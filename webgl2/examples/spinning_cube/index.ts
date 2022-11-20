@@ -4,7 +4,6 @@ import fragmentShader from "./shader.frag";
 import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
 
 export async function spinning_cube(renderer: WebGL2Renderer) {
-    const { width, height } = renderer.canvas;
     const program = renderer.createProgram({ vertexShader, fragmentShader });
     const vb = renderer.createBuffer({ kind: "ARRAY_BUFFER", srcData: createVertices() });
     const ib = renderer.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: createIndices() });
