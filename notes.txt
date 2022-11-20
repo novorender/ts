@@ -1,0 +1,50 @@
+keep existing system
+  but use transform feedback to feed new geometry into buffers
+    this should reduce/eliminate update stuttering
+    and we can use custom allocator with big single vertex/index buffers
+    we can combine/interleave attributes, insert object_id etc attribute and transform/convert on demand
+      keep only compact core geometry in js memory
+
+transform feedback is not easy to do with existing design
+  and the cost of dragging along all the legacy is slowing us down considerably
+
+a mvp v2?
+SUPPORT device_lost
+  keep a js memory copy of everything (or at least make reloading explicit)
+remove separate render worker
+main thread does everything, except processing downloads
+rendersettings -> render state (which includes scene, octree, dynamic objects etc)
+a scene can no longer be rendered by several views (since varying camera positions will yield varying node state)
+remove cameras (just merge into render state)
+  controllers now work on render state directly
+expose materials and meshes as part of render state
+  or better yet, use functions
+  each function can prepare its own resources, such as programs
+
+generating render state -> node.js
+  render state can be serialized
+rendering state -> webgl2
+
+what about view size and aspect ratio?
+  part of render state?
+  or part of render context? (gl, buffers, canvas++)
+    render state is probably better (just resize canvas)
+
+layers
+  webgl2context
+    low level gl2 resource, state and commands
+    runs in main thread.
+  renderer
+    transform render state into pixels using webgl2context (or webgpu later)
+    plug-ins based (objects that takes context and context with a single render() function)
+    can run in node.js
+    state can be serialized
+    context can be recreated if lost
+    runs in main thread.
+  novorender
+    api for loading and rendering scenes
+    modifies render state
+    camera controllers
+    runs in main thread
+      load/parser runs in separate worker
+      create worker from scratch for each update?

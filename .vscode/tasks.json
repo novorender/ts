@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "npm",
+            "label": "npm: watch - webgl2/examples",
+            "isBackground": true,
+            "script": "watch",
+            "path": "webgl2/examples",
+            "problemMatcher": [],
+            "detail": "tsc --watch --noemit",
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        },
+        {
+            "type": "npm",
+            "label": "npm: dev - webgl2/examples",
+            "isBackground": true,
+            "script": "dev",
+            "path": "webgl2/examples",
+            "problemMatcher": [],
+            "detail": "node build.mjs",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

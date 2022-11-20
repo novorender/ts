@@ -1,0 +1,8 @@
+{
+    "task.allowAutomaticTasks": "on",
+    "webgl-glsl-editor.codeInjection": true,
+    "webgl-glsl-editor.codeInjectionSource": [
+        "#version 300 es",
+        "precision highp float;"
+    ],
+}

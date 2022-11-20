@@ -1,0 +1,23 @@
+{
+    "name": "hello_triangle",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.ts",
+    "type": "module",
+    "scripts": {
+        "dev": "node build.mjs",
+        "watch": "tsc --watch --noemit",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "esbuild": "^0.15.14",
+        "ip": "^1.1.8",
+        "typescript": "^4.9.3"
+    },
+    "dependencies": {
+        "gl-matrix": "^3.4.3",
+        "tslib": "^2.4.1"
+    }
+}
