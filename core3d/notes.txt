@@ -1,0 +1,5 @@
+transform render state into pixels using webgl2context (or webgpu later)
+plug-ins based (objects that takes context and context with a single render() function)
+state can be serialized
+context can be recreated if lost
+runs in main thread.

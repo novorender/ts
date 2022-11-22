@@ -49,33 +49,32 @@ export interface BufferParamsData {
 export type ClearParams = ClearParamsBack | ClearParamsColor | ClearDepth | ClearStencil | ClearDepthStencil;
 
 export interface ClearParamsBack {
-    /** Clear the default back buffer provided by the canvas.
-     * @remarks Equivalent to `gl.clearColor(...color); gl.clear(gl.COLOR_BUFFER_BIT);`
-    */
-    readonly kind?: "BACK";
+    readonly kind: "back_buffer";
     readonly color?: readonly [red: number, green: number, blue: number, alpha: number]; // default: [0, 0, 0, 1]
+    readonly depth?: number;
+    readonly stencil?: number;
 }
 
 export interface ClearParamsColor {
-    /** Clear a draw buffer.
-     * @remarks Equivalent to `gl.clearBuffer[fiuv](color);`
-    */
     readonly kind: "COLOR";
-    readonly drawBuffer?: number; // 0 - MAX_DRAW_BUFFERS
+    readonly drawBuffer?: number; // 0 - MAX_DRAW_BUFFERS, default: 0
     readonly color?: readonly [red: number, green: number, blue: number, alpha: number]; // default: [0, 0, 0, 1]
     readonly type?: "Int" | "Uint" | "Float"; // default: Float
 }
 
 export interface ClearDepth {
     readonly kind: "DEPTH";
+    readonly drawBuffer?: number; // 0 - MAX_DRAW_BUFFERS, default: 0
     readonly depth: number;
 }
 export interface ClearStencil {
     readonly kind: "STENCIL";
+    readonly drawBuffer?: number; // 0 - MAX_DRAW_BUFFERS, default: 0
     readonly stencil: number;
 }
 export interface ClearDepthStencil {
     readonly kind: "DEPTH_STENCIL";
+    readonly drawBuffer?: number; // 0 - MAX_DRAW_BUFFERS, default: 0
     readonly depth: number;
     readonly stencil: number;
 }
@@ -95,7 +94,7 @@ export interface CopyParams {
 // update
 
 export interface UpdateParams {
-    readonly target: BufferTargetString;
+    readonly kind: BufferTargetString;
     readonly srcData: BufferSource;
     readonly targetBuffer: WebGLBuffer;
     readonly srcOffset?: number; // default: 0
@@ -212,6 +211,7 @@ export interface ProgramParams {
     readonly vertexShader: string;
     readonly fragmentShader?: string;
     readonly flags?: readonly string[];
+    readonly uniformBufferBlocks?: string[]; // The names of the shader uniform blocks, which will be bound to the index in which the name appears in this array using gl.uniformBlockBinding().
     readonly transformFeedback?: {
         readonly bufferMode: "INTERLEAVED_ATTRIBS" | "SEPARATE_ATTRIBS";
         readonly varyings: readonly string[];
@@ -406,17 +406,14 @@ export interface UniformBindingMatrix {
 
 export type UniformBinding = UniformBindingScalar | UniformBindingVector | UniformBindingMatrix;
 
-export interface UniformBufferBindingBase {
-    readonly name?: string;
-    readonly buffer: WebGLBuffer | null;
-}
 
-export interface UniformBufferBindingRange extends UniformBufferBindingBase {
+export interface UniformBufferBindingRange {
+    readonly buffer: WebGLBuffer;
     readonly offset: number;
     readonly size: number;
 }
 
-export type UniformBufferBinding = UniformBufferBindingBase | UniformBufferBindingRange;
+export type UniformBufferBinding = UniformBufferBindingRange | WebGLBuffer | null | undefined; // if undefined, the buffer binding will not be changed
 
 export interface TextureBinding {
     readonly target: "TEXTURE_2D" | "TEXTURE_3D" | "TEXTURE_2D_ARRAY" | "TEXTURE_CUBE_MAP";

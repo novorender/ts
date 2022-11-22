@@ -3,7 +3,7 @@ import type { RendererContext } from ".";
 
 export function update(context: RendererContext, params: UpdateParams) {
     const { gl } = context;
-    const target = gl[params.target];
+    const target = gl[params.kind];
     const srcOffset = params.srcOffset ?? 0;
     const targetOffset = params.targetOffset ?? 0;
     const src = params.srcData;

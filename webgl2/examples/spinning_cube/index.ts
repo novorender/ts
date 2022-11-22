@@ -27,7 +27,7 @@ export async function spinning_cube(renderer: WebGL2Renderer) {
             vertexArrayObject: vao,
         });
 
-        renderer.clear({ kind: "BACK", color: [0, 0, .25, 1] });
+        renderer.clear({ kind: "back_buffer", color: [0, 0, .25, 1] });
         renderer.draw({ kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
     }
 }

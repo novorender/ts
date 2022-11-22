@@ -1,4 +1,4 @@
-import type { WebGL2Renderer } from "@novorender/webgl2"
+import type { WebGL2Renderer } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
@@ -17,6 +17,6 @@ export async function hello_triangle(renderer: WebGL2Renderer) {
         vertexArrayObject: vao,
     });
 
-    renderer.clear({ kind: "BACK", color: [0, 0, .25, 1] });
+    renderer.clear({ kind: "back_buffer", color: [0, 0, .25, 1] });
     renderer.draw({ kind: "arrays", mode: "TRIANGLES", count: 3 });
 }

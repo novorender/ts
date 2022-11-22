@@ -3,7 +3,7 @@
     "tasks": [
         {
             "type": "npm",
-            "label": "npm: watch - webgl2/examples",
+            "label": "npm: tsc watch",
             "isBackground": true,
             "script": "watch",
             "path": "webgl2/examples",
@@ -14,11 +14,34 @@
             }
         },
         {
-            "type": "npm",
-            "label": "npm: dev - webgl2/examples",
+            "type": "shell",
+            "label": "build webgl2/examples",
+            "command": "node",
+            "args": [
+                "build.mjs"
+            ],
+            "options": {
+                "cwd": "webgl2/examples"
+            },
             "isBackground": true,
-            "script": "dev",
-            "path": "webgl2/examples",
+            "problemMatcher": [],
+            "detail": "node build.mjs",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "type": "shell",
+            "label": "build core3d/test",
+            "command": "node",
+            "args": [
+                "build.mjs"
+            ],
+            "options": {
+                "cwd": "core3d/test"
+            },
+            "isBackground": true,
             "problemMatcher": [],
             "detail": "node build.mjs",
             "group": {

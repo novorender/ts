@@ -1,0 +1,29 @@
+{
+    "name": "@novorender/ts",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+        "watch": "tsc --watch --noemit"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/novorender/ts.git"
+    },
+    "author": "",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/novorender/ts/issues"
+    },
+    "homepage": "https://github.com/novorender/ts#readme",
+    "devDependencies": {
+        "esbuild": "^0.15.14",
+        "ip": "^1.1.8",
+        "typescript": "^4.9.3"
+    },
+    "dependencies": {
+        "gl-matrix": "^3.4.3",
+        "tslib": "^2.4.1"
+    }
+}

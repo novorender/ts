@@ -2,7 +2,7 @@
 import { glMatrix } from "gl-matrix";
 import { createWebGL2Renderer, resizeCanvasToDisplaySize } from "..";
 import { hello_triangle } from "./hello_triangle";
-import { spinning_cube } from "spinning_cube";
+import { spinning_cube } from "./spinning_cube";
 
 glMatrix.setMatrixArrayType(Array);
 

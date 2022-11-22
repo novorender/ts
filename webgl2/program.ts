@@ -19,7 +19,7 @@ function compileShader(gl: WebGLRenderingContext, type: ShaderType, source: stri
 
 export function createProgram(context: RendererContext, params: ProgramParams) {
     const { gl } = context;
-    const { flags } = params;
+    const { flags, transformFeedback, uniformBufferBlocks } = params;
     const extensions: string[] = [];
     if (context.extensions.multiDraw) {
         extensions.push("#extension GL_ANGLE_multi_draw : require\n");
@@ -37,7 +37,6 @@ export function createProgram(context: RendererContext, params: ProgramParams) {
     gl.attachShader(program, vertexShader);
     gl.attachShader(program, fragmentShader);
 
-    const { transformFeedback } = params;
     if (transformFeedback) {
         const { varyings, bufferMode } = transformFeedback;
         gl.transformFeedbackVaryings(program, varyings, gl[bufferMode]);
@@ -54,6 +53,19 @@ export function createProgram(context: RendererContext, params: ProgramParams) {
 
     if (!gl.getProgramParameter(program, gl.LINK_STATUS))
         throw new Error(`Failed to compile link shaders!\r\n${gl.getProgramInfoLog(program)}`);
+
+    if (uniformBufferBlocks) {
+        let idx = 0;
+        for (const name of uniformBufferBlocks) {
+            if (name) {
+                const blockIndex = gl.getUniformBlockIndex(program, name);
+                if (blockIndex != -1) {
+                    gl.uniformBlockBinding(program, blockIndex, idx);
+                }
+            }
+            idx++;
+        }
+    }
 
     return program;
 }

@@ -1,11 +1,11 @@
 import type { RendererContext } from ".";
-import type { AttributeDefault, ColorAttachment, Rect, State, StateParams, TextureBinding, UniformBinding, UniformBindingMatrix, UniformBindingScalar, UniformBindingVector, UniformBufferBindingBase, UniformBufferBindingRange } from "./types";
+import type { AttributeDefault, ColorAttachment, Rect, State, StateParams, TextureBinding, UniformBinding, UniformBindingMatrix, UniformBindingScalar, UniformBindingVector, UniformBufferBindingRange } from "./types";
 import type { LimitsGL } from "./context.js";
 
 type FilteredKeys<T, U> = { [P in keyof T]: T[P] extends U ? P : never }[keyof T];
 
-function isUniformBufferBindingRange(params: UniformBufferBindingBase): params is UniformBufferBindingRange {
-    return "offset" in params && "size" in params;
+function isUniformBufferBindingRange(params: UniformBufferBindingRange | WebGLBuffer | null): params is UniformBufferBindingRange {
+    return params != null && "offset" in params && "size" in params;
 }
 
 function isUniformScalar(params: UniformBinding): params is UniformBindingScalar {
@@ -229,15 +229,30 @@ export function setState(context: RendererContext, params: StateParams) {
         }
     }
 
-    if (uniformBuffers && currentProgram != null) {
+    if (uniformBuffers) {
         let idx = 0;
         for (const uniformBindingParams of uniformBuffers) {
-            const { buffer } = uniformBindingParams;
-            if (uniformBindingParams.name) {
-                const blockIndex = gl.getUniformBlockIndex(currentProgram, uniformBindingParams.name); // TODO: cache this? or simply use order/index?
-                gl.uniformBlockBinding(currentProgram, blockIndex, idx);
+            if (uniformBindingParams === undefined)
+                continue;
+            if (isUniformBufferBindingRange(uniformBindingParams)) {
+                const { buffer, offset, size } = uniformBindingParams;
+                gl.bindBufferRange(gl.UNIFORM_BUFFER, idx, buffer, offset, size);
+            } else {
+                gl.bindBufferBase(gl.UNIFORM_BUFFER, idx, uniformBindingParams);
             }
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, idx, buffer);
+            idx++;
         }
     }
+
+    // if (uniformBuffers && currentProgram != null) {
+    //     let idx = 0;
+    //     for (const uniformBindingParams of uniformBuffers) {
+    //         const { buffer } = uniformBindingParams;
+    //         if (uniformBindingParams.name) {
+    //             const blockIndex = gl.getUniformBlockIndex(currentProgram, uniformBindingParams.name); // TODO: cache this? or simply use order/index?
+    //             gl.uniformBlockBinding(currentProgram, blockIndex, idx);
+    //         }
+    //         gl.bindBufferBase(gl.UNIFORM_BUFFER, idx, buffer);
+    //     }
+    // }
 }

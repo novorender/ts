@@ -1,4 +1,4 @@
-import type { RendererContext, ClearParams } from ".";
+import type { RendererContext, ClearParams, ClearDepth, ClearDepthStencil, ClearParamsColor, ClearStencil } from ".";
 
 function exhaustiveBufferCheck(value: never) {
     throw new Error(`Unknown buffer type: ${value}!`);
@@ -11,24 +11,37 @@ function exhaustiveColorCheck(value: never) {
 export function clear(context: RendererContext, params: ClearParams) {
     const { gl } = context;
     const { kind } = params;
-    const drawBuffer = "drawBuffer" in params ? params.drawBuffer : 0;
     switch (kind) {
+        case "back_buffer": {
+            let bits = 0;
+            if (params.color != undefined) {
+                gl.clearColor(...params.color);
+                bits |= gl.COLOR_BUFFER_BIT;
+            }
+            if (params.depth != undefined) {
+                gl.clearDepth(params.depth);
+                bits |= gl.DEPTH_BUFFER_BIT;
+            }
+            if (params.stencil != undefined) {
+                gl.clearStencil(params.stencil);
+                bits |= gl.STENCIL_BUFFER_BIT;
+            }
+            if (bits) {
+                gl.clear(bits);
+            }
+            break;
+        }
         case "DEPTH":
         case "STENCIL":
         case "DEPTH_STENCIL": {
+            const { drawBuffer } = params;
             const depth = "depth" in params ? params.depth : 1.0;
             const stencil = "stencil" in params ? params.stencil : 0;
-            gl.clearBufferfi(gl[kind], 0, depth, stencil);
-            break;
-        }
-        case undefined:
-        case "BACK": {
-            const color = params.color ?? [0, 0, 0, 0];
-            gl.clearColor(...color);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.clearBufferfi(gl[kind], drawBuffer ?? 0, depth, stencil);
             break;
         }
         case "COLOR": {
+            const { drawBuffer } = params;
             const type = params.type ?? "Float";
             const target = gl.COLOR;
             const color = params.color ?? [0, 0, 0, 0];

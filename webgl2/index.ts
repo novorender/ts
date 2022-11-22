@@ -213,8 +213,8 @@ export class WebGL2Renderer {
         endTransformFeedback(this.#context, params);
     }
 
-    state(params: StateParams) {
-        setState(this.#context, params);
+    state(params: StateParams | null) {
+        setState(this.#context, params ?? this.#context.defaultState);
     }
 
     clear(params: ClearParams) {
