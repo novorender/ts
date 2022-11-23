@@ -387,19 +387,19 @@ export type UniformTypeMatrix =
 
 export interface UniformBindingScalar {
     readonly kind: UniformTypeScalar;
-    readonly name: string;
+    readonly location: WebGLUniformLocation | null;
     readonly value: number;
 }
 
 export interface UniformBindingVector {
     readonly kind: UniformTypeVector;
-    readonly name: string;
+    readonly location: WebGLUniformLocation | null;
     readonly value: readonly number[];
 }
 
 export interface UniformBindingMatrix {
     readonly kind: UniformTypeMatrix;
-    readonly name: string;
+    readonly location: WebGLUniformLocation | null;
     readonly value: readonly number[];
     readonly transpose?: boolean; // default: false
 }

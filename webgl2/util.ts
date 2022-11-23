@@ -92,6 +92,14 @@ export function getUniformsInfo(gl: WebGL2RenderingContext, program: WebGLProgra
     return uniformData as readonly UniformInfo[];
 }
 
+export function getUniformLocations<T extends readonly string[]>(gl: WebGL2RenderingContext, program: WebGLProgram, ...names: T) {
+    const locations: any = {};
+    for (const name of names) {
+        locations[name] = gl.getUniformLocation(program, name);
+    }
+    return locations as Record<T[number], WebGLUniformLocation | null>;
+}
+
 export function getAttributesInfo(gl: WebGL2RenderingContext, program: WebGLProgram) {
     const numAttributes = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
     const attributes: any[] = [];

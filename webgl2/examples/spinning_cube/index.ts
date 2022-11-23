@@ -1,10 +1,11 @@
-import type { WebGL2Renderer } from "../..";
+import { WebGL2Renderer, getUniformLocations } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
 
 export async function spinning_cube(renderer: WebGL2Renderer) {
     const program = renderer.createProgram({ vertexShader, fragmentShader });
+    const uniformLocations = getUniformLocations(renderer.gl, program, "proj");
     const vb = renderer.createBuffer({ kind: "ARRAY_BUFFER", srcData: createVertices() });
     const ib = renderer.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: createIndices() });
     const vao = renderer.createVertexArray({
@@ -23,7 +24,7 @@ export async function spinning_cube(renderer: WebGL2Renderer) {
             program,
             cullEnable: true,
             depthTest: true,
-            uniforms: [{ kind: "Matrix4f", name: "proj", value: [...viewProjMtx] }],
+            uniforms: [{ kind: "Matrix4f", location: uniformLocations.proj, value: [...viewProjMtx] }],
             vertexArrayObject: vao,
         });
 

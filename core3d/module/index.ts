@@ -1,8 +1,9 @@
-import { RenderState } from "../state";
+import { RenderState, DerivedRenderState } from "../state";
 import { RenderContext } from "../context";
 import { BackgroundModule } from "./background";
 import { GridModule } from "./grid";
 import { CameraModule } from "./camera";
+import { Matrices } from "../matrices";
 
 // constructor takes RenderState object
 // this object contains all state (geometry, textures etc), or has at least the ability to reload state on demand if e.g. webgl context is lost
@@ -12,15 +13,16 @@ export interface RenderModule {
 
 // contains module's GPU resources
 export interface RenderModuleContext {
-    render(state: RenderState): void;
+    render(state: DerivedRenderState): void;
     dispose(): void;
 }
 
 export function createModules(state: RenderState) {
+    const derivedState = { ...state, ...{ matrices: Matrices.fromRenderState(state) } };
     return [
-        new CameraModule(state),
-        new BackgroundModule(state),
-        new GridModule(state),
+        new CameraModule(derivedState),
+        new BackgroundModule(derivedState),
+        new GridModule(derivedState),
     ]
 }
 

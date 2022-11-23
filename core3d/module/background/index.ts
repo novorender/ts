@@ -1,11 +1,11 @@
-import { RenderState, RenderContext } from "../../";
+import { DerivedRenderState, RenderContext } from "../../";
 import { RenderModuleContext, RenderModule } from "..";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat4, vec3 } from "gl-matrix";
 
 export class BackgroundModule implements RenderModule {
-    constructor(readonly state: RenderState) {
+    constructor(readonly state: DerivedRenderState) {
     }
 
     withContext(context: RenderContext) {
@@ -15,7 +15,7 @@ export class BackgroundModule implements RenderModule {
 
 class BackgroundModuleInstance implements RenderModuleContext {
 
-    constructor(readonly context: RenderContext, readonly state: RenderState) {
+    constructor(readonly context: RenderContext, readonly state: DerivedRenderState) {
         const { renderer } = context;
         // create static GPU resources here
     }

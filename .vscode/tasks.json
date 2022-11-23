@@ -7,7 +7,9 @@
             "isBackground": true,
             "script": "watch",
             "path": "webgl2/examples",
-            "problemMatcher": [],
+            "problemMatcher": [
+                "$tsc-watch"
+            ],
             "detail": "tsc --watch --noemit",
             "runOptions": {
                 "runOn": "folderOpen"

@@ -12,7 +12,7 @@ export async function hello_triangle(renderer: WebGL2Renderer) {
         viewport: { width, height },
         program,
         uniforms: [
-            { kind: "4f", name: "color", value: [1, 0, 0, 1] },
+            { kind: "4f", location: "color", value: [1, 0, 0, 1] },
         ],
         vertexArrayObject: vao,
     });

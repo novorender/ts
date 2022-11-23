@@ -1,22 +1,21 @@
-import { mat4, vec3 } from "gl-matrix";
-import { RenderState, RenderContext, RenderStateGrid } from "core3d";
+import { DerivedRenderState, RenderContext, RenderStateGrid } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
+import { createUniformBufferProxy } from "../uniforms";
+import { CoordSpace, Matrices } from "core3d/matrices";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { createUniformBufferProxy } from "../uniforms";
+import { mat4 } from "gl-matrix";
 
 export class GridModule implements RenderModule {
     readonly uniformsData;
-    constructor(readonly initialState: RenderState) {
+    constructor(readonly initialState: DerivedRenderState) {
         this.uniformsData = createUniformBufferProxy({
-            origin: "vec3",
-            axisX: "vec3",
-            axisY: "vec3",
+            objectClipMatrix: "mat4",
             color: "vec4",
             size: "int",
             spacing: "float",
         });
-        updateUniforms(this.uniformsData.uniforms, initialState.grid);
+        updateUniforms(this.uniformsData.uniforms, initialState.grid, Matrices.fromRenderState(initialState));
     }
 
     withContext(context: RenderContext) {
@@ -27,7 +26,9 @@ export class GridModule implements RenderModule {
 type UniformsData = GridModule["uniformsData"];
 
 interface RelevantRenderState {
-    grid: RenderStateGrid
+    grid: RenderStateGrid;
+    matrices: Matrices;
+    // TODO: Put matrices in state? (it's essentially a cache) ... create/update lazily in state wrapper?
 };
 
 // class GridModuleContext extends RenderModuleBase<RelevantRenderState> implements RenderModuleContext {
@@ -45,13 +46,13 @@ class GridModuleContext implements RenderModuleContext {
         this.gridUniformsBuffer = renderer.createBuffer({ kind: "UNIFORM_BUFFER", srcData: gridUniformsData.buffer });
     }
 
-    render(state: RenderState) {
+    render(state: DerivedRenderState) {
         const { context, program, gridUniformsBuffer } = this;
         const { renderer, cameraUniformsBuffer } = context;
         const size = state.grid.size;
         if (this.state.hasChanged(state)) {
             const { gridUniformsData } = this;
-            updateUniforms(gridUniformsData.uniforms, state.grid);
+            updateUniforms(gridUniformsData.uniforms, state.grid, state.matrices);
             renderer.update({ kind: "UNIFORM_BUFFER", srcData: gridUniformsData.buffer, targetBuffer: gridUniformsBuffer });
             // const { begin, end } = gridUniformsData.dirtyRange;
             // renderer.update({ kind: "UNIFORM_BUFFER", srcData: gridUniformsData.buffer, targetBuffer: gridUniformsBuffer, size: end - begin, srcOffset: begin, targetOffset: begin });
@@ -60,11 +61,6 @@ class GridModuleContext implements RenderModuleContext {
         renderer.state({
             program,
             uniformBuffers: [cameraUniformsBuffer, gridUniformsBuffer],
-            // uniforms: [
-            //     { kind: "4f", name: "color", value: [1, 1, 1, 1] },
-            //     { kind: "1i", name: "size", value: size },
-            //     { kind: "1f", name: "spacing", value: spacing },
-            // ],
             depthTest: true,
         });
 
@@ -79,11 +75,18 @@ class GridModuleContext implements RenderModuleContext {
     }
 }
 
-function updateUniforms(uniforms: UniformsData["uniforms"], grid: RenderStateGrid) {
+function updateUniforms(uniforms: UniformsData["uniforms"], grid: RenderStateGrid, matrices: Matrices) {
+    const { axisX, axisY, origin } = grid;
+    const m = [
+        ...axisX, 0,
+        ...axisY, 0,
+        0, 0, 1, 0,
+        ...origin, 1
+    ] as Parameters<typeof mat4.fromValues>;
+    const worldClipMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.Clip);
+    const objectWorldMatrix = mat4.fromValues(...m);
+    uniforms.objectClipMatrix = mat4.mul(mat4.create(), worldClipMatrix, objectWorldMatrix);
     uniforms.color = grid.color;
-    uniforms.origin = grid.origin;
-    uniforms.axisX = grid.axisX;
-    uniforms.axisY = grid.axisY;
     uniforms.size = grid.size;
     uniforms.spacing = grid.spacing;
 }

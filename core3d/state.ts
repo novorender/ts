@@ -1,4 +1,5 @@
 import { quat, ReadonlyQuat, ReadonlyVec3, vec3 } from "gl-matrix";
+import { Matrices } from "./matrices";
 
 export type RGBA = readonly [red: number, green: number, blue: number, alpha: number];
 
@@ -36,6 +37,16 @@ export interface RenderState {
     readonly grid: RenderStateGrid;
 }
 
+export interface DerivedRenderState extends RenderState {
+    readonly matrices: Matrices;
+}
+
+// Derived state is not meant to be set directly by app
+export interface DerivedMutableRenderState extends RenderState {
+    matrices: Matrices;
+}
+
+
 type RecursivePartial<T> = {
     [P in keyof T]?: RecursivePartial<T[P]>;
 };
@@ -68,7 +79,7 @@ function mergeRecursive(original: any, changes: any) {
 }
 
 export function defaultRenderState(): RenderState {
-    return {
+    const state: RenderState = {
         output: {
             width: 512,
             height: 256,
@@ -93,4 +104,5 @@ export function defaultRenderState(): RenderState {
             spacing: 1,
         },
     };
+    return state;
 }

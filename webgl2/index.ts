@@ -18,7 +18,7 @@ import { readPixelsAsync } from "./read.js";
 import { beginTransformFeedback, createTransformFeedback, endTransformFeedback } from "./transformFeedback.js";
 export type { RendererContext };
 export * from "./types";
-export { resizeCanvasToDisplaySize } from "./util.js";
+export { resizeCanvasToDisplaySize, getUniformLocations } from "./util.js";
 
 export function createWebGL2Renderer(canvas: HTMLCanvasElement, options?: WebGLContextAttributes): WebGL2Renderer {
     const gl = canvas.getContext("webgl2", options);
@@ -48,7 +48,7 @@ export class WebGL2Renderer {
     #animFrameHandle: number | undefined;
     #currentTransformFeedback: WebGLTransformFeedback | undefined;
 
-    constructor(gl: WebGL2RenderingContext, readonly canvas: HTMLCanvasElement) {
+    constructor(readonly gl: WebGL2RenderingContext, readonly canvas: HTMLCanvasElement) {
         this.#context = createContext(gl);
     }
 

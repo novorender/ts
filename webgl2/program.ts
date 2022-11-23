@@ -24,7 +24,7 @@ export function createProgram(context: RendererContext, params: ProgramParams) {
     if (context.extensions.multiDraw) {
         extensions.push("#extension GL_ANGLE_multi_draw : require\n");
     }
-    const header = `#version 300 es\n${extensions.join()}precision highp float;\n`;
+    const header = `#version 300 es\n${extensions.join()}precision highp float;\nprecision highp int;\n`;
     const defines = flags?.map(flag => `#define ${flag}\n`)?.join() ?? "";
     const vs = header + defines + params.vertexShader;
     const fs = header + defines + (params.fragmentShader ?? "void main() {}");
@@ -42,7 +42,7 @@ export function createProgram(context: RendererContext, params: ProgramParams) {
         gl.transformFeedbackVaryings(program, varyings, gl[bufferMode]);
     }
 
-    // TODO: Consider doing linking in a separate stage, so as to take advantage of parallel shader compilation. (https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#Compile_Shaders_and_Link_Programs_in_parallel)
+    // TODO: Consider doing async linking, so as to take advantage of parallel shader compilation. (https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#Compile_Shaders_and_Link_Programs_in_parallel)
     gl.linkProgram(program);
     gl.validateProgram(program);
 
@@ -59,7 +59,7 @@ export function createProgram(context: RendererContext, params: ProgramParams) {
         for (const name of uniformBufferBlocks) {
             if (name) {
                 const blockIndex = gl.getUniformBlockIndex(program, name);
-                if (blockIndex != -1) {
+                if (blockIndex != 0xffffffff) {
                     gl.uniformBlockBinding(program, blockIndex, idx);
                 }
             }

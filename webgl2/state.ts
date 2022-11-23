@@ -182,18 +182,7 @@ export function setState(context: RendererContext, params: StateParams) {
             }
         }
     }
-    // if (uniformBuffers && params.program == null) { // program == null ... why?
-    //     for (let i = 0; i < uniformBuffers.length; i++) {
-    //         const uniformBindingParams = uniformBuffers[i];
-    //         const { buffer } = uniformBindingParams;
-    //         if (isUniformBufferBindingRange(uniformBindingParams)) {
-    //             const { offset, size } = uniformBindingParams;
-    //             gl.bindBufferRange(gl.UNIFORM_BUFFER, i, buffer, offset, size);
-    //         } else {
-    //             gl.bindBufferBase(gl.UNIFORM_BUFFER, i, buffer);
-    //         }
-    //     }
-    // }
+
     if (textures) {
         const texture0 = gl.TEXTURE0;
         for (let i = 0; i < textures.length; i++) {
@@ -210,15 +199,11 @@ export function setState(context: RendererContext, params: StateParams) {
     const { program } = params;
     if (program !== undefined) {
         gl.useProgram(program);
-        context.currentProgram = program;
     }
 
-    const { currentProgram } = context;
-
-    if (uniforms && currentProgram != null) {
+    if (uniforms) {
         for (const uniformParams of uniforms) {
-            const { name } = uniformParams;
-            const location = gl.getUniformLocation(currentProgram, name); // TODO: cache this?
+            const { location } = uniformParams;
             if (isUniformScalar(uniformParams)) {
                 gl[`uniform${uniformParams.kind}`](location, uniformParams.value);
             } else if (isUniformVector(uniformParams)) {
@@ -243,16 +228,4 @@ export function setState(context: RendererContext, params: StateParams) {
             idx++;
         }
     }
-
-    // if (uniformBuffers && currentProgram != null) {
-    //     let idx = 0;
-    //     for (const uniformBindingParams of uniformBuffers) {
-    //         const { buffer } = uniformBindingParams;
-    //         if (uniformBindingParams.name) {
-    //             const blockIndex = gl.getUniformBlockIndex(currentProgram, uniformBindingParams.name); // TODO: cache this? or simply use order/index?
-    //             gl.uniformBlockBinding(currentProgram, blockIndex, idx);
-    //         }
-    //         gl.bindBufferBase(gl.UNIFORM_BUFFER, idx, buffer);
-    //     }
-    // }
 }

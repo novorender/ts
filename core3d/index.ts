@@ -21,15 +21,42 @@ export function run(canvas: HTMLCanvasElement) {
         stencil: false,
     });
 
-    const scale = devicePixelRatio;
-    let { width, height } = canvas.getBoundingClientRect();
-    width = Math.round(width * scale);
-    height = Math.round(height * scale);
-    const state = modifyRenderState(defaultRenderState(), { output: { width, height }, camera: { position: vec3.fromValues(0, 0, 15) } });
+    let state = defaultRenderState();
+    let prevState = state;
+
+    function resize() {
+        const scale = devicePixelRatio;
+        let { width, height } = canvas.getBoundingClientRect();
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const { output } = state;
+        if (width != output.width || height != output.height) {
+            state = modifyRenderState(state, { output: { width, height } });
+        }
+    }
+    resize();
+
+    function rotateCamera(time = 0) {
+        const rotation = quat.fromEuler(quat.create(), -15, time / 100, 0);
+        const position = vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, 15), rotation);
+        state = modifyRenderState(state, { camera: { position, rotation } });
+    }
+    rotateCamera();
 
     const modules = createModules(state);
-
     const context = new RenderContext(renderer, modules);
-    context["render"](state);
+
+    function render(time: number) {
+        resize();
+        rotateCamera(time);
+        if (prevState !== state) {
+            prevState = state;
+            context["render"](state);
+        }
+        requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+
+
     renderer.dispose();
 }

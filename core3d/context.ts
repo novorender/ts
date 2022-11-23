@@ -1,5 +1,6 @@
-import { RenderState, RenderModuleContext, RenderModule, RenderStateOutput } from "./";
-import { resizeCanvasToDisplaySize, WebGL2Renderer } from "webgl2";
+import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderModuleState, RenderStateCamera, DerivedMutableRenderState } from "./";
+import { WebGL2Renderer } from "webgl2";
+import { Matrices } from "./matrices";
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
@@ -8,7 +9,9 @@ function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
     private readonly modules: (RenderModuleContext | undefined)[];
-    private _prevOutput: RenderStateOutput | undefined;
+    private outputState;
+    private cameraState;
+
 
     // shared mutable state
     cameraUniformsBuffer: WebGLBuffer | null = null;
@@ -24,19 +27,29 @@ export class RenderContext {
                 this.modules[i] = m;
             });
         });
+        this.outputState = new RenderModuleState<RenderStateOutput>();
+        this.cameraState = new RenderModuleState<RenderStateCamera>();
     }
 
     protected render(state: RenderState) {
         const { renderer } = this;
 
         // handle resizes
-        if (state.output !== this._prevOutput) {
+        let resized = false;
+        if (this.outputState.hasChanged(state.output)) {
             const { canvas } = renderer;
             const { width, height } = state.output;
             canvas.width = width;
             canvas.height = height;
-            this._prevOutput = state.output;
+            resized = true;
         }
+
+        const derivedState = state as DerivedRenderState;
+        if (resized || this.cameraState.hasChanged(state.camera)) {
+            (derivedState as DerivedMutableRenderState).matrices = Matrices.fromRenderState(state);
+        }
+
+        // set up constant buffers (camera, materials)
 
         // set up viewport
         const { width, height } = renderer.canvas;
@@ -44,11 +57,9 @@ export class RenderContext {
             viewport: { width, height }
         })
 
-        // set up constant buffers (camera, materials)
-
         // render modules
         for (const module of this.modules) {
-            module?.render(state);
+            module?.render(derivedState);
         }
 
         // reset gl state

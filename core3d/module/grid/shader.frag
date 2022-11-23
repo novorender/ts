@@ -1,19 +1,19 @@
-// layout(std140) uniform Camera {
-//     mat4 objClip;
-// };
+layout(std140) uniform Camera {
+    mat4 clipViewMatrix;
+    mat4 viewClipMatrix;
+    mat3 worldViewNormalMatrix;
+    mat3 viewWorldNormalMatrix;
+} camera;
 
-// layout(std140) uniform Grid {
-//     vec3 origin;
-//     vec3 axisX;
-//     vec3 axisY;
-//     vec4 color;
-//     int size;
-//     float spacing;
-// };
+layout(std140) uniform Grid {
+    mat4 objectClipMatrix;
+    vec4 color;
+    int size;
+    float spacing;
+} grid;
 
-in vec4 gridColor;
 out vec4 fragColor;
 
 void main() {
-    fragColor = gridColor;
+    fragColor = grid.color;
 }

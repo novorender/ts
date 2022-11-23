@@ -8,7 +8,6 @@ export interface RendererContext {
         readonly multiDraw: WebGLMultiDrawExt | null;
     }
     readonly defaultState: State;
-    currentProgram: WebGLProgram | null; // we cache this here to avoid possible pipeline flush/stall when reading current state.
 };
 
 export interface WebGLMultiDrawExt {
