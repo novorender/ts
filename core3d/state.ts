@@ -24,6 +24,7 @@ export interface RenderStateCamera {
 }
 
 export interface RenderStateGrid {
+    readonly enabled: boolean;
     readonly color: RGBA;
     readonly origin: ReadonlyVec3;
     readonly axisX: ReadonlyVec3;
@@ -94,7 +95,8 @@ export function defaultRenderState(): RenderState {
             back: 1000,
         },
         grid: {
-            color: [1, 1, 1, 1],
+            enabled: false,
+            color: [0, 1, 0, 1],
             origin: [0, 0, 0],
             axisX: [1, 0, 0],
             axisY: [0, 1, 0],

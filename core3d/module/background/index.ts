@@ -72,6 +72,7 @@ class BackgroundModuleInstance implements RenderModuleContext {
             if (url && url != this.url) {
                 this.downloadTextures(url).then(textures => {
                     this.textures = textures;
+                    context.changed = true;
                 })
             } else if (!url) {
                 const { textures } = this;

@@ -3,6 +3,7 @@ import { createWebGL2Renderer } from "@novorender/webgl2";
 import { RenderContext } from "./context";
 import { createModules } from "./module";
 import { defaultRenderState, modifyRenderState } from "./state";
+import { OrbitController } from "./controller";
 
 export * from "./state";
 export * from "./context";
@@ -21,9 +22,10 @@ export function run(canvas: HTMLCanvasElement) {
         stencil: false,
     });
 
+    const controller = new OrbitController({ kind: "orbit" }, canvas);
     let state = defaultRenderState();
     let prevState = state;
-    state = modifyRenderState(state, { background: { url: "https://api.novorender.com/assets/env/lake/", blur: 0 }, grid: { color: [0.5, 0.5, 0.5, 1] } });
+    state = modifyRenderState(state, { background: { url: "https://api.novorender.com/assets/env/lake/", blur: 0.25 }, grid: { enabled: true } });
 
     function resize() {
         const scale = devicePixelRatio;
@@ -37,20 +39,21 @@ export function run(canvas: HTMLCanvasElement) {
     }
     resize();
 
-    function rotateCamera(time = 0) {
-        const rotation = quat.fromEuler(quat.create(), -15, time / 100, 0);
-        const position = vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, 15), rotation);
-        state = modifyRenderState(state, { camera: { position, rotation } });
-    }
-    rotateCamera();
+    // function rotateCamera(time = 0) {
+    //     const rotation = quat.fromEuler(quat.create(), -15, time / 100, 0);
+    //     const position = vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, 15), rotation);
+    //     state = modifyRenderState(state, { camera: { position, rotation } });
+    // }
+    // rotateCamera();
 
     const modules = createModules(state);
     const context = new RenderContext(renderer, modules);
 
     function render(time: number) {
         resize();
-        rotateCamera(time);
-        if (prevState !== state) {
+        state = controller.updateRenderState(state);
+        // rotateCamera(time);
+        if (prevState !== state || context.changed) {
             prevState = state;
             context["render"](state);
         }
@@ -58,6 +61,6 @@ export function run(canvas: HTMLCanvasElement) {
     }
     requestAnimationFrame(render);
 
-
-    renderer.dispose();
+    // controller.dispose();
+    // renderer.dispose();
 }

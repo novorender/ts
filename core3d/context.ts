@@ -14,9 +14,9 @@ export class RenderContext {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
 
     // shared mutable state
+    changed = true;
     cameraUniformsBuffer: WebGLBuffer | null = null;
     iblUniformsBuffer: WebGLBuffer | null = null;
-
 
     constructor(readonly renderer: WebGL2Renderer, modules: readonly RenderModule[]) {
         this.modules = modules.map((m, i) => {
@@ -34,6 +34,7 @@ export class RenderContext {
 
     protected render(state: RenderState) {
         const { renderer } = this;
+        this.changed = false;
 
         // handle resizes
         let resized = false;
@@ -43,14 +44,13 @@ export class RenderContext {
             canvas.width = width;
             canvas.height = height;
             resized = true;
+            this.changed = true;
         }
 
         const derivedState = state as DerivedRenderState;
         if (resized || this.cameraState.hasChanged(state.camera)) {
             (derivedState as DerivedMutableRenderState).matrices = Matrices.fromRenderState(state);
         }
-
-        // set up constant buffers (camera, materials)
 
         // set up viewport
         const { width, height } = renderer.canvas;

@@ -57,13 +57,14 @@ class GridModuleContext implements RenderModuleContext {
             // renderer.update({ kind: "UNIFORM_BUFFER", srcData: gridUniformsData.buffer, targetBuffer: gridUniformsBuffer, size: end - begin, srcOffset: begin, targetOffset: begin });
         }
 
-        renderer.state({
-            program,
-            uniformBuffers: [cameraUniformsBuffer, gridUniformsBuffer],
-            depthTest: true,
-        });
-
-        renderer.draw({ kind: "arrays", mode: "LINES", count: (size + 1) * 2 * 2 });
+        if (state.grid.enabled) {
+            renderer.state({
+                program,
+                uniformBuffers: [cameraUniformsBuffer, gridUniformsBuffer],
+                depthTest: true,
+            });
+            renderer.draw({ kind: "arrays", mode: "LINES", count: (size + 1) * 2 * 2 });
+        }
     }
 
     dispose() {

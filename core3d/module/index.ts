@@ -23,6 +23,7 @@ export function createModules(state: RenderState) {
         new CameraModule(derivedState),
         new BackgroundModule(derivedState),
         new GridModule(derivedState),
+        // TODO: Add octree module
     ]
 }
 
