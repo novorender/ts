@@ -1,8 +1,8 @@
 layout(std140) uniform Camera {
     mat4 clipViewMatrix;
     mat4 viewClipMatrix;
-    mat3 worldViewNormalMatrix;
-    mat3 viewWorldNormalMatrix;
+    mat3 worldViewMatrixNormal;
+    mat3 viewWorldMatrixNormal;
 } camera;
 
 layout(std140) uniform Grid {

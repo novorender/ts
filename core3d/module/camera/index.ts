@@ -10,8 +10,8 @@ export class CameraModule implements RenderModule {
         this.uniformsData = createUniformBufferProxy({
             clipViewMatrix: "mat4",
             viewClipMatrix: "mat4",
-            worldViewNormalMatrix: "mat3",
-            viewWorldNormalMatrix: "mat3",
+            worldViewMatrixNormal: "mat3",
+            viewWorldMatrixNormal: "mat3",
         });
         updateUniforms(this.uniformsData.uniforms, initialState);
     }
@@ -58,19 +58,8 @@ class CameraModuleInstance implements RenderModuleContext {
 
 function updateUniforms(uniforms: UniformsData["uniforms"], state: RelevantRenderState) {
     const { matrices } = state;
-    Object.assign(uniforms, matrices4x4(matrices), matrices3x3(matrices));
-}
-
-function matrices4x4(matrices: Matrices) {
-    return {
-        clipViewMatrix: matrices.getMatrix(CoordSpace.Clip, CoordSpace.View),
-        viewClipMatrix: matrices.getMatrix(CoordSpace.View, CoordSpace.Clip),
-    } as const;
-}
-
-function matrices3x3(matrices: Matrices) {
-    return {
-        worldViewNormalMatrix: matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View),
-        viewWorldNormalMatrix: matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World),
-    };
+    uniforms.clipViewMatrix = matrices.getMatrix(CoordSpace.Clip, CoordSpace.View);
+    uniforms.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
+    uniforms.worldViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
+    uniforms.viewWorldMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
 }

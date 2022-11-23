@@ -189,7 +189,6 @@ export class WebGL2Renderer {
         gl.deleteTransformFeedback(tf);
     }
 
-
     beginTransformFeedback(tf: WebGLTransformFeedback, params: TransformFeedbackParams): void {
         this.#currentTransformFeedback = tf;
         beginTransformFeedback(this.#context, tf, params);

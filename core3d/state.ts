@@ -10,6 +10,8 @@ export interface RenderStateOutput {
 
 export interface RenderStateBackground {
     readonly color: RGBA;
+    readonly url?: string;
+    readonly blur?: number;
 }
 
 export interface RenderStateCamera {
@@ -61,18 +63,14 @@ export function modifyRenderState(state: RenderState, changes: RenderStateChange
 }
 
 function mergeRecursive(original: any, changes: any) {
-    const clone: any = {};
-    for (const key in original) {
+    const clone = { ...original };
+    for (const key in changes) {
         const originalValue = original[key];
         const changedValue = changes[key];
-        if (key in changes) {
-            if (changedValue && typeof changedValue == "object" && !Array.isArray(changedValue)) {
-                clone[key] = mergeRecursive(originalValue, changedValue);
-            } else {
-                clone[key] = changedValue;
-            }
+        if (changedValue && typeof changedValue == "object" && !Array.isArray(changedValue)) {
+            clone[key] = mergeRecursive(originalValue, changedValue);
         } else {
-            clone[key] = originalValue;
+            clone[key] = changedValue;
         }
     }
     return clone;

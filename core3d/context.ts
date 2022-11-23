@@ -11,11 +11,12 @@ export class RenderContext {
     private readonly modules: (RenderModuleContext | undefined)[];
     private outputState;
     private cameraState;
-
+    readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
 
     // shared mutable state
     cameraUniformsBuffer: WebGLBuffer | null = null;
     iblUniformsBuffer: WebGLBuffer | null = null;
+
 
     constructor(readonly renderer: WebGL2Renderer, modules: readonly RenderModule[]) {
         this.modules = modules.map((m, i) => {

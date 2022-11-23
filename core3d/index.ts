@@ -23,6 +23,7 @@ export function run(canvas: HTMLCanvasElement) {
 
     let state = defaultRenderState();
     let prevState = state;
+    state = modifyRenderState(state, { background: { url: "https://api.novorender.com/assets/env/lake/", blur: 0 }, grid: { color: [0.5, 0.5, 0.5, 1] } });
 
     function resize() {
         const scale = devicePixelRatio;

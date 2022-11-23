@@ -416,7 +416,7 @@ export interface UniformBufferBindingRange {
 export type UniformBufferBinding = UniformBufferBindingRange | WebGLBuffer | null | undefined; // if undefined, the buffer binding will not be changed
 
 export interface TextureBinding {
-    readonly target: "TEXTURE_2D" | "TEXTURE_3D" | "TEXTURE_2D_ARRAY" | "TEXTURE_CUBE_MAP";
+    readonly kind: "TEXTURE_2D" | "TEXTURE_3D" | "TEXTURE_2D_ARRAY" | "TEXTURE_CUBE_MAP";
     readonly texture: WebGLTexture;
     readonly sampler: WebGLSampler;
 }
@@ -582,8 +582,8 @@ export type CompressedTextureFormatString =
     // EXT_texture_compression_rgtc
     "COMPRESSED_RED_RGTC1_EXT" | "COMPRESSED_SIGNED_RED_RGTC1_EXT" | "COMPRESSED_RED_GREEN_RGTC2_EXT" | "COMPRESSED_SIGNED_RED_GREEN_RGTC2_EXT";
 
-type Pow2 = 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 | 32758 | 65536;
-type CubeImages = readonly [posX: BufferSource, negX: BufferSource, posY: BufferSource, negZ: BufferSource, posZ: BufferSource, negZ: BufferSource];
+export type Pow2 = 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 | 32758 | 65536;
+export type CubeImages = readonly [posX: BufferSource, negX: BufferSource, posY: BufferSource, negZ: BufferSource, posZ: BufferSource, negZ: BufferSource];
 
 interface Uncompressed {
     readonly internalFormat: UncompressedTextureFormatString;

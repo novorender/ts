@@ -15,7 +15,7 @@ export class GridModule implements RenderModule {
             size: "int",
             spacing: "float",
         });
-        updateUniforms(this.uniformsData.uniforms, initialState.grid, Matrices.fromRenderState(initialState));
+        updateUniforms(this.uniformsData.uniforms, initialState);
     }
 
     withContext(context: RenderContext) {
@@ -28,7 +28,6 @@ type UniformsData = GridModule["uniformsData"];
 interface RelevantRenderState {
     grid: RenderStateGrid;
     matrices: Matrices;
-    // TODO: Put matrices in state? (it's essentially a cache) ... create/update lazily in state wrapper?
 };
 
 // class GridModuleContext extends RenderModuleBase<RelevantRenderState> implements RenderModuleContext {
@@ -52,7 +51,7 @@ class GridModuleContext implements RenderModuleContext {
         const size = state.grid.size;
         if (this.state.hasChanged(state)) {
             const { gridUniformsData } = this;
-            updateUniforms(gridUniformsData.uniforms, state.grid, state.matrices);
+            updateUniforms(gridUniformsData.uniforms, state);
             renderer.update({ kind: "UNIFORM_BUFFER", srcData: gridUniformsData.buffer, targetBuffer: gridUniformsBuffer });
             // const { begin, end } = gridUniformsData.dirtyRange;
             // renderer.update({ kind: "UNIFORM_BUFFER", srcData: gridUniformsData.buffer, targetBuffer: gridUniformsBuffer, size: end - begin, srcOffset: begin, targetOffset: begin });
@@ -75,7 +74,8 @@ class GridModuleContext implements RenderModuleContext {
     }
 }
 
-function updateUniforms(uniforms: UniformsData["uniforms"], grid: RenderStateGrid, matrices: Matrices) {
+function updateUniforms(uniforms: UniformsData["uniforms"], state: RelevantRenderState) {
+    const { grid, matrices } = state;
     const { axisX, axisY, origin } = grid;
     const m = [
         ...axisX, 0,

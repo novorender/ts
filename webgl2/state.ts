@@ -189,7 +189,7 @@ export function setState(context: RendererContext, params: StateParams) {
             const binding = textures[i];
             const texture = binding?.texture ?? null;
             gl.activeTexture(texture0 + i);
-            gl.bindTexture(gl[binding?.target ?? "TEXTURE_2D"], texture);
+            gl.bindTexture(gl[binding?.kind ?? "TEXTURE_2D"], texture);
             const sampler = binding?.sampler ?? null;
             gl.bindSampler(i, sampler);
         }
