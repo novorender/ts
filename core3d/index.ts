@@ -4,12 +4,13 @@ import { RenderContext } from "./context";
 import { createModules } from "./module";
 import { defaultRenderState, modifyRenderState } from "./state";
 import { OrbitController } from "./controller";
+import { downloadScene } from "./scene";
 
 export * from "./state";
 export * from "./context";
 export * from "./module";
 
-export function run(canvas: HTMLCanvasElement) {
+export async function run(canvas: HTMLCanvasElement) {
     const renderer = createWebGL2Renderer(canvas, {
         alpha: true,
         antialias: false,
@@ -25,7 +26,19 @@ export function run(canvas: HTMLCanvasElement) {
     const controller = new OrbitController({ kind: "orbit" }, canvas);
     let state = defaultRenderState();
     let prevState = state;
-    state = modifyRenderState(state, { background: { url: "https://api.novorender.com/assets/env/lake/", blur: 0.25 }, grid: { enabled: true } });
+    // const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
+    // const sceneUrl = new URL("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/", scriptUrl).toString();
+
+    const scene = await downloadScene("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/");
+
+    state = modifyRenderState(state, {
+        scene,
+        background: { url: "https://api.novorender.com/assets/env/lake/", blur: 0.25 },
+        // camera: { back: 10000 },
+        grid: { enabled: true },
+    });
+
+    controller.autoFitToScene(state);
 
     function resize() {
         const scale = devicePixelRatio;

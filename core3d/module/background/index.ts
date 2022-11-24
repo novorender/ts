@@ -1,10 +1,10 @@
 import { DerivedRenderState, RenderContext, RenderStateBackground } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
 import { createUniformBufferProxy } from "../uniforms";
+import { getUniformLocations } from "webgl2";
+import { KTX } from "./ktx";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { KTX } from "core3d/ktx";
-import { getUniformLocations } from "@novorender/webgl2";
 
 export class BackgroundModule implements RenderModule {
     readonly uniformsData;
@@ -62,18 +62,25 @@ class BackgroundModuleInstance implements RenderModuleContext {
 
         if (this.state.hasChanged({ background })) {
             const { backgroundUniformsData } = this;
-            const { url } = state.background;
             updateUniforms(backgroundUniformsData.uniforms, state);
+            renderer.update({ kind: "UNIFORM_BUFFER", srcData: backgroundUniformsData.buffer, targetBuffer: backgroundUniformsBuffer });
+
+            const { url } = state.background;
             // abort any pending downloads
             if (this.abortController) {
                 this.abortController.abort();
                 this.abortController = undefined;
             }
             if (url && url != this.url) {
-                this.downloadTextures(url).then(textures => {
+                this.abortController = new AbortController();
+                downloadTextures(context, url, this.abortController).then(textures => {
                     this.textures = textures;
+                    this.abortController = undefined;
                     context.changed = true;
-                })
+                }, error => {
+                    console.error(error);
+                    this.abortController = undefined;
+                });
             } else if (!url) {
                 const { textures } = this;
                 if (textures) {
@@ -85,9 +92,7 @@ class BackgroundModuleInstance implements RenderModuleContext {
                 }
             }
             this.url = url;
-            renderer.update({ kind: "UNIFORM_BUFFER", srcData: backgroundUniformsData.buffer, targetBuffer: backgroundUniformsBuffer });
         }
-
 
         if (this.textures) {
             renderer.clear({ kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
@@ -130,37 +135,36 @@ class BackgroundModuleInstance implements RenderModuleContext {
         renderer.deleteBuffer(backgroundUniformsBuffer);
         renderer.deleteProgram(program);
     }
-
-    // TODO: Move into worker?
-    private async downloadTextures(urlDir: string) {
-        const { scriptUrl, renderer } = this.context;
-        const { signal } = this.abortController = new AbortController();
-        const baseUrl = new URL(urlDir, scriptUrl);
-        const promises = [
-            download(new URL("background.ktx", baseUrl)),
-            download(new URL("irradiance.ktx", baseUrl)),
-            download(new URL("radiance.ktx", baseUrl)),
-        ];
-        const [background, irradiance, radiance] = await Promise.all(promises);
-        this.abortController = undefined;
-        return { background, irradiance, radiance } as const;
-
-        async function download(url: URL) {
-            const response = await fetch(url, { mode: "cors", signal });
-            if (response.ok) {
-                var ktxData = await response.arrayBuffer();
-                var params = KTX.parseKTX(ktxData);
-                const texture = renderer.createTexture(params);
-                return texture;
-            } else {
-                throw new Error(`HTTP Error:${response.status} ${response.status}`);
-            }
-        }
-    }
 }
 
 function updateUniforms(uniforms: UniformsData["uniforms"], state: RelevantRenderState) {
     const { background } = state;
     uniforms.envBlurNormalized = background.blur ?? 0;
     uniforms.mipCount = 9; // TODO: Compute from actual texture file
+}
+
+// TODO: Move into worker?
+async function downloadTextures(context: RenderContext, urlDir: string, abortController: AbortController) {
+    const { scriptUrl, renderer } = context;
+    const { signal } = abortController;
+    const baseUrl = new URL(urlDir, scriptUrl);
+    const promises = [
+        download(new URL("background.ktx", baseUrl)),
+        download(new URL("irradiance.ktx", baseUrl)),
+        download(new URL("radiance.ktx", baseUrl)),
+    ];
+    const [background, irradiance, radiance] = await Promise.all(promises);
+    return { background, irradiance, radiance } as const;
+
+    async function download(url: URL) {
+        const response = await fetch(url, { mode: "cors", signal });
+        if (response.ok) {
+            var ktxData = await response.arrayBuffer();
+            var params = KTX.parseKTX(ktxData);
+            const texture = renderer.createTexture(params);
+            return texture;
+        } else {
+            throw new Error(`HTTP Error:${response.status} ${response.status}`);
+        }
+    }
 }

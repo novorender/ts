@@ -31,7 +31,7 @@ class DirtyRange {
     }
 
     get isEmpty() {
-        return this.end >= this.begin;
+        return this.begin >= this.end;
     }
 
     expand(begin: number, end: number) {

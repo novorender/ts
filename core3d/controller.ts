@@ -1,5 +1,5 @@
 import { glMatrix, mat3, quat, ReadonlyQuat, ReadonlyVec3, vec2, vec3 } from "gl-matrix";
-import { modifyRenderState, RenderState } from "./state";
+import { modifyRenderState, RenderState, RenderStateScene } from "./state";
 
 function clamp(v: number, min: number, max: number) {
     if (v < min) {
@@ -198,7 +198,8 @@ abstract class BaseController {
     protected pan(deltaX: number, deltaY: number, rot: mat3): void { }
     protected orbit(deltaX: number, deltaY: number, rot: mat3, invert?: boolean): void { }
     protected zoom(delta: number, x: number, y: number): void { }
-    protected abstract update(): void;
+    abstract autoFitToScene(state: RenderState): void;
+    abstract update(): void;
 
     updateRenderState(state: RenderState): RenderState {
         const { camera } = state;
@@ -308,7 +309,29 @@ export class OrbitController extends BaseController {
         this.clampDistance();
     }
 
-    update() {
+    override autoFitToScene(state: RenderState): void {
+        const { camera, scene } = state;
+        if (!scene) {
+            return;
+        }
+        const { pivotPoint } = this;
+        const { center, radius } = scene.config.boundingSphere;
+        // vec3.sub(position, position, pivotPoint);
+        vec3.copy(pivotPoint, center);
+        // vec3.add(position, position, pivotPoint);
+
+        switch (camera.kind) {
+            case "pinhole":
+                this.distance = radius / Math.tan(glMatrix.toRadian(camera.fov) / 2);
+                break;
+            case "orthographic":
+                this.distance = radius;
+                // camera.fieldOfView = radius * 2;
+                break;
+        }
+    }
+
+    override update() {
         const { position, rotation, yaw, pitch, distance, pivotPoint } = this;
         const yawAngle = glMatrix.toRadian(yaw);
         const pitchAngle = glMatrix.toRadian(pitch);

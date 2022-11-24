@@ -1,5 +1,6 @@
 import { quat, ReadonlyQuat, ReadonlyVec3, vec3 } from "gl-matrix";
 import { Matrices } from "./matrices";
+import { OctreeSceneConfig } from "./scene";
 
 export type RGBA = readonly [red: number, green: number, blue: number, alpha: number];
 
@@ -33,11 +34,17 @@ export interface RenderStateGrid {
     readonly spacing: number; // spacing between each cell
 }
 
+export interface RenderStateScene {
+    readonly url: string;
+    readonly config: OctreeSceneConfig;
+}
+
 export interface RenderState {
     readonly output: RenderStateOutput;
     readonly background: RenderStateBackground;
     readonly camera: RenderStateCamera;
     readonly grid: RenderStateGrid;
+    readonly scene: RenderStateScene | undefined;
 }
 
 export interface DerivedRenderState extends RenderState {
@@ -48,7 +55,6 @@ export interface DerivedRenderState extends RenderState {
 export interface DerivedMutableRenderState extends RenderState {
     matrices: Matrices;
 }
-
 
 type RecursivePartial<T> = {
     [P in keyof T]?: RecursivePartial<T[P]>;
@@ -66,7 +72,7 @@ export function modifyRenderState(state: RenderState, changes: RenderStateChange
 function mergeRecursive(original: any, changes: any) {
     const clone = { ...original };
     for (const key in changes) {
-        const originalValue = original[key];
+        const originalValue = original ? original[key] : undefined;
         const changedValue = changes[key];
         if (changedValue && typeof changedValue == "object" && !Array.isArray(changedValue)) {
             clone[key] = mergeRecursive(originalValue, changedValue);
@@ -103,6 +109,7 @@ export function defaultRenderState(): RenderState {
             size: 10,
             spacing: 1,
         },
+        scene: undefined,
     };
     return state;
 }

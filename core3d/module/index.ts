@@ -4,6 +4,7 @@ import { BackgroundModule } from "./background";
 import { GridModule } from "./grid";
 import { CameraModule } from "./camera";
 import { Matrices } from "../matrices";
+import { OctreeModule } from "./octree";
 
 // constructor takes RenderState object
 // this object contains all state (geometry, textures etc), or has at least the ability to reload state on demand if e.g. webgl context is lost
@@ -23,7 +24,7 @@ export function createModules(state: RenderState) {
         new CameraModule(derivedState),
         new BackgroundModule(derivedState),
         new GridModule(derivedState),
-        // TODO: Add octree module
+        new OctreeModule(derivedState),
     ]
 }
 

@@ -48,7 +48,6 @@ class GridModuleContext implements RenderModuleContext {
     render(state: DerivedRenderState) {
         const { context, program, gridUniformsBuffer } = this;
         const { renderer, cameraUniformsBuffer } = context;
-        const size = state.grid.size;
         if (this.state.hasChanged(state)) {
             const { gridUniformsData } = this;
             updateUniforms(gridUniformsData.uniforms, state);
@@ -58,6 +57,7 @@ class GridModuleContext implements RenderModuleContext {
         }
 
         if (state.grid.enabled) {
+            const { size } = state.grid;
             renderer.state({
                 program,
                 uniformBuffers: [cameraUniformsBuffer, gridUniformsBuffer],
