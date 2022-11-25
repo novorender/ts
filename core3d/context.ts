@@ -11,7 +11,6 @@ export class RenderContext {
     private readonly modules: (RenderModuleContext | undefined)[];
     private outputState;
     private cameraState;
-    readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
 
     // shared mutable state
     changed = true;
@@ -54,16 +53,18 @@ export class RenderContext {
 
         // set up viewport
         const { width, height } = renderer.canvas;
-        renderer.state({
-            viewport: { width, height }
-        })
 
         // render modules
         for (const module of this.modules) {
+            renderer.state({
+                viewport: { width, height }
+            })
             module?.render(derivedState);
+            // reset gl state
+            renderer.state(null);
         }
 
         // reset gl state
-        renderer.state(null);
+        // renderer.state(null);
     }
 }

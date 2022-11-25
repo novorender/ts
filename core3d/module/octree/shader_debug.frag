@@ -7,11 +7,12 @@ layout(std140) uniform Camera {
 
 layout(std140) uniform Octree {
     mat4 objectClipMatrix;
+    vec4 debugColor;
 } octree;
 
-in vec3 normal;
+in vec4 color;
 out vec4 fragColor;
 
 void main() {
-    fragColor = vec4(normal * .5 + .5, 0.1);
+    fragColor = color;
 }

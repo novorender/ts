@@ -15,6 +15,11 @@ export interface WebGLMultiDrawExt {
         firstsList: Int32Array, firstsOffset: number,
         countsList: Int32Array, countsOffset: number,
         drawCount: number): void;
+    multiDrawElementsWEBGL(mode: number,
+        offsetsList: Int32Array, offsetsOffset: number,
+        type: number,
+        countsList: Int32Array, countsOffset: number,
+        drawCount: number): void;
 }
 
 export function createContext(gl: WebGL2RenderingContext) {

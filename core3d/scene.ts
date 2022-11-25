@@ -1,7 +1,7 @@
 import type { ReadonlyMat4, ReadonlyVec3 } from "gl-matrix";
 import type { NodeData } from "./module/octree/parser";
 import type { RenderContext, RenderStateScene } from ".";
-import { OctreeNode } from "./module/octree/node";
+import { OctreeContext, OctreeNode } from "./module/octree/node";
 
 /** Axis-aligned bounding box */
 export interface AABB {
@@ -64,7 +64,7 @@ export async function downloadScene(url: string, abortController?: AbortControll
     return { url: baseUrl.toString(), config } as const;
 }
 
-export function createSceneRootNode(context: RenderContext, config: OctreeSceneConfig) {
+export function createSceneRootNode(context: OctreeContext, config: OctreeSceneConfig) {
     const data = rootNodeData(config);
     return new OctreeNode(context, data);
 }

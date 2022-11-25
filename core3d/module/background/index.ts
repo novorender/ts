@@ -145,8 +145,9 @@ function updateUniforms(uniforms: UniformsData["uniforms"], state: RelevantRende
 
 // TODO: Move into worker?
 async function downloadTextures(context: RenderContext, urlDir: string, abortController: AbortController) {
-    const { scriptUrl, renderer } = context;
+    const { renderer } = context;
     const { signal } = abortController;
+    const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     const baseUrl = new URL(urlDir, scriptUrl);
     const promises = [
         download(new URL("background.ktx", baseUrl)),

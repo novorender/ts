@@ -107,7 +107,8 @@ export interface UpdateParams {
 
 export type DrawParams =
     DrawParamsArrays | DrawParamsArraysMultiDraw | DrawParamsArraysInstanced |
-    DrawParamsElements | DrawParamsElementsRange | DrawParamsElementsInstanced;
+    DrawParamsElements | DrawParamsElementsRange | DrawParamsElementsMultiDraw | DrawParamsElementsInstanced;
+// TODO: Add multi_draw_instanced variants for arrays and elements
 
 export type DrawMode = "POINTS" | "LINE_STRIP" | "LINE_LOOP" | "LINES" | "TRIANGLE_STRIP" | "TRIANGLE_FAN" | "TRIANGLES";
 
@@ -156,6 +157,17 @@ export interface DrawParamsElementsRange extends DrawParamsBase {
     readonly minIndex: number; // start vertex index
     /** The maximum array index contained in buffer range. */
     readonly maxIndex: number; // end vertex index
+}
+
+export interface DrawParamsElementsMultiDraw extends DrawParamsBase {
+    /** Equivalent to `ext.multiDrawArraysWEBGL()` */
+    readonly kind: "elements_multidraw",
+    readonly drawCount: number;
+    readonly indexType: "UNSIGNED_BYTE" | "UNSIGNED_SHORT" | "UNSIGNED_INT";
+    readonly offsetsList: Int32Array;
+    readonly offsetsOffset?: number; // default: 0
+    readonly countsList: Int32Array;
+    readonly countsOffset?: number; // default: 0
 }
 
 export interface DrawParamsArraysInstanced extends DrawParamsBase {

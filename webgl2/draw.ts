@@ -1,4 +1,4 @@
-import type { RendererContext, DrawParams, DrawParamsArraysInstanced, DrawParamsArraysMultiDraw, DrawParamsElements, DrawParamsElementsInstanced, DrawParamsElementsRange } from "./";
+import type { RendererContext, DrawParams, DrawParamsArraysInstanced, DrawParamsArraysMultiDraw, DrawParamsElements, DrawParamsElementsInstanced, DrawParamsElementsRange, DrawParamsElementsMultiDraw } from "./";
 
 export function draw(context: RendererContext, params: DrawParams) {
     const { gl } = context;
@@ -6,12 +6,17 @@ export function draw(context: RendererContext, params: DrawParams) {
     if (isMultiDraw(params)) {
         const { multiDraw } = context.extensions;
         if (multiDraw) {
-            const { drawCount } = params;
-            const firstsList = params.firstsList;
-            const firstsOffset = params.firstsOffset ?? 0;
-            const countsList = params.countsList;
-            const countsOffset = params.countsOffset ?? 0;
-            multiDraw.multiDrawArraysWEBGL(gl[mode], firstsList, firstsOffset, countsList, countsOffset, drawCount);
+            const { drawCount, countsList, countsOffset } = params;
+            switch (params.kind) {
+                case "arrays_multidraw":
+                    const { firstsList, firstsOffset } = params;
+                    multiDraw.multiDrawArraysWEBGL(gl[mode], firstsList, firstsOffset ?? 0, countsList, countsOffset ?? 0, drawCount);
+                    break;
+                case "elements_multidraw":
+                    const { offsetsList, offsetsOffset, indexType } = params;
+                    multiDraw.multiDrawElementsWEBGL(gl[mode], countsList, countsOffset ?? 0, gl[indexType], offsetsList, offsetsOffset ?? 0, drawCount);
+                    break;
+            }
         } else {
             console.warn("no multi_draw gl extension!");
         }
@@ -41,7 +46,7 @@ function isInstanced(params: DrawParams): params is DrawParamsArraysInstanced | 
     return "instanceCount" in params;
 }
 
-function isElements(params: DrawParams): params is DrawParamsElements | DrawParamsElementsInstanced | DrawParamsElementsRange {
+function isElements(params: DrawParams): params is DrawParamsElements | DrawParamsElementsInstanced | DrawParamsElementsRange | DrawParamsElementsMultiDraw {
     return "indexType" in params;
 }
 
@@ -49,7 +54,7 @@ function isRange(params: DrawParams): params is DrawParamsElementsRange {
     return "start" in params && "end" in params;
 }
 
-function isMultiDraw(params: DrawParams): params is DrawParamsArraysMultiDraw {
+function isMultiDraw(params: DrawParams): params is DrawParamsArraysMultiDraw | DrawParamsElementsMultiDraw {
     return "drawCount" in params;
 }
 

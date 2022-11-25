@@ -18,7 +18,7 @@ export async function run(canvas: HTMLCanvasElement) {
         desynchronized: false,
         failIfMajorPerformanceCaveat: true,
         powerPreference: "high-performance",
-        premultipliedAlpha: false,
+        premultipliedAlpha: true,
         preserveDrawingBuffer: false,
         stencil: false,
     });
@@ -29,7 +29,8 @@ export async function run(canvas: HTMLCanvasElement) {
     // const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     // const sceneUrl = new URL("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/", scriptUrl).toString();
 
-    const scene = await downloadScene("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/");
+    const scene = await downloadScene("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/"); // condos
+    // const scene = await downloadScene("/assets/octrees/0f762c06a61f4f1c8d3b7cf1b091515e_/"); // hospital
 
     state = modifyRenderState(state, {
         scene,

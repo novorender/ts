@@ -285,8 +285,8 @@ export class OrbitController extends BaseController {
     rotate(deltaX: number, deltaY: number) {
         const { params } = this;
         const { rotationalVelocity } = params;
-        this.yaw += -deltaX * rotationalVelocity;
-        this.pitch += deltaY * rotationalVelocity;
+        this.yaw += deltaX * rotationalVelocity;
+        this.pitch += -deltaY * rotationalVelocity;
         this.wrapYaw();
         this.clampPitch();
     }

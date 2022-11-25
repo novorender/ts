@@ -1,17 +1,19 @@
 import { DrawMode, DrawParams, WebGL2Renderer } from "webgl2";
-import { NodeGeometry } from "./parser";
+import { MeshDrawRange, NodeGeometry } from "./parser";
 import { MaterialType } from "./schema";
 
 export interface Mesh {
+    readonly materialType: MaterialType;
     readonly vao: WebGLVertexArrayObject;
     readonly drawParams: DrawParams;
+    readonly drawRanges: readonly MeshDrawRange[];
 }
 
 // create a single(!) mesh (for both opaque, transparent, doublesided) - use sub ranges to render with different render states
 export function* createMeshes(renderer: WebGL2Renderer, geometry: NodeGeometry, primitiveType: DrawMode) {
     for (const subMesh of geometry.subMeshes) {
-        if (subMesh.materialType == MaterialType.transparent)
-            continue;
+        // if (subMesh.materialType == MaterialType.transparent)
+        //     continue;
         const vb = renderer.createBuffer({ kind: "ARRAY_BUFFER", srcData: subMesh.vertexBuffer });
         const ib = typeof subMesh.indices != "number" ? renderer.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: subMesh.indices }) : undefined;
         const count = typeof subMesh.indices == "number" ? subMesh.indices : subMesh.indices.length;
@@ -28,6 +30,7 @@ export function* createMeshes(renderer: WebGL2Renderer, geometry: NodeGeometry, 
             renderer.deleteBuffer(ib);
         }
         const drawParams: DrawParams = { kind: "elements", mode: primitiveType, indexType, count };
-        yield { vao, drawParams } as Mesh;
+        const { drawRanges, materialType } = subMesh;
+        yield { vao, drawParams, drawRanges, materialType } as Mesh;
     }
 }

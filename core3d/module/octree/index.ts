@@ -2,12 +2,14 @@ import { DerivedRenderState, RenderContext, RenderStateScene } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
 import { createUniformBufferProxy } from "../uniforms";
 import { CoordSpace, Matrices } from "core3d/matrices";
-import vertexShader from "./shader.vert";
-import fragmentShader from "./shader.frag";
 import { mat4 } from "gl-matrix";
 import { OctreeNode } from "./node";
 import { createSceneRootNode } from "@novorender/core3d/scene";
 import { Downloader } from "./download";
+import vertexShader from "./shader.vert";
+import fragmentShader from "./shader.frag";
+import vertexShaderDebug from "./shader_debug.vert";
+import fragmentShaderDebug from "./shader_debug.frag";
 
 export class OctreeModule implements RenderModule {
     readonly uniformsData;
@@ -34,38 +36,42 @@ interface RelevantRenderState {
 class OctreeModuleContext implements RenderModuleContext {
     private readonly state;
     readonly program: WebGLProgram;
+    readonly programDebug: WebGLProgram;
     readonly octreeUniformsBuffer: WebGLBuffer;
     readonly downloader = new Downloader();
     url: string | undefined;
     rootNode: OctreeNode | undefined;
-    version: string | undefined;
+    version: string = "";
+    readonly projectedSizeSplitThreshold = 1; // / (settings.quality.detail.value * deviceProfile.detailBias); // baseline node size split threshold = 50% of view height
 
-    constructor(readonly context: RenderContext, readonly octreeUniformsData: UniformsData, initialState: RelevantRenderState) {
+    constructor(readonly renderContext: RenderContext, readonly octreeUniformsData: UniformsData, initialState: RelevantRenderState) {
         this.state = new RenderModuleState(initialState);
-        const { renderer } = context;
+        const { renderer } = renderContext;
         // create static GPU resources here
         const uniformBufferBlocks = ["Camera", "Octree"];
         this.program = renderer.createProgram({ vertexShader, fragmentShader, uniformBufferBlocks });
+        this.programDebug = renderer.createProgram({ vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
         this.octreeUniformsBuffer = renderer.createBuffer({ kind: "UNIFORM_BUFFER", srcData: octreeUniformsData.buffer });
     }
 
     render(state: DerivedRenderState) {
-        const { context, program, octreeUniformsBuffer } = this;
-        const { renderer, cameraUniformsBuffer } = context;
+        const { renderContext, program, programDebug, octreeUniformsBuffer } = this;
+        const { renderer, cameraUniformsBuffer } = renderContext;
         if (this.state.hasChanged(state)) {
             const { octreeUniformsData } = this;
             updateUniforms(octreeUniformsData.uniforms, state);
             renderer.update({ kind: "UNIFORM_BUFFER", srcData: octreeUniformsData.buffer, targetBuffer: octreeUniformsBuffer });
 
-            const url = state.scene?.url;
+            const { scene } = state;
+            const url = scene?.url;
             if (url && url != this.url) {
+                const { config } = scene;
                 this.rootNode?.dispose();
-                const { version } = state.scene.config;
+                const { version } = scene.config;
                 this.version = version;
-                this.rootNode = createSceneRootNode(context, state.scene.config);
                 this.downloader.baseUrl = new URL(url);
-                this.downloadNode(this.rootNode, state.scene.config.rootByteSize);
-                // TODO: add download so we can cancel?
+                this.rootNode = createSceneRootNode(this, config);
+                this.rootNode.downloadGeometry();
             } else if (!url) {
                 this.rootNode?.dispose();
                 this.rootNode = undefined;
@@ -74,39 +80,65 @@ class OctreeModuleContext implements RenderModuleContext {
         }
 
         const { rootNode } = this;
-        if (rootNode && cameraUniformsBuffer) {
+        if (rootNode) {
             rootNode.update(state);
-            renderer.state({ program });
-            rootNode.render(cameraUniformsBuffer);
+            if (cameraUniformsBuffer) {
+                renderer.state({
+                    program: program,
+                    depthTest: true,
+                    depthWriteMask: true,
+                    cullEnable: false
+                });
+                rootNode.render();
+
+                const debug = false;
+                if (debug) {
+                    renderer.state({
+                        program: programDebug,
+                        depthFunc: "GREATER",
+                        depthTest: true,
+                        depthWriteMask: false,
+                        cullEnable: true,
+                        blendEnable: true,
+                        blendSrcRGB: "CONSTANT_ALPHA",
+                        blendDstRGB: "ONE_MINUS_CONSTANT_ALPHA",
+                        blendColor: [0, 0, 0, .25],
+                    });
+                    rootNode.renderDebug();
+
+                    renderer.state({
+                        program: programDebug,
+                        depthFunc: "LESS",
+                        blendColor: [0, 0, 0, .75],
+                    });
+                    rootNode.renderDebug();
+
+                    renderer.state({
+                        program: programDebug,
+                        depthTest: false,
+                        depthWriteMask: true,
+                        cullEnable: false,
+                        blendEnable: false,
+                        blendSrcRGB: "ONE",
+                        blendDstRGB: "ZERO",
+                        blendColor: [0, 0, 0, 0],
+                    });
+                }
+            }
+
+            // split and download
+            rootNode.lod(state);
         }
     }
 
     dispose() {
-        const { context, program, octreeUniformsBuffer, rootNode } = this;
-        const { renderer } = context;
+        const { renderContext, program, programDebug, octreeUniformsBuffer, rootNode } = this;
+        const { renderer } = renderContext;
         rootNode?.dispose();
         this.rootNode = undefined;
-        renderer.deleteProgram(program);
         renderer.deleteBuffer(octreeUniformsBuffer);
-    }
-
-    async downloadNode(node: OctreeNode, byteSize: number) {
-        try {
-            const { context } = this;
-            const download = this.downloader.downloadArrayBufferAbortable("root", new ArrayBuffer(byteSize));
-            node.beginDownload(download)
-            const buffer = await download.result;
-            if (buffer) {
-                node.endDownload(this.version!, buffer);
-                context.changed = true;
-            }
-        } catch (error: any) {
-            if (error.name != "AbortError") {
-                console.error(error);
-            } else {
-                console.info(`abort ${node.id}`);
-            }
-        }
+        renderer.deleteProgram(program);
+        renderer.deleteProgram(programDebug);
     }
 }
 
@@ -120,6 +152,10 @@ function updateUniforms(uniforms: UniformsData["uniforms"], state: RelevantRende
 
 
 /*
+
+make cameraUniformsBuffer in RenderContext ctor
+change schema such that submeshes can be any primitive type
+
 NB: keep js memory stuff in module class, not in context class!
 
 mvp:
