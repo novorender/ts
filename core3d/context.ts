@@ -1,6 +1,7 @@
-import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderModuleState, RenderStateCamera, DerivedMutableRenderState } from "./";
+import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderModuleState, RenderStateCamera } from "./";
 import { WebGL2Renderer } from "webgl2";
-import { Matrices } from "./matrices";
+import { matricesFromRenderState } from "./matrices";
+import { createViewFrustum } from "./viewFrustum";
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
@@ -46,9 +47,11 @@ export class RenderContext {
             this.changed = true;
         }
 
-        const derivedState = state as DerivedRenderState;
+        type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+        const derivedState = state as Mutable<DerivedRenderState>;
         if (resized || this.cameraState.hasChanged(state.camera)) {
-            (derivedState as DerivedMutableRenderState).matrices = Matrices.fromRenderState(state);
+            derivedState.matrices = matricesFromRenderState(state);
+            derivedState.viewFrustum = createViewFrustum(state, derivedState.matrices);
         }
 
         // set up viewport

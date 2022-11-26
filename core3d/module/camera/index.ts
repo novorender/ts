@@ -1,7 +1,6 @@
-import { RenderContext, RenderStateOutput, DerivedRenderState } from "core3d";
+import { RenderContext, RenderStateOutput, DerivedRenderState, Matrices, CoordSpace } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
 import { createUniformBufferProxy } from "../uniforms";
-import { CoordSpace, Matrices } from "core3d/matrices";
 
 export class CameraModule implements RenderModule {
     readonly uniformsData;

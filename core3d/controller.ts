@@ -19,6 +19,8 @@ abstract class BaseController {
     readonly rotation = quat.create();
     protected readonly mouseButtonsMap = { rotate: 1, pan: 4, orbit: 2, pivot: 2 };
     protected readonly fingersMap = { rotate: 1, pan: 2, orbit: 3, pivot: 3 };
+    protected readonly keys = new Set<string>();
+
 
     protected pointerTable: readonly { readonly id: number; readonly x: number; readonly y: number; }[] = [];
 
@@ -38,12 +40,16 @@ abstract class BaseController {
         const { domElement } = this;
         if (!domElement) return;
         const options = false;
-        domElement.addEventListener("click", this.preventDefault, options);
-        domElement.addEventListener("contextmenu", this.preventDefault, options);
+        domElement.tabIndex = 0;
+        domElement.addEventListener("keydown", this.keydown, options);
+        domElement.addEventListener("keyup", this.keyup, options);
+        domElement.addEventListener("blur", this.blur, options);
+        domElement.addEventListener("click", this.click, options);
+        domElement.addEventListener("contextmenu", this.contextmenu, options);
         domElement.addEventListener("mousedown", this.mousedown, options);
         domElement.addEventListener("mouseup", this.mouseup, options);
         domElement.addEventListener("mousemove", this.mousemove, options);
-        domElement.addEventListener("wheel", this.mousewheel, options);
+        domElement.addEventListener("wheel", this.wheel, options);
         domElement.addEventListener("touchstart", this.touchstart, options);
         domElement.addEventListener("touchmove", this.touchmove, options);
         domElement.addEventListener("touchend", this.touchend, options);
@@ -54,25 +60,64 @@ abstract class BaseController {
         const { domElement } = this;
         if (!domElement) return;
         const options = false;
-        domElement.removeEventListener("click", this.preventDefault, options);
-        domElement.removeEventListener("contextmenu", this.preventDefault, options);
+        domElement.removeEventListener("keydown", this.keydown, options);
+        domElement.removeEventListener("keyup", this.keyup, options);
+        domElement.removeEventListener("blur", this.blur, options);
+        domElement.removeEventListener("click", this.click, options);
+        domElement.removeEventListener("contextmenu", this.contextmenu, options);
         domElement.removeEventListener("mousedown", this.mousedown, options);
         domElement.removeEventListener("mouseup", this.mouseup, options);
         domElement.removeEventListener("mousemove", this.mousemove, options);
-        domElement.removeEventListener("wheel", this.mousewheel, options);
+        domElement.removeEventListener("wheel", this.wheel, options);
         domElement.removeEventListener("touchstart", this.touchstart, options);
         domElement.removeEventListener("touchmove", this.touchmove, options);
         domElement.removeEventListener("touchend", this.touchend, options);
         domElement.removeEventListener("touchcancel", this.touchcancel, options);
     }
 
-    private preventDefault = (e: Event) => {
+    private click = (e: Event) => {
         e.preventDefault();
+    };
+
+    private contextmenu = (e: Event) => {
+        e.preventDefault();
+    };
+
+    private keydown = (e: KeyboardEvent) => {
+        switch (e.code) {
+            case "KeyW":
+            case "KeyS":
+            case "KeyA":
+            case "KeyD":
+            case "KeyQ":
+            case "KeyE":
+                e.preventDefault();
+        }
+        this.keys.add(e.code);
+    };
+
+    private keyup = (e: KeyboardEvent) => {
+        switch (e.code) {
+            case "KeyW":
+            case "KeyS":
+            case "KeyA":
+            case "KeyD":
+            case "KeyQ":
+            case "KeyE":
+                e.preventDefault();
+        }
+        this.keys.delete(e.code);
+    };
+
+    private blur = (e: FocusEvent) => {
+        if ("exitPointerLock" in document) document.exitPointerLock();
+        this.keys.clear();
     };
 
     private mousedown = (e: MouseEvent) => {
         if (!this.enabled) return;
         this.needPointerLock = true;
+        this.domElement.focus();
         e.preventDefault();
     };
 
@@ -83,7 +128,7 @@ abstract class BaseController {
         this.needPointerLock = false;
     };
 
-    private mousewheel = (e: WheelEvent) => {
+    private wheel = (e: WheelEvent) => {
         if (!this.enabled) return;
         this.zoom(e.deltaY, e.offsetX, e.offsetY);
     };
@@ -105,7 +150,7 @@ abstract class BaseController {
             mat3.fromQuat(rot, this.rotation);
             this.pan(e.movementX, e.movementY, rot);
         } else if (e.buttons & this.mouseButtonsMap.rotate) {
-            this.rotate(-e.movementX, -e.movementY);
+            this.rotate(e.movementX, e.movementY);
         }
     };
 
@@ -282,20 +327,30 @@ export class OrbitController extends BaseController {
         this.distance = clamp(this.distance, 0, this.params.maxDistance);
     }
 
+    private get multiplier() {
+        const { keys } = this;
+        let multiplier = 1;
+        if (keys.has("ShiftLeft")) multiplier *= 10;
+        if (keys.has("ShiftRight")) multiplier *= 10;
+        if (keys.has("AltLeft")) multiplier *= 0.1;
+        if (keys.has("AltRight")) multiplier *= 0.1;
+        return multiplier;
+    }
+
     rotate(deltaX: number, deltaY: number) {
         const { params } = this;
         const { rotationalVelocity } = params;
-        this.yaw += deltaX * rotationalVelocity;
-        this.pitch += -deltaY * rotationalVelocity;
+        this.yaw += -deltaX * rotationalVelocity;
+        this.pitch += deltaY * rotationalVelocity;
         this.wrapYaw();
         this.clampPitch();
     }
 
     pan(deltaX: number, deltaY: number, rot: mat3) {
-        const { pivotPoint, params } = this;
+        const { pivotPoint, params, multiplier } = this;
         const { linearVelocity } = params;
-        const dx = vec3.fromValues(-deltaX * linearVelocity, 0, 0);
-        const dy = vec3.fromValues(0, deltaY * linearVelocity, 0);
+        const dx = vec3.fromValues(-deltaX * linearVelocity * multiplier, 0, 0);
+        const dy = vec3.fromValues(0, deltaY * linearVelocity * multiplier, 0);
         const d = vec3.create();
         vec3.transformMat3(dx, dx, rot);
         vec3.transformMat3(dy, dy, rot);
@@ -304,8 +359,8 @@ export class OrbitController extends BaseController {
     }
 
     zoom(delta: number) {
-        const { params } = this;
-        this.distance += delta * params.linearVelocity;
+        const { params, multiplier, distance } = this;
+        this.distance += delta * params.linearVelocity * multiplier * distance / 100;
         this.clampDistance();
     }
 
@@ -316,9 +371,7 @@ export class OrbitController extends BaseController {
         }
         const { pivotPoint } = this;
         const { center, radius } = scene.config.boundingSphere;
-        // vec3.sub(position, position, pivotPoint);
         vec3.copy(pivotPoint, center);
-        // vec3.add(position, position, pivotPoint);
 
         switch (camera.kind) {
             case "pinhole":

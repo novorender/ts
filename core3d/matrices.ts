@@ -1,33 +1,37 @@
-import { mat3, mat4, vec3, vec4 } from "gl-matrix";
-import type { RenderStateCamera, RenderStateOutput } from "./state";
-
-export enum CoordSpace {
-    World,
-    View,
-    Clip,
-};
+import { mat3, mat4, ReadonlyMat3, ReadonlyMat4, vec3, vec4 } from "gl-matrix";
+import { CoordSpace, Matrices, RenderStateCamera, RenderStateOutput } from "./state";
 
 function index(from: CoordSpace, to: CoordSpace): number {
     return from * 4 + to;
 }
 
-export class Matrices {
+export function matricesFromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }): Matrices {
+    const { camera, output } = state;
+    const { width, height } = output;
+    const aspectRatio = width / height;
+    const fovY = camera.fov * Math.PI / 180;
+    const worldView = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
+    const viewClip = mat4.perspective(mat4.create(), fovY, aspectRatio, camera.near, camera.far);
+    return new MatricesImpl(worldView, viewClip);
+}
+
+class MatricesImpl implements Matrices {
     private _mtx4 = new Array<mat4 | undefined>(4 * 4);
     private _mtx3 = new Array<mat3 | undefined>(4 * 4);
 
-    static get identity() {
-        return new Matrices(mat4.create(), mat4.create());
-    }
+    // static get identity(): Matrices {
+    //     return new MatricesImpl(mat4.create(), mat4.create());
+    // }
 
-    static fromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }) {
-        const { camera, output } = state;
-        const { width, height } = output;
-        const aspectRatio = width / height;
-        const fovY = camera.fov * Math.PI / 180;
-        const worldView = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
-        const viewClip = mat4.perspective(mat4.create(), fovY, aspectRatio, camera.front, camera.back);
-        return new Matrices(worldView, viewClip);
-    }
+    // static fromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }): Matrices {
+    //     const { camera, output } = state;
+    //     const { width, height } = output;
+    //     const aspectRatio = width / height;
+    //     const fovY = camera.fov * Math.PI / 180;
+    //     const worldView = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
+    //     const viewClip = mat4.perspective(mat4.create(), fovY, aspectRatio, camera.near, camera.far);
+    //     return new MatricesImpl(worldView, viewClip);
+    // }
 
     constructor(viewWorld: mat4, viewClip: mat4) {
         this._mtx4[index(CoordSpace.View, CoordSpace.World)] = viewWorld;
@@ -38,7 +42,7 @@ export class Matrices {
         mat4.invert(clipView, viewClip);
     }
 
-    getMatrix(from: CoordSpace, to: CoordSpace): mat4 {
+    getMatrix(from: CoordSpace, to: CoordSpace): ReadonlyMat4 {
         console.assert(from != to);
         const idx = index(from, to);
         let m = this._mtx4[idx];
@@ -54,7 +58,7 @@ export class Matrices {
         return m;
     }
 
-    getMatrixNormal(from: CoordSpace, to: CoordSpace): mat3 {
+    getMatrixNormal(from: CoordSpace, to: CoordSpace): ReadonlyMat3 {
         console.assert(from != to);
         const idx = index(from, to);
         let m = this._mtx3[idx];

@@ -1,7 +1,6 @@
-import { DerivedRenderState, RenderContext, RenderStateGrid } from "core3d";
+import { CoordSpace, DerivedRenderState, Matrices, RenderContext, RenderStateGrid } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
 import { createUniformBufferProxy } from "../uniforms";
-import { CoordSpace, Matrices } from "core3d/matrices";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat4 } from "gl-matrix";

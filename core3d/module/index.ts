@@ -3,8 +3,9 @@ import { RenderContext } from "../context";
 import { BackgroundModule } from "./background";
 import { GridModule } from "./grid";
 import { CameraModule } from "./camera";
-import { Matrices } from "../matrices";
 import { OctreeModule } from "./octree";
+import { matricesFromRenderState } from "../matrices";
+import { createViewFrustum } from "../viewFrustum";
 
 // constructor takes RenderState object
 // this object contains all state (geometry, textures etc), or has at least the ability to reload state on demand if e.g. webgl context is lost
@@ -18,8 +19,14 @@ export interface RenderModuleContext {
     dispose(): void;
 }
 
+function createDerivedState(state: RenderState): DerivedRenderState {
+    const matrices = matricesFromRenderState(state);
+    const viewFrustum = createViewFrustum(state, matrices);
+    return { ...state, matrices, viewFrustum };
+}
+
 export function createModules(state: RenderState) {
-    const derivedState = { ...state, ...{ matrices: Matrices.fromRenderState(state) } };
+    const derivedState = createDerivedState(state);
     return [
         new CameraModule(derivedState),
         new BackgroundModule(derivedState),

@@ -1,8 +1,29 @@
-import { quat, ReadonlyQuat, ReadonlyVec3, vec3 } from "gl-matrix";
-import { Matrices } from "./matrices";
+import { quat, vec3, ReadonlyQuat, ReadonlyVec3, ReadonlyVec4, ReadonlyMat4, ReadonlyMat3 } from "gl-matrix";
 import { OctreeSceneConfig } from "./scene";
 
 export type RGBA = readonly [red: number, green: number, blue: number, alpha: number];
+
+export interface ViewFrustum {
+    readonly left: ReadonlyVec4;
+    readonly right: ReadonlyVec4;
+    readonly top: ReadonlyVec4;
+    readonly bottom: ReadonlyVec4;
+    readonly near: ReadonlyVec4;
+    readonly far: ReadonlyVec4;
+    readonly image: ReadonlyVec4; // a plane coincident with camera position and parallel to screen/image plane in world space
+    readonly planes: readonly [left: ReadonlyVec4, right: ReadonlyVec4, top: ReadonlyVec4, bottom: ReadonlyVec4, near: ReadonlyVec4, far: ReadonlyVec4];
+}
+
+export enum CoordSpace {
+    World,
+    View,
+    Clip,
+};
+
+export interface Matrices {
+    getMatrix(from: CoordSpace, to: CoordSpace): ReadonlyMat4;
+    getMatrixNormal(from: CoordSpace, to: CoordSpace): ReadonlyMat3;
+}
 
 export interface RenderStateOutput {
     readonly width: number;
@@ -20,8 +41,8 @@ export interface RenderStateCamera {
     readonly position: ReadonlyVec3;
     readonly rotation: ReadonlyQuat;
     readonly fov: number;
-    readonly front: number;
-    readonly back: number;
+    readonly near: number;
+    readonly far: number;
 }
 
 export interface RenderStateGrid {
@@ -49,11 +70,7 @@ export interface RenderState {
 
 export interface DerivedRenderState extends RenderState {
     readonly matrices: Matrices;
-}
-
-// Derived state is not meant to be set directly by app
-export interface DerivedMutableRenderState extends RenderState {
-    matrices: Matrices;
+    readonly viewFrustum: ViewFrustum;
 }
 
 type RecursivePartial<T> = {
@@ -97,8 +114,8 @@ export function defaultRenderState(): RenderState {
             position: vec3.create(),
             rotation: quat.create(),
             fov: 45,
-            front: 0.1,
-            back: 1000,
+            near: 0.1,
+            far: 1000,
         },
         grid: {
             enabled: false,

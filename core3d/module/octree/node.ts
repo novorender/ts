@@ -1,7 +1,6 @@
-import { CoordSpace } from "@novorender/core3d/matrices";
-import { DrawParams, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw } from "@novorender/webgl2";
-import { DerivedRenderState, RenderContext } from "core3d";
-import { mat4, ReadonlyVec3, vec3, vec4 } from "gl-matrix";
+import { mat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
+import { DrawParams, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw } from "webgl2";
+import { CoordSpace, DerivedRenderState, RenderContext } from "core3d";
 import { createUniformBufferProxy } from "../uniforms";
 import { AbortableDownload, Downloader } from "./download";
 import { createMeshes, Mesh } from "./mesh";
@@ -37,6 +36,8 @@ export class OctreeNode {
     readonly children: OctreeNode[] = [];
     readonly meshes: Mesh[] = [];
     readonly uniformsData;
+    private readonly center4: ReadonlyVec4;
+    private readonly corners: ReadonlyVec4[];
 
     state = NodeState.collapsed;
     download: AbortableDownload | undefined;
@@ -46,10 +47,25 @@ export class OctreeNode {
 
     constructor(readonly context: OctreeContext, readonly data: NodeData) {
         // create uniform buffer
-        const { sphere } = data.bounds;
+        const { sphere, box } = data.bounds;
+        const { center, radius } = sphere;
         this.id = data.id;
-        this.center = sphere.center;
-        this.radius = sphere.radius;
+        this.center = center;
+        this.radius = radius;
+        this.center4 = vec4.fromValues(center[0], center[1], center[2], 1);
+        const [x0, y0, z0] = box.min;
+        const [x1, y1, z1] = box.max;
+        this.corners = [
+            vec4.fromValues(x0, y0, z0, 1),
+            vec4.fromValues(x1, y0, z0, 1),
+            vec4.fromValues(x0, y1, z0, 1),
+            vec4.fromValues(x1, y1, z0, 1),
+            vec4.fromValues(x0, y0, z1, 1),
+            vec4.fromValues(x1, y0, z1, 1),
+            vec4.fromValues(x0, y1, z1, 1),
+            vec4.fromValues(x1, y1, z1, 1),
+        ];
+
         const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         this.size = Math.pow(2, data.tolerance) * toleranceScale;
         this.uniformsData = createUniformBufferProxy({
@@ -65,8 +81,10 @@ export class OctreeNode {
         for (const mesh of meshes) {
             renderer.deleteVertexArray(mesh.vao);
         }
-        if (uniformsBuffer)
+        if (uniformsBuffer) {
             renderer.deleteBuffer(uniformsBuffer);
+            this.uniformsBuffer = undefined;
+        }
         meshes.length = 0;
         children.length = 0;
         this.download = undefined;
@@ -75,7 +93,6 @@ export class OctreeNode {
         uniformsData.dirtyRange.begin = 0;
         uniformsData.dirtyRange.end = uniformsData.buffer.byteLength;
     }
-
     get isRoot() {
         return this.id.length == 0;
     }
@@ -92,12 +109,7 @@ export class OctreeNode {
         return this.meshes.length > 0;
     }
 
-    shouldSplit(projectedSizeSplitThreshold: number): boolean {
-        const { visibility, projectedSize } = this;
-        return this.isRoot || (visibility != Visibility.none && projectedSize > projectedSizeSplitThreshold);
-    }
-
-    protected get renderedChildMask() {
+    get renderedChildMask() {
         let { childMask } = this.data;
         for (const child of this.children) {
             if (child.hasGeometry) {
@@ -107,19 +119,65 @@ export class OctreeNode {
         return childMask;
     }
 
-    update(state: DerivedRenderState) {
+    private shouldSplit(projectedSizeSplitThreshold: number): boolean {
+        const { visibility, projectedSize } = this;
+        return this.isRoot || (visibility != Visibility.none && projectedSize > projectedSizeSplitThreshold);
+    }
+
+    private computeVisibility(state: DerivedRenderState): Visibility {
+        const { center4, radius, corners } = this;
+        let fullyInside = true;
+        let fullyOutside = false;
+        const { planes } = state.viewFrustum;
+        for (const plane of planes) {
+            const distance = vec4.dot(plane, center4);
+            if (distance > radius) {
+                fullyOutside = true;
+                fullyInside = false;
+                break;
+            } else if (distance > -radius)
+                fullyInside = false;
+        }
+        if (fullyInside === fullyOutside) {
+            // check against corders of bounding box
+            fullyOutside = true;
+            fullyInside = true;
+            for (const corner of corners) {
+                for (const plane of planes) {
+                    const distance = vec4.dot(plane, corner);
+                    if (distance > 0) {
+                        fullyInside = false;
+                    } else {
+                        fullyOutside = false;
+                    }
+                }
+            }
+        }
+        let visibility = Visibility.undefined;
+        if (fullyOutside) {
+            visibility = Visibility.none;
+        } else if (!fullyInside) {
+            visibility = Visibility.partial;
+        } else {
+            visibility = Visibility.full;
+        }
+        return visibility;
+    }
+
+
+    update(state: DerivedRenderState, parentVisibility: Visibility = Visibility.partial) {
         // update visibility
-        // this.visibility = (parentVisibility == Visibility.partial) ? this.computeVisibility(planes) : parentVisibility;
-        this.visibility = Visibility.full; // TODO: Determine visibility!
+        this.visibility = (parentVisibility == Visibility.partial) ? this.computeVisibility(state) : parentVisibility;
 
         // update projected size
-        const { center, visibility, radius, children } = this;
-        const { camera, matrices } = state;
+        const { center4, visibility, radius, children } = this;
+        const { camera, matrices, viewFrustum } = state;
+        const imagePlane = viewFrustum.image;
         const projection = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
         if (visibility <= Visibility.none) {
             this.projectedSize = 0;
         } else if (camera.kind == "pinhole") {
-            const distance = Math.max(0.001, vec3.distance(center, camera.position) - radius); // we subtract radius to get the projection size at the extremity nearest the camera
+            const distance = Math.max(0.001, vec4.dot(imagePlane, center4) - radius); // we subtract radius to get the projection size at the extremity nearest the camera
             this.projectedSize = (this.size * projection[5]) / (-distance * projection[11]);
         } else {
             this.projectedSize = this.size * projection[5];
@@ -138,7 +196,7 @@ export class OctreeNode {
 
         // update children
         for (const child of children) {
-            child.update(state);
+            child.update(state, visibility);
         }
     }
 
@@ -186,12 +244,25 @@ export class OctreeNode {
     }
 
     renderDebug() {
-        const { context, data, uniformsData, uniformsBuffer } = this;
+        const { context, data, uniformsData, uniformsBuffer, visibility, state } = this;
         const { renderContext } = context;
         const { renderer, cameraUniformsBuffer } = renderContext;
 
         if (this.renderedChildMask) {
-            // if (this.id.length == 0) {
+            if (uniformsBuffer) {
+                let r = 0, g = 0, b = 0;
+                switch (visibility) {
+                    case Visibility.partial: g = 0.25; break;
+                    case Visibility.full: g = 1; break;
+                }
+                switch (state) {
+                    case NodeState.downloading: r = 1; break;
+                    case NodeState.ready: b = 1; break;
+                }
+                uniformsData.uniforms.debugColor = vec4.fromValues(r, g, b, 1);
+                renderer.update({ kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniformsBuffer });
+            }
+
             renderer.state({
                 uniformBuffers: [cameraUniformsBuffer!, uniformsBuffer],
             });

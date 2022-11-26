@@ -1,7 +1,6 @@
-import { DerivedRenderState, RenderContext, RenderStateScene } from "core3d";
+import { CoordSpace, DerivedRenderState, Matrices, RenderContext, RenderStateScene } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
 import { createUniformBufferProxy } from "../uniforms";
-import { CoordSpace, Matrices } from "core3d/matrices";
 import { mat4 } from "gl-matrix";
 import { OctreeNode } from "./node";
 import { createSceneRootNode } from "@novorender/core3d/scene";
@@ -114,7 +113,7 @@ class OctreeModuleContext implements RenderModuleContext {
                     rootNode.renderDebug();
 
                     renderer.state({
-                        program: programDebug,
+                        program: null,
                         depthTest: false,
                         depthWriteMask: true,
                         cullEnable: false,
