@@ -3,9 +3,7 @@ import type { RendererContext } from ".";
 
 export function createRenderBuffer(context: RendererContext, params: RenderBufferParams): WebGLRenderbuffer {
     const { gl, limits } = context;
-    const buffer = gl.createRenderbuffer();
-    if (!buffer)
-        throw new Error("Could not create render buffer!");
+    const buffer = gl.createRenderbuffer()!;
     const { internalFormat, width, height } = params;
     const samples = params.samples == undefined ? 1 : params.samples === "max" ? limits.MAX_SAMPLES : params.samples;
     console.assert(samples <= limits.MAX_SAMPLES);

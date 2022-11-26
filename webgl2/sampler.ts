@@ -3,9 +3,7 @@ import type { SamplerParams } from "./types";
 
 export function createSampler(context: RendererContext, params: SamplerParams): WebGLSampler {
     const { gl } = context;
-    const sampler = gl.createSampler();
-    if (!sampler)
-        throw new Error("Could not create sampler!");
+    const sampler = gl.createSampler()!;
     gl.bindSampler(0, sampler);
     const { minificationFilter, magnificationFilter, minLOD, maxLOD, wrap, compareFunction, compareMode } = params;
     if (minificationFilter)

@@ -1,5 +1,5 @@
 import { quat, vec3 } from "gl-matrix";
-import { createWebGL2Renderer } from "@novorender/webgl2";
+import { createWebGL2Renderer, WebGL2Renderer } from "@novorender/webgl2";
 import { RenderContext } from "./context";
 import { createModules } from "./module";
 import { defaultRenderState, modifyRenderState } from "./state";
@@ -11,7 +11,7 @@ export * from "./context";
 export * from "./module";
 
 export async function run(canvas: HTMLCanvasElement) {
-    const renderer = createWebGL2Renderer(canvas, {
+    const options: WebGLContextAttributes = {
         alpha: true,
         antialias: false,
         depth: true,
@@ -21,7 +21,7 @@ export async function run(canvas: HTMLCanvasElement) {
         premultipliedAlpha: true,
         preserveDrawingBuffer: false,
         stencil: false,
-    });
+    };
 
     const controller = new OrbitController({ kind: "orbit" }, canvas);
     let state = defaultRenderState();
@@ -29,14 +29,14 @@ export async function run(canvas: HTMLCanvasElement) {
     // const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     // const sceneUrl = new URL("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/", scriptUrl).toString();
 
-    //const scene = await downloadScene("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/"); // condos
-    const scene = await downloadScene("/assets/octrees/0f762c06a61f4f1c8d3b7cf1b091515e_/"); // hospital
+    const scene = await downloadScene("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/"); // condos
+    // const scene = await downloadScene("/assets/octrees/0f762c06a61f4f1c8d3b7cf1b091515e_/"); // hospital
 
     state = modifyRenderState(state, {
         scene,
         background: { url: "https://api.novorender.com/assets/env/lake/", blur: 0.25 },
         // camera: { back: 10000 },
-        grid: { enabled: true },
+        grid: { enabled: true, origin: scene.config.boundingSphere.center, size: 100 },
     });
 
     controller.autoFitToScene(state);
@@ -53,28 +53,74 @@ export async function run(canvas: HTMLCanvasElement) {
     }
     resize();
 
-    // function rotateCamera(time = 0) {
-    //     const rotation = quat.fromEuler(quat.create(), -15, time / 100, 0);
-    //     const position = vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, 15), rotation);
-    //     state = modifyRenderState(state, { camera: { position, rotation } });
-    // }
-    // rotateCamera();
+    let context: RenderContext | undefined;
 
-    const modules = createModules(state);
-    const context = new RenderContext(renderer, modules);
-
-    function render(time: number) {
-        resize();
-        state = controller.updateRenderState(state);
-        // rotateCamera(time);
-        if (prevState !== state || context.changed) {
-            prevState = state;
-            context["render"](state);
+    canvas.addEventListener("webglcontextlost", function (event: WebGLContextEvent) {
+        event.preventDefault();
+        console.info("WebGL Context lost!");
+        if (context) {
+            context["contextLost"]();
+            context = undefined;
         }
-        requestAnimationFrame(render);
+        // trigger a reset of canvas on safari.
+        canvas.width = 300;
+        canvas.height = 150;
+        if (animId !== undefined)
+            cancelAnimationFrame(animId);
+        animId = undefined;
+    } as (event: Event) => void, false);
+
+    canvas.addEventListener("webglcontextrestored", function (event: WebGLContextEvent) {
+        console.info("WebGL Context restored!");
+        init();
+    } as (event: Event) => void, false);
+
+
+    let animId: number | undefined;
+    function init() {
+        context = new RenderContext(canvas, options);
+        function render(time: number) {
+            resize();
+            state = controller.updateRenderState(state);
+            if (context) {
+                if (context.isContextLost())
+                    return;
+                if (prevState !== state || context.changed) {
+                    prevState = state;
+                    context["render"](state);
+                }
+            }
+            animId = requestAnimationFrame(render);
+        }
+        animId = requestAnimationFrame(render);
     }
-    requestAnimationFrame(render);
+
+    init();
+    emulateLostContext(context?.renderer!);
 
     // controller.dispose();
     // renderer.dispose();
 }
+
+function emulateLostContext(renderer: WebGL2Renderer) {
+    const key = "Backspace";
+    window.addEventListener("keydown", (e) => {
+        if (e.code == key) {
+            renderer.loseContext();
+            window.addEventListener("keyup", (e) => {
+                if (e.code == key) {
+                    renderer.restoreContext();
+                }
+            }, { once: true });
+
+        }
+    }, { once: true });
+
+    // setTimeout(() => {
+    //     renderer.loseContext();
+    //     setTimeout(() => {
+    //         renderer.restoreContext();
+    //     }, 1000);
+    // }, 3000);
+}
+

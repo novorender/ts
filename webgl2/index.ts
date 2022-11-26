@@ -1,5 +1,5 @@
-import type { BlitParams, BufferParams, ClearParams, CopyParams, DrawParams, FrameBufferParams, ProgramParams, ReadPixelsParams, RenderBufferParams, SamplerParams, StateParams, TextureParams, VertexArrayParams, Pixels, InvalidateFrameBufferParams, UpdateParams, TransformFeedbackParams, TransformFeedbackTestParams } from "./types";
-import { createContext, RendererContext } from "./context.js";
+import type { BlitParams, BufferParams, ClearParams, CopyParams, DrawParams, FrameBufferParams, ProgramParams, ReadPixelsParams, RenderBufferParams, SamplerParams, StateParams, TextureParams, VertexArrayParams, Pixels, InvalidateFrameBufferParams, UpdateParams, TransformFeedbackParams, TransformFeedbackTestParams, State } from "./types";
+import { createContext, getLimits, LimitsGL, RendererContext, WebGLLoseContextExt, WebGLMultiDrawExt } from "./context.js";
 import { createTimer, Timer } from "./timer.js";
 import { blit } from "./blit.js";
 import { createProgram } from "./program.js";
@@ -13,7 +13,7 @@ import { clear } from "./clear.js";
 import { copy } from "./copy.js";
 import { update } from "./update.js";
 import { draw } from "./draw.js";
-import { setState } from "./state.js";
+import { createDefaultState, setState } from "./state.js";
 import { readPixelsAsync } from "./read.js";
 import { beginTransformFeedback, createTransformFeedback, endTransformFeedback } from "./transformFeedback.js";
 export type { RendererContext };
@@ -25,54 +25,65 @@ export function createWebGL2Renderer(canvas: HTMLCanvasElement, options?: WebGLC
     if (!gl)
         throw new Error("Unable to create WebGL 2 context!");
 
-    canvas.addEventListener("webglcontextlost", function (event) {
-        // event.preventDefault();
-        // TODO: Handle!
-        console.error("WebGL Context lost");
-    }, false);
-
-    canvas.addEventListener(
-        "webglcontextrestored", function (event) {
-            // event.preventDefault();
-            // TODO: Handle!
-            console.info("WebGL Context restored");
-        }, false);
-
     return new WebGL2Renderer(gl, canvas);
 }
 
 export class WebGL2Renderer {
-    readonly #context; // we dont want anything GL specific to leak outside
-    readonly #promises: PolledPromise[] = [];
-    #timer: Timer | undefined;
-    #animFrameHandle: number | undefined;
-    #currentTransformFeedback: WebGLTransformFeedback | undefined;
+    readonly gl: WebGL2RenderingContext;
+    readonly limits: LimitsGL;
+    readonly extensions: {
+        readonly loseContext: WebGLLoseContextExt | null;
+        readonly multiDraw: WebGLMultiDrawExt | null;
+    }
+    readonly defaultState: State;
 
-    constructor(readonly gl: WebGL2RenderingContext, readonly canvas: HTMLCanvasElement) {
-        this.#context = createContext(gl);
+    private readonly promises: PolledPromise[] = [];
+    private timer: Timer | undefined;
+    private animFrameHandle: number | undefined;
+
+    constructor(gl: WebGL2RenderingContext, readonly canvas: HTMLCanvasElement) {
+        this.gl = gl;
+        this.limits = getLimits(gl);
+        this.defaultState = createDefaultState(this.limits);
+        this.extensions = {
+            loseContext: gl.getExtension("WEBGL_lose_context") as WebGLLoseContextExt,
+            multiDraw: gl.getExtension("WEBGL_MULTI_DRAW") as WebGLMultiDrawExt,
+        } as const;
     }
 
     dispose() {
-        if (this.#animFrameHandle !== undefined) {
-            cancelAnimationFrame(this.#animFrameHandle);
-            this.#animFrameHandle = undefined;
+        if (this.animFrameHandle !== undefined) {
+            cancelAnimationFrame(this.animFrameHandle);
+            this.animFrameHandle = undefined;
         }
-        this.state(this.#context.defaultState); // make sure resources are unbound before deleting them.
-        for (const promise of this.#promises) {
+        this.state(this.defaultState); // make sure resources are unbound before deleting them.
+        for (const promise of this.promises) {
             promise.dispose();
         }
     }
 
     get width() {
-        return this.#context.gl.drawingBufferWidth;
+        return this.gl.drawingBufferWidth;
     }
 
     get height() {
-        return this.#context.gl.drawingBufferHeight;
+        return this.gl.drawingBufferHeight;
+    }
+
+    isContextLost() {
+        return this.gl.isContextLost();
+    }
+
+    loseContext() {
+        this.extensions.loseContext?.loseContext();
+    }
+
+    restoreContext() {
+        this.extensions.loseContext?.restoreContext();
     }
 
     pollPromises() {
-        const promises = this.#promises;
+        const promises = this.promises;
         for (let i = 0; i < promises.length; i++) {
             const promise = promises[i];
             if (promise.poll()) {
@@ -83,13 +94,13 @@ export class WebGL2Renderer {
     }
 
     flush() {
-        this.#context.gl.flush();
+        this.gl.flush();
     }
 
     async nextFrame() {
         const promise = new Promise<number>(resolve => {
-            this.#animFrameHandle = requestAnimationFrame(time => {
-                this.#animFrameHandle = undefined;
+            this.animFrameHandle = requestAnimationFrame(time => {
+                this.animFrameHandle = undefined;
                 resolve(time);
             })
         });
@@ -99,151 +110,136 @@ export class WebGL2Renderer {
     }
 
     measureBegin() {
-        const timer = createTimer(this.#context.gl);
-        this.#timer = timer;
+        const timer = createTimer(this.gl);
+        this.timer = timer;
         timer.begin();
     }
 
     measureEnd(): Promise<number> {
-        const timer = this.#timer!;
+        const timer = this.timer!;
         timer.end();
-        this.#timer = undefined;
-        this.#promises.push(timer);
+        this.timer = undefined;
+        this.promises.push(timer);
         return timer.promise;
     }
 
     createProgram(params: ProgramParams): WebGLProgram {
-        return createProgram(this.#context, params);
+        return createProgram(this, params);
     }
 
     deleteProgram(program: WebGLProgram) {
-        const { gl } = this.#context;
-        gl.deleteProgram(program);
+        this.gl.deleteProgram(program);
     }
 
     createBuffer(params: BufferParams) {
-        return createBuffer(this.#context, params);
+        return createBuffer(this, params);
     }
 
     deleteBuffer(buffer: WebGLBuffer) {
-        const { gl } = this.#context;
-        gl.deleteBuffer(buffer);
+        this.gl.deleteBuffer(buffer);
     }
 
     createVertexArray(params: VertexArrayParams): WebGLVertexArrayObject {
-        return createVertexArray(this.#context, params);
+        return createVertexArray(this, params);
     }
 
     deleteVertexArray(vao: WebGLVertexArrayObject) {
-        const { gl } = this.#context;
-        gl.deleteVertexArray(vao);
+        this.gl.deleteVertexArray(vao);
     }
 
     createSampler(params: SamplerParams): WebGLSampler {
-        return createSampler(this.#context, params);
+        return createSampler(this, params);
     }
 
     deleteSampler(sampler: WebGLSampler) {
-        const { gl } = this.#context;
-        gl.deleteSampler(sampler);
+        this.gl.deleteSampler(sampler);
     }
 
     createTexture(params: TextureParams): WebGLTexture {
-        return createTexture(this.#context, params);
+        return createTexture(this, params);
     }
 
     deleteTexture(texture: WebGLTexture) {
-        const { gl } = this.#context;
-        gl.deleteTexture(texture);
+        this.gl.deleteTexture(texture);
     }
 
     createRenderBuffer(params: RenderBufferParams): WebGLRenderbuffer {
-        return createRenderBuffer(this.#context, params);
+        return createRenderBuffer(this, params);
     }
 
     deleteRenderBuffer(rb: WebGLRenderbuffer) {
-        const { gl, } = this.#context;
+        const { gl } = this;
         gl.deleteRenderbuffer(rb);
     }
 
     createFrameBuffer(params: FrameBufferParams): WebGLFramebuffer {
-        return createFrameBuffer(this.#context, params);
+        return createFrameBuffer(this, params);
     }
 
     invalidateFrameBuffer(params: InvalidateFrameBufferParams) {
-        invalidateFrameBuffer(this.#context, params);
+        invalidateFrameBuffer(this, params);
     }
 
     deleteFrameBuffer(fb: WebGLFramebuffer) {
-        const { gl } = this.#context;
-        gl.deleteFramebuffer(fb);
+        this.gl.deleteFramebuffer(fb);
     }
 
     createTransformFeedback(): WebGLTransformFeedback {
-        const { gl } = this.#context;
-        return createTransformFeedback(gl);
+        return createTransformFeedback(this);
     }
 
     deleteTransformFeedback(tf: WebGLTransformFeedback): void {
-        const { gl } = this.#context;
-        gl.deleteTransformFeedback(tf);
+        this.gl.deleteTransformFeedback(tf);
     }
 
     beginTransformFeedback(tf: WebGLTransformFeedback, params: TransformFeedbackParams): void {
-        this.#currentTransformFeedback = tf;
-        beginTransformFeedback(this.#context, tf, params);
+        beginTransformFeedback(this, tf, params);
     }
 
-    pauseTransformFeedback(tf: WebGLTransformFeedback): void {
-        const { gl } = this.#context;
-        console.assert(tf == this.#currentTransformFeedback);
-        gl.pauseTransformFeedback();
+    pauseTransformFeedback(): void {
+        this.gl.pauseTransformFeedback();
     }
 
     resumeTransformFeedback(tf: WebGLTransformFeedback): void {
-        const { gl } = this.#context;
-        console.assert(tf == this.#currentTransformFeedback);
-        gl.resumeTransformFeedback();
+        this.gl.resumeTransformFeedback();
     }
 
-    endTransformFeedback(tf: WebGLTransformFeedback, params?: TransformFeedbackTestParams): void {
-        console.assert(tf == this.#currentTransformFeedback);
-        this.#currentTransformFeedback = undefined;
-        endTransformFeedback(this.#context, params);
+    endTransformFeedback(params?: TransformFeedbackTestParams): void {
+        endTransformFeedback(this, params);
     }
 
     state(params: StateParams | null) {
-        setState(this.#context, params ?? this.#context.defaultState);
+        setState(this, params ?? this.defaultState);
     }
 
     clear(params: ClearParams) {
-        clear(this.#context, params);
+        clear(this, params);
     }
 
     blit(params: BlitParams) {
-        blit(this.#context, params);
+        blit(this, params);
     }
 
     readPixels(params: ReadPixelsParams): Promise<Pixels> {
-        const result = readPixelsAsync(this.#context, params);
-        this.#promises.push(result);
+        const result = readPixelsAsync(this, params);
+        this.promises.push(result);
         return result.promise;
     }
 
     copy(params: CopyParams) {
-        copy(this.#context, params);
+        copy(this, params);
     }
 
     update(params: UpdateParams) {
-        update(this.#context, params);
+        update(this, params);
     }
 
     draw(params: DrawParams) {
-        draw(this.#context, params);
+        draw(this, params);
     }
 
     checkStatus(message: string = "GL") {
-        const { gl } = this.#context;
+        const { gl } = this;
         const status = gl.getError();
         switch (status) {
             case gl.NO_ERROR: break;

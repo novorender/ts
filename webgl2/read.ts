@@ -17,9 +17,7 @@ export function readPixelsAsync(context: RendererContext, params: ReadPixelsPara
     const pixels = new ctor(width * height * channels);
     const target = gl.PIXEL_PACK_BUFFER;
 
-    const buf = gl.createBuffer();
-    if (!buf)
-        throw new Error("Could not create buffer!");
+    const buf = gl.createBuffer()!;
 
     gl.bindBuffer(target, buf);
     gl.bufferData(target, pixels.byteLength, gl.STREAM_READ);
@@ -28,8 +26,6 @@ export function readPixelsAsync(context: RendererContext, params: ReadPixelsPara
     gl.bindBuffer(target, null);
 
     const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)!;
-    if (!sync)
-        throw new Error("Could not create fence sync!");
 
     gl.flush();
 

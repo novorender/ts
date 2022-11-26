@@ -5,11 +5,10 @@ export type ProgramIndex = number;
 type ShaderType = "VERTEX_SHADER" | "FRAGMENT_SHADER";
 
 function compileShader(gl: WebGLRenderingContext, type: ShaderType, source: string): WebGLShader {
-    const shader = gl.createShader(gl[type]);
-    if (!shader) throw new Error("WebGL Shader could not be created.");
+    const shader = gl.createShader(gl[type])!;
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS) && !gl.isContextLost()) {
         const typeName = type.split("_")[0].toLocaleLowerCase();
         const errorMsg = gl.getShaderInfoLog(shader);
         throw new Error(`: Failed to compile glsl ${typeName} shader!\r\n${errorMsg}`);
@@ -30,9 +29,7 @@ export function createProgram(context: RendererContext, params: ProgramParams) {
     const fs = header + defines + (params.fragmentShader ?? "void main() {}");
     const vertexShader = compileShader(gl, "VERTEX_SHADER", vs);
     const fragmentShader = compileShader(gl, "FRAGMENT_SHADER", fs);
-    const program = gl.createProgram();
-    if (!program)
-        throw new Error("Could not create WebGL shader program!");
+    const program = gl.createProgram()!;
 
     gl.attachShader(program, vertexShader);
     gl.attachShader(program, fragmentShader);
@@ -51,7 +48,7 @@ export function createProgram(context: RendererContext, params: ProgramParams) {
     gl.deleteShader(vertexShader);
     gl.deleteShader(fragmentShader);
 
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS) && !gl.isContextLost())
         throw new Error(`Failed to compile link shaders!\r\n${gl.getProgramInfoLog(program)}`);
 
     if (uniformBufferBlocks) {

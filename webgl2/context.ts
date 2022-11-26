@@ -5,10 +5,16 @@ export interface RendererContext {
     readonly gl: WebGL2RenderingContext;
     readonly limits: LimitsGL;
     readonly extensions: {
+        readonly loseContext: WebGLLoseContextExt | null;
         readonly multiDraw: WebGLMultiDrawExt | null;
     }
     readonly defaultState: State;
-};
+}
+
+export interface WebGLLoseContextExt {
+    loseContext(): void;
+    restoreContext(): void;
+}
 
 export interface WebGLMultiDrawExt {
     multiDrawArraysWEBGL(mode: number,
@@ -26,12 +32,13 @@ export function createContext(gl: WebGL2RenderingContext) {
     const limits = getLimits(gl);
     const defaultState = createDefaultState(limits);
     const extensions = {
+        loseContext: gl.getExtension("WEBGL_lose_context ") as WebGLLoseContextExt,
         multiDraw: gl.getExtension("WEBGL_MULTI_DRAW") as WebGLMultiDrawExt,
     } as const;
     return { gl, extensions, limits, defaultState, currentProgram: null } as const;
 }
 
-function getLimits(gl: WebGL2RenderingContext) {
+export function getLimits(gl: WebGL2RenderingContext) {
     const names = [
         "MAX_TEXTURE_SIZE",
         "MAX_VIEWPORT_DIMS",

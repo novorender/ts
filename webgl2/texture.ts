@@ -5,9 +5,7 @@ import { getBufferViewType } from "./util.js";
 
 export function createTexture(context: RendererContext, params: TextureParams) {
     const { gl } = context;
-    const texture = gl.createTexture();
-    if (!texture)
-        throw new Error("Could not create texture!");
+    const texture = gl.createTexture()!;
 
     const { width, height } = params;
     const target = gl[params.kind];

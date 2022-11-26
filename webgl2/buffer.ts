@@ -5,9 +5,7 @@ export function createBuffer(context: RendererContext, params: BufferParams): We
     const { gl } = context;
     const target = gl[params.kind];
     const usage = gl[params.usage ?? "STATIC_DRAW"];
-    const buffer = gl.createBuffer();
-    if (!buffer)
-        throw new Error("Could not create buffer!");
+    const buffer = gl.createBuffer()!;
     gl.bindBuffer(target, buffer);
     if ("size" in params) {
         gl.bufferData(target, params.size, usage);

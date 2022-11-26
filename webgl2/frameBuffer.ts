@@ -30,9 +30,7 @@ export function invalidateFrameBuffer(context: RendererContext, params: Invalida
 export function createFrameBuffer(context: RendererContext, params: FrameBufferParams): WebGLFramebuffer {
     const { gl, limits } = context;
 
-    const frameBuffer = gl.createFramebuffer();
-    if (!frameBuffer)
-        throw new Error("Could not create frame buffer!");
+    const frameBuffer = gl.createFramebuffer()!;
     console.assert(params.color.length <= limits.MAX_COLOR_ATTACHMENTS);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);

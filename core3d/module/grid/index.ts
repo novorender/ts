@@ -1,24 +1,23 @@
 import { CoordSpace, DerivedRenderState, Matrices, RenderContext, RenderStateGrid } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformBufferProxy } from "../uniforms";
+import { createUniformBufferProxy } from "../../uniforms";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat4 } from "gl-matrix";
 
 export class GridModule implements RenderModule {
     readonly uniformsData;
-    constructor(readonly initialState: DerivedRenderState) {
+    constructor() {
         this.uniformsData = createUniformBufferProxy({
             objectClipMatrix: "mat4",
             color: "vec4",
             size: "int",
             spacing: "float",
         });
-        updateUniforms(this.uniformsData.uniforms, initialState);
     }
 
     withContext(context: RenderContext) {
-        return new GridModuleContext(context, this.uniformsData, this.initialState);
+        return new GridModuleContext(context, this.uniformsData);
     }
 }
 
@@ -35,8 +34,8 @@ class GridModuleContext implements RenderModuleContext {
     readonly program: WebGLProgram;
     readonly gridUniformsBuffer: WebGLBuffer;
 
-    constructor(readonly context: RenderContext, readonly gridUniformsData: UniformsData, initialState: RelevantRenderState) {
-        this.state = new RenderModuleState(initialState);
+    constructor(readonly context: RenderContext, readonly gridUniformsData: UniformsData) {
+        this.state = new RenderModuleState<RelevantRenderState>();
         const { renderer } = context;
         // create static GPU resources here
         const uniformBufferBlocks = ["Camera", "Grid"];
@@ -66,9 +65,13 @@ class GridModuleContext implements RenderModuleContext {
         }
     }
 
+    contextLost(): void {
+    }
+
     dispose() {
         const { context, program, gridUniformsBuffer } = this;
         const { renderer } = context;
+        this.contextLost();
         renderer.deleteProgram(program);
         renderer.deleteBuffer(gridUniformsBuffer);
     }

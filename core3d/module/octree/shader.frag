@@ -7,6 +7,7 @@ layout(std140) uniform Camera {
 
 layout(std140) uniform Octree {
     mat4 objectClipMatrix;
+    vec4 debugColor;
 } octree;
 
 in vec3 normal;

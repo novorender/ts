@@ -33,9 +33,7 @@ const shaderTypeInfo = {
 
 export function createVertexArray(context: RendererContext, params: VertexArrayParams): WebGLVertexArrayObject {
     const { gl } = context;
-    const vao = gl.createVertexArray();
-    if (!vao)
-        throw new Error("Could not create vao!");
+    const vao = gl.createVertexArray()!;
     gl.bindVertexArray(vao);
     let attribIndex = 0;
     const { attributes } = params;

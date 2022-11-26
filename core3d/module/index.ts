@@ -2,7 +2,6 @@ import { RenderState, DerivedRenderState } from "../state";
 import { RenderContext } from "../context";
 import { BackgroundModule } from "./background";
 import { GridModule } from "./grid";
-import { CameraModule } from "./camera";
 import { OctreeModule } from "./octree";
 import { matricesFromRenderState } from "../matrices";
 import { createViewFrustum } from "../viewFrustum";
@@ -16,23 +15,16 @@ export interface RenderModule {
 // contains module's GPU resources
 export interface RenderModuleContext {
     render(state: DerivedRenderState): void;
+    contextLost(): void;
     dispose(): void;
 }
 
-function createDerivedState(state: RenderState): DerivedRenderState {
-    const matrices = matricesFromRenderState(state);
-    const viewFrustum = createViewFrustum(state, matrices);
-    return { ...state, matrices, viewFrustum };
-}
-
-export function createModules(state: RenderState) {
-    const derivedState = createDerivedState(state);
+export function createModules() {
     return [
-        new CameraModule(derivedState),
-        new BackgroundModule(derivedState),
-        new GridModule(derivedState),
-        new OctreeModule(derivedState),
-    ]
+        new BackgroundModule(),
+        new GridModule(),
+        new OctreeModule(),
+    ];
 }
 
 export class RenderModuleState<T> {

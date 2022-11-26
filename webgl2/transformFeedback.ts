@@ -1,10 +1,8 @@
 import type { TransformFeedbackParams, TransformFeedbackTestParams } from "./types";
 import type { RendererContext } from ".";
 
-export function createTransformFeedback(gl: WebGL2RenderingContext) {
-    const tf = gl.createTransformFeedback()!;
-    if (!tf)
-        throw new Error("Could not create transform feedback!");
+export function createTransformFeedback(context: RendererContext) {
+    const tf = context.gl.createTransformFeedback()!;
     return tf;
 }
 

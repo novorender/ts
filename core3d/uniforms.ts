@@ -1,3 +1,5 @@
+import type { WebGL2Renderer } from "webgl2";
+
 const uniformTypes = {
     bool: { type: "i32", alignment: 1, components: 1, rows: 1 },
     int: { type: "i32", alignment: 1, components: 1, rows: 1 },
@@ -42,6 +44,12 @@ class DirtyRange {
             this.end = end;
         }
     }
+}
+
+export interface UniformsProxy {
+    readonly buffer: ArrayBuffer;
+    readonly dirtyRange: DirtyRange;
+    readonly uniforms: { [index: string]: boolean | number | ArrayLike<number> };
 }
 
 // apply std140 layout rules (https://registry.khronos.org/OpenGL/specs/gl/glspec45.core.pdf#page=159)
@@ -141,6 +149,36 @@ export function createUniformBufferProxy<T extends Record<string, UniformTypes>>
 
     return proxy;
 }
+
+export class UniformsHandler<T extends UniformsProxy> {
+    buffer: WebGLBuffer | null = null;
+    readonly values: T["uniforms"];
+
+    constructor(readonly renderer: WebGL2Renderer, readonly proxy: T) {
+        this.values = proxy.uniforms;
+    }
+
+    dispose() {
+        const { renderer, buffer } = this;
+        if (buffer)
+            renderer.deleteBuffer(buffer);
+        this.buffer = null;
+    }
+
+    update() {
+        const { renderer, proxy } = this;
+        if (!proxy.dirtyRange.isEmpty) {
+            let { buffer } = this;
+            if (!buffer) {
+                this.buffer = buffer = renderer.createBuffer({ kind: "UNIFORM_BUFFER", srcData: proxy.buffer });
+            }
+            renderer.update({ kind: "UNIFORM_BUFFER", srcData: proxy.buffer, targetBuffer: buffer });
+            proxy.dirtyRange.reset();
+        }
+    }
+}
+
+
 
 // const d = {
 //     hasColor: "bool",
