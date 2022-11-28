@@ -3,3 +3,18 @@ plug-ins based (objects that takes context and context with a single render() fu
 state can be serialized
 context can be recreated if lost
 runs in main thread.
+
+
+re-implement features and see what breaks ios/ipad
+/materials
+  only crashes when tri count is too high (out of memory)
+device caps
+highlighting
+shading (ibl, dir light and camera light)
+pick buffers
+clipping planes
+dither transparency
+outlines
+elevation maps
+points
+lines

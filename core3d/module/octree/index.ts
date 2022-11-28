@@ -2,7 +2,7 @@ import { CoordSpace, DerivedRenderState, Matrices, RenderContext, RenderStateSce
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
 import { createUniformBufferProxy, UniformsHandler } from "../../uniforms";
 import { mat4 } from "gl-matrix";
-import { OctreeNode } from "./node";
+import { NodeState, OctreeNode } from "./node";
 import { createSceneRootNode } from "@novorender/core3d/scene";
 import { Downloader } from "./download";
 import vertexShader from "./shader.vert";
@@ -15,6 +15,14 @@ export class OctreeModule implements RenderModule {
 
     constructor() {
         this.uniformsProxy = createUniformBufferProxy({
+            // ibl params
+            // sun params (+ambient)
+            // headlight params
+            // elevation params
+            // outline params
+            // clipping planes
+            // materials
+            // elevation colors
             objectClipMatrix: "mat4",
         });
     }
@@ -24,19 +32,17 @@ export class OctreeModule implements RenderModule {
     }
 }
 
-type UniformsData = OctreeModule["uniformsProxy"];
-
 interface RelevantRenderState {
     scene: RenderStateScene | undefined;
     matrices: Matrices;
 }
-
 
 class OctreeModuleContext implements RenderModuleContext {
     readonly state;
     readonly uniforms;
     readonly program: WebGLProgram;
     readonly programDebug: WebGLProgram;
+    readonly materialsUniformsBuffer: WebGLBuffer;
     readonly downloader = new Downloader();
     url: string | undefined;
     rootNode: OctreeNode | undefined;
@@ -47,14 +53,13 @@ class OctreeModuleContext implements RenderModuleContext {
         this.state = new RenderModuleState<RelevantRenderState>();
         const { renderer } = renderContext;
         this.uniforms = new UniformsHandler(renderer, data.uniformsProxy);
-        // create static GPU resources here
-        const uniformBufferBlocks = ["Camera", "Octree"];
-        this.program = renderer.createProgram({ vertexShader, fragmentShader, uniformBufferBlocks });
-        this.programDebug = renderer.createProgram({ vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
+        this.program = renderer.createProgram({ vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Materials", "Node"] });
+        this.programDebug = renderer.createProgram({ vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks: ["Node"] });
+        this.materialsUniformsBuffer = renderer.createBuffer({ kind: "UNIFORM_BUFFER", size: 256 * 4 });
     }
 
     render(state: DerivedRenderState) {
-        const { renderContext, program, programDebug, uniforms } = this;
+        const { renderContext, program, programDebug, materialsUniformsBuffer, projectedSizeSplitThreshold } = this;
         const { renderer, cameraUniformsBuffer } = renderContext;
         if (this.state.hasChanged(state)) {
             this.updateUniforms(state);
@@ -78,14 +83,63 @@ class OctreeModuleContext implements RenderModuleContext {
 
         const { rootNode } = this;
         if (rootNode) {
-            rootNode.update(state);
+            function* iterate(node: OctreeNode): IterableIterator<OctreeNode> {
+                yield node;
+                for (const child of node.children) {
+                    yield* iterate(child);
+                }
+            }
+            let nodes = [...iterate(rootNode)];
+
+            // update node visibility and projectedSize++
+            for (const node of nodes) {
+                node.update(state);
+                if (!node.shouldSplit(projectedSizeSplitThreshold * 0.98)) { // add a little "slack" before collapsing back again
+                    if (node.state != NodeState.collapsed) {
+                        // collapse node
+                        node.dispose();
+                    }
+                }
+            }
+            nodes = [...iterate(rootNode)];
+
+            // sort nodes by projected size
+            nodes.sort((a, b) => b.projectedSize - a.projectedSize);
+
+            // dispose nodes that exceed limits
+            const maxGPUBytes = 1_000_000_000;
+            const maxTriangles = 5_000_000;
+            let gpuBytes = 0;
+            let triangles = 0; // # rendered triangles
+            let exceeded = false;
+            {
+                for (const node of nodes) {
+                    const { renderedTriangles } = node;
+                    if (exceeded || gpuBytes + node.data.gpuBytes > maxGPUBytes || triangles + renderedTriangles > maxTriangles) {
+                        if (node.hasGeometry) {
+                            node.dispose();
+                            exceeded = true; // for better deterministism, also dispose every subsequent node, even if some may still fit within budget, 
+                        }
+                    } else {
+                        gpuBytes += node.data.gpuBytes;
+                        triangles += renderedTriangles;
+                    }
+                }
+                // sessionStorage.setItem("triangles", triangles.toLocaleString());
+                // console.log(`Triangles: ${(triangles / 1000 / 1000).toFixed(3)} of ${(maxTriangles / 1000 / 1000).toFixed(3)}`);
+                // console.log(`GPU memory (MB): ${(gpuBytes / 1024 / 1024).toFixed(3)} of ${(maxGPUBytes / 1024 / 1024).toFixed(3)}`);
+            }
+            nodes = [...iterate(rootNode)];
+
             renderer.state({
                 program: program,
                 depthTest: true,
-                depthWriteMask: true,
-                cullEnable: false
+                // depthWriteMask: true,
+                // cullEnable: false
             });
-            rootNode.render();
+            for (const node of nodes) {
+                node.render([cameraUniformsBuffer, materialsUniformsBuffer]);
+            }
 
             const debug = false;
             if (debug) {
@@ -100,14 +154,18 @@ class OctreeModuleContext implements RenderModuleContext {
                     blendDstRGB: "ONE_MINUS_CONSTANT_ALPHA",
                     blendColor: [0, 0, 0, .25],
                 });
-                rootNode.renderDebug();
+                for (const node of nodes) {
+                    node.renderDebug();
+                }
 
                 renderer.state({
                     program: programDebug,
                     depthFunc: "LESS",
                     blendColor: [0, 0, 0, .75],
                 });
-                rootNode.renderDebug();
+                for (const node of nodes) {
+                    node.renderDebug();
+                }
 
                 renderer.state({
                     program: null,
@@ -121,8 +179,33 @@ class OctreeModuleContext implements RenderModuleContext {
                 });
             }
 
-            // split and download
-            rootNode.lod(state);
+            // split nodes based on camera orientation
+            for (const node of nodes) {
+                if (node.shouldSplit(projectedSizeSplitThreshold)) {
+                    if (node.state == NodeState.collapsed) {
+                        const nodeNewTriangles = node.data.primitivesDelta; // the # of new rendered primitives that would be introduced by this node compared to parent mesh.
+                        if (triangles + nodeNewTriangles <= maxTriangles && gpuBytes + node.data.gpuBytes <= maxGPUBytes) {
+                            // include projected resources in the budget
+                            triangles += nodeNewTriangles;
+                            gpuBytes += node.data.gpuBytes;
+                            node.state = NodeState.requestDownload;
+                        }
+                    }
+                }
+            }
+            sessionStorage.setItem("gpu_bytes", gpuBytes.toLocaleString());
+            sessionStorage.setItem("triangles", triangles.toLocaleString());
+
+            const maxDownloads = 8;
+            let availableDownloads = maxDownloads - this.downloader.activeDownloads;
+
+            for (const node of nodes) {
+                // TODO: limit # active downloads
+                if (availableDownloads > 0 && node.state == NodeState.requestDownload) {
+                    node.downloadGeometry();
+                    availableDownloads--;
+                }
+            }
         }
     }
 
@@ -132,27 +215,67 @@ class OctreeModuleContext implements RenderModuleContext {
     }
 
     dispose() {
-        const { renderContext, program, programDebug, uniforms, rootNode } = this;
+        const { renderContext, program, programDebug, uniforms } = this;
         const { renderer } = renderContext;
         this.contextLost();
         this.rootNode = undefined;
+        renderer.deleteBuffer(this.materialsUniformsBuffer);
         uniforms.dispose();
         renderer.deleteProgram(program);
         renderer.deleteProgram(programDebug);
     }
 
     updateUniforms(state: DerivedRenderState) {
-        const { uniforms } = this;
+        const { uniforms, renderContext } = this;
+        const { renderer } = renderContext;
         const { matrices } = state;
         const worldClipMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.Clip);
         const objectWorldMatrix = mat4.create(); // offset/translation?
         uniforms.values.objectClipMatrix = mat4.mul(mat4.create(), worldClipMatrix, objectWorldMatrix);
         uniforms.update();
+        const { scene } = state;
+        if (scene) {
+            const { config } = scene;
+            const { numMaterials } = config;
+            const { diffuse, opacity } = config.materialProperties;
+            console.assert(numMaterials <= 256);
+            function zeroes() { return new Uint8ClampedArray(numMaterials); };
+            function ones() { const a = new Uint8ClampedArray(numMaterials); a.fill(255); return a; };
+            const red = decodeBase64(diffuse.red) ?? zeroes();
+            const green = decodeBase64(diffuse.green) ?? zeroes();
+            const blue = decodeBase64(diffuse.blue) ?? zeroes();
+            const alpha = decodeBase64(opacity) ?? ones();
+            const srcData = interleaveRGBA(red, green, blue, alpha);
+            renderer.update({ kind: "UNIFORM_BUFFER", srcData, targetBuffer: this.materialsUniformsBuffer })
+        }
     }
-
 }
 
+function decodeBase64(base64: string | undefined): Uint8ClampedArray | undefined {
+    if (base64) {
+        var binaryString = atob(base64);
+        var len = binaryString.length;
+        var bytes = new Uint8ClampedArray(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+    }
+}
 
+function interleaveRGBA(r: Uint8ClampedArray, g: Uint8ClampedArray, b: Uint8ClampedArray, a: Uint8ClampedArray) {
+    const n = r.length;
+    console.assert(n == g.length && n == b.length && n == a.length);
+    const rgba = new Uint8ClampedArray(n * 4);
+    let j = 0;
+    for (let i = 0; i < n; i++) {
+        rgba[j++] = r[i];
+        rgba[j++] = g[i];
+        rgba[j++] = b[i];
+        rgba[j++] = a[i];
+    }
+    return rgba;
+}
 
 
 /*

@@ -42,7 +42,6 @@ export class OctreeNode {
     download: AbortableDownload | undefined;
     visibility = Visibility.undefined;
     projectedSize = 0;
-    // uniformsBuffer: WebGLBuffer | undefined;
 
     constructor(readonly context: OctreeContext, readonly data: NodeData) {
         // create uniform buffer
@@ -69,7 +68,6 @@ export class OctreeNode {
         this.size = Math.pow(2, data.tolerance) * toleranceScale;
         this.uniforms = new UniformsHandler(context.renderContext.renderer, createUniformBufferProxy({
             objectClipMatrix: "mat4",
-            transparent: "bool",
             debugColor: "vec4",
         }));
     }
@@ -84,6 +82,7 @@ export class OctreeNode {
         uniforms.dispose();
         meshes.length = 0;
         children.length = 0;
+        this.download?.abort();
         this.download = undefined;
         this.state = NodeState.collapsed;
     }
@@ -113,7 +112,7 @@ export class OctreeNode {
         return childMask;
     }
 
-    private shouldSplit(projectedSizeSplitThreshold: number): boolean {
+    shouldSplit(projectedSizeSplitThreshold: number): boolean {
         const { visibility, projectedSize } = this;
         return this.isRoot || (visibility != Visibility.none && projectedSize > projectedSizeSplitThreshold);
     }
@@ -158,6 +157,22 @@ export class OctreeNode {
         return visibility;
     }
 
+    get renderedTriangles() {
+        let numTriangles = 0;
+        if (this.visibility != Visibility.none) {
+            const { renderedChildMask } = this;
+            if (renderedChildMask) {
+                for (const mesh of this.meshes) {
+                    const renderedRanges = mesh.drawRanges.filter(r => ((1 << r.childIndex) & renderedChildMask) != 0);
+                    const primitiveType = mesh.drawParams.mode ?? "TRIANGLES";
+                    for (const drawRange of renderedRanges) {
+                        numTriangles += calcNumTriangles(drawRange.count, primitiveType);
+                    }
+                }
+            }
+        }
+        return numTriangles;
+    }
 
     update(state: DerivedRenderState, parentVisibility: Visibility = Visibility.partial) {
         // update visibility
@@ -186,29 +201,22 @@ export class OctreeNode {
         mat4.scale(modelWorldMatrix, modelWorldMatrix, vec3.fromValues(scale, scale, scale));
         const modelClipMatrix = mat4.mul(mat4.create(), worldClipMatrix, modelWorldMatrix);
         uniforms.values.objectClipMatrix = modelClipMatrix;
-
-        // update children
-        for (const child of children) {
-            child.update(state, visibility);
-        }
     }
 
-    render() {
+    render(uniformBuffers: WebGLBuffer[]) {
         const { context, data, uniforms } = this;
         const { renderContext } = context;
-        const { renderer, cameraUniformsBuffer } = renderContext;
+        const { renderer } = renderContext;
         uniforms.update();
-        renderer.state({
-            // program,
-            uniformBuffers: [cameraUniformsBuffer!, uniforms.buffer],
-        });
 
         const { renderedChildMask } = this;
         if (renderedChildMask) {
+            // TODO: 
             for (const mesh of this.meshes) {
                 const { materialType } = mesh;
                 const blendEnable = materialType == MaterialType.transparent;
                 renderer.state({
+                    uniformBuffers: [...uniformBuffers, uniforms.buffer],
                     vertexArrayObject: mesh.vao,
                     cullEnable: materialType == MaterialType.opaque,
                     depthWriteMask: !blendEnable,
@@ -221,22 +229,20 @@ export class OctreeNode {
                 if (renderedChildMask == data.childMask) {
                     renderer.draw(mesh.drawParams);
                 } else {
-                    // determine which portions of the parent node must be rendered based on what children currently don't render themselves
+                    // determine which portions of the parent node must be rendered based on what children currently doesn't render themselves
                     const multiDrawParams = getMultiDrawParams(mesh, renderedChildMask);
-                    renderer.draw(multiDrawParams);
+                    if (multiDrawParams) {
+                        renderer.draw(multiDrawParams);
+                    }
                 }
             }
-        }
-
-        for (const child of this.children) {
-            child.render();
         }
     }
 
     renderDebug() {
         const { context, uniforms, visibility, state } = this;
         const { renderContext } = context;
-        const { renderer, cameraUniformsBuffer } = renderContext;
+        const { renderer } = renderContext;
 
         if (this.renderedChildMask) {
             let r = 0, g = 0, b = 0;
@@ -253,31 +259,24 @@ export class OctreeNode {
         }
 
         renderer.state({
-            uniformBuffers: [cameraUniformsBuffer!, uniforms.buffer],
+            uniformBuffers: [uniforms.buffer],
         });
         renderer.draw({ kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
-
-        for (const child of this.children) {
-            child.renderDebug();
-        }
     }
 
-    lod(state: DerivedRenderState) {
-        const { projectedSizeSplitThreshold } = this.context;
-        if (this.shouldSplit(projectedSizeSplitThreshold)) {
-            if (this.state == NodeState.collapsed) {
-                // we should go via state = requestdownload to queue up downloads in prioritized order
-                this.downloadGeometry();
-            }
-        } else if (!this.shouldSplit(projectedSizeSplitThreshold * 0.98)) { // add a little "slack" before collapsing back again
-            if (this.state != NodeState.collapsed) {
-                this.dispose();
-            }
-        }
-        for (const child of this.children) {
-            child.lod(state);
-        }
-    }
+    // lod(state: DerivedRenderState) {
+    //     const { projectedSizeSplitThreshold } = this.context;
+    //     if (this.shouldSplit(projectedSizeSplitThreshold)) {
+    //         if (this.state == NodeState.collapsed) {
+    //             this.state = NodeState.requestDownload;
+    //             // this.downloadGeometry();
+    //         }
+    //     } else if (!this.shouldSplit(projectedSizeSplitThreshold * 0.98)) { // add a little "slack" before collapsing back again
+    //         if (this.state != NodeState.collapsed) {
+    //             this.dispose();
+    //         }
+    //     }
+    // }
 
     async downloadGeometry() {
         try {
@@ -322,14 +321,17 @@ export class OctreeNode {
     }
 }
 
-function getMultiDrawParams(mesh: Mesh, childMask: number): DrawParamsArraysMultiDraw | DrawParamsElementsMultiDraw {
+function getMultiDrawParams(mesh: Mesh, childMask: number): DrawParamsArraysMultiDraw | DrawParamsElementsMultiDraw | undefined {
     // determine which draw ranges this parent node must render based on what children will render their own mesh
     const drawRanges = mesh.drawRanges.filter(r => ((1 << r.childIndex) & childMask) != 0);
+    if (drawRanges.length == 0) {
+        return;
+    }
     const offsetsList = new Int32Array(drawRanges.map(r => r.byteOffset));
     const countsList = new Int32Array(drawRanges.map(r => r.count));
     const drawCount = offsetsList.length;
     const { drawParams } = mesh;
-    const { kind, mode } = drawParams;
+    const { mode } = drawParams;
     function isElements(params: DrawParams): params is DrawParamsElementsMultiDraw {
         return "indexType" in params;
     }
@@ -352,4 +354,19 @@ function getMultiDrawParams(mesh: Mesh, childMask: number): DrawParamsArraysMult
             countsList
         };
     }
+}
+
+function calcNumTriangles(indices: number, primitiveType: string) {
+    switch (primitiveType) {
+        case "TRIANGLES":
+            indices /= 3; break;
+        case "TRIANGLE_STRIP":
+        case "TRIANGLE_FAN":
+            indices -= 2; break;
+        case "LINES":
+            indices /= 2; break;
+        case "LINE_STRIP":
+            indices -= 1; break;
+    }
+    return indices;
 }

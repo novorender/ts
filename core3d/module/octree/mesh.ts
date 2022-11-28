@@ -22,6 +22,7 @@ export function* createMeshes(renderer: WebGL2Renderer, geometry: NodeGeometry, 
             attributes: [
                 { kind: "FLOAT_VEC4", buffer: vb, componentCount: 3, componentType: "SHORT", normalized: true, stride: 16, offset: 0 },
                 { kind: "FLOAT_VEC3", buffer: vb, componentCount: 3, componentType: "BYTE", normalized: true, stride: 16, offset: 6 },
+                { kind: "UNSIGNED_INT", buffer: vb, componentType: "UNSIGNED_BYTE", stride: 16, offset: 9 },
             ],
             indices: ib,
         });

@@ -34,6 +34,7 @@ export interface NodeData {
     readonly primitiveType: PrimitiveTypeString;
     // Used to predict the cost of creating geometry, potentially with filtering. Note that this does not consider the cost of loading, which ideally is a streaming process with low memory footprint
     readonly primitives: number;
+    readonly primitivesDelta: number; // # new primitives introduced compared to parent
     readonly gpuBytes: number;
 }
 
@@ -159,10 +160,21 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
 export function getChildren(parentId: string, schema: Schema, predicate?: (objectId: number) => boolean): NodeData[] {
     const { childInfo } = schema;
     var children: NodeData[] = [];
+    const parentIndexCounts: number[] = [];
+    for (const mesh of getSubMeshes(schema, predicate)) {
+        const { childIndex, indexRange, vertexRange } = mesh;
+        const numIndices = indexRange[1] - indexRange[0];
+        const numVertices = vertexRange[1] - vertexRange[0];
+        const n = numIndices ? numIndices : numVertices;
+        let count = parentIndexCounts[childIndex] ?? 0;
+        count += n;
+        parentIndexCounts[childIndex] = count;
+    }
+
     for (let i = 0; i < childInfo.length; i++) {
         const childIndex = childInfo.childIndex[i];
         const childMask = childInfo.childMask[i];
-        const id = parentId + childIndex.toString(36); // use radix 36 (0-9, a-z) encoding, which allows for max 36 children per node
+        const id = parentId + childIndex.toString(32); // use radix 32 (0-9, a-v) encoding, which allows for max 32 children per node
         const tolerance = childInfo.tolerance[i];
         const byteSize = childInfo.totalByteSize[i];
         const offset = getVec3(childInfo.offset, i);
@@ -187,9 +199,12 @@ export function getChildren(parentId: string, schema: Schema, predicate?: (objec
         const optionalAttributes = childInfo.attributes[i];
         const subMeshRange = getRange(childInfo.subMeshes, i);
 
+        const parentPrimitives = computePrimitiveCount(primitiveType, parentIndexCounts[i] ?? 0) ?? 0;
         const vertexStride = computeVertexOffsets(getVertexAttribNames(optionalAttributes)).stride;
         const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshRange, primitiveType, vertexStride, predicate);
-        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitiveType: primitiveTypeStrings[primitiveType], primitives, gpuBytes });
+        const primitivesDelta = primitives - parentPrimitives;
+        console.assert(primitivesDelta > 0);
+        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitiveType: primitiveTypeStrings[primitiveType], primitives, primitivesDelta, gpuBytes });
     }
     return children;
 }

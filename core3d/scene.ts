@@ -47,7 +47,7 @@ export interface OctreeSceneConfig {
     readonly rootByteSize: number;
     readonly numObjects: number;
     readonly numMaterials: number; // in original mesh, i.e. the size of the materialproperties texture
-    readonly materialProperties?: MaterialProperties;
+    readonly materialProperties: MaterialProperties;
 
     readonly modelWorldMatrix?: ReadonlyMat4; // model -> world space transformation matrix
     readonly subtrees?: ("terrain" | "triangles" | "lines" | "points")[];
@@ -84,6 +84,7 @@ function rootNodeData(config: OctreeSceneConfig): NodeData {
         primitiveType: "TRIANGLES", // is this always the case?
         // config should probably contain SubMeshProjection data, suitable for aggregateSubMeshProjections()
         primitives: 0, // compute from config?
+        primitivesDelta: 0, // same as primitives above
         gpuBytes: 0, // compute from config?
     };
 }

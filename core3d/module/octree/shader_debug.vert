@@ -1,14 +1,7 @@
-layout(std140) uniform Camera {
-    mat4 clipViewMatrix;
-    mat4 viewClipMatrix;
-    mat3 worldViewMatrixNormal;
-    mat3 viewWorldMatrixNormal;
-} camera;
-
-layout(std140) uniform Octree {
+layout(std140) uniform Node {
     mat4 objectClipMatrix;
     vec4 debugColor;
-} octree;
+} node;
 
 const float size = 0.9;
 const int ccwIndices[12] = int[12](0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2);
@@ -20,11 +13,11 @@ out vec4 color;
 void main() {
     vec3 pos = corners[gl_VertexID / 12];
     int idx = (gl_VertexID / 12) < 4 ? cwIndices[gl_VertexID % 12] : ccwIndices[gl_VertexID % 12];
-    color = octree.debugColor;
+    color = node.debugColor;
     if(idx > 0) {
         pos[idx - 1] *= size;
         color.rgb *= 0.75;
     }
-    gl_Position = octree.objectClipMatrix * vec4(pos, 1);
+    gl_Position = node.objectClipMatrix * vec4(pos, 1);
 
 }

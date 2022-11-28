@@ -46,7 +46,7 @@ export class RenderContext {
             worldViewMatrixNormal: "mat3",
             viewWorldMatrixNormal: "mat3",
         });
-        this.cameraUniformsBuffer = this.renderer.createBuffer({ kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength });
+        this.cameraUniformsBuffer = this.renderer.createBuffer({ kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength + 256 });
     }
 
     protected contextLost() {

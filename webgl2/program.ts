@@ -58,6 +58,8 @@ export function createProgram(context: RendererContext, params: ProgramParams) {
                 const blockIndex = gl.getUniformBlockIndex(program, name);
                 if (blockIndex != 0xffffffff) {
                     gl.uniformBlockBinding(program, blockIndex, idx);
+                } else {
+                    console.warn(`Shader has no uniform block named: ${name}!`);
                 }
             }
             idx++;
