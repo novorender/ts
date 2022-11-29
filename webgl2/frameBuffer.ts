@@ -21,10 +21,11 @@ export function invalidateFrameBuffer(context: RendererContext, params: Invalida
         }
         i++;
     }
-    const { frameBuffer } = params;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
-    gl.invalidateFramebuffer(gl.FRAMEBUFFER, attachments);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    const { frameBuffer, kind } = params;
+    const target = gl[kind];
+    gl.bindFramebuffer(target, frameBuffer);
+    gl.invalidateFramebuffer(target, attachments);
+    gl.bindFramebuffer(target, null);
 }
 
 export function createFrameBuffer(context: RendererContext, params: FrameBufferParams): WebGLFramebuffer {
@@ -36,17 +37,18 @@ export function createFrameBuffer(context: RendererContext, params: FrameBufferP
     gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
 
     function bind(binding: FrameBufferBinding, attachment: number) {
+        const target = gl[binding.kind];
         if (isTextureAttachment(binding)) {
             const { texture } = binding;
             if (binding.layer === undefined) {
-                const target = gl[binding.target ?? "TEXTURE_2D"];
-                gl.framebufferTexture2D(gl.FRAMEBUFFER, attachment, target, texture, binding.level ?? 0);
+                const texTarget = gl[binding.texTarget ?? "TEXTURE_2D"];
+                gl.framebufferTexture2D(target, attachment, texTarget, texture, binding.level ?? 0);
             } else {
-                gl.framebufferTextureLayer(gl.FRAMEBUFFER, attachment, texture, binding.level ?? 0, binding.layer);
+                gl.framebufferTextureLayer(target, attachment, texture, binding.level ?? 0, binding.layer);
             }
         } else {
             const { renderBuffer } = binding;
-            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, attachment, gl.RENDERBUFFER, renderBuffer);
+            gl.framebufferRenderbuffer(target, attachment, gl.RENDERBUFFER, renderBuffer);
         }
     }
     if (params.depth)
@@ -61,7 +63,7 @@ export function createFrameBuffer(context: RendererContext, params: FrameBufferP
         i++;
     }
 
-    const debug = false; // TODO: get from build environment
+    const debug = true; // TODO: get from build environment
     if (debug) {
         const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
         switch (status) {

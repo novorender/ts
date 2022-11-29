@@ -1,7 +1,5 @@
-import { quat, vec3 } from "gl-matrix";
-import { createWebGL2Renderer, WebGL2Renderer } from "@novorender/webgl2";
+import { WebGL2Renderer } from "@novorender/webgl2";
 import { RenderContext } from "./context";
-import { createModules } from "./module";
 import { defaultRenderState, modifyRenderState } from "./state";
 import { OrbitController } from "./controller";
 import { downloadScene } from "./scene";
@@ -14,7 +12,7 @@ export async function run(canvas: HTMLCanvasElement) {
     const options: WebGLContextAttributes = {
         alpha: true,
         antialias: false,
-        depth: true,
+        depth: false,
         desynchronized: false,
         failIfMajorPerformanceCaveat: true,
         powerPreference: "high-performance",
@@ -88,7 +86,7 @@ export async function run(canvas: HTMLCanvasElement) {
                 if (prevState !== state || context.changed) {
                     prevState = state;
                     context["render"](state);
-                    console.log("render");
+                    // console.log("render");
                 }
             }
             animId = requestAnimationFrame(render);

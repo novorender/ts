@@ -92,10 +92,10 @@ export function getUniformsInfo(gl: WebGL2RenderingContext, program: WebGLProgra
     return uniformData as readonly UniformInfo[];
 }
 
-export function getUniformLocations<T extends readonly string[]>(gl: WebGL2RenderingContext, program: WebGLProgram, ...names: T) {
+export function getTextureUniformLocations<T extends readonly string[]>(gl: WebGL2RenderingContext, program: WebGLProgram, ...names: T) {
     const locations: any = {};
     for (const name of names) {
-        locations[name] = gl.getUniformLocation(program, name);
+        locations[name] = gl.getUniformLocation(program, `textures_${name}`);
     }
     return locations as Record<T[number], WebGLUniformLocation | null>;
 }

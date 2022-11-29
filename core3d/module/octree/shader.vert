@@ -14,18 +14,21 @@ layout(std140) uniform Node {
     vec4 debugColor;
 } node;
 
-in vec4 vertexPosition;
-in vec3 vertexNormal;
-in uint material;
-out vec3 normal;
-out vec4 color;
+struct Varyings {
+    vec3 normal;
+    vec4 color;
+};
+out Varyings varyings;
+
+layout(location = 0) in vec4 position;
+layout(location = 1) in vec3 normal;
+layout(location = 2) in uint material;
 
 void main() {
-    gl_Position = node.objectClipMatrix * vertexPosition;
-    normal = vertexNormal;
+    gl_Position = node.objectClipMatrix * position;
+    varyings.normal = normal;
     uint rgba = materials.rgba[material / 4U][material % 4U];
-    // vec4 unpack = vec4(float((rgba >> 24) & 0xffU), float((rgba >> 16) & 0xffU), float((rgba >> 8) & 0xffU), float((rgba >> 0) & 0xffU));
     vec4 unpack = vec4(float((rgba >> 0) & 0xffU), float((rgba >> 8) & 0xffU), float((rgba >> 16) & 0xffU), float((rgba >> 24) & 0xffU));
-    color = unpack / 255.0;
-    // color = vec4(normal * .5 + .5, 0.1);
+    varyings.color = unpack / 255.0;
+    // varyings.color = vec4(normal * .5 + .5, 0.1);
 }

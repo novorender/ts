@@ -5,7 +5,18 @@ layout(std140) uniform Camera {
     mat3 viewWorldMatrixNormal;
 } camera;
 
-out vec3 vDir;
+layout(std140) uniform Background {
+    float envBlurNormalized;
+    int mipCount;
+} background;
+
+uniform samplerCube textures_background;
+uniform samplerCube textures_radiance;
+
+struct Varyings {
+    vec3 dir;
+};
+out Varyings varyings;
 
 void main() {
     // Use degenerate triangle if ortho camera to use clear color instead
@@ -13,5 +24,5 @@ void main() {
     vec2 pos = vec2(gl_VertexID % 2, gl_VertexID / 2) * 2.0 - 1.0;
     gl_Position = isPerspective ? vec4(pos, 1, 1) : vec4(0);
     vec3 dirVS = vec3(pos.x / camera.viewClipMatrix[0][0], pos.y / camera.viewClipMatrix[1][1], -1);
-    vDir = camera.viewWorldMatrixNormal * dirVS;
+    varyings.dir = camera.viewWorldMatrixNormal * dirVS;
 }

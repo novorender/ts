@@ -4,6 +4,7 @@
     "webgl-glsl-editor.codeInjectionSource": [
         "#version 300 es",
         "precision highp float;",
-        "precision highp int;"
+        "precision highp int;",
+        "precision highp usampler2D;"
     ],
 }

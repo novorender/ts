@@ -6,7 +6,6 @@
             "label": "npm: tsc watch",
             "isBackground": true,
             "script": "watch",
-            "path": "webgl2/examples",
             "problemMatcher": [
                 "$tsc-watch"
             ],

@@ -1,7 +1,7 @@
-import { DerivedRenderState, RenderContext, RenderStateBackground } from "core3d";
+import type { DerivedRenderState, RenderContext, RenderStateBackground } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformBufferProxy, UniformsHandler, UniformsProxy } from "../../uniforms";
-import { getUniformLocations, TextureParams, WebGL2Renderer } from "webgl2";
+import { createUniformBufferProxy, UniformsHandler } from "core3d/uniforms";
+import { getTextureUniformLocations, TextureParams } from "webgl2";
 import { KTX } from "./ktx";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
@@ -60,7 +60,6 @@ export class BackgroundModule implements RenderModule {
             }
         }
     }
-
 }
 
 interface RelevantRenderState {
@@ -71,7 +70,7 @@ class BackgroundModuleInstance implements RenderModuleContext {
     readonly state;
     readonly program;
     readonly uniforms;
-    readonly uniformLocations;
+    readonly textureUniformLocations;
     readonly sampler: WebGLSampler;
     readonly samplerMip: WebGLSampler;
     textures: undefined | {
@@ -86,7 +85,7 @@ class BackgroundModuleInstance implements RenderModuleContext {
         const uniformBufferBlocks = ["Camera", "Background"];
         this.program = renderer.createProgram({ vertexShader, fragmentShader, uniformBufferBlocks });
         this.uniforms = new UniformsHandler(renderer, data.uniformsProxy);
-        this.uniformLocations = getUniformLocations(renderer.gl, this.program, "texBackground", "texRadiance");
+        this.textureUniformLocations = getTextureUniformLocations(renderer.gl, this.program, "background", "radiance");
         this.sampler = renderer.createSampler({ minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         this.samplerMip = renderer.createSampler({ minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
     }
@@ -138,15 +137,15 @@ class BackgroundModuleInstance implements RenderModuleContext {
             data.url = url;
         }
 
+        renderer.clear({ kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
         if (this.textures) {
-            renderer.clear({ kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
-            const { uniformLocations, textures, sampler, samplerMip } = this;
+            const { textureUniformLocations, textures, sampler, samplerMip } = this;
             renderer.state({
                 program,
                 uniformBuffers: [cameraUniformsBuffer, uniforms.buffer],
                 uniforms: [
-                    { kind: "1i", location: uniformLocations.texBackground, value: 0 },
-                    { kind: "1i", location: uniformLocations.texRadiance, value: 1 },
+                    { kind: "1i", location: textureUniformLocations.background, value: 0 },
+                    { kind: "1i", location: textureUniformLocations.radiance, value: 1 },
                 ],
                 textures: [
                     { kind: "TEXTURE_CUBE_MAP", texture: textures.background, sampler },
@@ -158,7 +157,8 @@ class BackgroundModuleInstance implements RenderModuleContext {
 
             renderer.draw({ kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
         } else {
-            renderer.clear({ kind: "back_buffer", color: state.background.color, depth: 1.0 });
+            // renderer.clear({ kind: "back_buffer", color: state.background.color, depth: 1.0 });
+            renderer.clear({ kind: "COLOR", drawBuffer: 0, color: state.background.color });
         }
     }
 
@@ -167,7 +167,7 @@ class BackgroundModuleInstance implements RenderModuleContext {
     }
 
     dispose() {
-        const { context, program, uniforms, sampler, textures } = this;
+        const { context, program, uniforms, sampler, samplerMip, textures } = this;
         const { renderer } = context;
         this.contextLost();
         if (textures) {
@@ -178,6 +178,7 @@ class BackgroundModuleInstance implements RenderModuleContext {
             this.textures = undefined;
         }
         renderer.deleteSampler(sampler);
+        renderer.deleteSampler(samplerMip);
         uniforms.dispose();
         renderer.deleteProgram(program);
     }

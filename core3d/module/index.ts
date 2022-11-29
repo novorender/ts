@@ -1,10 +1,9 @@
-import { RenderState, DerivedRenderState } from "../state";
+import { DerivedRenderState } from "../state";
 import { RenderContext } from "../context";
 import { BackgroundModule } from "./background";
 import { GridModule } from "./grid";
 import { OctreeModule } from "./octree";
-import { matricesFromRenderState } from "../matrices";
-import { createViewFrustum } from "../viewFrustum";
+import { TonemapdModule } from "./tonemap";
 
 // constructor takes RenderState object
 // this object contains all state (geometry, textures etc), or has at least the ability to reload state on demand if e.g. webgl context is lost
@@ -19,11 +18,12 @@ export interface RenderModuleContext {
     dispose(): void;
 }
 
-export function createModules() {
+export function createDefaultModules() {
     return [
         new BackgroundModule(),
         new GridModule(),
         new OctreeModule(),
+        new TonemapdModule(),
     ];
 }
 

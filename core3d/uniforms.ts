@@ -117,7 +117,7 @@ export function createUniformBufferProxy<T extends Record<string, UniformTypes>>
             type == "bool" ? () => {
                 return view[offsets[0]] != 0;
             } : type == "int" || type == "uint" || type == "float" ? () => {
-                return view[offsets[0]] != 0;
+                return view[offsets[0]];
             } : () => {
                 return offsets.map(o => view[o]);
             };

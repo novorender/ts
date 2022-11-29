@@ -60,12 +60,34 @@ export interface RenderStateScene {
     readonly config: OctreeSceneConfig;
 }
 
+export const enum TonemappingMode {
+    color,
+    normal,
+    depth,
+    objectId,
+    deviation,
+    intensity,
+};
+
+export interface RenderStateTonemapping {
+    /** Camera light exposure as stops of power of 2.
+     * @remarks
+     * Negative values darkens the image, while positive ones brightens it.
+     * The default value is 0.0.
+     */
+    readonly exposure: number;
+
+    /** Debug display frame buffer */
+    readonly mode: TonemappingMode;
+}
+
 export interface RenderState {
     readonly output: RenderStateOutput;
     readonly background: RenderStateBackground;
     readonly camera: RenderStateCamera;
     readonly grid: RenderStateGrid;
     readonly scene: RenderStateScene | undefined;
+    readonly tonemapping: RenderStateTonemapping;
 }
 
 export interface DerivedRenderState extends RenderState {
@@ -127,6 +149,10 @@ export function defaultRenderState(): RenderState {
             spacing: 1,
         },
         scene: undefined,
+        tonemapping: {
+            exposure: 0,
+            mode: TonemappingMode.color,
+        },
     };
     return state;
 }

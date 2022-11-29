@@ -83,12 +83,15 @@ export function createTexture(context: RendererContext, params: TextureParams) {
     if ("mipMaps" in params) {
         // mip mapped
         const { mipMaps } = params;
-        const levels = mipMaps.length;
+        const isNumber = typeof mipMaps == "number";
+        const levels = isNumber ? mipMaps : mipMaps.length;
         createStorage(levels);
-        for (let level = 0; level < levels; level++) {
-            const mipMap = mipMaps[level];
-            if (mipMap) {
-                createMipLevel(level, mipMap);
+        if (!isNumber) {
+            for (let level = 0; level < levels; level++) {
+                const mipMap = mipMaps[level];
+                if (mipMap) {
+                    createMipLevel(level, mipMap);
+                }
             }
         }
     } else {
@@ -115,7 +118,7 @@ function isFormatCompressed(format: UncompressedTextureFormatString | Compressed
     return format.startsWith("COMPRESSED");
 }
 
-function getFormatInfo(gl: WebGL2RenderingContext, internalFormatString: UncompressedTextureFormatString | CompressedTextureFormatString, typeString?: Exclude<TexelTypeString, "FLOAT_32_UNSIGNED_INT_24_8_REV">) {
+function getFormatInfo(gl: WebGL2RenderingContext, internalFormatString: UncompressedTextureFormatString | CompressedTextureFormatString, typeString?: TexelTypeString) {
     if (isFormatCompressed(internalFormatString)) {
         const internalFormat = compressedFormats[internalFormatString];
         const format = undefined;
@@ -187,6 +190,11 @@ const internalFormat2FormatLookup = {
     [GL.RGBA16UI]: GL.RGBA_INTEGER,
     [GL.RGBA32I]: GL.RGBA_INTEGER,
     [GL.RGBA32UI]: GL.RGBA_INTEGER,
+    [GL.DEPTH_COMPONENT16]: GL.DEPTH_COMPONENT,
+    [GL.DEPTH_COMPONENT24]: GL.DEPTH_COMPONENT,
+    [GL.DEPTH_COMPONENT32F]: GL.DEPTH_COMPONENT,
+    [GL.DEPTH24_STENCIL8]: GL.DEPTH_STENCIL,
+    [GL.DEPTH32F_STENCIL8]: GL.DEPTH_STENCIL,
 } as const;
 
 // we could read these from extensions instead...

@@ -1,5 +1,5 @@
 import type { BlitParams, BufferParams, ClearParams, CopyParams, DrawParams, FrameBufferParams, ProgramParams, ReadPixelsParams, RenderBufferParams, SamplerParams, StateParams, TextureParams, VertexArrayParams, Pixels, InvalidateFrameBufferParams, UpdateParams, TransformFeedbackParams, TransformFeedbackTestParams, State } from "./types";
-import { createContext, getLimits, LimitsGL, RendererContext, WebGLLoseContextExt, WebGLMultiDrawExt } from "./context.js";
+import { getLimits, LimitsGL, RendererContext, WebGL_multi_draw_ext } from "./context.js";
 import { createTimer, Timer } from "./timer.js";
 import { blit } from "./blit.js";
 import { createProgram } from "./program.js";
@@ -18,7 +18,7 @@ import { readPixelsAsync } from "./read.js";
 import { beginTransformFeedback, createTransformFeedback, endTransformFeedback } from "./transformFeedback.js";
 export type { RendererContext };
 export * from "./types";
-export { resizeCanvasToDisplaySize, getUniformLocations } from "./util.js";
+export { resizeCanvasToDisplaySize, getTextureUniformLocations } from "./util.js";
 
 export function createWebGL2Renderer(canvas: HTMLCanvasElement, options?: WebGLContextAttributes): WebGL2Renderer {
     const gl = canvas.getContext("webgl2", options);
@@ -28,12 +28,13 @@ export function createWebGL2Renderer(canvas: HTMLCanvasElement, options?: WebGLC
     return new WebGL2Renderer(gl, canvas);
 }
 
-export class WebGL2Renderer {
+export class WebGL2Renderer implements RendererContext {
     readonly gl: WebGL2RenderingContext;
     readonly limits: LimitsGL;
     readonly extensions: {
-        readonly loseContext: WebGLLoseContextExt | null;
-        readonly multiDraw: WebGLMultiDrawExt | null;
+        readonly colorBufferFloat: WEBGL_color_buffer_float | null;
+        readonly loseContext: WEBGL_lose_context | null;
+        readonly multiDraw: WebGL_multi_draw_ext | null;
     }
     readonly defaultState: State;
 
@@ -46,8 +47,9 @@ export class WebGL2Renderer {
         this.limits = getLimits(gl);
         this.defaultState = createDefaultState(this.limits);
         this.extensions = {
-            loseContext: gl.getExtension("WEBGL_lose_context") as WebGLLoseContextExt,
-            multiDraw: gl.getExtension("WEBGL_MULTI_DRAW") as WebGLMultiDrawExt,
+            colorBufferFloat: gl.getExtension("EXT_color_buffer_float") as WEBGL_color_buffer_float | null, // also includes half floats
+            loseContext: gl.getExtension("WEBGL_lose_context") as WEBGL_lose_context | null,
+            multiDraw: gl.getExtension("WEBGL_MULTI_DRAW") as WebGL_multi_draw_ext | null,
         } as const;
     }
 

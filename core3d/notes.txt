@@ -8,7 +8,7 @@ runs in main thread.
 re-implement features and see what breaks ios/ipad
 /materials
   only crashes when tri count is too high (out of memory)
-device caps
+/device caps
 highlighting
 shading (ibl, dir light and camera light)
 pick buffers

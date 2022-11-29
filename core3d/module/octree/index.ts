@@ -1,4 +1,5 @@
-import { CoordSpace, DerivedRenderState, Matrices, RenderContext, RenderStateScene } from "core3d";
+import type { DerivedRenderState, Matrices, RenderContext, RenderStateScene } from "core3d";
+import { CoordSpace } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
 import { createUniformBufferProxy, UniformsHandler } from "../../uniforms";
 import { mat4 } from "gl-matrix";

@@ -12,7 +12,7 @@ layout(std140) uniform Grid {
     float spacing;
 } grid;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     fragColor = grid.color;

@@ -5,18 +5,14 @@ export interface RendererContext {
     readonly gl: WebGL2RenderingContext;
     readonly limits: LimitsGL;
     readonly extensions: {
-        readonly loseContext: WebGLLoseContextExt | null;
-        readonly multiDraw: WebGLMultiDrawExt | null;
+        readonly colorBufferFloat: WEBGL_color_buffer_float | null;
+        readonly loseContext: WEBGL_lose_context | null;
+        readonly multiDraw: WebGL_multi_draw_ext | null;
     }
     readonly defaultState: State;
 }
 
-export interface WebGLLoseContextExt {
-    loseContext(): void;
-    restoreContext(): void;
-}
-
-export interface WebGLMultiDrawExt {
+export interface WebGL_multi_draw_ext {
     multiDrawArraysWEBGL(mode: number,
         firstsList: Int32Array, firstsOffset: number,
         countsList: Int32Array, countsOffset: number,
@@ -32,8 +28,9 @@ export function createContext(gl: WebGL2RenderingContext) {
     const limits = getLimits(gl);
     const defaultState = createDefaultState(limits);
     const extensions = {
-        loseContext: gl.getExtension("WEBGL_lose_context ") as WebGLLoseContextExt,
-        multiDraw: gl.getExtension("WEBGL_MULTI_DRAW") as WebGLMultiDrawExt,
+        loseContext: gl.getExtension("WEBGL_lose_context ") as WEBGL_lose_context | null,
+        multiDraw: gl.getExtension("WEBGL_MULTI_DRAW") as WebGL_multi_draw_ext | null,
+        colorBufferFloat: gl.getExtension("EXT_color_buffer_float") as WEBGL_color_buffer_float | null, // also includes half floats
     } as const;
     return { gl, extensions, limits, defaultState, currentProgram: null } as const;
 }

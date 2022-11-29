@@ -1,8 +1,9 @@
-import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderModuleState, RenderStateCamera, CoordSpace, createModules } from "./";
+import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderModuleState, RenderStateCamera, CoordSpace, createDefaultModules } from "./";
 import { createWebGL2Renderer, WebGL2Renderer } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { createUniformBufferProxy } from "./uniforms";
+import { RenderBuffers } from "./buffers";
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
@@ -10,6 +11,7 @@ function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
+    private static defaultModules: readonly RenderModule[] | undefined;
     private readonly modules: readonly RenderModule[];
     private readonly moduleContexts: (RenderModuleContext | undefined)[];
     private outputState;
@@ -19,13 +21,15 @@ export class RenderContext {
 
     // shared mutable state
     changed = true;
+    buffers: RenderBuffers = undefined!;
     readonly cameraUniformsBuffer: WebGLBuffer;
-    private static defaultModules: readonly RenderModule[] | undefined;
     // iblUniformsBuffer: WebGLBuffer | null = null;
 
     constructor(canvas: HTMLCanvasElement, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
-        this.renderer = createWebGL2Renderer(canvas, options);
-        this.modules = modules ?? RenderContext.defaultModules ?? RenderContext.defaultModules ?? createModules();
+        const renderer = this.renderer = createWebGL2Renderer(canvas, options);
+        const { extensions } = renderer;
+        console.assert(extensions.loseContext != null, extensions.multiDraw != null, extensions.colorBufferFloat != null);
+        this.modules = modules ?? RenderContext.defaultModules ?? RenderContext.defaultModules ?? createDefaultModules();
         RenderContext.defaultModules = this.modules;
 
         this.moduleContexts = this.modules.map((m, i) => {
@@ -46,7 +50,16 @@ export class RenderContext {
             worldViewMatrixNormal: "mat3",
             viewWorldMatrixNormal: "mat3",
         });
-        this.cameraUniformsBuffer = this.renderer.createBuffer({ kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength + 256 });
+        this.cameraUniformsBuffer = renderer.createBuffer({ kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength + 256 });
+    }
+
+    dispose() {
+        const { renderer, cameraUniformsBuffer, buffers, moduleContexts } = this;
+        renderer.deleteBuffer(cameraUniformsBuffer);
+        buffers?.dispose();
+        for (const module of moduleContexts) {
+            module?.dispose();
+        }
     }
 
     protected contextLost() {
@@ -68,10 +81,13 @@ export class RenderContext {
         if (this.outputState.hasChanged(state.output)) {
             const { canvas } = renderer;
             const { width, height } = state.output;
+            console.assert(Number.isInteger(width) && Number.isInteger(height));
             canvas.width = width;
             canvas.height = height;
             resized = true;
             this.changed = true;
+            this.buffers?.dispose();
+            this.buffers = new RenderBuffers(renderer, width, height);
         }
 
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
@@ -82,21 +98,21 @@ export class RenderContext {
         }
         this.updateCameraUniforms(derivedState);
 
-        // set up viewport
-        const { width, height } = renderer.canvas;
-
         // render modules
+        const { width, height } = renderer.canvas;
         for (const module of this.moduleContexts) {
             renderer.state({
-                viewport: { width, height }
+                viewport: { width, height },
+                frameBuffer: this.buffers.frameBuffer,
+                drawBuffers: ["COLOR_ATTACHMENT0"],
             })
             module?.render(derivedState);
             // reset gl state
             renderer.state(null);
         }
 
-        // reset gl state
-        // renderer.state(null);
+        this.buffers.invalidate();
+        // renderer.invalidateFrameBuffer({ kind: "DRAW_FRAMEBUFFER", frameBuffer: this.buffers.frameBuffer, color: [], depth: true });
     }
 
     private updateCameraUniforms(state: DerivedRenderState) {
