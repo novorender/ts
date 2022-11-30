@@ -67,7 +67,7 @@ export class OctreeNode {
         const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         this.size = Math.pow(2, data.tolerance) * toleranceScale;
         this.uniforms = new UniformsHandler(context.renderContext.renderer, createUniformBufferProxy({
-            objectClipMatrix: "mat4",
+            modelViewMatrix: "mat4",
             debugColor: "vec4",
         }));
     }
@@ -195,12 +195,11 @@ export class OctreeNode {
         // update uniforms data        
         const { offset, scale } = this.data;
         const { uniforms } = this;
-        const worldClipMatrix = state.matrices.getMatrix(CoordSpace.World, CoordSpace.Clip);
+        const worldViewMatrix = state.matrices.getMatrix(CoordSpace.World, CoordSpace.View);
         const modelWorldMatrix = mat4.fromTranslation(mat4.create(), offset);
-        // const modelWorldMatrix = mat4.create();
         mat4.scale(modelWorldMatrix, modelWorldMatrix, vec3.fromValues(scale, scale, scale));
-        const modelClipMatrix = mat4.mul(mat4.create(), worldClipMatrix, modelWorldMatrix);
-        uniforms.values.objectClipMatrix = modelClipMatrix;
+        const modelViewMatrix = mat4.mul(mat4.create(), worldViewMatrix, modelWorldMatrix);
+        uniforms.values.modelViewMatrix = modelViewMatrix;
     }
 
     render(uniformBuffers: WebGLBuffer[]) {
@@ -239,7 +238,7 @@ export class OctreeNode {
         }
     }
 
-    renderDebug() {
+    renderDebug(uniformBuffers: WebGLBuffer[]) {
         const { context, uniforms, visibility, state } = this;
         const { renderContext } = context;
         const { renderer } = renderContext;
@@ -255,28 +254,14 @@ export class OctreeNode {
                 case NodeState.ready: b = 1; break;
             }
             uniforms.values.debugColor = vec4.fromValues(r, g, b, 1);
-            uniforms.update();
+            // uniforms.update();
         }
 
         renderer.state({
-            uniformBuffers: [uniforms.buffer],
+            uniformBuffers: [...uniformBuffers, uniforms.buffer],
         });
         renderer.draw({ kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
     }
-
-    // lod(state: DerivedRenderState) {
-    //     const { projectedSizeSplitThreshold } = this.context;
-    //     if (this.shouldSplit(projectedSizeSplitThreshold)) {
-    //         if (this.state == NodeState.collapsed) {
-    //             this.state = NodeState.requestDownload;
-    //             // this.downloadGeometry();
-    //         }
-    //     } else if (!this.shouldSplit(projectedSizeSplitThreshold * 0.98)) { // add a little "slack" before collapsing back again
-    //         if (this.state != NodeState.collapsed) {
-    //             this.dispose();
-    //         }
-    //     }
-    // }
 
     async downloadGeometry() {
         try {

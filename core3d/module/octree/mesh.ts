@@ -20,9 +20,12 @@ export function* createMeshes(renderer: WebGL2Renderer, geometry: NodeGeometry, 
         const indexType = subMesh.indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
         const vao = renderer.createVertexArray({
             attributes: [
-                { kind: "FLOAT_VEC4", buffer: vb, componentCount: 3, componentType: "SHORT", normalized: true, stride: 16, offset: 0 },
-                { kind: "FLOAT_VEC3", buffer: vb, componentCount: 3, componentType: "BYTE", normalized: true, stride: 16, offset: 6 },
-                { kind: "UNSIGNED_INT", buffer: vb, componentType: "UNSIGNED_BYTE", stride: 16, offset: 9 },
+                { kind: "FLOAT_VEC4", buffer: vb, componentCount: 3, componentType: "SHORT", normalized: true, stride: 16, offset: 0 }, // pos
+                { kind: "FLOAT_VEC3", buffer: vb, componentCount: 3, componentType: "BYTE", normalized: true, stride: 16, offset: 6 }, // normal
+                { kind: "UNSIGNED_INT", buffer: vb, componentType: "UNSIGNED_BYTE", stride: 16, offset: 9 }, // material index
+                // highlight index
+                // texture?
+                { kind: "UNSIGNED_INT", buffer: vb, componentType: "UNSIGNED_INT", stride: 16, offset: 12 }, // object_id
             ],
             indices: ib,
         });

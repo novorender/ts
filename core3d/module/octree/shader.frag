@@ -10,19 +10,32 @@ layout(std140) uniform Materials {
 } materials;
 
 layout(std140) uniform Node {
-    mat4 objectClipMatrix;
+    mat4 modelViewMatrix;
     vec4 debugColor;
 } node;
 
 struct Varyings {
     vec3 normal;
     vec4 color;
+    float linearDepth;
+    float objectId; // older (<A15) IOS and Ipads crash if we use uint here, so we pack the bits as float and hope no bits are lost/changed during interpolation
 };
 in Varyings varyings;
 
-layout(location = 0) out vec4 fragColor;
+// struct VaryingsFlat {
+//     vec4 color;
+//     uint objectId;
+// };
+// flat in VaryingsFlat varyingsFlat;
+
+layout(location = 0) out vec4 color;
+layout(location = 1) out vec2 normal;
+layout(location = 2) out float linearDepth;
+layout(location = 3) out uvec2 info;
 
 void main() {
-    // fragColor = vec4(normal * .5 + .5, 0.1);
-    fragColor = varyings.color;
+    color = varyings.color;
+    normal = varyings.normal.xy;
+    linearDepth = varyings.linearDepth;
+    info = uvec2(floatBitsToUint(varyings.objectId), 0);
 }

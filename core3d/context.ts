@@ -100,19 +100,21 @@ export class RenderContext {
 
         // render modules
         const { width, height } = renderer.canvas;
+        const { buffers } = this;
         for (const module of this.moduleContexts) {
-            renderer.state({
-                viewport: { width, height },
-                frameBuffer: this.buffers.frameBuffer,
-                drawBuffers: ["COLOR_ATTACHMENT0"],
-            })
-            module?.render(derivedState);
-            // reset gl state
-            renderer.state(null);
+            if (module) {
+                renderer.state({
+                    viewport: { width, height },
+                    frameBuffer: buffers.frameBuffer,
+                    drawBuffers: ["COLOR_ATTACHMENT0"],
+                })
+                module.render(derivedState);
+                // reset gl state
+                renderer.state(null);
+            }
         }
 
         this.buffers.invalidate();
-        // renderer.invalidateFrameBuffer({ kind: "DRAW_FRAMEBUFFER", frameBuffer: this.buffers.frameBuffer, color: [], depth: true });
     }
 
     private updateCameraUniforms(state: DerivedRenderState) {

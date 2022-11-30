@@ -137,7 +137,17 @@ class BackgroundModuleInstance implements RenderModuleContext {
             data.url = url;
         }
 
+        renderer.state({
+            drawBuffers: ["NONE", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
+        });
         renderer.clear({ kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
+        renderer.clear({ kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.NaN, Number.NaN, 0, 0] });
+        renderer.clear({ kind: "COLOR", drawBuffer: 2, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
+        renderer.clear({ kind: "COLOR", drawBuffer: 3, type: "Uint", color: [0xffffffff, 0xffffffff, 0, 0] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
+        renderer.state({
+            drawBuffers: ["COLOR_ATTACHMENT0"],
+        });
+
         if (this.textures) {
             const { textureUniformLocations, textures, sampler, samplerMip } = this;
             renderer.state({
@@ -157,7 +167,6 @@ class BackgroundModuleInstance implements RenderModuleContext {
 
             renderer.draw({ kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
         } else {
-            // renderer.clear({ kind: "back_buffer", color: state.background.color, depth: 1.0 });
             renderer.clear({ kind: "COLOR", drawBuffer: 0, color: state.background.color });
         }
     }

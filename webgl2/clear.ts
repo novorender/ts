@@ -47,8 +47,8 @@ export function clear(context: RendererContext, params: ClearParams) {
             const color = params.color ?? [0, 0, 0, 0];
             switch (type) {
                 case "Float": gl.clearBufferfv(target, drawBuffer ?? 0, color); break;
-                case "Int": gl.clearBufferiv(target, drawBuffer ?? 0, new Int32Array(color)); break;
-                case "Uint": gl.clearBufferuiv(target, drawBuffer ?? 0, new Uint32Array(color)); break;
+                case "Int": gl.clearBufferiv(target, drawBuffer ?? 0, color); break;
+                case "Uint": gl.clearBufferuiv(target, drawBuffer ?? 0, color); break;
                 default: exhaustiveColorCheck(type);
             }
             break;

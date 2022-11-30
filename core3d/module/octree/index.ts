@@ -24,7 +24,6 @@ export class OctreeModule implements RenderModule {
             // clipping planes
             // materials
             // elevation colors
-            objectClipMatrix: "mat4",
         });
     }
 
@@ -54,8 +53,9 @@ class OctreeModuleContext implements RenderModuleContext {
         this.state = new RenderModuleState<RelevantRenderState>();
         const { renderer } = renderContext;
         this.uniforms = new UniformsHandler(renderer, data.uniformsProxy);
-        this.program = renderer.createProgram({ vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Materials", "Node"] });
-        this.programDebug = renderer.createProgram({ vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks: ["Node"] });
+        const uniformBufferBlocks = ["Camera", "Materials", "Node"];
+        this.program = renderer.createProgram({ vertexShader, fragmentShader, uniformBufferBlocks });
+        this.programDebug = renderer.createProgram({ vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
         this.materialsUniformsBuffer = renderer.createBuffer({ kind: "UNIFORM_BUFFER", size: 256 * 4 });
     }
 
@@ -135,6 +135,8 @@ class OctreeModuleContext implements RenderModuleContext {
             renderer.state({
                 program: program,
                 depthTest: true,
+                drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
+                // drawBuffers: ["COLOR_ATTACHMENT0"],
                 // depthWriteMask: true,
                 // cullEnable: false
             });
@@ -156,7 +158,7 @@ class OctreeModuleContext implements RenderModuleContext {
                     blendColor: [0, 0, 0, .25],
                 });
                 for (const node of nodes) {
-                    node.renderDebug();
+                    node.renderDebug([cameraUniformsBuffer, materialsUniformsBuffer]);
                 }
 
                 renderer.state({
@@ -165,7 +167,7 @@ class OctreeModuleContext implements RenderModuleContext {
                     blendColor: [0, 0, 0, .75],
                 });
                 for (const node of nodes) {
-                    node.renderDebug();
+                    node.renderDebug([cameraUniformsBuffer, materialsUniformsBuffer]);
                 }
 
                 renderer.state({
@@ -229,11 +231,8 @@ class OctreeModuleContext implements RenderModuleContext {
     updateUniforms(state: DerivedRenderState) {
         const { uniforms, renderContext } = this;
         const { renderer } = renderContext;
-        const { matrices } = state;
-        const worldClipMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.Clip);
-        const objectWorldMatrix = mat4.create(); // offset/translation?
-        uniforms.values.objectClipMatrix = mat4.mul(mat4.create(), worldClipMatrix, objectWorldMatrix);
-        uniforms.update();
+        // uniforms.values.objectViewMatrix = mat4.mul(mat4.create(), worldViewMatrix, objectWorldMatrix);
+        // uniforms.update();
         const { scene } = state;
         if (scene) {
             const { config } = scene;
