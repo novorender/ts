@@ -53,8 +53,9 @@ class OctreeModuleContext implements RenderModuleContext {
         this.state = new RenderModuleState<RelevantRenderState>();
         const { renderer } = renderContext;
         this.uniforms = new UniformsHandler(renderer, data.uniformsProxy);
+        const flags = ["IOS_WORKAROUND"];
         const uniformBufferBlocks = ["Camera", "Materials", "Node"];
-        this.program = renderer.createProgram({ vertexShader, fragmentShader, uniformBufferBlocks });
+        this.program = renderer.createProgram({ vertexShader, fragmentShader, flags, uniformBufferBlocks });
         this.programDebug = renderer.createProgram({ vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
         this.materialsUniformsBuffer = renderer.createBuffer({ kind: "UNIFORM_BUFFER", size: 256 * 4 });
     }

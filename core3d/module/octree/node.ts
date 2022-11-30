@@ -295,8 +295,7 @@ export class OctreeNode {
         console.assert(children.length == 0);
         console.assert(meshes.length == 0);
         this.download = undefined;
-        const transformIndex = 0; // TODO: allocate/remove?
-        const { childInfos, geometry } = parseNode(this.id, transformIndex, version, buffer);
+        const { childInfos, geometry } = parseNode(this.id, version, buffer);
         for (const data of childInfos) {
             const child = new OctreeNode(context, data);
             children.push(child);

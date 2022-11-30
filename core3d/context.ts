@@ -60,6 +60,8 @@ export class RenderContext {
         for (const module of moduleContexts) {
             module?.dispose();
         }
+        this.deletePick();
+        renderer.dispose();
     }
 
     protected contextLost() {
@@ -70,6 +72,11 @@ export class RenderContext {
 
     isContextLost() {
         return this.renderer.isContextLost();
+    }
+
+    protected poll() {
+        this.pollPick();
+        this.renderer.pollPromises();
     }
 
     protected render(state: RenderState) {
@@ -126,6 +133,71 @@ export class RenderContext {
         uniforms.worldViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
         uniforms.viewWorldMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
         renderer.update({ kind: "UNIFORM_BUFFER", srcData: this.cameraUniformsData.buffer, targetBuffer: this.cameraUniformsBuffer });
+    }
+
+    pickInfo: {
+        readonly sync: WebGLSync,
+        readonly promises: { readonly resolve: () => void, readonly reject: (reason: string) => void }[],
+    } | undefined;
+
+    private pollPick() {
+        const { pickInfo } = this;
+        if (pickInfo) {
+            const { gl } = this.renderer;
+            const { sync, promises } = pickInfo;
+            const status = gl.clientWaitSync(sync, gl.SYNC_FLUSH_COMMANDS_BIT, 0);
+            if (status == gl.WAIT_FAILED) {
+                for (const promise of promises) {
+                    promise.reject("Pick failed!");
+                }
+                this.deletePick();
+            } else if (status != gl.TIMEOUT_EXPIRED) {
+                for (const promise of promises) {
+                    promise.resolve();
+                }
+                this.deletePick();
+            }
+        }
+    }
+
+    private deletePick() {
+        this.renderer.gl.deleteSync(this.pickInfo?.sync ?? null);
+        this.pickInfo = undefined;
+    }
+
+    protected async pick(x: number, y: number): Promise<number[]> {
+        const { renderer, buffers } = this;
+        const { gl } = renderer;
+        const { width, height } = renderer;
+        const r = renderer.canvas.getBoundingClientRect(); // dim in css pixels
+        const cssWidth = r.width;
+        const cssHeight = r.height;
+        // convert to pixel coords
+        const px = Math.round(x / cssWidth * width);
+        const py = Math.round((1 - (y + 0.5) / cssHeight) * height);
+        console.assert(px >= 0 && py >= 0 && px < renderer.width && py < renderer.height);
+        if (!this.pickInfo) {
+            buffers.read();
+            const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)!;
+            this.pickInfo = { sync, promises: [] };
+        }
+        const { promises } = this.pickInfo;
+        const promise = new Promise<void>((resolve, reject) => {
+            promises.push({ resolve, reject });
+        });
+        await promise;
+
+        const pixOffs = px + py * width;
+        const floats = new Float32Array(3);
+        const uints = new Uint32Array(2);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffers.normalRead);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 4, floats, 0, 2);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffers.linearDepthRead);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 4, floats, 2, 1);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffers.infoRead);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 8, uints, 0, 2);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+        return [...floats, uints[0], /* convert pair of half floats for deviation and intensity  */];
     }
 }
 

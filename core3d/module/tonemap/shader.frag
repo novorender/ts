@@ -15,8 +15,8 @@ layout(std140) uniform Tonemapping {
 } tonemapping;
 
 uniform sampler2D textures_color;
-uniform sampler2D textures_depth;
 uniform sampler2D textures_normal;
+uniform sampler2D textures_depth;
 uniform usampler2D textures_info;
 
 struct Varyings {

@@ -66,14 +66,14 @@ class TonemapdModuleInstance implements RenderModuleContext {
             uniformBuffers: [uniforms.buffer],
             uniforms: [
                 { kind: "1i", location: textureUniformLocations.color, value: 0 },
-                { kind: "1i", location: textureUniformLocations.depth, value: 1 },
-                { kind: "1i", location: textureUniformLocations.normal, value: 2 },
+                { kind: "1i", location: textureUniformLocations.normal, value: 1 },
+                { kind: "1i", location: textureUniformLocations.depth, value: 2 },
                 { kind: "1i", location: textureUniformLocations.info, value: 3 },
             ],
             textures: [
                 { kind: "TEXTURE_2D", texture: context.buffers.color, sampler },
-                { kind: "TEXTURE_2D", texture: context.buffers.linearDepth, sampler },
                 { kind: "TEXTURE_2D", texture: context.buffers.normal, sampler },
+                { kind: "TEXTURE_2D", texture: context.buffers.linearDepth, sampler },
                 { kind: "TEXTURE_2D", texture: context.buffers.info, sampler },
             ],
             frameBuffer: null,

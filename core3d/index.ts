@@ -1,6 +1,6 @@
 import { WebGL2Renderer } from "@novorender/webgl2";
 import { RenderContext } from "./context";
-import { defaultRenderState, modifyRenderState } from "./state";
+import { defaultRenderState, modifyRenderState, TonemappingMode } from "./state";
 import { OrbitController } from "./controller";
 import { downloadScene } from "./scene";
 
@@ -33,6 +33,7 @@ export async function run(canvas: HTMLCanvasElement) {
     state = modifyRenderState(state, {
         scene,
         background: { url: "https://api.novorender.com/assets/env/lake/", blur: 0.25 },
+        tonemapping: { mode: TonemappingMode.color },
         // camera: { back: 10000 },
         // grid: { enabled: true, origin: scene.config.boundingSphere.center, size: 100 },
     });
@@ -52,6 +53,13 @@ export async function run(canvas: HTMLCanvasElement) {
     resize();
 
     let context: RenderContext | undefined;
+
+    canvas.addEventListener("click", async (e) => {
+        if (context) {
+            const r = await context["pick"](e.offsetX, e.offsetY);
+            console.log(r);
+        }
+    });
 
     canvas.addEventListener("webglcontextlost", function (event: WebGLContextEvent) {
         event.preventDefault();
@@ -83,6 +91,7 @@ export async function run(canvas: HTMLCanvasElement) {
             if (context) {
                 if (context.isContextLost())
                     return;
+                context["poll"]();
                 if (prevState !== state || context.changed) {
                     prevState = state;
                     context["render"](state);

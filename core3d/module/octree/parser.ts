@@ -93,9 +93,7 @@ const vertexAttribs = {
     texCoord: { type: Float16Array, components: ["x", "y"] },
     intensity: { type: Uint8Array },
     deviation: { type: Float16Array },
-    // childIndex: { type: Uint8Array },
     materialIndex: { type: Uint8Array },
-    transformIndex: { type: Uint16Array },
     objectId: { type: Uint32Array },
 } as const;
 type VertexAttribNames = keyof typeof vertexAttribs;
@@ -129,7 +127,7 @@ function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute) {
     if (optionalAttributes & OptionalVertexAttribute.texCoord) attribNames.push("texCoord");
     if (optionalAttributes & OptionalVertexAttribute.intensity) attribNames.push("intensity");
     if (optionalAttributes & OptionalVertexAttribute.deviation) attribNames.push("deviation");
-    attribNames.push(/*"childIndex",*/ "materialIndex", "transformIndex", "objectId");
+    attribNames.push("materialIndex", "objectId");
     return attribNames;
 }
 
@@ -252,7 +250,7 @@ function fillToInterleavedArray<T extends TypedArray>(dst: T, src: number, byteO
 }
 
 
-function getGeometry(schema: Schema, transformIndex: number, predicate?: (objectId: number) => boolean): NodeGeometry {
+function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean): NodeGeometry {
     const { vertex, vertexIndex } = schema;
 
     const optionalAttributes: OptionalVertexAttribute =
@@ -296,7 +294,7 @@ function getGeometry(schema: Schema, transformIndex: number, predicate?: (object
 
             for (const subMesh of meshes) {
                 const { vertexRange, indexRange, materialIndex, objectId } = subMesh;
-                const context = { transformIndex, materialIndex, objectId };
+                const context = { materialIndex, objectId };
                 const [beginVtx, endVtx] = vertexRange;
                 const [beginIdx, endIdx] = indexRange;
 
@@ -343,62 +341,14 @@ function getGeometry(schema: Schema, transformIndex: number, predicate?: (object
     return { subMeshes } as const;
 }
 
-export function parseNode(id: string, transformIndex: number, version: string, buffer: ArrayBuffer) {
+export function parseNode(id: string, version: string, buffer: ArrayBuffer) {
     console.assert(version == "1.7");
     // const begin = performance.now();
     const r = new BufferReader(buffer);
     var schema = readSchema(r);
     const childInfos = getChildren(id, schema);
-    const geometry = getGeometry(schema, transformIndex);
+    const geometry = getGeometry(schema);
     // const end = performance.now();
     // console.log((end - begin));
     return { childInfos, geometry } as const;
 }
-
-
-/*
-
-make a single vertex and index buffer (per material group?)
-allocate vb and ib ranges on load
-reindex ib into 32 bit global vb
-draw meshes with offsets
-
-
-the fastest way to result is probably to use tiny meshes and multi_draw
-  but join adjacent ranges to make it more performant on pc/android
-all uniforms goes to materialgroup instead of mesh
-  add transform_index vertex attribute
-  add transforms to constant buffer
-
-*/
-
-
-/*
-/split into smaller meshes (never mind perf right now)
-/  split by childIndex for now (just to test the concept)
-/get rid of multi_draw stuff
-/  enable/disable individual child meshes instead
-
-/implement custom alloc per mesh (in geometry worker)
-/  don't actually use single vb, just do the allocator
-/  start with very basic one
--split meshes to fit into allocator gaps
--  again, don't worry about perf, just ensure visual is still correct and monitor fragmentation over time
-
-send allocator ranges to render worker (per mesh)
-  won't do anything yet, just get the plumbing up and running
-send node_id/transform_index to render worker
-
-in renderer:
-  per material group
-    alloc large vb and ib on start
-  per mesh
-    copy vertices and indices into global vb and ib
-    add draw_range to group
-  per material group
-    introduce transform_index attribute and make transformation cb
-    draw all meshes using multi_draw
-
-then start introducing a per draw_id cb to replace meta vertex attribs
-  measure perf, particularly on android to see where to draw the line
-*/

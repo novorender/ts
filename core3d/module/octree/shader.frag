@@ -16,17 +16,21 @@ layout(std140) uniform Node {
 
 struct Varyings {
     vec3 normal;
-    vec4 color;
     float linearDepth;
-    float objectId; // older (<A15) IOS and Ipads crash if we use uint here, so we pack the bits as float and hope no bits are lost/changed during interpolation
+#ifdef IOS_WORKAROUND
+    vec4 color;
+    vec2 objectId; // older (<A15) IOS and Ipads crash if we use uint here, so we use two floats instead
+#endif
 };
 in Varyings varyings;
 
-// struct VaryingsFlat {
-//     vec4 color;
-//     uint objectId;
-// };
-// flat in VaryingsFlat varyingsFlat;
+#ifndef IOS_WORKAROUND
+struct VaryingsFlat {
+    vec4 color;
+    uint objectId;
+};
+flat in VaryingsFlat varyingsFlat;
+#endif
 
 layout(location = 0) out vec4 color;
 layout(location = 1) out vec2 normal;
@@ -34,8 +38,15 @@ layout(location = 2) out float linearDepth;
 layout(location = 3) out uvec2 info;
 
 void main() {
-    color = varyings.color;
     normal = varyings.normal.xy;
     linearDepth = varyings.linearDepth;
-    info = uvec2(floatBitsToUint(varyings.objectId), 0);
+#ifdef IOS_WORKAROUND
+    color = varyings.color;
+    uint objectId = uint(varyings.objectId[0]) | uint(varyings.objectId[1]) << 16U;
+    info = uvec2(objectId, 0);
+#else
+    color = varyingsFlat.color;
+    info = uvec2(varyingsFlat.objectId, 0);
+#endif
+
 }
