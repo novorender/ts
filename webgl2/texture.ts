@@ -1,10 +1,7 @@
-import type { CompressedTextureFormatString, TexelTypeString, TextureImageTargetString, TextureParams, UncompressedTextureFormatString } from "./types";
-import type { RendererContext } from ".";
-import { GL } from "./glEnum.js";
-import { getBufferViewType } from "./util.js";
+import { GL } from "./constants.js";
+import { getBufferViewType } from "./misc.js";
 
-export function createTexture(context: RendererContext, params: TextureParams) {
-    const { gl } = context;
+export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
     const texture = gl.createTexture()!;
 
     const { width, height } = params;
@@ -132,6 +129,219 @@ function getFormatInfo(gl: WebGL2RenderingContext, internalFormatString: Uncompr
         const arrayType = getBufferViewType(type);
         return { internalFormat, format, type, arrayType };
     }
+}
+
+export type TextureParams =
+    TextureParams2DUncompressed | TextureParams2DCompressed | TextureParams2DUncompressedMipMapped | TextureParams2DCompressedMipMapped |
+    TextureParamsCubeUncompressed | TextureParamsCubeCompressed | TextureParamsCubeUncompressedMipMapped | TextureParamsCubeCompressedMipMapped |
+    TextureParams3DUncompressed | TextureParams3DCompressed | TextureParams3DUncompressedMipMapped | TextureParams3DCompressedMipMapped |
+    TextureParams2DArrayUncompressed | TextureParams2DArrayCompressed | TextureParams2DArrayUncompressedMipMapped | TextureParams2DArrayCompressedMipMapped;
+
+// 2D
+export type TextureParams2DUncompressed = Uncompressed & Size2D & GenMipMap & {
+    readonly kind: "TEXTURE_2D";
+    readonly image: BufferSource | null;
+};
+
+export interface TextureParams2DCompressed extends Compressed, Size2D {
+    readonly kind: "TEXTURE_2D";
+    readonly image: BufferSource;
+};
+
+export type TextureParams2DUncompressedMipMapped = Uncompressed & Size2D<Pow2> & GenMipMap & {
+    readonly kind: "TEXTURE_2D";
+    readonly mipMaps: number | readonly (BufferSource | null)[];
+};
+
+export interface TextureParams2DCompressedMipMapped extends Compressed, Size2D<Pow2> {
+    readonly kind: "TEXTURE_2D";
+    readonly mipMaps: readonly (BufferSource)[];
+};
+
+// Cube
+export type TextureParamsCubeUncompressed = Uncompressed & Size2D & GenMipMap & {
+    readonly kind: "TEXTURE_CUBE_MAP";
+    readonly image: CubeImages | null;
+}
+
+export interface TextureParamsCubeCompressed extends Compressed, Size2D {
+    readonly kind: "TEXTURE_CUBE_MAP";
+    readonly image: CubeImages;
+}
+
+export type TextureParamsCubeUncompressedMipMapped = Uncompressed & Size2D<Pow2> & {
+    readonly kind: "TEXTURE_CUBE_MAP";
+    readonly mipMaps: number | readonly (CubeImages | null)[];
+}
+
+export interface TextureParamsCubeCompressedMipMapped extends Compressed, Size2D<Pow2> {
+    readonly kind: "TEXTURE_CUBE_MAP";
+    readonly mipMaps: readonly (CubeImages)[];
+}
+
+// 3D
+export type TextureParams3DUncompressed = Uncompressed & Size3D & GenMipMap & {
+    readonly kind: "TEXTURE_3D";
+    readonly image: BufferSource | null;
+}
+
+export interface TextureParams3DCompressed extends Compressed, Size3D {
+    readonly kind: "TEXTURE_3D";
+    readonly image: BufferSource;
+}
+
+export type TextureParams3DUncompressedMipMapped = Uncompressed & Size3D<Pow2> & {
+    readonly kind: "TEXTURE_3D";
+    readonly mipMaps: number | readonly (BufferSource | null)[];
+}
+
+export interface TextureParams3DCompressedMipMapped extends Compressed, Size3D<Pow2> {
+    readonly kind: "TEXTURE_3D";
+    readonly mipMaps: readonly (BufferSource)[];
+}
+
+// 2D Array
+export type TextureParams2DArrayUncompressed = Uncompressed & Size3D & GenMipMap & {
+    readonly kind: "TEXTURE_2D_ARRAY";
+    readonly image: BufferSource | null;
+}
+
+export interface TextureParams2DArrayCompressed extends Compressed, Size3D {
+    readonly kind: "TEXTURE_2D_ARRAY";
+    readonly image: BufferSource;
+}
+
+export type TextureParams2DArrayUncompressedMipMapped = Uncompressed & Size3D<Pow2> & {
+    readonly kind: "TEXTURE_2D_ARRAY";
+    readonly mipMaps: number | readonly (BufferSource | null)[];
+}
+
+export interface TextureParams2DArrayCompressedMipMapped extends Compressed, Size3D<Pow2> {
+    readonly kind: "TEXTURE_2D_ARRAY";
+    readonly mipMaps: readonly (BufferSource)[];
+}
+
+export type TextureImageTargetString = "TEXTURE_2D" | "TEXTURE_3D" | "TEXTURE_2D_ARRAY" | "TEXTURE_CUBE_MAP_POSITIVE_X" | "TEXTURE_CUBE_MAP_NEGATIVE_X" | "TEXTURE_CUBE_MAP_POSITIVE_Y" | "TEXTURE_CUBE_MAP_NEGATIVE_Y" | "TEXTURE_CUBE_MAP_POSITIVE_Z" | "TEXTURE_CUBE_MAP_NEGATIVE_Z";
+
+// https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glTexStorage2D.xhtml
+export type UncompressedTextureFormatType =
+    { internalFormat: "R8", type: "UNSIGNED_BYTE" } |
+    { internalFormat: "R8_SNORM", type: "BYTE" } |
+    { internalFormat: "R16F", type: "HALF_FLOAT" | "FLOAT" } |
+    { internalFormat: "R32F", type: "FLOAT" } |
+    { internalFormat: "R8UI", type: "UNSIGNED_BYTE" } |
+    { internalFormat: "R8I", type: "BYTE" } |
+    { internalFormat: "R16UI", type: "UNSIGNED_SHORT" } |
+    { internalFormat: "R16I", type: "SHORT" } |
+    { internalFormat: "R32UI", type: "UNSIGNED_INT" } |
+    { internalFormat: "R32I", type: "INT" } |
+    { internalFormat: "RG8", type: "UNSIGNED_BYTE" } |
+    { internalFormat: "RG8_SNORM", type: "BYTE" } |
+    { internalFormat: "RG16F", type: "HALF_FLOAT" | "FLOAT" } |
+    { internalFormat: "RG32F", type: "FLOAT" } |
+    { internalFormat: "RG8UI", type: "UNSIGNED_BYTE" } |
+    { internalFormat: "RG8I", type: "BYTE" } |
+    { internalFormat: "RG16UI", type: "UNSIGNED_SHORT" } |
+    { internalFormat: "RG16I", type: "SHORT" } |
+    { internalFormat: "RG32UI", type: "UNSIGNED_INT" } |
+    { internalFormat: "RG32I", type: "INT" } |
+    { internalFormat: "RGB8", type: "UNSIGNED_BYTE" } |
+    { internalFormat: "SRGB8", type: "UNSIGNED_BYTE" } |
+    { internalFormat: "RGB565", type: "UNSIGNED_BYTE" | "UNSIGNED_SHORT_5_6_5" } |
+    { internalFormat: "RGB8_SNORM", type: "BYTE" } |
+    { internalFormat: "R11F_G11F_B10F", type: "UNSIGNED_INT_10F_11F_11F_REV" | "HALF_FLOAT" | "FLOAT" } |
+    { internalFormat: "RGB9_E5", type: "UNSIGNED_INT_5_9_9_9_REV" | "HALF_FLOAT" | "FLOAT" } |
+    { internalFormat: "RGB16F", type: "HALF_FLOAT" | "FLOAT" } |
+    { internalFormat: "RGB32F", type: "FLOAT" } |
+    { internalFormat: "RGB8UI", type: "UNSIGNED_BYTE" } |
+    { internalFormat: "RGB8I", type: "BYTE" } |
+    { internalFormat: "RGB16UI", type: "UNSIGNED_SHORT" } |
+    { internalFormat: "RGB16I", type: "SHORT" } |
+    { internalFormat: "RGB32UI", type: "UNSIGNED_INT" } |
+    { internalFormat: "RGB32I", type: "INT" } |
+    { internalFormat: "RGBA8", type: "UNSIGNED_BYTE" } |
+    { internalFormat: "SRGB8_ALPHA8", type: "UNSIGNED_BYTE" } |
+    { internalFormat: "RGBA8_SNORM", type: "BYTE" } |
+    { internalFormat: "RGB5_A1", type: "UNSIGNED_BYTE" | "UNSIGNED_SHORT_5_5_5_1" | "UNSIGNED_INT_2_10_10_10_REV" } |
+    { internalFormat: "RGBA4", type: "UNSIGNED_BYTE" | "UNSIGNED_SHORT_4_4_4_4" } |
+    { internalFormat: "RGB10_A2", type: "UNSIGNED_INT_2_10_10_10_REV" } |
+    { internalFormat: "RGBA16F", type: "HALF_FLOAT" | "FLOAT" } |
+    { internalFormat: "RGBA32F", type: "FLOAT" } |
+    { internalFormat: "RGBA8UI", type: "UNSIGNED_BYTE" } |
+    { internalFormat: "RGBA8I", type: "BYTE" } |
+    { internalFormat: "RGB10_A2UI", type: "UNSIGNED_INT_2_10_10_10_REV" } |
+    { internalFormat: "RGBA16UI", type: "UNSIGNED_SHORT" } |
+    { internalFormat: "RGBA16I", type: "SHORT" } |
+    { internalFormat: "RGBA32I", type: "INT" } |
+    { internalFormat: "RGBA32UI", type: "UNSIGNED_INT" } |
+    { internalFormat: "DEPTH_COMPONENT16", type: "UNSIGNED_SHORT" } |
+    { internalFormat: "DEPTH_COMPONENT24", type: "UNSIGNED_INT" } |
+    { internalFormat: "DEPTH_COMPONENT32F", type: "FLOAT" } |
+    { internalFormat: "DEPTH24_STENCIL8", type: "UNSIGNED_INT_24_8" } |
+    { internalFormat: "DEPTH32F_STENCIL8", type: "FLOAT_32_UNSIGNED_INT_24_8_REV" }; // FLOAT_32_UNSIGNED_INT_24_8_REV is for reading z-buffer and can't be created from an image: https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/texImage3D;
+
+export type UncompressedTextureFormatString = UncompressedTextureFormatType["internalFormat"];
+export type TexelTypeString = UncompressedTextureFormatType["type"];
+
+export type CompressedTextureFormatString =
+    // WEBGL_compressed_texture_s3tc
+    "COMPRESSED_RGB_S3TC_DXT1_EXT" | "COMPRESSED_RGBA_S3TC_DXT1_EXT" | "COMPRESSED_RGBA_S3TC_DXT3_EXT" | "COMPRESSED_RGBA_S3TC_DXT5_EXT" |
+
+    // WEBGL_compressed_texture_s3tc_srgb    
+    "COMPRESSED_SRGB_S3TC_DXT1_EXT" | "COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT" | "COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT" | "COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT" |
+
+    // WEBGL_compressed_texture_etc
+    "COMPRESSED_R11_EAC" | "COMPRESSED_SIGNED_R11_EAC" | "COMPRESSED_RG11_EAC" | "COMPRESSED_SIGNED_RG11_EAC" | "COMPRESSED_RGB8_ETC2" | "COMPRESSED_RGBA8_ETC2_EAC" | "COMPRESSED_SRGB8_ETC2" | "COMPRESSED_SRGB8_ALPHA8_ETC2_EAC" | "COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2" | "COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2" |
+
+    // WEBGL_compressed_texture_pvrtc
+    "COMPRESSED_RGB_PVRTC_4BPPV1_IMG" | "COMPRESSED_RGBA_PVRTC_4BPPV1_IMG" | "COMPRESSED_RGB_PVRTC_2BPPV1_IMG" | "COMPRESSED_RGBA_PVRTC_2BPPV1_IMG" |
+
+    // WEBGL_compressed_texture_etc1
+    "COMPRESSED_RGB_ETC1_WEBGL" |
+
+    // WEBGL_compressed_texture_astc    
+    "COMPRESSED_RGBA_ASTC_4x4_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR" |
+    "COMPRESSED_RGBA_ASTC_5x4_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR" |
+    "COMPRESSED_RGBA_ASTC_5x5_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR" |
+    "COMPRESSED_RGBA_ASTC_6x5_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR" |
+    "COMPRESSED_RGBA_ASTC_6x6_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR" |
+    "COMPRESSED_RGBA_ASTC_8x5_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR" |
+    "COMPRESSED_RGBA_ASTC_8x6_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR" |
+    "COMPRESSED_RGBA_ASTC_8x8_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR" |
+    "COMPRESSED_RGBA_ASTC_10x5_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR" |
+    "COMPRESSED_RGBA_ASTC_10x6_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR" |
+    "COMPRESSED_RGBA_ASTC_10x10_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR" |
+    "COMPRESSED_RGBA_ASTC_12x10_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR" |
+    "COMPRESSED_RGBA_ASTC_12x12_KHR" | "COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR" |
+
+    // EXT_texture_compression_bptc
+    "COMPRESSED_RGBA_BPTC_UNORM_EXT" | "COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT" | "COMPRESSED_RGB_BPTC_SIGNED_FLOAT_EXT" | "COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_EXT" |
+
+    // EXT_texture_compression_rgtc
+    "COMPRESSED_RED_RGTC1_EXT" | "COMPRESSED_SIGNED_RED_RGTC1_EXT" | "COMPRESSED_RED_GREEN_RGTC2_EXT" | "COMPRESSED_SIGNED_RED_GREEN_RGTC2_EXT";
+
+export type Pow2 = 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 | 32758 | 65536;
+export type CubeImages = readonly [posX: BufferSource, negX: BufferSource, posY: BufferSource, negZ: BufferSource, posZ: BufferSource, negZ: BufferSource];
+
+type Uncompressed = UncompressedTextureFormatType;
+
+interface Compressed {
+    readonly internalFormat: CompressedTextureFormatString;
+}
+
+interface GenMipMap {
+    readonly generateMipMaps?: boolean; //  default: false. Mip maps can only be created for textures with power of 2 sizes.
+}
+
+interface Size2D<T extends number = number> {
+    readonly width: T;
+    readonly height: T;
+}
+
+interface Size3D<T extends number = number> {
+    readonly width: T;
+    readonly height: T;
+    readonly depth: T;
 }
 
 // https://www.khronos.org/registry/webgl/specs/latest/2.0/#TEXTURE_TYPES_FORMATS_FROM_DOM_ELEMENTS_TABLE

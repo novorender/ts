@@ -1,37 +1,9 @@
-import type { RendererContext, InvalidateFrameBufferParams, FrameBufferBinding, FrameBufferParams, FrameBufferTextureBinding } from ".";
+import { glLimits } from "./limits";
 
-function isTextureAttachment(attachment: FrameBufferBinding): attachment is FrameBufferTextureBinding {
-    return typeof attachment == "object" && "texture" in attachment;
-}
-
-export function invalidateFrameBuffer(context: RendererContext, params: InvalidateFrameBufferParams) {
-    const { gl } = context;
-    const attachments: number[] = [];
-    if (params.depth && params.stencil) {
-        attachments.push(gl.DEPTH_STENCIL_ATTACHMENT);
-    } else if (params.depth) {
-        attachments.push(gl.DEPTH_ATTACHMENT);
-    } else if (params.stencil) {
-        attachments.push(gl.STENCIL_ATTACHMENT);
-    }
-    let i = 0;
-    for (const invalidate of params.color) {
-        if (invalidate) {
-            attachments.push(gl.COLOR_ATTACHMENT0 + i);
-        }
-        i++;
-    }
-    const { frameBuffer, kind } = params;
-    const target = gl[kind];
-    gl.bindFramebuffer(target, frameBuffer);
-    gl.invalidateFramebuffer(target, attachments);
-    gl.bindFramebuffer(target, null);
-}
-
-export function createFrameBuffer(context: RendererContext, params: FrameBufferParams): WebGLFramebuffer {
-    const { gl, limits } = context;
+export function glFrameBuffer(gl: WebGL2RenderingContext, params: FrameBufferParams): WebGLFramebuffer {
 
     const frameBuffer = gl.createFramebuffer()!;
+    const limits = glLimits(gl);
     console.assert(params.color.length <= limits.MAX_COLOR_ATTACHMENTS);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
@@ -63,7 +35,7 @@ export function createFrameBuffer(context: RendererContext, params: FrameBufferP
         i++;
     }
 
-    const debug = true; // TODO: get from build environment
+    const debug = false; // TODO: get from build environment
     if (debug) {
         const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
         switch (status) {
@@ -86,4 +58,61 @@ export function createFrameBuffer(context: RendererContext, params: FrameBufferP
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     return frameBuffer;
+}
+
+export function glInvalidateFrameBuffer(gl: WebGL2RenderingContext, params: InvalidateFrameBufferParams) {
+    const attachments: number[] = [];
+    if (params.depth && params.stencil) {
+        attachments.push(gl.DEPTH_STENCIL_ATTACHMENT);
+    } else if (params.depth) {
+        attachments.push(gl.DEPTH_ATTACHMENT);
+    } else if (params.stencil) {
+        attachments.push(gl.STENCIL_ATTACHMENT);
+    }
+    let i = 0;
+    for (const invalidate of params.color) {
+        if (invalidate) {
+            attachments.push(gl.COLOR_ATTACHMENT0 + i);
+        }
+        i++;
+    }
+    const { frameBuffer, kind } = params;
+    const target = gl[kind];
+    gl.bindFramebuffer(target, frameBuffer);
+    gl.invalidateFramebuffer(target, attachments);
+    gl.bindFramebuffer(target, null);
+}
+
+function isTextureAttachment(attachment: FrameBufferBinding): attachment is FrameBufferTextureBinding {
+    return typeof attachment == "object" && "texture" in attachment;
+}
+
+export interface FrameBufferParams {
+    readonly depth?: FrameBufferBinding;
+    readonly stencil?: FrameBufferBinding;
+    readonly color: readonly (FrameBufferBinding | null)[]; // length: [0, MAX_COLOR_ATTACHMENTS>
+}
+
+export interface FrameBufferTextureBinding {
+    readonly kind: "FRAMEBUFFER" | "DRAW_FRAMEBUFFER" | "READ_FRAMEBUFFER";
+    readonly texture: WebGLTexture;
+    readonly texTarget?: "TEXTURE_2D";
+    readonly level?: number; // default: 0, mip-map level
+    readonly layer?: number; // default: 0, face in cube map, z in 3d and index in 2d array
+}
+
+export interface FrameBufferRenderBufferBinding {
+    readonly kind: "FRAMEBUFFER" | "DRAW_FRAMEBUFFER" | "READ_FRAMEBUFFER";
+    readonly renderBuffer: WebGLRenderbuffer;
+}
+
+export type FrameBufferBinding = FrameBufferTextureBinding | FrameBufferRenderBufferBinding;
+
+
+export interface InvalidateFrameBufferParams {
+    readonly kind: "FRAMEBUFFER" | "DRAW_FRAMEBUFFER" | "READ_FRAMEBUFFER";
+    readonly frameBuffer: WebGLFramebuffer;
+    readonly depth?: boolean;
+    readonly stencil?: boolean;
+    readonly color: readonly (boolean)[]; // length: [0, MAX_COLOR_ATTACHMENTS>
 }

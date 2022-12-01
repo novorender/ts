@@ -1,8 +1,7 @@
 import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderModuleState, RenderStateCamera, CoordSpace, createDefaultModules } from "./";
-import { createWebGL2Renderer, WebGL2Renderer } from "webgl2";
+import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformBufferProxy, UniformsProxy } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
-import { createUniformBufferProxy } from "./uniforms";
 import { RenderBuffers } from "./buffers";
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
@@ -17,17 +16,20 @@ export class RenderContext {
     private outputState;
     private cameraState;
     private cameraUniformsData;
-    readonly renderer: WebGL2Renderer;
+    readonly gl: WebGL2RenderingContext;
 
     // shared mutable state
     changed = true;
     buffers: RenderBuffers = undefined!;
-    readonly cameraUniformsBuffer: WebGLBuffer;
-    // iblUniformsBuffer: WebGLBuffer | null = null;
+    readonly cameraUniforms: WebGLBuffer;
+    // iblUniforms: WebGLBuffer | null = null;
 
-    constructor(canvas: HTMLCanvasElement, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
-        const renderer = this.renderer = createWebGL2Renderer(canvas, options);
-        const { extensions } = renderer;
+    constructor(readonly canvas: HTMLCanvasElement, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
+        const gl = canvas.getContext("webgl2", options);
+        if (!gl)
+            throw new Error("Unable to create WebGL 2 context!");
+        this.gl = gl;
+        const extensions = glExtensions(gl, true);
         console.assert(extensions.loseContext != null, extensions.multiDraw != null, extensions.colorBufferFloat != null);
         this.modules = modules ?? RenderContext.defaultModules ?? RenderContext.defaultModules ?? createDefaultModules();
         RenderContext.defaultModules = this.modules;
@@ -50,18 +52,37 @@ export class RenderContext {
             worldViewMatrixNormal: "mat3",
             viewWorldMatrixNormal: "mat3",
         });
-        this.cameraUniformsBuffer = renderer.createBuffer({ kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength + 256 });
+        this.cameraUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength + 256 });
     }
 
     dispose() {
-        const { renderer, cameraUniformsBuffer, buffers, moduleContexts } = this;
-        renderer.deleteBuffer(cameraUniformsBuffer);
+        const { gl, cameraUniforms, buffers, moduleContexts } = this;
+        gl.deleteBuffer(cameraUniforms);
         buffers?.dispose();
         for (const module of moduleContexts) {
             module?.dispose();
         }
         this.deletePick();
-        renderer.dispose();
+    }
+
+    get width() {
+        return this.gl.drawingBufferWidth;
+    }
+
+    get height() {
+        return this.gl.drawingBufferHeight;
+    }
+
+    isContextLost() {
+        return this.gl.isContextLost();
+    }
+
+    updateUniformBuffer(uniformBuffer: WebGLBuffer, proxy: UniformsProxy) {
+        if (!proxy.dirtyRange.isEmpty) {
+            const { begin, end } = proxy.dirtyRange;
+            glUpdateBuffer(this.gl, { kind: "UNIFORM_BUFFER", srcData: proxy.buffer, targetBuffer: uniformBuffer, srcOffset: begin, targetOffset: begin, size: end - begin });
+            proxy.dirtyRange.reset();
+        }
     }
 
     protected contextLost() {
@@ -70,23 +91,17 @@ export class RenderContext {
         }
     }
 
-    isContextLost() {
-        return this.renderer.isContextLost();
-    }
-
     protected poll() {
         this.pollPick();
-        this.renderer.pollPromises();
     }
 
     protected render(state: RenderState) {
-        const { renderer } = this;
+        const { gl, canvas } = this;
         this.changed = false;
 
         // handle resizes
         let resized = false;
         if (this.outputState.hasChanged(state.output)) {
-            const { canvas } = renderer;
             const { width, height } = state.output;
             console.assert(Number.isInteger(width) && Number.isInteger(height));
             canvas.width = width;
@@ -94,7 +109,7 @@ export class RenderContext {
             resized = true;
             this.changed = true;
             this.buffers?.dispose();
-            this.buffers = new RenderBuffers(renderer, width, height);
+            this.buffers = new RenderBuffers(gl, width, height);
         }
 
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
@@ -104,20 +119,20 @@ export class RenderContext {
             derivedState.viewFrustum = createViewFrustum(state, derivedState.matrices);
         }
         this.updateCameraUniforms(derivedState);
+        this.updateUniformBuffer(this.cameraUniforms, this.cameraUniformsData);
 
         // render modules
-        const { width, height } = renderer.canvas;
-        const { buffers } = this;
+        const { width, height } = canvas;
         for (const module of this.moduleContexts) {
             if (module) {
-                renderer.state({
+                glState(gl, {
                     viewport: { width, height },
-                    frameBuffer: buffers.frameBuffer,
+                    frameBuffer: this.buffers.resources.frameBuffer,
                     drawBuffers: ["COLOR_ATTACHMENT0"],
                 })
                 module.render(derivedState);
                 // reset gl state
-                renderer.state(null);
+                glState(gl, null);
             }
         }
 
@@ -125,14 +140,13 @@ export class RenderContext {
     }
 
     private updateCameraUniforms(state: DerivedRenderState) {
-        const { renderer, cameraUniformsData } = this;
+        const { gl, cameraUniformsData } = this;
         const { matrices } = state;
-        const { uniforms } = cameraUniformsData;
-        uniforms.clipViewMatrix = matrices.getMatrix(CoordSpace.Clip, CoordSpace.View);
-        uniforms.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
-        uniforms.worldViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
-        uniforms.viewWorldMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
-        renderer.update({ kind: "UNIFORM_BUFFER", srcData: this.cameraUniformsData.buffer, targetBuffer: this.cameraUniformsBuffer });
+        const { values } = cameraUniformsData;
+        values.clipViewMatrix = matrices.getMatrix(CoordSpace.Clip, CoordSpace.View);
+        values.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
+        values.worldViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
+        values.viewWorldMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
     }
 
     pickInfo: {
@@ -141,9 +155,8 @@ export class RenderContext {
     } | undefined;
 
     private pollPick() {
-        const { pickInfo } = this;
+        const { gl, pickInfo } = this;
         if (pickInfo) {
-            const { gl } = this.renderer;
             const { sync, promises } = pickInfo;
             const status = gl.clientWaitSync(sync, gl.SYNC_FLUSH_COMMANDS_BIT, 0);
             if (status == gl.WAIT_FAILED) {
@@ -161,21 +174,20 @@ export class RenderContext {
     }
 
     private deletePick() {
-        this.renderer.gl.deleteSync(this.pickInfo?.sync ?? null);
+        this.gl.deleteSync(this.pickInfo?.sync ?? null);
         this.pickInfo = undefined;
     }
 
     protected async pick(x: number, y: number): Promise<number[]> {
-        const { renderer, buffers } = this;
-        const { gl } = renderer;
-        const { width, height } = renderer;
-        const r = renderer.canvas.getBoundingClientRect(); // dim in css pixels
+        const { gl, canvas, buffers, width, height } = this;
+        const { resources } = buffers;
+        const r = canvas.getBoundingClientRect(); // dim in css pixels
         const cssWidth = r.width;
         const cssHeight = r.height;
         // convert to pixel coords
         const px = Math.round(x / cssWidth * width);
         const py = Math.round((1 - (y + 0.5) / cssHeight) * height);
-        console.assert(px >= 0 && py >= 0 && px < renderer.width && py < renderer.height);
+        console.assert(px >= 0 && py >= 0 && px < width && py < height);
         if (!this.pickInfo) {
             buffers.read();
             const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)!;
@@ -190,11 +202,11 @@ export class RenderContext {
         const pixOffs = px + py * width;
         const floats = new Float32Array(3);
         const uints = new Uint32Array(2);
-        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffers.normalRead);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readNormal);
         gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 4, floats, 0, 2);
-        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffers.linearDepthRead);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readLinearDepth);
         gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 4, floats, 2, 1);
-        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffers.infoRead);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readInfo);
         gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 8, uints, 0, 2);
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
         return [...floats, uints[0], /* convert pair of half floats for deviation and intensity  */];

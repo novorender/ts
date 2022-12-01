@@ -1,6 +1,6 @@
 //import(`/dist/${window.location.search.substring(1)}.js`);
 import { glMatrix } from "gl-matrix";
-import { createWebGL2Renderer, resizeCanvasToDisplaySize } from "..";
+import { resizeCanvasToDisplaySize } from "..";
 import { hello_triangle } from "./hello_triangle";
 import { spinning_cube } from "./spinning_cube";
 
@@ -23,7 +23,7 @@ async function useExample(example: string) {
     localStorage.setItem("example", example);
     selector.value = example;
 
-    const renderer = createWebGL2Renderer(canvas, {
+    const gl = canvas.getContext("webgl2", {
         alpha: true,
         antialias: false,
         depth: true,
@@ -34,6 +34,8 @@ async function useExample(example: string) {
         preserveDrawingBuffer: false,
         stencil: false,
     });
+    if (!gl)
+        throw new Error("Coult not create webgl 2 context!");
 
     resizeCanvasToDisplaySize(canvas);
 
@@ -41,10 +43,10 @@ async function useExample(example: string) {
 
     switch (example) {
         case "hello_triangle":
-            renderFunc = await hello_triangle(renderer);
+            renderFunc = await hello_triangle(gl);
             break;
         case "spinning_cube":
-            renderFunc = await spinning_cube(renderer);
+            renderFunc = await spinning_cube(gl);
             break;
         default:
             alert(`Unknown example ${example}!`);
@@ -60,7 +62,4 @@ async function useExample(example: string) {
                 animFrameHandle = requestAnimationFrame(cb);
         });
     }
-
-
-    renderer.dispose();
 }

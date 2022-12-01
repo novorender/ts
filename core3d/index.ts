@@ -1,8 +1,8 @@
-import { WebGL2Renderer } from "@novorender/webgl2";
 import { RenderContext } from "./context";
 import { defaultRenderState, modifyRenderState, TonemappingMode } from "./state";
 import { OrbitController } from "./controller";
 import { downloadScene } from "./scene";
+import { glExtensions } from "@novorender/webgl2";
 
 export * from "./state";
 export * from "./context";
@@ -27,8 +27,8 @@ export async function run(canvas: HTMLCanvasElement) {
     // const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     // const sceneUrl = new URL("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/", scriptUrl).toString();
 
-    // const scene = await downloadScene("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/"); // condos
-    const scene = await downloadScene("/assets/octrees/0f762c06a61f4f1c8d3b7cf1b091515e_/"); // hospital
+    const scene = await downloadScene("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/"); // condos
+    // const scene = await downloadScene("/assets/octrees/0f762c06a61f4f1c8d3b7cf1b091515e_/"); // hospital
 
     state = modifyRenderState(state, {
         scene,
@@ -101,34 +101,30 @@ export async function run(canvas: HTMLCanvasElement) {
             animId = requestAnimationFrame(render);
         }
         animId = requestAnimationFrame(render);
+        emulateLostContext(context.gl, canvas);
     }
 
     init();
-    emulateLostContext(context?.renderer!);
 
     // controller.dispose();
-    // renderer.dispose();
+    // context.dispose();
 }
 
-function emulateLostContext(renderer: WebGL2Renderer) {
+function emulateLostContext(gl: WebGL2RenderingContext, domElement: HTMLElement) {
     const key = "Backspace";
-    window.addEventListener("keydown", (e) => {
-        if (e.code == key) {
-            renderer.loseContext();
-            window.addEventListener("keyup", (e) => {
-                if (e.code == key) {
-                    renderer.restoreContext();
+    let isLost = false;
+    const { loseContext } = glExtensions(gl);
+    domElement.addEventListener("keydown", (e) => {
+        if (e.code == key && !isLost) {
+            loseContext?.loseContext();
+            isLost = true;
+            domElement.addEventListener("keyup", (e) => {
+                if (e.code == key && isLost) {
+                    loseContext?.restoreContext();
+                    isLost = true;
                 }
-            }, { once: true });
+            }, { once: false });
 
         }
-    }, { once: true });
-
-    // setTimeout(() => {
-    //     renderer.loseContext();
-    //     setTimeout(() => {
-    //         renderer.restoreContext();
-    //     }, 1000);
-    // }, 3000);
+    }, { once: false });
 }
-

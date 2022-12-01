@@ -1,5 +1,5 @@
 import type { CubeImages, Pow2, TextureParams, TextureParams2DUncompressedMipMapped, TextureParamsCubeUncompressedMipMapped } from "webgl2";
-import { GL } from "webgl2/glEnum";
+import { GL } from "@novorender/webgl2/constants";
 
 export namespace KTX {
     const identifier = new Uint8Array([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A]);

@@ -1,7 +1,6 @@
 import { mat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
-import { DrawParams, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw } from "webgl2";
+import { createUniformBufferProxy, glDraw, DrawParams, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glState, glBuffer, glUpdateBuffer } from "webgl2";
 import { CoordSpace, DerivedRenderState, RenderContext } from "core3d";
-import { createUniformBufferProxy, UniformsHandler } from "../../uniforms";
 import { AbortableDownload, Downloader } from "./download";
 import { createMeshes, Mesh } from "./mesh";
 import { NodeData, parseNode } from "./parser";
@@ -35,7 +34,8 @@ export class OctreeNode {
     readonly size: number;
     readonly children: OctreeNode[] = [];
     readonly meshes: Mesh[] = [];
-    readonly uniforms;
+    readonly uniformsData;
+    uniforms: WebGLBuffer | undefined;
     private readonly center4: ReadonlyVec4;
     private readonly corners: ReadonlyVec4[];
     state = NodeState.collapsed;
@@ -66,26 +66,30 @@ export class OctreeNode {
 
         const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         this.size = Math.pow(2, data.tolerance) * toleranceScale;
-        this.uniforms = new UniformsHandler(context.renderContext.renderer, createUniformBufferProxy({
+        this.uniformsData = createUniformBufferProxy({
             modelViewMatrix: "mat4",
             debugColor: "vec4",
-        }));
+        });
     }
 
     dispose() {
         const { context, meshes, uniforms, children } = this;
         const { renderContext } = context;
-        const { renderer } = renderContext;
+        const { gl } = renderContext;
         for (const mesh of meshes) {
-            renderer.deleteVertexArray(mesh.vao);
+            gl.deleteVertexArray(mesh.vao);
         }
-        uniforms.dispose();
+        if (uniforms) {
+            gl.deleteBuffer(uniforms);
+            this.uniforms = undefined;
+        }
         meshes.length = 0;
         children.length = 0;
         this.download?.abort();
         this.download = undefined;
         this.state = NodeState.collapsed;
     }
+
     get isRoot() {
         return this.id.length == 0;
     }
@@ -179,7 +183,7 @@ export class OctreeNode {
         this.visibility = (parentVisibility == Visibility.partial) ? this.computeVisibility(state) : parentVisibility;
 
         // update projected size
-        const { center4, visibility, radius, children } = this;
+        const { center4, visibility, radius, uniforms, data, uniformsData } = this;
         const { camera, matrices, viewFrustum } = state;
         const imagePlane = viewFrustum.image;
         const projection = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
@@ -193,20 +197,25 @@ export class OctreeNode {
         }
 
         // update uniforms data        
-        const { offset, scale } = this.data;
-        const { uniforms } = this;
+        const { offset, scale } = data;
+        const { values } = this.uniformsData;
         const worldViewMatrix = state.matrices.getMatrix(CoordSpace.World, CoordSpace.View);
         const modelWorldMatrix = mat4.fromTranslation(mat4.create(), offset);
         mat4.scale(modelWorldMatrix, modelWorldMatrix, vec3.fromValues(scale, scale, scale));
         const modelViewMatrix = mat4.mul(mat4.create(), worldViewMatrix, modelWorldMatrix);
-        uniforms.values.modelViewMatrix = modelViewMatrix;
+        values.modelViewMatrix = modelViewMatrix;
+        if (uniforms) {
+            glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniforms });
+        }
     }
 
     render(uniformBuffers: WebGLBuffer[]) {
-        const { context, data, uniforms } = this;
+        const { context, data, uniforms, uniformsData } = this;
         const { renderContext } = context;
-        const { renderer } = renderContext;
-        uniforms.update();
+        const { gl } = renderContext;
+        if (uniforms) {
+            renderContext.updateUniformBuffer(uniforms, uniformsData);
+        }
 
         const { renderedChildMask } = this;
         if (renderedChildMask) {
@@ -214,8 +223,8 @@ export class OctreeNode {
             for (const mesh of this.meshes) {
                 const { materialType } = mesh;
                 const blendEnable = materialType == MaterialType.transparent;
-                renderer.state({
-                    uniformBuffers: [...uniformBuffers, uniforms.buffer],
+                glState(gl, {
+                    uniformBuffers: [...uniformBuffers, uniforms],
                     vertexArrayObject: mesh.vao,
                     cullEnable: materialType == MaterialType.opaque,
                     depthWriteMask: !blendEnable,
@@ -226,12 +235,12 @@ export class OctreeNode {
                     blendDstAlpha: "ONE",
                 });
                 if (renderedChildMask == data.childMask) {
-                    renderer.draw(mesh.drawParams);
+                    glDraw(gl, mesh.drawParams);
                 } else {
                     // determine which portions of the parent node must be rendered based on what children currently doesn't render themselves
                     const multiDrawParams = getMultiDrawParams(mesh, renderedChildMask);
                     if (multiDrawParams) {
-                        renderer.draw(multiDrawParams);
+                        glDraw(gl, multiDrawParams);
                     }
                 }
             }
@@ -239,9 +248,9 @@ export class OctreeNode {
     }
 
     renderDebug(uniformBuffers: WebGLBuffer[]) {
-        const { context, uniforms, visibility, state } = this;
+        const { context, uniforms, uniformsData, visibility, state } = this;
         const { renderContext } = context;
-        const { renderer } = renderContext;
+        const { gl } = renderContext;
 
         if (this.renderedChildMask) {
             let r = 0, g = 0, b = 0;
@@ -253,25 +262,36 @@ export class OctreeNode {
                 case NodeState.downloading: r = 1; break;
                 case NodeState.ready: b = 1; break;
             }
-            uniforms.values.debugColor = vec4.fromValues(r, g, b, 1);
-            // uniforms.update();
+            uniformsData.values.debugColor = vec4.fromValues(r, g, b, 1);
+            if (uniforms) {
+                renderContext.updateUniformBuffer(uniforms, uniformsData);
+            }
         }
 
-        renderer.state({
-            uniformBuffers: [...uniformBuffers, uniforms.buffer],
+        glState(gl, {
+            uniformBuffers: [...uniformBuffers, uniforms],
         });
-        renderer.draw({ kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
+        glDraw(gl, { kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
     }
 
     async downloadGeometry() {
         try {
-            const { context } = this;
-            const { renderContext, downloader } = context;
+            const { context, children, meshes, data } = this;
+            const { renderContext, downloader, version } = context;
             const download = downloader.downloadArrayBufferAbortable(this.path, new ArrayBuffer(this.data.byteSize));
-            this.beginDownload(download)
+            this.download = download;
+            this.state = NodeState.downloading;
             const buffer = await download.result;
             if (buffer) {
-                this.endDownload(buffer);
+                this.download = undefined;
+                const { childInfos, geometry } = parseNode(this.id, version, buffer);
+                for (const data of childInfos) {
+                    const child = new OctreeNode(context, data);
+                    children.push(child);
+                }
+                this.state = NodeState.ready;
+                meshes.push(...createMeshes(renderContext.gl, geometry, data.primitiveType));
+                this.uniforms = glBuffer(renderContext.gl, { kind: "UNIFORM_BUFFER", size: this.uniformsData.buffer.byteLength });
                 renderContext.changed = true;
             }
         } catch (error: any) {
@@ -281,27 +301,6 @@ export class OctreeNode {
                 console.info(`abort ${this.id}`);
             }
         }
-    }
-
-    beginDownload(download: AbortableDownload) {
-        this.download = download;
-        this.state = NodeState.downloading;
-    }
-
-    endDownload(buffer: ArrayBuffer) {
-        const { context, children, meshes, data, uniforms } = this;
-        const { renderContext, version } = context;
-        const { renderer } = renderContext;
-        console.assert(children.length == 0);
-        console.assert(meshes.length == 0);
-        this.download = undefined;
-        const { childInfos, geometry } = parseNode(this.id, version, buffer);
-        for (const data of childInfos) {
-            const child = new OctreeNode(context, data);
-            children.push(child);
-        }
-        this.state = NodeState.ready;
-        meshes.push(...createMeshes(renderer, geometry, data.primitiveType));
     }
 }
 

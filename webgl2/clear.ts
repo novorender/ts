@@ -1,15 +1,4 @@
-import type { RendererContext, ClearParams, ClearDepth, ClearDepthStencil, ClearParamsColor, ClearStencil } from ".";
-
-function exhaustiveBufferCheck(value: never) {
-    throw new Error(`Unknown buffer type: ${value}!`);
-}
-
-function exhaustiveColorCheck(value: never) {
-    throw new Error(`Unknown clear color type: ${value}!`);
-}
-
-export function clear(context: RendererContext, params: ClearParams) {
-    const { gl } = context;
+export function glClear(gl: WebGL2RenderingContext, params: ClearParams) {
     const { kind } = params;
     switch (kind) {
         case "back_buffer": {
@@ -56,3 +45,45 @@ export function clear(context: RendererContext, params: ClearParams) {
         default: exhaustiveBufferCheck(kind);
     }
 }
+
+export type ClearParams = ClearParamsBack | ClearParamsColor | ClearDepth | ClearStencil | ClearDepthStencil;
+
+export interface ClearParamsBack {
+    readonly kind: "back_buffer";
+    readonly color?: readonly [red: number, green: number, blue: number, alpha: number]; // default: [0, 0, 0, 1]
+    readonly depth?: number;
+    readonly stencil?: number;
+}
+
+export interface ClearParamsColor {
+    readonly kind: "COLOR";
+    readonly drawBuffer?: number; // 0 - MAX_DRAW_BUFFERS, default: 0
+    readonly color?: readonly [red: number, green: number, blue: number, alpha: number]; // default: [0, 0, 0, 1]
+    readonly type?: "Int" | "Uint" | "Float"; // default: Float
+}
+
+export interface ClearDepth {
+    readonly kind: "DEPTH";
+    readonly drawBuffer?: number; // 0 - MAX_DRAW_BUFFERS, default: 0
+    readonly depth: number;
+}
+export interface ClearStencil {
+    readonly kind: "STENCIL";
+    readonly drawBuffer?: number; // 0 - MAX_DRAW_BUFFERS, default: 0
+    readonly stencil: number;
+}
+export interface ClearDepthStencil {
+    readonly kind: "DEPTH_STENCIL";
+    readonly drawBuffer?: number; // 0 - MAX_DRAW_BUFFERS, default: 0
+    readonly depth: number;
+    readonly stencil: number;
+}
+
+function exhaustiveBufferCheck(value: never) {
+    throw new Error(`Unknown buffer type: ${value}!`);
+}
+
+function exhaustiveColorCheck(value: never) {
+    throw new Error(`Unknown clear color type: ${value}!`);
+}
+

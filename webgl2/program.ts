@@ -1,26 +1,9 @@
-import type { RendererContext, ProgramParams } from ".";
+import { glExtensions } from "./extensions";
 
-export type ProgramIndex = number;
-
-type ShaderType = "VERTEX_SHADER" | "FRAGMENT_SHADER";
-
-function compileShader(gl: WebGLRenderingContext, type: ShaderType, source: string): WebGLShader {
-    const shader = gl.createShader(gl[type])!;
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS) && !gl.isContextLost()) {
-        const typeName = type.split("_")[0].toLocaleLowerCase();
-        const errorMsg = gl.getShaderInfoLog(shader);
-        throw new Error(`: Failed to compile glsl ${typeName} shader!\r\n${errorMsg}`);
-    }
-    return shader;
-}
-
-export function createProgram(context: RendererContext, params: ProgramParams) {
-    const { gl } = context;
+export function glProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
     const { flags, transformFeedback, uniformBufferBlocks } = params;
     const extensions: string[] = [];
-    if (context.extensions.multiDraw) {
+    if (glExtensions(gl).multiDraw) {
         extensions.push("#extension GL_ANGLE_multi_draw : require\n");
     }
     const header = `#version 300 es\n${extensions.join()}precision highp float;\nprecision highp int;\nprecision highp usampler2D;\n`;
@@ -68,3 +51,27 @@ export function createProgram(context: RendererContext, params: ProgramParams) {
 
     return program;
 }
+
+function compileShader(gl: WebGLRenderingContext, type: "VERTEX_SHADER" | "FRAGMENT_SHADER", source: string): WebGLShader {
+    const shader = gl.createShader(gl[type])!;
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS) && !gl.isContextLost()) {
+        const typeName = type.split("_")[0].toLocaleLowerCase();
+        const errorMsg = gl.getShaderInfoLog(shader);
+        throw new Error(`: Failed to compile glsl ${typeName} shader!\r\n${errorMsg}`);
+    }
+    return shader;
+}
+
+export interface ProgramParams {
+    readonly vertexShader: string;
+    readonly fragmentShader?: string;
+    readonly flags?: readonly string[];
+    readonly uniformBufferBlocks?: string[]; // The names of the shader uniform blocks, which will be bound to the index in which the name appears in this array using gl.uniformBlockBinding().
+    readonly transformFeedback?: {
+        readonly bufferMode: "INTERLEAVED_ATTRIBS" | "SEPARATE_ATTRIBS";
+        readonly varyings: readonly string[];
+    }
+}
+

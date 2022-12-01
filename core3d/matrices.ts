@@ -19,20 +19,6 @@ class MatricesImpl implements Matrices {
     private _mtx4 = new Array<mat4 | undefined>(4 * 4);
     private _mtx3 = new Array<mat3 | undefined>(4 * 4);
 
-    // static get identity(): Matrices {
-    //     return new MatricesImpl(mat4.create(), mat4.create());
-    // }
-
-    // static fromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }): Matrices {
-    //     const { camera, output } = state;
-    //     const { width, height } = output;
-    //     const aspectRatio = width / height;
-    //     const fovY = camera.fov * Math.PI / 180;
-    //     const worldView = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
-    //     const viewClip = mat4.perspective(mat4.create(), fovY, aspectRatio, camera.near, camera.far);
-    //     return new MatricesImpl(worldView, viewClip);
-    // }
-
     constructor(viewWorld: mat4, viewClip: mat4) {
         this._mtx4[index(CoordSpace.View, CoordSpace.World)] = viewWorld;
         this._mtx4[index(CoordSpace.View, CoordSpace.Clip)] = viewClip;

@@ -1,5 +1,5 @@
-import { glMatrix, mat3, quat, ReadonlyQuat, ReadonlyVec3, vec2, vec3 } from "gl-matrix";
-import { modifyRenderState, RenderState, RenderStateScene } from "./state";
+import { glMatrix, mat3, quat, ReadonlyVec3, vec2, vec3 } from "gl-matrix";
+import { modifyRenderState, RenderState } from "./state";
 
 function clamp(v: number, min: number, max: number) {
     if (v < min) {

@@ -1,8 +1,10 @@
-import type { RendererContext } from ".";
-import type { SamplerParams } from "./types";
+export type WrapString = "CLAMP_TO_EDGE" | "MIRRORED_REPEAT" | "REPEAT";
+export type MinFilterString = "NEAREST" | "LINEAR" | "NEAREST_MIPMAP_NEAREST" | "LINEAR_MIPMAP_NEAREST" | "NEAREST_MIPMAP_LINEAR" | "LINEAR_MIPMAP_LINEAR";
+export type MagFilterString = "NEAREST" | "LINEAR";
+export type CompareFuncString = "NEVER" | "LESS" | "EQUAL" | "LEQUAL" | "GREATER" | "NOTEQUAL" | "GEQUAL" | "ALWAYS";
+export type CompareModeString = "COMPARE_REF_TO_TEXTURE" | "NONE";
 
-export function createSampler(context: RendererContext, params: SamplerParams): WebGLSampler {
-    const { gl } = context;
+export function glSampler(gl: WebGL2RenderingContext, params: SamplerParams): WebGLSampler {
     const sampler = gl.createSampler()!;
     gl.bindSampler(0, sampler);
     const { minificationFilter, magnificationFilter, minLOD, maxLOD, wrap, compareFunction, compareMode } = params;
@@ -27,3 +29,14 @@ export function createSampler(context: RendererContext, params: SamplerParams): 
         gl.samplerParameteri(sampler, gl.TEXTURE_COMPARE_MODE, gl[compareMode]);
     return sampler;
 }
+
+export interface SamplerParams {
+    readonly minificationFilter?: MinFilterString; // default: NEAREST_MIPMAP_LINEAR
+    readonly magnificationFilter?: MagFilterString; // default: LINEAR
+    readonly minLOD?: number; // default: -1000
+    readonly maxLOD?: number; // default: 1000
+    readonly compareFunction?: CompareFuncString;
+    readonly compareMode?: CompareModeString;
+    readonly wrap?: readonly [WrapString, WrapString] | readonly [WrapString, WrapString, WrapString]; // ST, or STR coordinate wrapping. default: REPEAT
+};
+

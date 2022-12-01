@@ -1,13 +1,12 @@
 import type { DerivedRenderState, RenderContext, RenderStateBackground } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformBufferProxy, UniformsHandler } from "core3d/uniforms";
-import { getTextureUniformLocations, TextureParams } from "webgl2";
+import { createUniformBufferProxy, glClear, glProgram, glSampler, glTexture, glDraw, glUniformLocations, glState, TextureParams, glBuffer, glDelete } from "webgl2";
 import { KTX } from "./ktx";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
 export class BackgroundModule implements RenderModule {
-    readonly uniformsProxy;
+    readonly uniforms;
     private abortController: AbortController | undefined;
     url: string | undefined;
     textureParams: {
@@ -17,7 +16,7 @@ export class BackgroundModule implements RenderModule {
     } | null | undefined = null; // null means no textures, whereas undefined means no change in textures
 
     constructor() {
-        this.uniformsProxy = createUniformBufferProxy({
+        this.uniforms = createUniformBufferProxy({
             envBlurNormalized: "float",
             mipCount: "int",
         });
@@ -68,11 +67,8 @@ interface RelevantRenderState {
 
 class BackgroundModuleInstance implements RenderModuleContext {
     readonly state;
-    readonly program;
-    readonly uniforms;
     readonly textureUniformLocations;
-    readonly sampler: WebGLSampler;
-    readonly samplerMip: WebGLSampler;
+    readonly resources;
     textures: undefined | {
         readonly background: WebGLTexture;
         readonly irradiance: WebGLTexture;
@@ -81,45 +77,47 @@ class BackgroundModuleInstance implements RenderModuleContext {
 
     constructor(readonly context: RenderContext, readonly data: BackgroundModule) {
         this.state = new RenderModuleState<RelevantRenderState>();
-        const { renderer } = context;
+        const { gl } = context;
         const uniformBufferBlocks = ["Camera", "Background"];
-        this.program = renderer.createProgram({ vertexShader, fragmentShader, uniformBufferBlocks });
-        this.uniforms = new UniformsHandler(renderer, data.uniformsProxy);
-        this.textureUniformLocations = getTextureUniformLocations(renderer.gl, this.program, "background", "radiance");
-        this.sampler = renderer.createSampler({ minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
-        this.samplerMip = renderer.createSampler({ minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks });
+        const sampler = glSampler(gl, { minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        const samplerMip = glSampler(gl, { minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: data.uniforms.buffer.byteLength });
+        this.resources = { program, sampler, samplerMip, uniforms } as const;
+        this.textureUniformLocations = glUniformLocations(gl, program, ["background", "radiance"], "textures_");
     }
 
     updateUniforms(state: RelevantRenderState) {
         const { background } = state;
-        const { uniforms } = this;
-        const { values } = uniforms;
+        const { values } = this.data.uniforms;
         values.envBlurNormalized = background.blur ?? 0;
         values.mipCount = 9; // TODO: Compute from actual texture file
-        uniforms.update();
     }
 
     render(state: DerivedRenderState) {
-        const { context, program, uniforms, data, textures } = this;
-        const { renderer, cameraUniformsBuffer } = context;
+        const { context, resources, data } = this;
+        const { program, uniforms, sampler, samplerMip } = resources;
+        const { gl, cameraUniforms } = context;
         const { textureParams } = data;
         const { background } = state;
 
         if (textureParams !== undefined) {
-            if (textureParams) {
+            if (textureParams !== null) {
                 const { background, irradiance, radiance } = textureParams;
                 this.textures = {
-                    background: renderer.createTexture(background),
-                    irradiance: renderer.createTexture(irradiance),
-                    radiance: renderer.createTexture(radiance),
+                    background: glTexture(gl, background),
+                    irradiance: glTexture(gl, irradiance),
+                    radiance: glTexture(gl, radiance),
                 };
+            } else {
+                this.textures = undefined;
             }
             data.textureParams = undefined; // we don't really want to keep a js mem copy of these.
         }
 
         if (this.state.hasChanged({ background })) {
             this.updateUniforms(state);
-
+            context.updateUniformBuffer(resources.uniforms, data.uniforms);
             const { url } = state.background;
             if (url && (url != data.url)) {
                 data.downloadTextures(url).then(() => { context.changed = true; });
@@ -127,9 +125,9 @@ class BackgroundModuleInstance implements RenderModuleContext {
                 const { textures } = this;
                 if (textures) {
                     const { background, irradiance, radiance } = textures;
-                    renderer.deleteTexture(background);
-                    renderer.deleteTexture(irradiance);
-                    renderer.deleteTexture(radiance);
+                    gl.deleteTexture(background);
+                    gl.deleteTexture(irradiance);
+                    gl.deleteTexture(radiance);
                     this.textures = undefined;
                     data.textureParams = null;
                 }
@@ -137,37 +135,33 @@ class BackgroundModuleInstance implements RenderModuleContext {
             data.url = url;
         }
 
-        renderer.state({
+        glState(gl, {
             drawBuffers: ["NONE", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
         });
-        renderer.clear({ kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
-        renderer.clear({ kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.NaN, Number.NaN, 0, 0] });
-        renderer.clear({ kind: "COLOR", drawBuffer: 2, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
-        renderer.clear({ kind: "COLOR", drawBuffer: 3, type: "Uint", color: [0xffffffff, 0xffffffff, 0, 0] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
-        renderer.state({
+        glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
+        glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.NaN, Number.NaN, 0, 0] });
+        glClear(gl, { kind: "COLOR", drawBuffer: 2, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
+        glClear(gl, { kind: "COLOR", drawBuffer: 3, type: "Uint", color: [0xffffffff, 0xffffffff, 0, 0] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
+        glState(gl, {
             drawBuffers: ["COLOR_ATTACHMENT0"],
         });
 
         if (this.textures) {
-            const { textureUniformLocations, textures, sampler, samplerMip } = this;
-            renderer.state({
+            const { textureUniformLocations, textures } = this;
+            glState(gl, {
                 program,
-                uniformBuffers: [cameraUniformsBuffer, uniforms.buffer],
-                uniforms: [
-                    { kind: "1i", location: textureUniformLocations.background, value: 0 },
-                    { kind: "1i", location: textureUniformLocations.radiance, value: 1 },
-                ],
+                uniformBuffers: [cameraUniforms, uniforms],
                 textures: [
-                    { kind: "TEXTURE_CUBE_MAP", texture: textures.background, sampler },
-                    { kind: "TEXTURE_CUBE_MAP", texture: textures.radiance, sampler: samplerMip },
+                    { kind: "TEXTURE_CUBE_MAP", texture: textures.background, sampler, uniform: textureUniformLocations.background },
+                    { kind: "TEXTURE_CUBE_MAP", texture: textures.radiance, sampler: samplerMip, uniform: textureUniformLocations.radiance },
                 ],
                 depthTest: false,
                 depthWriteMask: false,
             });
 
-            renderer.draw({ kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
+            glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
         } else {
-            renderer.clear({ kind: "COLOR", drawBuffer: 0, color: state.background.color });
+            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
         }
     }
 
@@ -176,19 +170,13 @@ class BackgroundModuleInstance implements RenderModuleContext {
     }
 
     dispose() {
-        const { context, program, uniforms, sampler, samplerMip, textures } = this;
-        const { renderer } = context;
+        const { context, resources, textures } = this;
+        const { gl } = context;
         this.contextLost();
+        glDelete(gl, resources);
         if (textures) {
-            const { background, irradiance, radiance } = textures;
-            renderer.deleteTexture(background);
-            renderer.deleteTexture(irradiance);
-            renderer.deleteTexture(radiance);
+            glDelete(gl, { resources: textures });
             this.textures = undefined;
         }
-        renderer.deleteSampler(sampler);
-        renderer.deleteSampler(samplerMip);
-        uniforms.dispose();
-        renderer.deleteProgram(program);
     }
 }

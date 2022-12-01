@@ -1,6 +1,6 @@
 import type { ReadonlyMat4, ReadonlyVec3 } from "gl-matrix";
 import type { NodeData } from "./module/octree/parser";
-import type { RenderContext, RenderStateScene } from ".";
+import type { RenderStateScene } from ".";
 import { OctreeContext, OctreeNode } from "./module/octree/node";
 
 /** Axis-aligned bounding box */

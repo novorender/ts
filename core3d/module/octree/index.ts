@@ -1,21 +1,19 @@
 import type { DerivedRenderState, Matrices, RenderContext, RenderStateScene } from "core3d";
-import { CoordSpace } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformBufferProxy, UniformsHandler } from "../../uniforms";
-import { mat4 } from "gl-matrix";
+import { createSceneRootNode } from "core3d/scene";
 import { NodeState, OctreeNode } from "./node";
-import { createSceneRootNode } from "@novorender/core3d/scene";
 import { Downloader } from "./download";
+import { createUniformBufferProxy, glBuffer, glDelete, glProgram, glState, glUpdateBuffer } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import vertexShaderDebug from "./shader_debug.vert";
 import fragmentShaderDebug from "./shader_debug.frag";
 
 export class OctreeModule implements RenderModule {
-    readonly uniformsProxy;
+    readonly uniforms;
 
     constructor() {
-        this.uniformsProxy = createUniformBufferProxy({
+        this.uniforms = createUniformBufferProxy({
             // ibl params
             // sun params (+ambient)
             // headlight params
@@ -39,10 +37,7 @@ interface RelevantRenderState {
 
 class OctreeModuleContext implements RenderModuleContext {
     readonly state;
-    readonly uniforms;
-    readonly program: WebGLProgram;
-    readonly programDebug: WebGLProgram;
-    readonly materialsUniformsBuffer: WebGLBuffer;
+    readonly resources;
     readonly downloader = new Downloader();
     url: string | undefined;
     rootNode: OctreeNode | undefined;
@@ -51,20 +46,26 @@ class OctreeModuleContext implements RenderModuleContext {
 
     constructor(readonly renderContext: RenderContext, readonly data: OctreeModule) {
         this.state = new RenderModuleState<RelevantRenderState>();
-        const { renderer } = renderContext;
-        this.uniforms = new UniformsHandler(renderer, data.uniformsProxy);
+        const { gl } = renderContext;
         const flags = ["IOS_WORKAROUND"];
         const uniformBufferBlocks = ["Camera", "Materials", "Node"];
-        this.program = renderer.createProgram({ vertexShader, fragmentShader, flags, uniformBufferBlocks });
-        this.programDebug = renderer.createProgram({ vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
-        this.materialsUniformsBuffer = renderer.createBuffer({ kind: "UNIFORM_BUFFER", size: 256 * 4 });
+        const program = glProgram(gl, { vertexShader, fragmentShader, flags, uniformBufferBlocks });
+        const programDebug = glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
+        const octreeUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: data.uniforms.buffer.byteLength });
+        const materialsUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: 256 * 4 });
+        this.resources = { program, programDebug, octreeUniforms, materialsUniforms } as const;
     }
 
     render(state: DerivedRenderState) {
-        const { renderContext, program, programDebug, materialsUniformsBuffer, projectedSizeSplitThreshold } = this;
-        const { renderer, cameraUniformsBuffer } = renderContext;
+        const { renderContext, resources, projectedSizeSplitThreshold } = this;
+        const { program, programDebug, materialsUniforms } = resources;
+        const { gl, cameraUniforms } = renderContext;
+
         if (this.state.hasChanged(state)) {
-            this.updateUniforms(state);
+            const materialUniformsData = this.computeMaterialUniforms(state);
+            if (materialUniformsData) {
+                glUpdateBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: materialUniformsData, targetBuffer: resources.materialsUniforms })
+            }
 
             const { scene } = state;
             const url = scene?.url;
@@ -133,21 +134,18 @@ class OctreeModuleContext implements RenderModuleContext {
             }
             nodes = [...iterate(rootNode)];
 
-            renderer.state({
+            glState(gl, {
                 program: program,
                 depthTest: true,
                 drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
-                // drawBuffers: ["COLOR_ATTACHMENT0"],
-                // depthWriteMask: true,
-                // cullEnable: false
             });
             for (const node of nodes) {
-                node.render([cameraUniformsBuffer, materialsUniformsBuffer]);
+                node.render([cameraUniforms, materialsUniforms]);
             }
 
             const debug = false;
             if (debug) {
-                renderer.state({
+                glState(gl, {
                     program: programDebug,
                     depthFunc: "GREATER",
                     depthTest: true,
@@ -159,19 +157,19 @@ class OctreeModuleContext implements RenderModuleContext {
                     blendColor: [0, 0, 0, .25],
                 });
                 for (const node of nodes) {
-                    node.renderDebug([cameraUniformsBuffer, materialsUniformsBuffer]);
+                    node.renderDebug([cameraUniforms, materialsUniforms]);
                 }
 
-                renderer.state({
+                glState(gl, {
                     program: programDebug,
                     depthFunc: "LESS",
                     blendColor: [0, 0, 0, .75],
                 });
                 for (const node of nodes) {
-                    node.renderDebug([cameraUniformsBuffer, materialsUniformsBuffer]);
+                    node.renderDebug([cameraUniforms, materialsUniforms]);
                 }
 
-                renderer.state({
+                glState(gl, {
                     program: null,
                     depthTest: false,
                     depthWriteMask: true,
@@ -219,21 +217,12 @@ class OctreeModuleContext implements RenderModuleContext {
     }
 
     dispose() {
-        const { renderContext, program, programDebug, uniforms } = this;
-        const { renderer } = renderContext;
         this.contextLost();
+        glDelete(this.renderContext.gl, this.resources);
         this.rootNode = undefined;
-        renderer.deleteBuffer(this.materialsUniformsBuffer);
-        uniforms.dispose();
-        renderer.deleteProgram(program);
-        renderer.deleteProgram(programDebug);
     }
 
-    updateUniforms(state: DerivedRenderState) {
-        const { uniforms, renderContext } = this;
-        const { renderer } = renderContext;
-        // uniforms.values.objectViewMatrix = mat4.mul(mat4.create(), worldViewMatrix, objectWorldMatrix);
-        // uniforms.update();
+    computeMaterialUniforms(state: DerivedRenderState) {
         const { scene } = state;
         if (scene) {
             const { config } = scene;
@@ -247,7 +236,7 @@ class OctreeModuleContext implements RenderModuleContext {
             const blue = decodeBase64(diffuse.blue) ?? zeroes();
             const alpha = decodeBase64(opacity) ?? ones();
             const srcData = interleaveRGBA(red, green, blue, alpha);
-            renderer.update({ kind: "UNIFORM_BUFFER", srcData, targetBuffer: this.materialsUniformsBuffer })
+            return srcData;
         }
     }
 }

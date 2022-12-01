@@ -1,14 +1,3 @@
-// just a placeholder until this interface becomes part of the standard library types.
-interface EXT_disjoint_timer_query_webgl2 {
-    readonly QUERY_COUNTER_BITS_EXT: 0x8864; // GL.QUERY_COUNTER_BITS_EXT;
-    readonly TIME_ELAPSED_EXT: 0x88BF; // GL.TIME_ELAPSED_EXT;
-    readonly TIMESTAMP_EXT: 0x8E28; // GL.TIMESTAMP_EXT;
-    readonly GPU_DISJOINT_EXT: 0x8FBB;  // GL.GPU_DISJOINT_EXT;
-    queryCounterEXT(query: WebGLQuery, target: 0x8E28 /*GL.TIMESTAMP_EXT*/): void;
-}
-
-export type Timer = CPUTimer | GPUTimer | GPUTimerTS;
-
 export function createTimer(gl: WebGL2RenderingContext): Timer {
     const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') as EXT_disjoint_timer_query_webgl2;
     if (ext) {
@@ -24,6 +13,8 @@ export function createTimer(gl: WebGL2RenderingContext): Timer {
         return new CPUTimer(gl);
     }
 }
+
+export type Timer = CPUTimer | GPUTimer | GPUTimerTS;
 
 class CPUTimer {
     readonly promise: Promise<number>;
@@ -155,4 +146,13 @@ class GPUTimerTS {
         }
         return false;
     }
+}
+
+// just a placeholder until this interface becomes part of the standard library types.
+interface EXT_disjoint_timer_query_webgl2 {
+    readonly QUERY_COUNTER_BITS_EXT: 0x8864; // GL.QUERY_COUNTER_BITS_EXT;
+    readonly TIME_ELAPSED_EXT: 0x88BF; // GL.TIME_ELAPSED_EXT;
+    readonly TIMESTAMP_EXT: 0x8E28; // GL.TIMESTAMP_EXT;
+    readonly GPU_DISJOINT_EXT: 0x8FBB;  // GL.GPU_DISJOINT_EXT;
+    queryCounterEXT(query: WebGLQuery, target: 0x8E28 /*GL.TIMESTAMP_EXT*/): void;
 }

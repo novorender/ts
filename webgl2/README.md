@@ -1,17 +1,19 @@
 ## WebGL 2 module
 
-This module provides a thin abstraction above the [webgl2 api](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext).
-The main goal is to avoid some of error traps and plain annoying boiler-plate aspects of the opengl API while retaining most of its functionality.
+This module provides a set of utility functions for the [webgl2 api](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext).
+The main goal is to avoid common pitfalls and plain annoying boiler-plate aspects of the opengl API while retaining most of its functionality.
 An important sub-goal is to make good use ot typescript to maintain a productive editing experience, helping the developer discover the available functions and valid sets of parameters.
 
 The module encourages more modern styles of GPU api, using immutable batch updates rather than piecemeal mutations and binding.
+Furthermore, some functionality is deliberately ignored where better options are available.
+For example, uniform buffers should be used instead of setting uniforms piecemeal and Vertex Array Objects should be used instead of binding vertex attributes one at a time.
 
 (example...)
 
 Broadly speaking, there are three categories of functions:
 1) Resource management
 2) State management
-3) Draw commands
+3) Commands
 
 ## Resource management
 
@@ -24,9 +26,9 @@ The entire gl state is described as a strongly typed data structure.
 You can apply changes using a partial state object of the same type. 
 The default gl state is available as an object if you wish to reset all or part of the gl state to a default/known configuration.
 
-## Draw commands
+## Commands
 
-Once you've created your resource and set up your state, you may call functions such as `clear()`, `draw()` and `copy()` that actually executes GPU instructions.
+Once you've created your resource and set up your state, you may call functions such as `glClear()`, `glDraw()` and `glCopy()` that actually executes GPU instructions.
 A number of variants and extensions are merged into a single function, expressing the desired behavior in the set of parameters rather than by function name.
 This is to keep the api simple and help you quickly discover how to achieve what you want, while also keeping the code compact and readable.
 
@@ -47,7 +49,7 @@ Information about shader uniforms and attributes are returned as a js object.
 ## Async reads
 Synchronous reads of frame buffers will typically stall the entire pipeline and are generally bad.
 Instead, async, promise based alternatives are provided for read operations and queries.
-To check and potentially trigger these promises, `pollPromises()` must be called on a fairly regular basis, e.g. once per frame.
+To check and potentially trigger these promises, `poll()` must be called on a fairly regular basis, e.g. once per frame.
 
 ## Testing
 

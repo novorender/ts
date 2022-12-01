@@ -1,4 +1,3 @@
-//import(`/dist/${window.location.search.substring(1)}.js`);
 import { glMatrix } from "gl-matrix";
 import { run } from "../";
 
