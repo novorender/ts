@@ -54,11 +54,10 @@ export interface ChildInfo {
     readonly childMask: U32; // Set of bits (max 32) for which child indices are referenced by geometry.
     readonly tolerance: I8; // A power of two exponent describing the error tolerance of this node, which is used to determine LOD.
     readonly totalByteSize: U32; // # uncompressed bytes total for child binary file.
-    readonly offset: Double3; // Object -> world space translation vector.
-    readonly scale: F32; // Object -> world space uniform scale factor (from unit [-1,1] vectors).
-    readonly bounds: Bounds; // Bounding volume (in object space).
-    readonly primitiveType: EnumArray<PrimitiveType>;
-    readonly attributes: EnumArray<OptionalVertexAttribute>;
+    readonly offset: Double3; // Model -> world space translation vector.
+    readonly scale: F32; // Model -> world space uniform scale factor (from unit [-1,1] vectors).
+    readonly bounds: Bounds; // Bounding volume (in model space).
+    readonly weightedCenter: Float3; // Weighted center coordinate (in model space).
     readonly subMeshes: SubMeshProjectionRange;
 };
 
@@ -101,6 +100,8 @@ export interface BoundingSphere {
 export interface SubMeshProjection {
     readonly length: number;
     readonly objectId: U32;
+    readonly primitiveType: EnumArray<PrimitiveType>;
+    readonly attributes: EnumArray<OptionalVertexAttribute>;
     readonly numIndices: U32; // zero if no index buffer
     readonly numVertices: U32;
     readonly numTextureBytes: U32;
@@ -112,7 +113,9 @@ export interface SubMesh {
     readonly childIndex: U8;
     readonly objectId: U32;
     readonly materialIndex: U8;
+    readonly primitiveType: EnumArray<PrimitiveType>;
     readonly materialType: EnumArray<MaterialType>;
+    readonly attributes: EnumArray<OptionalVertexAttribute>;
     readonly vertices: VertexRange; // Vertices are local to each sub-mesh.
     readonly indices: VertexIndexRange; // Indices, if any, are 16-bit and relative to the local vertex range.
 };
@@ -222,13 +225,19 @@ export function readSchema(r: BufferReader) {
                     radius: r.f32(sizes[0]),
                 } as BoundingSphere,
             } as Bounds,
-            primitiveType: r.u8(sizes[0]) as EnumArray<PrimitiveType>,
-            attributes: r.u8(sizes[0]) as EnumArray<OptionalVertexAttribute>,
+            weightedCenter: {
+                length: sizes[0],
+                x: r.f32(sizes[0]),
+                y: r.f32(sizes[0]),
+                z: r.f32(sizes[0]),
+            } as Float3,
             subMeshes: { start: r.u32(sizes[0]), count: r.u32(sizes[0]) } as SubMeshProjectionRange,
         } as ChildInfo,
         subMeshProjection: {
             length: sizes[1],
             objectId: r.u32(sizes[1]),
+            primitiveType: r.u8(sizes[1]) as EnumArray<PrimitiveType>,
+            attributes: r.u8(sizes[1]) as EnumArray<OptionalVertexAttribute>,
             numIndices: r.u32(sizes[1]),
             numVertices: r.u32(sizes[1]),
             numTextureBytes: r.u32(sizes[1]),
@@ -238,7 +247,9 @@ export function readSchema(r: BufferReader) {
             childIndex: r.u8(sizes[2]),
             objectId: r.u32(sizes[2]),
             materialIndex: r.u8(sizes[2]),
+            primitiveType: r.u8(sizes[2]) as EnumArray<PrimitiveType>,
             materialType: r.u8(sizes[2]) as EnumArray<MaterialType>,
+            attributes: r.u8(sizes[2]) as EnumArray<OptionalVertexAttribute>,
             vertices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexRange,
             indices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexIndexRange,
         } as SubMesh,

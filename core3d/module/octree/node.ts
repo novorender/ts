@@ -290,7 +290,7 @@ export class OctreeNode {
                     children.push(child);
                 }
                 this.state = NodeState.ready;
-                meshes.push(...createMeshes(renderContext.gl, geometry, data.primitiveType));
+                meshes.push(...createMeshes(renderContext.gl, geometry));
                 this.uniforms = glBuffer(renderContext.gl, { kind: "UNIFORM_BUFFER", size: this.uniformsData.buffer.byteLength });
                 renderContext.changed = true;
             }

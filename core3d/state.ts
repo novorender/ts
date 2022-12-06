@@ -55,6 +55,13 @@ export interface RenderStateGrid {
     readonly spacing: number; // spacing between each cell
 }
 
+export interface RenderStateCube {
+    readonly enabled: boolean; // default = false
+    readonly position: ReadonlyVec3; // default = (0,0,0)
+    readonly scale: number; // default = 1
+    readonly clipDepth: number; // default = 1
+}
+
 export interface RenderStateScene {
     readonly url: string;
     readonly config: OctreeSceneConfig;
@@ -86,6 +93,7 @@ export interface RenderState {
     readonly background: RenderStateBackground;
     readonly camera: RenderStateCamera;
     readonly grid: RenderStateGrid;
+    readonly cube: RenderStateCube;
     readonly scene: RenderStateScene | undefined;
     readonly tonemapping: RenderStateTonemapping;
 }
@@ -147,6 +155,12 @@ export function defaultRenderState(): RenderState {
             axisY: [0, 1, 0],
             size: 10,
             spacing: 1,
+        },
+        cube: {
+            enabled: false,
+            position: [0, 0, 0],
+            scale: 1,
+            clipDepth: 1,
         },
         scene: undefined,
         tonemapping: {

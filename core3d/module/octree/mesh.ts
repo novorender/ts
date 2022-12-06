@@ -9,8 +9,7 @@ export interface Mesh {
     readonly drawRanges: readonly MeshDrawRange[];
 }
 
-// create a single(!) mesh (for both opaque, transparent, doublesided) - use sub ranges to render with different render states
-export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry, primitiveType: DrawMode) {
+export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry) {
     for (const subMesh of geometry.subMeshes) {
         if (subMesh.materialType == MaterialType.transparent)
             continue;
@@ -23,8 +22,9 @@ export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry
                 { kind: "FLOAT_VEC4", buffer: vb, componentCount: 3, componentType: "SHORT", normalized: true, stride: 16, offset: 0 }, // pos
                 { kind: "FLOAT_VEC3", buffer: vb, componentCount: 3, componentType: "BYTE", normalized: true, stride: 16, offset: 6 }, // normal
                 { kind: "UNSIGNED_INT", buffer: vb, componentType: "UNSIGNED_BYTE", stride: 16, offset: 9 }, // material index
+                // edge mask?
+                // texture/material?
                 // highlight index
-                // texture?
                 { kind: "UNSIGNED_INT", buffer: vb, componentType: "UNSIGNED_INT", stride: 16, offset: 12 }, // object_id
             ],
             indices: ib,
@@ -33,7 +33,7 @@ export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry
         if (ib) {
             gl.deleteBuffer(ib);
         }
-        const drawParams: DrawParams = { kind: "elements", mode: primitiveType, indexType, count };
+        const drawParams: DrawParams = { kind: "elements", mode: subMesh.primitiveType, indexType, count };
         const { drawRanges, materialType } = subMesh;
         yield { vao, drawParams, drawRanges, materialType } as Mesh;
     }

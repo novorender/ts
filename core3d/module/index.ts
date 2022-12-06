@@ -4,6 +4,7 @@ import { BackgroundModule } from "./background";
 import { GridModule } from "./grid";
 import { OctreeModule } from "./octree";
 import { TonemapdModule } from "./tonemap";
+import { CubeModule } from "./cube";
 
 // constructor takes RenderState object
 // this object contains all state (geometry, textures etc), or has at least the ability to reload state on demand if e.g. webgl context is lost
@@ -22,6 +23,7 @@ export function createDefaultModules() {
     return [
         new BackgroundModule(),
         new GridModule(),
+        new CubeModule(),
         new OctreeModule(),
         new TonemapdModule(),
     ];

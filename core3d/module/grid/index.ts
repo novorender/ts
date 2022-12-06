@@ -10,7 +10,7 @@ export class GridModule implements RenderModule {
     readonly uniforms;
     constructor() {
         this.uniforms = createUniformBufferProxy({
-            objectClipMatrix: "mat4",
+            modelClipMatrix: "mat4",
             color: "vec4",
             size: "int",
             spacing: "float",
@@ -73,8 +73,8 @@ class GridModuleContext implements RenderModuleContext {
             ...origin, 1
         ] as Parameters<typeof mat4.fromValues>;
         const worldClipMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.Clip);
-        const objectWorldMatrix = mat4.fromValues(...m);
-        values.objectClipMatrix = mat4.mul(mat4.create(), worldClipMatrix, objectWorldMatrix);
+        const modelWorldMatrix = mat4.fromValues(...m);
+        values.modelClipMatrix = mat4.mul(mat4.create(), worldClipMatrix, modelWorldMatrix);
         values.color = grid.color;
         values.size = grid.size;
         values.spacing = grid.spacing;

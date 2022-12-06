@@ -6,7 +6,7 @@ layout(std140) uniform Camera {
 } camera;
 
 layout(std140) uniform Grid {
-    mat4 objectClipMatrix;
+    mat4 modelClipMatrix;
     vec4 color;
     int size;
     float spacing;

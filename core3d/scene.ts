@@ -81,7 +81,6 @@ function rootNodeData(config: OctreeSceneConfig): NodeData {
         offset,
         scale,
         bounds,
-        primitiveType: "TRIANGLES", // is this always the case?
         // config should probably contain SubMeshProjection data, suitable for aggregateSubMeshProjections()
         primitives: 0, // compute from config?
         primitivesDelta: 0, // same as primitives above

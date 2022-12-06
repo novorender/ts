@@ -38,7 +38,7 @@ layout(location = 2) out float linearDepth;
 layout(location = 3) out uvec2 info;
 
 void main() {
-    normal = varyings.normal.xy;
+    normal = normalize(varyings.normal).xy;
     linearDepth = varyings.linearDepth;
 #ifdef IOS_WORKAROUND
     color = varyings.color;

@@ -24,18 +24,20 @@ export async function run(canvas: HTMLCanvasElement) {
     const controller = new OrbitController({ kind: "orbit" }, canvas);
     let state = defaultRenderState();
     let prevState = state;
-    // const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
-    // const sceneUrl = new URL("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/", scriptUrl).toString();
-
-    const scene = await downloadScene("/assets/octrees/933dae7aaad34a35897b59d4ec09c6d7_/"); // condos
-    // const scene = await downloadScene("/assets/octrees/0f762c06a61f4f1c8d3b7cf1b091515e_/"); // hospital
+    const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    // const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
+    const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
+    // const scene = await downloadScene(sceneUrl);
 
     state = modifyRenderState(state, {
-        scene,
+        // scene,
         background: { url: "https://api.novorender.com/assets/env/lake/", blur: 0.25 },
         tonemapping: { mode: TonemappingMode.color },
-        // camera: { back: 10000 },
+        camera: { near: 1, far: 100 },
         // grid: { enabled: true, origin: scene.config.boundingSphere.center, size: 100 },
+        grid: { enabled: true, size: 100 },
+        cube: { enabled: true, clipDepth: 10 },
     });
 
     controller.autoFitToScene(state);

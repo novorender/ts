@@ -6,7 +6,7 @@ layout(std140) uniform Camera {
 } camera;
 
 layout(std140) uniform Grid {
-    mat4 objectClipMatrix;
+    mat4 modelClipMatrix;
     vec4 color;
     int size;
     float spacing;
@@ -26,5 +26,5 @@ void main() {
     float x = (float(xi) - c) * grid.spacing;
     float y = (float(yi) - c) * grid.spacing;
     vec4 posOS = vec4(x, 0, y, 1);
-    gl_Position = grid.objectClipMatrix * posOS;
+    gl_Position = grid.modelClipMatrix * posOS;
 }

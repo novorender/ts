@@ -31,7 +31,7 @@ export interface NodeData {
     readonly offset: ReadonlyVec3;
     readonly scale: number;
     readonly bounds: Bounds;
-    readonly primitiveType: PrimitiveTypeString;
+    // readonly primitiveType: PrimitiveTypeString;
     // Used to predict the cost of creating geometry, potentially with filtering. Note that this does not consider the cost of loading, which ideally is a streaming process with low memory footprint
     readonly primitives: number;
     readonly primitivesDelta: number; // # new primitives introduced compared to parent
@@ -40,11 +40,12 @@ export interface NodeData {
 
 export interface SubMesh {
     readonly materialType: MaterialType;
+    readonly primitiveType: PrimitiveTypeString;
+    readonly attributes: OptionalVertexAttribute;
     // either index range (if index buffer is defined) for use with drawElements(), or vertex range for use with drawArray()
     readonly drawRanges: MeshDrawRange[];
     readonly vertexBuffer: ArrayBuffer; // Interleaved with all attributes (including childIndex, objectId and materialIndex)
     readonly indices: Uint16Array | Uint32Array | number; // Index buffer, or # vertices of none
-
 }
 
 // node geometry and textures
@@ -131,42 +132,47 @@ function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute) {
     return attribNames;
 }
 
-export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection, range: Range, primitiveType: PrimitiveType, vertexStride: number, predicate?: (objectId: number) => boolean) {
+export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection, range: Range, predicate?: (objectId: number) => boolean) {
     // const { subMeshProjection } = schema;
     const [begin, end] = range;
     let primitives = 0;
     let totalTextureBytes = 0;
     let totalNumIndices = 0;
     let totalNumVertices = 0;
+    let totalNumVertexBytes = 0;
     for (let i = begin; i < end; i++) {
         const objectId = subMeshProjection.objectId[i];
         if (predicate?.(objectId) ?? true) {
             const indices = subMeshProjection.numIndices[i];
             const vertices = subMeshProjection.numVertices[i];
             const textureBytes = subMeshProjection.numTextureBytes[i];
+            const attributes = subMeshProjection.attributes[i];
+            const primitiveType = subMeshProjection.primitiveType[i];
+            const vertexStride = computeVertexOffsets(getVertexAttribNames(attributes)).stride;
             primitives += computePrimitiveCount(primitiveType, indices) ?? 0;
             totalNumIndices += indices;
             totalNumVertices += vertices;
+            totalNumVertexBytes += vertices * vertexStride;
             totalTextureBytes += textureBytes;
         }
     }
     const idxStride = totalNumVertices < 0xffff ? 2 : 4;
-    const gpuBytes = totalTextureBytes + totalNumVertices * vertexStride + totalNumIndices * idxStride;
+    const gpuBytes = totalTextureBytes + totalNumVertexBytes + totalNumIndices * idxStride;
     return { primitives, gpuBytes } as const;
 }
 
 export function getChildren(parentId: string, schema: Schema, predicate?: (objectId: number) => boolean): NodeData[] {
     const { childInfo } = schema;
     var children: NodeData[] = [];
-    const parentIndexCounts: number[] = [];
+    const parentPrimitiveCounts: number[] = [];
     for (const mesh of getSubMeshes(schema, predicate)) {
         const { childIndex, indexRange, vertexRange } = mesh;
         const numIndices = indexRange[1] - indexRange[0];
         const numVertices = vertexRange[1] - vertexRange[0];
         const n = numIndices ? numIndices : numVertices;
-        let count = parentIndexCounts[childIndex] ?? 0;
-        count += n;
-        parentIndexCounts[childIndex] = count;
+        let count = parentPrimitiveCounts[childIndex] ?? 0;
+        count += computePrimitiveCount(mesh.primitiveType, n) ?? 0;
+        parentPrimitiveCounts[childIndex] = count;
     }
 
     for (let i = 0; i < childInfo.length; i++) {
@@ -193,16 +199,15 @@ export function getChildren(parentId: string, schema: Schema, predicate?: (objec
         vec3.add(box.min as vec3, box.min, offset);
         vec3.add(box.max as vec3, box.max, offset);
 
-        const primitiveType = childInfo.primitiveType[i] as Exclude<PrimitiveType, PrimitiveType.undefined>;
-        const optionalAttributes = childInfo.attributes[i];
+        // const primitiveType = childInfo.primitiveType[i] as Exclude<PrimitiveType, PrimitiveType.undefined>;
+        // const optionalAttributes = childInfo.attributes[i];
         const subMeshRange = getRange(childInfo.subMeshes, i);
 
-        const parentPrimitives = computePrimitiveCount(primitiveType, parentIndexCounts[i] ?? 0) ?? 0;
-        const vertexStride = computeVertexOffsets(getVertexAttribNames(optionalAttributes)).stride;
-        const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshRange, primitiveType, vertexStride, predicate);
-        const primitivesDelta = primitives - parentPrimitives;
+        const parentPrimitives = parentPrimitiveCounts[i];
+        const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshRange, predicate);
+        const primitivesDelta = primitives - (parentPrimitives ?? 0);
         console.assert(primitivesDelta > 0);
-        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitiveType: primitiveTypeStrings[primitiveType], primitives, primitivesDelta, gpuBytes });
+        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
     }
     return children;
 }
@@ -216,10 +221,12 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
             const objectId = subMesh.objectId[i];
             const materialIndex = subMesh.materialIndex[i];
             const materialType = subMesh.materialType[i];
+            const primitiveType = subMesh.primitiveType[i];
+            const attributes = subMesh.attributes[i];
             const vertexRange = getRange(subMesh.vertices, i);
             const indexRange = getRange(subMesh.indices, i);
             if (materialType != MaterialType.elevation) // filter by material type (for now)
-                yield { childIndex, objectId, materialIndex, materialType, vertexRange, indexRange };
+                yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, vertexRange, indexRange };
         }
     }
 }
@@ -267,15 +274,37 @@ function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean):
     const vertexStride = attribOffsets.stride;
 
     let subMeshes: SubMesh[] = [];
-    const materialTypes = [...new Set<number>(filteredSubMeshes.map(sm => sm.materialType))].sort();
-    for (const materialType of materialTypes) {
-        const materialMeshes = filteredSubMeshes.filter(sm => sm.materialType == materialType);
-        if (materialMeshes.length == 0)
-            continue;
 
-        const childIndices = [...new Set<number>(materialMeshes.map(sm => sm.childIndex))].sort();
-        const numVertices = materialMeshes.map(sm => (sm.vertexRange[1] - sm.vertexRange[0])).reduce((a, b) => (a + b));
-        const numIndices = materialMeshes.map(sm => (sm.indexRange[1] - sm.indexRange[0])).reduce((a, b) => (a + b));
+    // group submeshes into drawable meshes (with common attributes)
+    type Group = {
+        readonly materialType: number;
+        readonly primitiveType: number;
+        readonly attributes: number;
+        // readonly childIndex: number;
+        readonly subMeshIndices: number[];
+    };
+    const groups = new Map<string, Group>();
+
+    for (let i = 0; i < filteredSubMeshes.length; i++) {
+        const { materialType, primitiveType, attributes, childIndex } = filteredSubMeshes[i];
+        const key = `${materialType}_${primitiveType}_${attributes}_${childIndex}`;
+        let group = groups.get(key);
+        if (!group) {
+            group = { materialType, primitiveType, attributes, subMeshIndices: [] };
+            groups.set(key, group);
+        }
+        group.subMeshIndices.push(i);
+    }
+
+    for (const { materialType, primitiveType, attributes, subMeshIndices } of groups.values()) {
+        // const materialMeshes = filteredSubMeshes.filter(sm => sm.materialType == materialType);
+        if (subMeshIndices.length == 0)
+            continue;
+        const groupMeshes = subMeshIndices.map(i => filteredSubMeshes[i]);
+
+        const childIndices = [...new Set<number>(groupMeshes.map(sm => sm.childIndex))].sort();
+        const numVertices = groupMeshes.map(sm => (sm.vertexRange[1] - sm.vertexRange[0])).reduce((a, b) => (a + b));
+        const numIndices = groupMeshes.map(sm => (sm.indexRange[1] - sm.indexRange[0])).reduce((a, b) => (a + b));
         const vertexBuffer = new ArrayBuffer(numVertices * vertexStride);
         let indexBuffer: Uint32Array | Uint16Array | undefined;
         if (vertexIndex) {
@@ -286,7 +315,7 @@ function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean):
         let drawRanges: MeshDrawRange[] = [];
 
         for (const childIndex of childIndices) {
-            const meshes = materialMeshes.filter(sm => sm.childIndex == childIndex);
+            const meshes = groupMeshes.filter(sm => sm.childIndex == childIndex);
             if (meshes.length == 0)
                 continue;
 
@@ -336,7 +365,7 @@ function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean):
         console.assert(vertexOffset == numVertices);
         console.assert(idx == numIndices);
         var indices = indexBuffer ?? numVertices;
-        subMeshes.push({ materialType, vertexBuffer, indices, drawRanges });
+        subMeshes.push({ materialType, primitiveType: primitiveTypeStrings[primitiveType], attributes, vertexBuffer, indices, drawRanges });
     }
     return { subMeshes } as const;
 }
