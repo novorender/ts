@@ -1,6 +1,7 @@
 import { quat, vec3, ReadonlyQuat, ReadonlyVec3, ReadonlyVec4, ReadonlyMat4, ReadonlyMat3 } from "gl-matrix";
 import { OctreeSceneConfig } from "./scene";
 
+export type RGB = readonly [red: number, green: number, blue: number];
 export type RGBA = readonly [red: number, green: number, blue: number, alpha: number];
 
 export interface ViewFrustum {
@@ -47,12 +48,13 @@ export interface RenderStateCamera {
 
 export interface RenderStateGrid {
     readonly enabled: boolean;
-    readonly color: RGBA;
+    readonly color: RGB;
     readonly origin: ReadonlyVec3;
     readonly axisX: ReadonlyVec3;
     readonly axisY: ReadonlyVec3;
-    readonly size: number; // integer dimension
-    readonly spacing: number; // spacing between each cell
+    readonly size1: number; // minor grid cell size, default = 1
+    readonly size2: number; // major grid cell size, default = 10
+    readonly distance: number; // max distance to render grid
 }
 
 export interface RenderStateCube {
@@ -149,12 +151,13 @@ export function defaultRenderState(): RenderState {
         },
         grid: {
             enabled: false,
-            color: [0, 1, 0, 1],
+            color: [2, 2, 2],
             origin: [0, 0, 0],
             axisX: [1, 0, 0],
-            axisY: [0, 1, 0],
-            size: 10,
-            spacing: 1,
+            axisY: [0, 0, 1],
+            size1: 1,
+            size2: 10,
+            distance: 100,
         },
         cube: {
             enabled: false,

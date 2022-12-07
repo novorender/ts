@@ -10,9 +10,9 @@ export function matricesFromRenderState(state: { output: RenderStateOutput; came
     const { width, height } = output;
     const aspectRatio = width / height;
     const fovY = camera.fov * Math.PI / 180;
-    const worldView = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
+    const viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
     const viewClip = mat4.perspective(mat4.create(), fovY, aspectRatio, camera.near, camera.far);
-    return new MatricesImpl(worldView, viewClip);
+    return new MatricesImpl(viewWorld, viewClip);
 }
 
 class MatricesImpl implements Matrices {

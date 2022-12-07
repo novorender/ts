@@ -1,30 +1,25 @@
-layout(std140) uniform Camera {
-    mat4 clipViewMatrix;
-    mat4 viewClipMatrix;
-    mat3 worldViewMatrixNormal;
-    mat3 viewWorldMatrixNormal;
-} camera;
-
 layout(std140) uniform Grid {
-    mat4 modelClipMatrix;
-    vec4 color;
-    int size;
-    float spacing;
+    mat4 worldClipMatrix;
+    vec3 origin;
+    vec3 axisX;
+    vec3 axisY;
+    vec3 cameraPosition; // in world space
+    float size1;
+    float size2;
+    vec3 color;
+    float distance;
 } grid;
 
+out struct {
+    vec2 posOS;
+    vec3 posWS;
+} varyings;
+
 void main() {
-    int xi, yi;
-    int s1 = grid.size + 1;
-    if(gl_VertexID < s1 * 2) {
-        xi = gl_VertexID / 2 % s1;
-        yi = gl_VertexID % 2 == 0 ? grid.size : 0;
-    } else {
-        xi = gl_VertexID % 2 == 0 ? grid.size : 0;
-        yi = gl_VertexID / 2 % s1;
-    }
-    float c = float(grid.size) / 2.0;
-    float x = (float(xi) - c) * grid.spacing;
-    float y = (float(yi) - c) * grid.spacing;
-    vec4 posOS = vec4(x, 0, y, 1);
-    gl_Position = grid.modelClipMatrix * posOS;
+    vec2 posOS = (vec2(gl_VertexID % 2, gl_VertexID / 2) * 2. - 1.) * grid.distance;
+    posOS += vec2(dot(grid.cameraPosition - grid.origin, grid.axisX), dot(grid.cameraPosition - grid.origin, grid.axisY));
+    vec3 posWS = grid.origin + grid.axisX * posOS.x + grid.axisY * posOS.y;
+    varyings.posOS = posOS;
+    varyings.posWS = posWS;
+    gl_Position = grid.worldClipMatrix * vec4(posWS, 1);
 }

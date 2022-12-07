@@ -1,8 +1,8 @@
-import type { DerivedRenderState, Matrices, RenderContext, RenderStateGrid } from "core3d";
+import type { DerivedRenderState, Matrices, RenderContext, RenderStateCamera, RenderStateGrid } from "core3d";
 import { CoordSpace } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformBufferProxy, glBuffer, glProgram, glDraw, glState, glDelete } from "webgl2";
-import { mat4 } from "gl-matrix";
+import { createUniformBufferProxy, glBuffer, glProgram, glDraw, glState, glDelete, glUniformsInfo } from "webgl2";
+import { mat4, vec3, vec4 } from "gl-matrix";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
@@ -10,10 +10,15 @@ export class GridModule implements RenderModule {
     readonly uniforms;
     constructor() {
         this.uniforms = createUniformBufferProxy({
-            modelClipMatrix: "mat4",
-            color: "vec4",
-            size: "int",
-            spacing: "float",
+            worldClipMatrix: "mat4",
+            origin: "vec3",
+            axisX: "vec3",
+            axisY: "vec3",
+            cameraPosition: "vec3",
+            size1: "float",
+            size2: "float",
+            color: "vec3",
+            distance: "float",
         });
     }
 
@@ -23,6 +28,7 @@ export class GridModule implements RenderModule {
 }
 
 interface RelevantRenderState {
+    camera: RenderStateCamera;
     grid: RenderStateGrid;
     matrices: Matrices;
 };
@@ -36,7 +42,8 @@ class GridModuleContext implements RenderModuleContext {
         this.state = new RenderModuleState<RelevantRenderState>();
         const { gl } = context;
         // create static GPU resources here
-        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Grid"] });
+        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Grid"] });
+        const uniformInfos = glUniformsInfo(gl, program);
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: data.uniforms.buffer });
         this.resources = { program, uniforms } as const;
     }
@@ -44,40 +51,42 @@ class GridModuleContext implements RenderModuleContext {
     render(state: DerivedRenderState) {
         const { context, resources, data } = this;
         const { program, uniforms } = resources;
-        const { gl, cameraUniforms } = context;
+        const { gl } = context;
         if (this.state.hasChanged(state)) {
             this.updateUniforms(state);
-            context.updateUniformBuffer(resources.uniforms, data.uniforms);
+            context.updateUniformBuffer(uniforms, data.uniforms);
         }
 
         if (state.grid.enabled) {
-            const { size } = state.grid;
             glState(gl, {
                 program,
-                uniformBuffers: [cameraUniforms, uniforms],
+                uniformBuffers: [uniforms],
                 depthTest: true,
+                depthWriteMask: false,
+                blendEnable: true,
+                blendSrcRGB: "SRC_ALPHA",
+                blendDstRGB: "ONE_MINUS_SRC_ALPHA",
+                blendSrcAlpha: "ZERO",
+                blendDstAlpha: "ONE",
             });
-            glDraw(gl, { kind: "arrays", mode: "LINES", count: (size + 1) * 2 * 2 });
+            glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
         }
     }
 
     private updateUniforms(state: RelevantRenderState) {
         const { data } = this;
         const { values } = data.uniforms;
-        const { grid, matrices } = state;
+        const { grid, matrices, camera } = state;
         const { axisX, axisY, origin } = grid;
-        const m = [
-            ...axisX, 0,
-            ...axisY, 0,
-            0, 0, 1, 0,
-            ...origin, 1
-        ] as Parameters<typeof mat4.fromValues>;
-        const worldClipMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.Clip);
-        const modelWorldMatrix = mat4.fromValues(...m);
-        values.modelClipMatrix = mat4.mul(mat4.create(), worldClipMatrix, modelWorldMatrix);
+        values.worldClipMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.Clip);
+        values.origin = origin;
+        values.axisX = axisX;
+        values.axisY = axisY;
         values.color = grid.color;
-        values.size = grid.size;
-        values.spacing = grid.spacing;
+        values.size1 = grid.size1;
+        values.size2 = grid.size2;
+        values.cameraPosition = camera.position;
+        values.distance = grid.distance;
     }
 
     contextLost(): void {

@@ -22,9 +22,9 @@ export interface RenderModuleContext {
 export function createDefaultModules() {
     return [
         new BackgroundModule(),
-        new GridModule(),
         new CubeModule(),
         new OctreeModule(),
+        new GridModule(),
         new TonemapdModule(),
     ];
 }
