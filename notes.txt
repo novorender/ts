@@ -1,3 +1,12 @@
+offline
+  memory only
+  objectid/data
+ 
+new api
+  support old binary format
+  new texture/material system
+
+
 keep existing system
   but use transform feedback to feed new geometry into buffers
     this should reduce/eliminate update stuttering

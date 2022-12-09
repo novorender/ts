@@ -7,6 +7,7 @@ const uint modeDepth = 2U;
 const uint modeObjectId = 3U;
 const uint modeDeviation = 4U;
 const uint modeIntensity = 5U;
+const uint modeZbuffer = 6U;
 
 layout(std140) uniform Tonemapping {
     float exposure;
@@ -18,11 +19,11 @@ uniform sampler2D textures_color;
 uniform sampler2D textures_normal;
 uniform sampler2D textures_depth;
 uniform usampler2D textures_info;
+uniform sampler2D textures_zbuffer;
 
-struct Varyings {
+in struct {
     vec2 uv;
-};
-in Varyings varyings;
+} varyings;
 
 layout(location = 0) out vec4 fragColor;
 
@@ -69,10 +70,6 @@ vec3 RRTAndODTFit(vec3 color) {
 }
 
 void main() {
-    // vec4 rgba = texture(textures.color, varyings.uv);
-    // vec3 color = rgba.rgb * tonemapping.exposure;
-    // fragColor = vec4(color, rgba.a);
-
     vec4 color = vec4(1, 0, 0, 1);
     switch(tonemapping.mode) {
         case modeColor: {
@@ -123,6 +120,11 @@ void main() {
         case modeIntensity: {
             float intensity = unpackHalf2x16(texture(textures_info, varyings.uv).y).y;
             color.rgb = vec3(intensity / maxIntensity);
+            break;
+        }
+        case modeZbuffer: {
+            float z = texture(textures_zbuffer, varyings.uv).x;
+            color.rgb = vec3(z);
             break;
         }
     }

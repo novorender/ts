@@ -1,5 +1,5 @@
 import { mat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
-import { createUniformBufferProxy, glDraw, DrawParams, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glState, glBuffer, glUpdateBuffer } from "webgl2";
+import { createUniformsProxy, glDraw, DrawParams, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glState, glBuffer, glUpdateBuffer } from "webgl2";
 import { CoordSpace, DerivedRenderState, RenderContext } from "core3d";
 import { AbortableDownload, Downloader } from "./download";
 import { createMeshes, Mesh } from "./mesh";
@@ -66,7 +66,7 @@ export class OctreeNode {
 
         const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         this.size = Math.pow(2, data.tolerance) * toleranceScale;
-        this.uniformsData = createUniformBufferProxy({
+        this.uniformsData = createUniformsProxy({
             modelViewMatrix: "mat4",
             debugColor: "vec4",
         });
@@ -209,7 +209,7 @@ export class OctreeNode {
         }
     }
 
-    render(uniformBuffers: WebGLBuffer[]) {
+    render(uniformBuffers: WebGLBuffer[], prepass = false, writeZ = true) {
         const { context, data, uniforms, uniformsData } = this;
         const { renderContext } = context;
         const { gl } = renderContext;
@@ -219,15 +219,17 @@ export class OctreeNode {
 
         const { renderedChildMask } = this;
         if (renderedChildMask) {
-            // TODO: 
             for (const mesh of this.meshes) {
                 const { materialType } = mesh;
-                const blendEnable = materialType == MaterialType.transparent;
+                const isTransparent = materialType == MaterialType.transparent;
+                if (prepass && isTransparent)
+                    continue;
+                const blendEnable = isTransparent;
                 glState(gl, {
                     uniformBuffers: [...uniformBuffers, uniforms],
                     vertexArrayObject: mesh.vao,
                     cullEnable: materialType == MaterialType.opaque,
-                    depthWriteMask: !blendEnable,
+                    depthWriteMask: !isTransparent && writeZ,
                     blendEnable,
                     blendSrcRGB: blendEnable ? "SRC_ALPHA" : "ONE",
                     blendSrcAlpha: "ZERO",

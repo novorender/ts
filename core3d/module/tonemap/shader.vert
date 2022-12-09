@@ -7,6 +7,7 @@ const uint modeDepth = 2U;
 const uint modeObjectId = 3U;
 const uint modeDeviation = 4U;
 const uint modeIntensity = 5U;
+const uint modeZbuffer = 6U;
 
 layout(std140) uniform Tonemapping {
     float exposure;
@@ -18,11 +19,11 @@ uniform sampler2D textures_color;
 uniform sampler2D textures_depth;
 uniform sampler2D textures_normal;
 uniform usampler2D textures_info;
+uniform sampler2D textures_zbuffer;
 
-struct Varyings {
+out struct {
     vec2 uv;
-};
-out Varyings varyings;
+} varyings;
 
 void main() {
     varyings.uv = vec2(gl_VertexID % 2, gl_VertexID / 2);

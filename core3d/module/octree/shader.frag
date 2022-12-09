@@ -14,22 +14,20 @@ layout(std140) uniform Node {
     vec4 debugColor;
 } node;
 
-struct Varyings {
+in struct {
     vec3 normal;
     float linearDepth;
 #ifdef IOS_WORKAROUND
     vec4 color;
     vec2 objectId; // older (<A15) IOS and Ipads crash if we use uint here, so we use two floats instead
 #endif
-};
-in Varyings varyings;
+} varyings;
 
 #ifndef IOS_WORKAROUND
-struct VaryingsFlat {
+flat in struct {
     vec4 color;
     uint objectId;
-};
-flat in VaryingsFlat varyingsFlat;
+} varyingsFlat;
 #endif
 
 layout(location = 0) out vec4 color;
@@ -48,5 +46,4 @@ void main() {
     color = varyingsFlat.color;
     info = uvec2(varyingsFlat.objectId, 0);
 #endif
-
 }

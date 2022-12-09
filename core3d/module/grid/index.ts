@@ -1,26 +1,22 @@
 import type { DerivedRenderState, Matrices, RenderContext, RenderStateCamera, RenderStateGrid } from "core3d";
 import { CoordSpace } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformBufferProxy, glBuffer, glProgram, glDraw, glState, glDelete, glUniformsInfo } from "webgl2";
-import { mat4, vec3, vec4 } from "gl-matrix";
+import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
 export class GridModule implements RenderModule {
-    readonly uniforms;
-    constructor() {
-        this.uniforms = createUniformBufferProxy({
-            worldClipMatrix: "mat4",
-            origin: "vec3",
-            axisX: "vec3",
-            axisY: "vec3",
-            cameraPosition: "vec3",
-            size1: "float",
-            size2: "float",
-            color: "vec3",
-            distance: "float",
-        });
-    }
+    readonly uniforms = {
+        worldClipMatrix: "mat4",
+        origin: "vec3",
+        axisX: "vec3",
+        axisY: "vec3",
+        cameraPosition: "vec3",
+        size1: "float",
+        size2: "float",
+        color: "vec3",
+        distance: "float",
+    } as const;
 
     withContext(context: RenderContext) {
         return new GridModuleContext(context, this);
@@ -33,31 +29,47 @@ interface RelevantRenderState {
     matrices: Matrices;
 };
 
-// class GridModuleContext extends RenderModuleBase<RelevantRenderState> implements RenderModuleContext {
 class GridModuleContext implements RenderModuleContext {
     private readonly state;
+    readonly uniforms;
     readonly resources;
 
     constructor(readonly context: RenderContext, readonly data: GridModule) {
         this.state = new RenderModuleState<RelevantRenderState>();
+        this.uniforms = createUniformsProxy(data.uniforms);
         const { gl } = context;
-        // create static GPU resources here
         const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Grid"] });
-        const uniformInfos = glUniformsInfo(gl, program);
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: data.uniforms.buffer });
+        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
         this.resources = { program, uniforms } as const;
     }
 
-    render(state: DerivedRenderState) {
-        const { context, resources, data } = this;
+    update(state: DerivedRenderState) {
+        const { context, resources } = this;
+        const { uniforms } = resources;
+        if (this.state.hasChanged(state)) {
+            const { data } = this;
+            const { values } = this.uniforms;
+            const { grid, matrices, camera } = state;
+            const { axisX, axisY, origin } = grid;
+            values.worldClipMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.Clip);
+            values.origin = origin;
+            values.axisX = axisX;
+            values.axisY = axisY;
+            values.color = grid.color;
+            values.size1 = grid.size1;
+            values.size2 = grid.size2;
+            values.cameraPosition = camera.position;
+            values.distance = grid.distance;
+            context.updateUniformBuffer(uniforms, this.uniforms);
+        }
+    }
+
+    render() {
+        const { context, resources, state } = this;
         const { program, uniforms } = resources;
         const { gl } = context;
-        if (this.state.hasChanged(state)) {
-            this.updateUniforms(state);
-            context.updateUniformBuffer(uniforms, data.uniforms);
-        }
 
-        if (state.grid.enabled) {
+        if (state.current?.grid.enabled) {
             glState(gl, {
                 program,
                 uniformBuffers: [uniforms],
@@ -71,22 +83,6 @@ class GridModuleContext implements RenderModuleContext {
             });
             glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
         }
-    }
-
-    private updateUniforms(state: RelevantRenderState) {
-        const { data } = this;
-        const { values } = data.uniforms;
-        const { grid, matrices, camera } = state;
-        const { axisX, axisY, origin } = grid;
-        values.worldClipMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.Clip);
-        values.origin = origin;
-        values.axisX = axisX;
-        values.axisY = axisY;
-        values.color = grid.color;
-        values.size1 = grid.size1;
-        values.size2 = grid.size2;
-        values.cameraPosition = camera.position;
-        values.distance = grid.distance;
     }
 
     contextLost(): void {

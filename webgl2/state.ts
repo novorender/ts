@@ -43,6 +43,8 @@ export function glState(gl: WebGL2RenderingContext, params: StateParams | null) 
 
     setFlag("DITHER", "ditherEnable");
 
+    set((rgba: readonly [boolean, boolean, boolean, boolean]) => { gl.colorMask(...rgba); }, "colorMask");
+
     setFlag("POLYGON_OFFSET_FILL", "polygonOffsetFill");
     set(gl.polygonOffset, "polygonOffsetFactor", "polygonOffsetUnits");
 
@@ -151,6 +153,8 @@ export interface State {
     readonly depthRange: readonly [near: number, far: number]; // DEPTH_RANGE
 
     readonly ditherEnable: boolean; // DITHER
+
+    readonly colorMask: readonly [red: boolean, green: boolean, blue: boolean, alpha: boolean];
 
     readonly polygonOffsetFill: boolean; // POLYGON_OFFSET_FILL
     readonly polygonOffsetFactor: number; // POLYGON_OFFSET_FACTOR
@@ -289,6 +293,8 @@ const defaultConstants = {
     depthRange: [0, 1], // DEPTH_RANGE
 
     ditherEnable: true, // DITHER
+
+    colorMask: [true, true, true, true],
 
     polygonOffsetFill: false, // POLYGON_OFFSET_FILL
     polygonOffsetFactor: 0, // POLYGON_OFFSET_FACTOR

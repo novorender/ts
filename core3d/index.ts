@@ -3,6 +3,7 @@ import { defaultRenderState, modifyRenderState, TonemappingMode } from "./state"
 import { OrbitController } from "./controller";
 import { downloadScene } from "./scene";
 import { glExtensions } from "@novorender/webgl2";
+import { wasmInstance } from "./wasm";
 
 export * from "./state";
 export * from "./context";
@@ -21,11 +22,12 @@ export async function run(canvas: HTMLCanvasElement) {
         stencil: false,
     };
 
+    const wasm = await wasmInstance();
     const controller = new OrbitController({ kind: "orbit" }, canvas);
     let state = defaultRenderState();
     let prevState = state;
-    const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
-    // const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    // const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
     const scene = await downloadScene(sceneUrl);
@@ -86,7 +88,7 @@ export async function run(canvas: HTMLCanvasElement) {
 
     let animId: number | undefined;
     function init() {
-        context = new RenderContext(canvas, options);
+        context = new RenderContext(canvas, wasm, options);
         function render(time: number) {
             resize();
             state = controller.updateRenderState(state);

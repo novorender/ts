@@ -76,6 +76,7 @@ export const enum TonemappingMode {
     objectId,
     deviation,
     intensity,
+    zbuffer,
 };
 
 export interface RenderStateTonemapping {

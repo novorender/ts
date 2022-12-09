@@ -1,8 +1,10 @@
 import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderModuleState, RenderStateCamera, CoordSpace, createDefaultModules } from "./";
-import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformBufferProxy, UniformsProxy } from "webgl2";
+import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformsProxy, UniformsProxy } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { RenderBuffers } from "./buffers";
+import { WasmInstance } from "./wasm";
+import { mat3, mat4, vec3, vec4 } from "gl-matrix";
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
@@ -18,13 +20,19 @@ export class RenderContext {
     private cameraUniformsData;
     readonly gl: WebGL2RenderingContext;
 
+    // copy from last rendered state
+    private isOrtho = false;
+    private viewClipMatrix = mat4.create();
+    private viewWorldMatrix = mat4.create();
+    private viewWorldMatrixNormal = mat3.create();
+
     // shared mutable state
     changed = true;
     buffers: RenderBuffers = undefined!;
     readonly cameraUniforms: WebGLBuffer;
     // iblUniforms: WebGLBuffer | null = null;
 
-    constructor(readonly canvas: HTMLCanvasElement, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
+    constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
         const gl = canvas.getContext("webgl2", options);
         if (!gl)
             throw new Error("Unable to create WebGL 2 context!");
@@ -46,7 +54,7 @@ export class RenderContext {
         this.outputState = new RenderModuleState<RenderStateOutput>();
         this.cameraState = new RenderModuleState<RenderStateCamera>();
 
-        this.cameraUniformsData = createUniformBufferProxy({
+        this.cameraUniformsData = createUniformsProxy({
             clipViewMatrix: "mat4",
             viewClipMatrix: "mat4",
             worldViewMatrixNormal: "mat3",
@@ -65,6 +73,10 @@ export class RenderContext {
         this.deletePick();
     }
 
+    // TODO: split position attribute into separate buffer
+    // TODO: test perf difference (on android especially). [remember to test later when fragment shader is heavier!]
+    readonly usePrepass = true;
+
     get width() {
         return this.gl.drawingBufferWidth;
     }
@@ -81,7 +93,7 @@ export class RenderContext {
         if (!proxy.dirtyRange.isEmpty) {
             const { begin, end } = proxy.dirtyRange;
             glUpdateBuffer(this.gl, { kind: "UNIFORM_BUFFER", srcData: proxy.buffer, targetBuffer: uniformBuffer, srcOffset: begin, targetOffset: begin, size: end - begin });
-            proxy.dirtyRange.reset();
+            proxy.dirtyRange.clear();
         }
     }
 
@@ -121,8 +133,36 @@ export class RenderContext {
         this.updateCameraUniforms(derivedState);
         this.updateUniformBuffer(this.cameraUniforms, this.cameraUniformsData);
 
-        // render modules
+        // update internal state
+        this.isOrtho = derivedState.camera.kind == "orthographic";
+        mat4.copy(this.viewClipMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.Clip));
+        mat4.copy(this.viewWorldMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.World));
+        mat3.copy(this.viewWorldMatrixNormal, derivedState.matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World));
+
+        // update modules from state
+        for (const module of this.moduleContexts) {
+            module?.update(derivedState);
+        }
+
+        // apply module render z-buffer pre-pass
         const { width, height } = canvas;
+        if (this.usePrepass) {
+            for (const module of this.moduleContexts) {
+                if (module && module.prepass) {
+                    glState(gl, {
+                        viewport: { width, height },
+                        frameBuffer: this.buffers.resources.frameBuffer,
+                        drawBuffers: [],
+                        // colorMask: [false, false, false, false],
+                    })
+                    module.prepass();
+                    // reset gl state
+                    glState(gl, null);
+                }
+            }
+        }
+
+        // render modules
         for (const module of this.moduleContexts) {
             if (module) {
                 glState(gl, {
@@ -130,7 +170,7 @@ export class RenderContext {
                     frameBuffer: this.buffers.resources.frameBuffer,
                     drawBuffers: ["COLOR_ATTACHMENT0"],
                 })
-                module.render(derivedState);
+                module.render();
                 // reset gl state
                 glState(gl, null);
             }
@@ -178,8 +218,8 @@ export class RenderContext {
         this.pickInfo = undefined;
     }
 
-    protected async pick(x: number, y: number): Promise<number[]> {
-        const { gl, canvas, buffers, width, height } = this;
+    protected async pick(x: number, y: number) {
+        const { gl, canvas, wasm, buffers, width, height } = this;
         const { resources } = buffers;
         const r = canvas.getBoundingClientRect(); // dim in css pixels
         const cssWidth = r.width;
@@ -201,15 +241,39 @@ export class RenderContext {
 
         const pixOffs = px + py * width;
         const floats = new Float32Array(3);
-        const uints = new Uint32Array(2);
+        const uints = new Uint32Array(1);
+        const ushorts = new Uint16Array(2);
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readNormal);
         gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 4, floats, 0, 2);
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readLinearDepth);
         gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 4, floats, 2, 1);
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readInfo);
-        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 8, uints, 0, 2);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 8, uints, 0, 1);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 8 + 4, ushorts, 0, 2);
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
-        return [...floats, uints[0], /* convert pair of half floats for deviation and intensity  */];
+        const [nx, ny, depth] = floats;
+        const [objectId] = uints;
+        const [deviation16, intensity16] = ushorts;
+        const deviation = wasm.float32(deviation16);
+        const intensity = wasm.float32(intensity16);
+
+        // compute clip space x,y coords
+        const xCS = ((x + 0.5) / width) * 2 - 1;
+        const yCS = ((y + 0.5) / height) * 2 - 1;
+
+        // compute view space position and normal
+        const scale = this.isOrtho ? 1 : depth;
+        const posVS = vec3.fromValues((xCS / this.viewClipMatrix[0]) * scale, (yCS / this.viewClipMatrix[5]) * scale, -depth);
+        const nz = Math.sqrt(1 - (nx * nx + ny * ny));
+        const normalVS = vec3.fromValues(nx, ny, nz);
+
+        // convert into world space.
+        const position = vec3.transformMat4(vec3.create(), posVS, this.viewWorldMatrix);
+        const normal = vec3.transformMat3(vec3.create(), normalVS, this.viewWorldMatrixNormal);
+        vec3.normalize(normal, normal);
+
+        return { position, normal, objectId, deviation, intensity } as const;
+        // return [...floats, uints[0], /* convert pair of half floats for deviation and intensity  */];
     }
 }
 

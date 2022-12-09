@@ -12,3 +12,8 @@ declare module "*.frag" {
     const shader: string;
     export default shader;
 }
+
+declare module "*.wasm" {
+    const data: Uint8Array;
+    export default data;
+}

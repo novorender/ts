@@ -1,3 +1,4 @@
+import { glBuffer } from "./buffer";
 import { GL } from "./constants";
 
 export function glUniformsInfo(gl: WebGL2RenderingContext, program: WebGLProgram) {
@@ -50,7 +51,7 @@ export function glUniformLocations<T extends readonly string[]>(gl: WebGL2Render
 }
 
 // apply std140 layout rules (https://registry.khronos.org/OpenGL/specs/gl/glspec45.core.pdf#page=159)
-export function createUniformBufferProxy<T extends Record<string, UniformTypes>>(values: T) {
+export function createUniformsProxy<T extends Record<string, UniformTypes>>(values: T) {
     type Keys = Extract<keyof T, string>;
     const offsetsMap: Record<string, readonly number[]> = {};
     let offset = 0;
@@ -91,7 +92,7 @@ export function createUniformBufferProxy<T extends Record<string, UniformTypes>>
         f32: (value: number) => { },
     };
 
-    const dirtyRange = new DirtyRange(0, byteSize);
+    const dirtyRange = new DirtyRange(byteSize);
 
     const proxy = {
         buffer,
@@ -105,7 +106,7 @@ export function createUniformBufferProxy<T extends Record<string, UniformTypes>>
         const validate = validators[componentType];
         const offsets = offsetsMap[key];
         const begin = offsets[0] * 4;
-        const end = offsets[offsets.length - 1] * 4;
+        const end = offsets[offsets.length - 1] * 4 + 4;
         const type = values[key];
         const get =
             type == "bool" ? () => {
@@ -145,15 +146,26 @@ export function createUniformBufferProxy<T extends Record<string, UniformTypes>>
 }
 
 class DirtyRange {
-    constructor(public begin: number, public end: number) { }
+    begin: number;
+    end: number;
+
+    constructor(readonly size: number) {
+        this.begin = 0;
+        this.end = size;
+    }
 
     get isEmpty() {
         return this.begin >= this.end;
     }
 
-    reset() {
-        this.begin = Number.MAX_SAFE_INTEGER;
+    clear() {
+        this.begin = this.size;
         this.end = 0;
+    }
+
+    reset() {
+        this.begin = 0;
+        this.end = this.size;
     }
 
     expand(begin: number, end: number) {

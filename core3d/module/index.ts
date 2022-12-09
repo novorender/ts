@@ -3,18 +3,22 @@ import { RenderContext } from "../context";
 import { BackgroundModule } from "./background";
 import { GridModule } from "./grid";
 import { OctreeModule } from "./octree";
-import { TonemapdModule } from "./tonemap";
+import { TonemapModule } from "./tonemap";
 import { CubeModule } from "./cube";
+import type { UniformTypes } from "@novorender/webgl2";
 
 // constructor takes RenderState object
 // this object contains all state (geometry, textures etc), or has at least the ability to reload state on demand if e.g. webgl context is lost
 export interface RenderModule {
     withContext(context: RenderContext): RenderModuleContext | Promise<RenderModuleContext>;
+    readonly uniforms: Record<string, UniformTypes>;
 }
 
 // contains module's GPU resources
 export interface RenderModuleContext {
-    render(state: DerivedRenderState): void;
+    update(state: DerivedRenderState): void;
+    prepass?: () => void;
+    render(): void;
     contextLost(): void;
     dispose(): void;
 }
@@ -25,28 +29,28 @@ export function createDefaultModules() {
         new CubeModule(),
         new OctreeModule(),
         new GridModule(),
-        new TonemapdModule(),
+        new TonemapModule(),
     ];
 }
 
 export class RenderModuleState<T> {
-    private _prevState: T | undefined;
+    current: T | undefined;
 
-    constructor(prevState?: T) {
-        this._prevState = prevState;
+    constructor(state?: T) {
+        this.current = state;
     }
 
     hasChanged(state: T) {
-        const { _prevState } = this;
+        const { current } = this;
         let changed = false;
         // do a shallow comparison of root properties
         for (let prop in state) {
-            if (!_prevState || _prevState[prop] !== state[prop]) {
+            if (!current || current[prop] !== state[prop]) {
                 changed = true;
             }
         }
         if (changed) {
-            this._prevState = state;
+            this.current = state;
         }
         return changed;
     }

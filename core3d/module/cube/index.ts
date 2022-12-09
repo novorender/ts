@@ -1,7 +1,7 @@
 import type { DerivedRenderState, Matrices, RenderContext, RenderStateCube } from "core3d";
 import { CoordSpace } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformBufferProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, glTransformFeedback, BufferParams, glCopy } from "webgl2";
+import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, glTransformFeedback } from "webgl2";
 import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
@@ -10,13 +10,10 @@ import line_fs from "./line.frag";
 import transform_vs from "./transform.vert";
 
 export class CubeModule implements RenderModule {
-    readonly uniforms;
-    constructor() {
-        this.uniforms = createUniformBufferProxy({
-            modelViewMatrix: "mat4",
-            clipDepth: "float",
-        });
-    }
+    readonly uniforms = {
+        modelViewMatrix: "mat4",
+        clipDepth: "float",
+    } as const;
 
     withContext(context: RenderContext) {
         return new CubeModuleContext(context, this);
@@ -30,10 +27,12 @@ interface RelevantRenderState {
 
 class CubeModuleContext implements RenderModuleContext {
     private readonly state;
+    readonly uniforms;
     readonly resources;
 
     constructor(readonly context: RenderContext, readonly data: CubeModule) {
         this.state = new RenderModuleState<RelevantRenderState>();
+        this.uniforms = createUniformsProxy(data.uniforms);
         const { gl } = context;
         const vertices = createVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
         const pos = createVertices((pos) => (pos));
@@ -52,7 +51,7 @@ class CubeModuleContext implements RenderModuleContext {
         const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Cube"] });
         const program_line = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, uniformBufferBlocks: ["Camera", "Cube"] });
         const program_transform = glProgram(gl, { vertexShader: transform_vs, uniformBufferBlocks: ["Cube"], transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: data.uniforms.buffer });
+        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
 
         const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vertices });
         const ib = glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
@@ -88,16 +87,35 @@ class CubeModuleContext implements RenderModuleContext {
         this.resources = { program, program_transform, program_line, uniforms, vao, transformFeedback, vao_tri, vao_line, vb_line } as const;
     }
 
-    render(state: DerivedRenderState) {
-        const { context, resources, data } = this;
+    update(state: DerivedRenderState) {
+        const { context, resources } = this;
+        if (this.state.hasChanged(state)) {
+            const { data } = this;
+            const { values } = this.uniforms;
+            const { matrices } = state;
+            const { scale, position, clipDepth } = state.cube;
+            const m = [
+                scale, 0, 0, 0,
+                0, scale, 0, 0,
+                0, 0, scale, 0,
+                ...position, 1
+            ] as Parameters<typeof mat4.fromValues>;
+            const modelWorldMatrix = mat4.fromValues(...m);
+            const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
+            const modelViewMatrix = mat4.multiply(mat4.create(), worldViewMatrix, modelWorldMatrix);
+            values.modelViewMatrix = modelViewMatrix;
+            values.clipDepth = clipDepth;
+            context.updateUniformBuffer(resources.uniforms, this.uniforms);
+        }
+    }
+
+
+    render() {
+        const { context, resources, state } = this;
         const { program, program_line, program_transform, uniforms, vao, transformFeedback, vao_tri, vao_line, vb_line } = resources;
         const { gl, cameraUniforms } = context;
-        if (this.state.hasChanged(state)) {
-            this.updateUniforms(state);
-            context.updateUniformBuffer(resources.uniforms, data.uniforms);
-        }
 
-        if (state.cube.enabled) {
+        if (state.current?.cube.enabled) {
             // transform vertex triplets into intersection lines
             glState(gl, {
                 program: program_transform,
@@ -124,24 +142,6 @@ class CubeModuleContext implements RenderModuleContext {
             });
             glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });
         }
-    }
-
-    private updateUniforms(state: RelevantRenderState) {
-        const { data } = this;
-        const { values } = data.uniforms;
-        const { matrices } = state;
-        const { scale, position, clipDepth } = state.cube;
-        const m = [
-            scale, 0, 0, 0,
-            0, scale, 0, 0,
-            0, 0, scale, 0,
-            ...position, 1
-        ] as Parameters<typeof mat4.fromValues>;
-        const modelWorldMatrix = mat4.fromValues(...m);
-        const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
-        const modelViewMatrix = mat4.multiply(mat4.create(), worldViewMatrix, modelWorldMatrix);
-        values.modelViewMatrix = modelViewMatrix;
-        values.clipDepth = clipDepth;
     }
 
     contextLost(): void {

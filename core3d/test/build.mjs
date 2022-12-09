@@ -19,6 +19,7 @@ const buildOptions = {
     external: ["./node_modules/*"],
     outdir: "./dist",
     loader: {
+        ".wasm": "binary",
         ".glsl": "text",
         ".vert": "text",
         ".frag": "text",

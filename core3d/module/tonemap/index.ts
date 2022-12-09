@@ -1,22 +1,18 @@
 import type { DerivedRenderState, RenderContext, RenderStateCamera, RenderStateTonemapping } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformBufferProxy, glProgram, glSampler, glDraw, glUniformLocations, glState, glDelete, glBuffer } from "webgl2";
+import { createUniformsProxy, glProgram, glSampler, glDraw, glUniformLocations, glState, glDelete, glBuffer } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
-export class TonemapdModule implements RenderModule {
-    readonly uniforms;
-
-    constructor() {
-        this.uniforms = createUniformBufferProxy({
-            exposure: "float",
-            mode: "uint",
-            maxLinearDepth: "float",
-        });
-    }
+export class TonemapModule implements RenderModule {
+    readonly uniforms = {
+        exposure: "float",
+        mode: "uint",
+        maxLinearDepth: "float",
+    } as const;
 
     withContext(context: RenderContext) {
-        return new TonemapdModuleInstance(context, this);
+        return new TonemapModuleInstance(context, this);
     }
 }
 
@@ -25,41 +21,46 @@ interface RelevantRenderState {
     readonly tonemapping: RenderStateTonemapping;
 };
 
-class TonemapdModuleInstance implements RenderModuleContext {
+class TonemapModuleInstance implements RenderModuleContext {
     readonly state;
+    readonly uniforms;
     readonly textureUniformLocations;
     readonly resources;
 
-    constructor(readonly context: RenderContext, readonly data: TonemapdModule) {
+    constructor(readonly context: RenderContext, readonly data: TonemapModule) {
         const { gl } = context;
         this.state = new RenderModuleState<RelevantRenderState>();
+        this.uniforms = createUniformsProxy(data.uniforms);
         const uniformBufferBlocks = ["Tonemapping"];
         const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks });
         const sampler = glSampler(gl, { minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: data.uniforms.buffer.byteLength });
+        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniforms.buffer.byteLength });
         this.resources = { program, sampler, uniforms } as const;
-        this.textureUniformLocations = glUniformLocations(gl, program, ["color", "normal", "depth", "info"], "textures_");
+        this.textureUniformLocations = glUniformLocations(gl, program, ["color", "normal", "depth", "info", "zbuffer"], "textures_");
     }
 
-    updateUniforms(state: RelevantRenderState) {
+    update(state: DerivedRenderState) {
+        const { context } = this;
+        const { uniforms } = this.resources
         const { camera, tonemapping } = state;
-        const { values } = this.data.uniforms;
-        values.exposure = Math.pow(2, tonemapping.exposure);
-        values.mode = tonemapping.mode;
-        values.maxLinearDepth = camera.far;
-    }
-
-    render(state: DerivedRenderState) {
-        const { context, textureUniformLocations, data } = this;
-        const { program, sampler, uniforms } = this.resources
-        const { gl } = context;
-        const { camera, tonemapping } = state;
-        const { resources } = context.buffers;
 
         if (this.state.hasChanged({ camera, tonemapping })) {
-            this.updateUniforms(state);
-            context.updateUniformBuffer(uniforms, data.uniforms);
+            const { camera, tonemapping } = state;
+            const { values } = this.uniforms;
+            values.exposure = Math.pow(2, tonemapping.exposure);
+            values.mode = tonemapping.mode;
+            values.maxLinearDepth = camera.far;
+            context.updateUniformBuffer(uniforms, this.uniforms);
         }
+    }
+
+
+    render() {
+        const { context, textureUniformLocations } = this;
+        const { program, sampler, uniforms } = this.resources
+        const { gl } = context;
+        const { resources } = context.buffers;
+
         glState(gl, {
             program,
             uniformBuffers: [uniforms],
@@ -68,6 +69,7 @@ class TonemapdModuleInstance implements RenderModuleContext {
                 { kind: "TEXTURE_2D", texture: resources.normal, sampler, uniform: textureUniformLocations.normal },
                 { kind: "TEXTURE_2D", texture: resources.linearDepth, sampler, uniform: textureUniformLocations.depth },
                 { kind: "TEXTURE_2D", texture: resources.info, sampler, uniform: textureUniformLocations.info },
+                { kind: "TEXTURE_2D", texture: resources.depth, sampler, uniform: textureUniformLocations.zbuffer },
             ],
             frameBuffer: null,
             drawBuffers: ["BACK"],
