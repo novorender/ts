@@ -26,11 +26,22 @@ export class RenderContext {
     private viewWorldMatrix = mat4.create();
     private viewWorldMatrixNormal = mat3.create();
 
-    // shared mutable state
-    changed = true;
-    buffers: RenderBuffers = undefined!;
     readonly cameraUniforms: WebGLBuffer;
-    // iblUniforms: WebGLBuffer | null = null;
+    // readonly iblUniforms: WebGLBuffer | null = null;
+
+    // shared mutable state
+    changed = true; // flag to force a re-render when internal render module state has changed, e.g. on download complete.
+    buffers: RenderBuffers = undefined!; // output render buffers
+    iblTextures: { // these are set by the background module, once download is complete
+        readonly lut_ggx: WebGLTexture; // 2D lookup texture for ggx function.
+        readonly diffuse: WebGLTexture; // irradiance, mipped cubemap
+        readonly specular: WebGLTexture; // radiance, no-mip cubemap
+        readonly skybox: WebGLTexture; // high-res background panorama image cubemap.
+        readonly samplerMip: WebGLSampler; // use to read diffuse texture
+        readonly samplerSingle: WebGLSampler; // use to read the other textures
+        readonly numMipMaps: number; // # of diffuse mip map levels.
+    } | undefined;
+
 
     constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
         const gl = canvas.getContext("webgl2", options);

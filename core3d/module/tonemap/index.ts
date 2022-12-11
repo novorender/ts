@@ -36,7 +36,7 @@ class TonemapModuleInstance implements RenderModuleContext {
         const sampler = glSampler(gl, { minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniforms.buffer.byteLength });
         this.resources = { program, sampler, uniforms } as const;
-        this.textureUniformLocations = glUniformLocations(gl, program, ["color", "normal", "depth", "info", "zbuffer"], "textures_");
+        this.textureUniformLocations = glUniformLocations(gl, program, ["color", "normal", "depth", "info", "zbuffer"] as const, "textures_");
     }
 
     update(state: DerivedRenderState) {

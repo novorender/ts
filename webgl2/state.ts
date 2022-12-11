@@ -262,8 +262,8 @@ export type UniformBufferBinding = UniformBufferBindingRange | WebGLBuffer | nul
 
 export interface TextureBinding {
     readonly kind: "TEXTURE_2D" | "TEXTURE_3D" | "TEXTURE_2D_ARRAY" | "TEXTURE_CUBE_MAP";
-    readonly texture: WebGLTexture;
-    readonly sampler: WebGLSampler;
+    readonly texture: WebGLTexture | null;
+    readonly sampler: WebGLSampler | null;
     readonly uniform?: WebGLUniformLocation | null;
 }
 

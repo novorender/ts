@@ -10,24 +10,22 @@ layout(std140) uniform Background {
     int mipCount;
 } background;
 
-uniform samplerCube textures_background;
-uniform samplerCube textures_radiance;
+uniform samplerCube textures_skybox;
+uniform samplerCube textures_diffuse;
 
 struct Varyings {
     vec3 dir;
 };
 in Varyings varyings;
 
-layout(location = 0) out vec4 fragColor;
+layout(location = 0) out vec4 color;
 
 void main() {
-    vec3 color;
+    vec3 rgb;
     if(background.envBlurNormalized == 0.) {
-        color = texture(textures_background, normalize(varyings.dir)).rgb;
+        rgb = texture(textures_skybox, normalize(varyings.dir)).rgb;
     } else {
-        color = textureLod(textures_radiance, normalize(varyings.dir), background.envBlurNormalized * float(background.mipCount - 1)).rgb;
+        rgb = textureLod(textures_diffuse, normalize(varyings.dir), background.envBlurNormalized * float(background.mipCount - 1)).rgb;
     }
-//    color = vec3(0, 1, 0);
-    // color = (normalize(vDir) + 1.0) / 2.0;
-    fragColor = vec4(color, 1);
+    color = vec4(rgb, 1);
 }

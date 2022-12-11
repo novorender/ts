@@ -3,7 +3,7 @@ import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
 import { createSceneRootNode } from "core3d/scene";
 import { NodeState, OctreeNode } from "./node";
 import { Downloader } from "./download";
-import { createUniformsProxy, glBuffer, glDelete, glProgram, glState, glUpdateBuffer } from "webgl2";
+import { createUniformsProxy, glBuffer, glDelete, glProgram, glState, glUniformLocations, glUpdateBuffer } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import vertexShaderDebug from "./shader_debug.vert";
@@ -35,6 +35,7 @@ class OctreeModuleContext implements RenderModuleContext {
     readonly state;
     readonly uniforms;
     readonly resources;
+    readonly textureUniformLocations;
     readonly downloader = new Downloader();
     url: string | undefined;
     rootNode: OctreeNode | undefined;
@@ -52,6 +53,7 @@ class OctreeModuleContext implements RenderModuleContext {
         const programDebug = glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
         const octreeUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniforms.buffer.byteLength });
         const materialsUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: 256 * 4 });
+        this.textureUniformLocations = glUniformLocations(gl, program, ["diffuse", "specular"] as const, "texture_ibl_");
         this.resources = { program, programZ, programDebug, octreeUniforms, materialsUniforms } as const;
     }
 
@@ -176,13 +178,22 @@ class OctreeModuleContext implements RenderModuleContext {
         const { resources, renderContext, rootNode } = this;
         const { usePrepass } = renderContext;
         const { program, programDebug, materialsUniforms } = resources;
-        const { gl, cameraUniforms } = renderContext;
+        const { gl, cameraUniforms, iblTextures } = renderContext;
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
+            const { textureUniformLocations } = this;
+            const samplerSingle = iblTextures?.samplerSingle ?? null;
+            const samplerMip = iblTextures?.samplerMip ?? null;
+            const diffuse = iblTextures?.diffuse ?? null;
+            const specular = iblTextures?.specular ?? null;
             glState(gl, {
                 program: program,
                 depthTest: true,
                 depthFunc: usePrepass ? "LEQUAL" : "LESS",
+                textures: [
+                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerSingle, uniform: textureUniformLocations.specular },
+                    { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerMip, uniform: textureUniformLocations.diffuse },
+                ],
                 drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
             });
             for (const node of nodes) {

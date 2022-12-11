@@ -12,8 +12,8 @@ export interface Mesh {
 
 export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry) {
     for (const subMesh of geometry.subMeshes) {
-        if (subMesh.materialType == MaterialType.transparent)
-            continue;
+        // if (subMesh.materialType == MaterialType.transparent)
+        //     continue;
         const { positionBuffer, vertexBuffer, indices, drawRanges, materialType } = subMesh;
         const pos = positionBuffer ? glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: positionBuffer }) : null;
         const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vertexBuffer });

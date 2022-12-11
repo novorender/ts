@@ -131,7 +131,7 @@ function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute) {
     return attribNames;
 }
 
-export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection, range: Range, predicate?: (objectId: number) => boolean) {
+export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection, range: Range, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean) {
     // const { subMeshProjection } = schema;
     const [begin, end] = range;
     let primitives = 0;
@@ -148,7 +148,9 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
             const attributes = subMeshProjection.attributes[i];
             const primitiveType = subMeshProjection.primitiveType[i];
             const [pos, ...rest] = getVertexAttribNames(attributes);
-            const numBytesPerVertex = computeVertexOffsets([pos]).stride + computeVertexOffsets(rest).stride;
+            const numBytesPerVertex = separatePositionBuffer ?
+                computeVertexOffsets([pos]).stride + computeVertexOffsets(rest).stride :
+                computeVertexOffsets([pos, ...rest]).stride;
             primitives += computePrimitiveCount(primitiveType, indices) ?? 0;
             totalNumIndices += indices;
             totalNumVertices += vertices;
@@ -161,7 +163,7 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
     return { primitives, gpuBytes } as const;
 }
 
-export function getChildren(parentId: string, schema: Schema, predicate?: (objectId: number) => boolean): NodeData[] {
+export function getChildren(parentId: string, schema: Schema, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean): NodeData[] {
     const { childInfo } = schema;
     var children: NodeData[] = [];
     const parentPrimitiveCounts: number[] = [];
@@ -204,7 +206,7 @@ export function getChildren(parentId: string, schema: Schema, predicate?: (objec
         const subMeshRange = getRange(childInfo.subMeshes, i);
 
         const parentPrimitives = parentPrimitiveCounts[i];
-        const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshRange, predicate);
+        const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshRange, separatePositionBuffer, predicate);
         const primitivesDelta = primitives - (parentPrimitives ?? 0);
         console.assert(primitivesDelta > 0);
         children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
@@ -385,7 +387,7 @@ export function parseNode(id: string, separatePositionBuffer: boolean, version: 
     // const begin = performance.now();
     const r = new BufferReader(buffer);
     var schema = readSchema(r);
-    const childInfos = getChildren(id, schema);
+    const childInfos = getChildren(id, schema, separatePositionBuffer);
     const geometry = getGeometry(schema, separatePositionBuffer);
     // const end = performance.now();
     // console.log((end - begin));

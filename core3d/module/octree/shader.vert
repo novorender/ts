@@ -15,7 +15,9 @@ layout(std140) uniform Node {
 } node;
 
 out struct {
-    vec3 normal;
+    vec3 positionVS; // view space
+    vec3 normalWS; // world space
+    vec3 normalVS; // view space
     float linearDepth;
 #ifdef IOS_WORKAROUND
     vec4 color;
@@ -44,11 +46,13 @@ const uint objectId = uint(0);
 void main() {
     vec4 posVS = node.modelViewMatrix * position;
     gl_Position = camera.viewClipMatrix * posVS;
-    varyings.normal = normal;
+    varyings.positionVS = posVS.xyz;
+    varyings.normalWS = normal;
+    varyings.normalVS = camera.worldViewMatrixNormal * normal;
     varyings.linearDepth = -posVS.z;
     uint rgba = materials.rgba[material / 4U][material % 4U];
     vec4 unpack = vec4(float((rgba >> 0) & 0xffU), float((rgba >> 8) & 0xffU), float((rgba >> 16) & 0xffU), float((rgba >> 24) & 0xffU));
-#ifdef IOS_WORKAROUND
+#if defined(IOS_WORKAROUND)
     varyings.color = unpack / 255.0;
     varyings.objectId = vec2(objectId & 0xffffU, objectId >> 16U) + 0.5;
 #else

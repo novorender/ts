@@ -26,15 +26,16 @@ export async function run(canvas: HTMLCanvasElement) {
     const controller = new OrbitController({ kind: "orbit" }, canvas);
     let state = defaultRenderState();
     let prevState = state;
-    // const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
-    const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    // const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
+    const backgroundUrl = new URL("/assets/env/lake/", scriptUrl).toString();
     const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
     const scene = await downloadScene(sceneUrl);
 
     state = modifyRenderState(state, {
         scene,
-        background: { url: "https://api.novorender.com/assets/env/lake/", blur: 0.25 },
+        background: { url: backgroundUrl, blur: 0.25 },
         tonemapping: { mode: TonemappingMode.color },
         camera: { near: 1, far: 1000 },
         // grid: { enabled: true, origin: scene.config.boundingSphere.center },
@@ -101,7 +102,7 @@ export async function run(canvas: HTMLCanvasElement) {
                     // console.log("render");
                 }
             }
-            animId = requestAnimationFrame(render);
+            requestAnimationFrame(render);
         }
         animId = requestAnimationFrame(render);
         emulateLostContext(context.gl, canvas);
