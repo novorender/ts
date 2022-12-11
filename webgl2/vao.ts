@@ -20,8 +20,10 @@ export function glVertexArray(gl: WebGL2RenderingContext, params: VertexArrayPar
                 gl.vertexAttribPointer(attribIndex, componentCount, gl[componentType], normalized, stride, offset);
             }
             gl.vertexAttribDivisor(attribIndex, divisor);
-            attribIndex++;
+        } else {
+            gl.disableVertexAttribArray(attribIndex);
         }
+        attribIndex++;
     };
     if (params.indices) {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, params.indices);

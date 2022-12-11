@@ -31,9 +31,15 @@ flat out struct {
 #endif
 
 layout(location = 0) in vec4 position;
+#ifndef POS_ONLY
 layout(location = 1) in vec3 normal;
 layout(location = 2) in uint material;
 layout(location = 3) in uint objectId;
+#else
+const vec3 normal = vec3(0);
+const uint material = uint(0);
+const uint objectId = uint(0);
+#endif
 
 void main() {
     vec4 posVS = node.modelViewMatrix * position;

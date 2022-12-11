@@ -73,8 +73,7 @@ export class RenderContext {
         this.deletePick();
     }
 
-    // TODO: split position attribute into separate buffer
-    // TODO: test perf difference (on android especially). [remember to test later when fragment shader is heavier!]
+    // use a pre-pass to fill in z-buffer for improved fill rate at the expense of triangle rate (useful when doing heavy shading, but unclear how efficient this is on tiled GPUs.)
     readonly usePrepass = true;
 
     get width() {
@@ -241,19 +240,17 @@ export class RenderContext {
 
         const pixOffs = px + py * width;
         const floats = new Float32Array(3);
-        const uints = new Uint32Array(1);
-        const ushorts = new Uint16Array(2);
+        const uints = new Uint32Array(2);
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readNormal);
         gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 4, floats, 0, 2);
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readLinearDepth);
         gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 4, floats, 2, 1);
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readInfo);
-        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 8, uints, 0, 1);
-        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 8 + 4, ushorts, 0, 2);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 8, uints, 0, 2);
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
         const [nx, ny, depth] = floats;
         const [objectId] = uints;
-        const [deviation16, intensity16] = ushorts;
+        const [deviation16, intensity16] = new Uint16Array(uints.buffer, 4);
         const deviation = wasm.float32(deviation16);
         const intensity = wasm.float32(intensity16);
 
@@ -273,7 +270,6 @@ export class RenderContext {
         vec3.normalize(normal, normal);
 
         return { position, normal, objectId, deviation, intensity } as const;
-        // return [...floats, uints[0], /* convert pair of half floats for deviation and intensity  */];
     }
 }
 

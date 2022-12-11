@@ -37,8 +37,7 @@ export async function run(canvas: HTMLCanvasElement) {
         background: { url: "https://api.novorender.com/assets/env/lake/", blur: 0.25 },
         tonemapping: { mode: TonemappingMode.color },
         camera: { near: 1, far: 1000 },
-        grid: { enabled: true, origin: scene.config.boundingSphere.center },
-        // grid: { enabled: true },
+        // grid: { enabled: true, origin: scene.config.boundingSphere.center },
         // cube: { enabled: true, clipDepth: 10 },
     });
 

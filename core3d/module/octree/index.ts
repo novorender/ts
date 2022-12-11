@@ -48,10 +48,11 @@ class OctreeModuleContext implements RenderModuleContext {
         const flags = ["IOS_WORKAROUND"];
         const uniformBufferBlocks = ["Camera", "Materials", "Node"];
         const program = glProgram(gl, { vertexShader, fragmentShader, flags, uniformBufferBlocks });
+        const programZ = glProgram(gl, { vertexShader, fragmentShader, flags: [...flags, "POS_ONLY"], uniformBufferBlocks });
         const programDebug = glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
         const octreeUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniforms.buffer.byteLength });
         const materialsUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: 256 * 4 });
-        this.resources = { program, programDebug, octreeUniforms, materialsUniforms } as const;
+        this.resources = { program, programZ, programDebug, octreeUniforms, materialsUniforms } as const;
     }
 
     update(state: DerivedRenderState) {
@@ -102,7 +103,7 @@ class OctreeModuleContext implements RenderModuleContext {
 
             // dispose nodes that exceed limits
             const maxGPUBytes = 1_000_000_000;
-            const maxTriangles = 5_000_000;
+            const maxTriangles = 2_000_000;
             let gpuBytes = 0;
             let triangles = 0; // # rendered triangles
             let exceeded = false;
@@ -156,13 +157,13 @@ class OctreeModuleContext implements RenderModuleContext {
 
     prepass() {
         const { resources, renderContext, rootNode } = this;
-        const { program, materialsUniforms } = resources;
+        const { programZ, materialsUniforms } = resources;
         const { gl, cameraUniforms } = renderContext;
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
 
             glState(gl, {
-                program: program,
+                program: programZ,
                 depthTest: true,
             });
             for (const node of nodes) {

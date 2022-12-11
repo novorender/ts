@@ -227,7 +227,7 @@ export class OctreeNode {
                 const blendEnable = isTransparent;
                 glState(gl, {
                     uniformBuffers: [...uniformBuffers, uniforms],
-                    vertexArrayObject: mesh.vao,
+                    vertexArrayObject: prepass ? mesh.vaoPosOnly : mesh.vao,
                     cullEnable: materialType == MaterialType.opaque,
                     depthWriteMask: !isTransparent && writeZ,
                     blendEnable,
@@ -286,7 +286,7 @@ export class OctreeNode {
             const buffer = await download.result;
             if (buffer) {
                 this.download = undefined;
-                const { childInfos, geometry } = parseNode(this.id, version, buffer);
+                const { childInfos, geometry } = parseNode(this.id, true, version, buffer);
                 for (const data of childInfos) {
                     const child = new OctreeNode(context, data);
                     children.push(child);

@@ -44,15 +44,14 @@ export interface SubMesh {
     readonly attributes: OptionalVertexAttribute;
     // either index range (if index buffer is defined) for use with drawElements(), or vertex range for use with drawArray()
     readonly drawRanges: MeshDrawRange[];
-    readonly vertexBuffer: ArrayBuffer; // Interleaved with all attributes (including childIndex, objectId and materialIndex)
+    readonly positionBuffer: ArrayBuffer | undefined; // Buffer for positions only (for more efficient z-buffer pre-pass)
+    readonly vertexBuffer: ArrayBuffer; // Interleaved with all other attributes (including childIndex, objectId and materialIndex)
     readonly indices: Uint16Array | Uint32Array | number; // Index buffer, or # vertices of none
 }
 
 // node geometry and textures
 export interface NodeGeometry {
     readonly subMeshes: readonly SubMesh[];
-    // readonly vertexBuffer: ArrayBuffer; // Interleaved with all attributes (including childIndex, objectId and materialIndex)
-    // readonly indices: Uint16Array | Uint32Array | number; // Index buffer, or # vertices of none
     // TODO: include optional texture buffer and creation params, such as with/height and pixel format etc.
 }
 
@@ -105,7 +104,7 @@ function computeVertexOffsets(attribs: readonly VertexAttribNames[]) {
     let offsets: any = {};
     function alignOffset(alignment: number) {
         const padding = alignment - 1 - (offset + alignment - 1) % alignment;
-        offset += padding; // pad/align offset such that we can use typed arrays to read/write into it on the CPU (GPU doesn't care).
+        offset += padding; // pad offset to be memory aligned.
     }
     let maxAlign = 1;
     for (const attrib of attribs) {
@@ -148,11 +147,12 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
             const textureBytes = subMeshProjection.numTextureBytes[i];
             const attributes = subMeshProjection.attributes[i];
             const primitiveType = subMeshProjection.primitiveType[i];
-            const vertexStride = computeVertexOffsets(getVertexAttribNames(attributes)).stride;
+            const [pos, ...rest] = getVertexAttribNames(attributes);
+            const numBytesPerVertex = computeVertexOffsets([pos]).stride + computeVertexOffsets(rest).stride;
             primitives += computePrimitiveCount(primitiveType, indices) ?? 0;
             totalNumIndices += indices;
             totalNumVertices += vertices;
-            totalNumVertexBytes += vertices * vertexStride;
+            totalNumVertexBytes += vertices * numBytesPerVertex;
             totalTextureBytes += textureBytes;
         }
     }
@@ -231,33 +231,34 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
     }
 }
 
-// These are good candidates for wasm implementation
 type TypedArray = Uint8Array | Uint16Array | Uint32Array | Int8Array | Int16Array | Int32Array | Float32Array | Float64Array;
+
+// Candidates for wasm implementation?
 function copyToInterleavedArray<T extends TypedArray>(dst: T, src: T, byteOffset: number, byteStride: number, begin: number, end: number) {
     const offset = byteOffset / dst.BYTES_PER_ELEMENT;
     const stride = byteStride / dst.BYTES_PER_ELEMENT;
     console.assert(Math.round(offset) == offset);
     console.assert(Math.round(stride) == stride);
-    let j = offset; // + begin * stride;
+    let j = offset;
     for (let i = begin; i < end; i++) {
         dst[j] = src[i];
         j += stride;
     }
 }
+
 function fillToInterleavedArray<T extends TypedArray>(dst: T, src: number, byteOffset: number, byteStride: number, begin: number, end: number) {
     const offset = byteOffset / dst.BYTES_PER_ELEMENT;
     const stride = byteStride / dst.BYTES_PER_ELEMENT;
     console.assert(Math.round(offset) == offset);
     console.assert(Math.round(stride) == stride);
-    let j = offset; // + begin * stride;
+    let j = offset;
     for (let i = begin; i < end; i++) {
         dst[j] = src;
         j += stride;
     }
 }
 
-
-function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean): NodeGeometry {
+function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean): NodeGeometry {
     const { vertex, vertexIndex } = schema;
 
     const optionalAttributes: OptionalVertexAttribute =
@@ -268,8 +269,10 @@ function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean):
         (vertex.deviation ? OptionalVertexAttribute.deviation : 0);
 
     const filteredSubMeshes = [...getSubMeshes(schema, predicate)];
-    // const numVertices = filteredSubMeshes.map(sm => (sm.vertexRange[1] - sm.vertexRange[0])).reduce((a, b) => (a + b));
-    const attribNames = getVertexAttribNames(optionalAttributes);
+    const allAttribNames = getVertexAttribNames(optionalAttributes);
+    const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're putting them in a separate buffer
+    const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
+    const positionStride = computeVertexOffsets([posName]).stride;
     const attribOffsets = computeVertexOffsets(attribNames);
     const vertexStride = attribOffsets.stride;
 
@@ -284,7 +287,6 @@ function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean):
         readonly subMeshIndices: number[];
     };
     const groups = new Map<string, Group>();
-
     for (let i = 0; i < filteredSubMeshes.length; i++) {
         const { materialType, primitiveType, attributes, childIndex } = filteredSubMeshes[i];
         const key = `${materialType}_${primitiveType}_${attributes}_${childIndex}`;
@@ -296,8 +298,8 @@ function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean):
         group.subMeshIndices.push(i);
     }
 
+    // create drawable meshes
     for (const { materialType, primitiveType, attributes, subMeshIndices } of groups.values()) {
-        // const materialMeshes = filteredSubMeshes.filter(sm => sm.materialType == materialType);
         if (subMeshIndices.length == 0)
             continue;
         const groupMeshes = subMeshIndices.map(i => filteredSubMeshes[i]);
@@ -306,6 +308,7 @@ function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean):
         const numVertices = groupMeshes.map(sm => (sm.vertexRange[1] - sm.vertexRange[0])).reduce((a, b) => (a + b));
         const numIndices = groupMeshes.map(sm => (sm.indexRange[1] - sm.indexRange[0])).reduce((a, b) => (a + b));
         const vertexBuffer = new ArrayBuffer(numVertices * vertexStride);
+        const positionBuffer = separatePositionBuffer ? new ArrayBuffer(numVertices * positionStride) : undefined;
         let indexBuffer: Uint32Array | Uint16Array | undefined;
         if (vertexIndex) {
             indexBuffer = new (numVertices < 0xffff ? Uint16Array : Uint32Array)(numIndices);
@@ -347,6 +350,14 @@ function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean):
                     }
                 }
 
+                if (positionBuffer) {
+                    // create seaparate positions buffer
+                    const i16 = new Int16Array(positionBuffer, vertexOffset * positionStride);
+                    copyToInterleavedArray(i16, vertex.position.x, 0, positionStride, beginVtx, endVtx);
+                    copyToInterleavedArray(i16, vertex.position.y, 2, positionStride, beginVtx, endVtx);
+                    copyToInterleavedArray(i16, vertex.position.z, 4, positionStride, beginVtx, endVtx);
+                }
+
                 // create index buffer (if any)
                 if (vertexIndex && indexBuffer) {
                     for (let i = beginIdx; i < endIdx; i++) {
@@ -360,23 +371,22 @@ function getGeometry(schema: Schema, predicate?: (objectId: number) => boolean):
             const byteOffset = drawRangeBegin * (indexBuffer ? indexBuffer.BYTES_PER_ELEMENT : vertexStride);
             const count = drawRangeEnd - drawRangeBegin;
             drawRanges.push({ childIndex, byteOffset, count });
-
         }
         console.assert(vertexOffset == numVertices);
         console.assert(idx == numIndices);
         var indices = indexBuffer ?? numVertices;
-        subMeshes.push({ materialType, primitiveType: primitiveTypeStrings[primitiveType], attributes, vertexBuffer, indices, drawRanges });
+        subMeshes.push({ materialType, primitiveType: primitiveTypeStrings[primitiveType], attributes, positionBuffer, vertexBuffer, indices, drawRanges });
     }
     return { subMeshes } as const;
 }
 
-export function parseNode(id: string, version: string, buffer: ArrayBuffer) {
+export function parseNode(id: string, separatePositionBuffer: boolean, version: string, buffer: ArrayBuffer) {
     console.assert(version == "1.7");
     // const begin = performance.now();
     const r = new BufferReader(buffer);
     var schema = readSchema(r);
     const childInfos = getChildren(id, schema);
-    const geometry = getGeometry(schema);
+    const geometry = getGeometry(schema, separatePositionBuffer);
     // const end = performance.now();
     // console.log((end - begin));
     return { childInfos, geometry } as const;

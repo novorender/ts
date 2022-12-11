@@ -6,8 +6,8 @@ export function glProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
     if (glExtensions(gl).multiDraw) {
         extensions.push("#extension GL_ANGLE_multi_draw : require\n");
     }
-    const header = `#version 300 es\n${extensions.join()}precision highp float;\nprecision highp int;\nprecision highp usampler2D;\n`;
-    const defines = flags?.map(flag => `#define ${flag}\n`)?.join() ?? "";
+    const header = `#version 300 es\n${extensions.join("")}precision highp float;\nprecision highp int;\nprecision highp usampler2D;\n`;
+    const defines = flags?.map(flag => `#define ${flag}\n`)?.join("") ?? "";
     const vs = header + defines + params.vertexShader;
     const fs = header + defines + (params.fragmentShader ?? "void main() {}");
     const vertexShader = compileShader(gl, "VERTEX_SHADER", vs);
