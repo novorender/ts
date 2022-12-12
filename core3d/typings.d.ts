@@ -17,3 +17,8 @@ declare module "*.wasm" {
     const data: Uint8Array;
     export default data;
 }
+
+declare module "*.worker.js" {
+    const createWorker: () => Worker;
+    export default createWorker;
+}

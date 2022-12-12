@@ -19,6 +19,7 @@
     "homepage": "https://github.com/novorender/ts#readme",
     "devDependencies": {
         "esbuild": "^0.15.14",
+        "esbuild-plugin-inline-worker": "^0.1.1",
         "ip": "^1.1.8",
         "typescript": "^4.9.3"
     },

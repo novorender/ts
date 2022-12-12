@@ -11,6 +11,7 @@ import fragmentShaderDebug from "./shader_debug.frag";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
 import { mat4 } from "gl-matrix";
+import { NodeLoader } from "./loader";
 
 export class OctreeModule implements RenderModule {
     readonly uniforms = {
@@ -24,6 +25,8 @@ export class OctreeModule implements RenderModule {
         // materials
         // elevation colors
     } as const;
+
+    readonly loader = new NodeLoader();
 
     withContext(context: RenderContext) {
         return new OctreeModuleContext(context, this);
@@ -41,7 +44,8 @@ class OctreeModuleContext implements RenderModuleContext {
     readonly sceneUniforms;
     readonly resources;
     readonly textureUniformLocations;
-    readonly downloader = new Downloader();
+    readonly loader: NodeLoader;
+    readonly downloader = new Downloader(new URL((document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url));
     readonly debug = false;
     // Local space is a variant of world space that is occasionally offset to keep it close to camera. This helps avoid large coordinate values and float32 rounding errors in shaders.
     localSpaceChanged = false;
@@ -55,6 +59,7 @@ class OctreeModuleContext implements RenderModuleContext {
     constructor(readonly renderContext: RenderContext, readonly data: OctreeModule) {
         this.state = new RenderModuleState<RelevantRenderState>();
         this.sceneUniforms = createUniformsProxy(data.uniforms);
+        this.loader = data.loader;
         const { gl } = renderContext;
         const flags = ["IOS_WORKAROUND"];
         const uniformBufferBlocks = ["Camera", "Materials", "Scene", "Node"];
@@ -126,6 +131,11 @@ class OctreeModuleContext implements RenderModuleContext {
                     gpuBytes += node.data.gpuBytes;
                     primitives += node.renderedPrimitives;
                 }
+                if (node.state == NodeState.requestDownload) {
+                    // include projected resources in the budget
+                    primitives += node.data.primitivesDelta;
+                    gpuBytes += node.data.gpuBytes;
+                }
             }
 
             // split nodes based on camera orientation
@@ -134,12 +144,9 @@ class OctreeModuleContext implements RenderModuleContext {
                     if (node.state == NodeState.collapsed) {
                         if (primitives + node.data.primitivesDelta <= maxPrimitives && gpuBytes + node.data.gpuBytes <= maxGPUBytes) {
                             node.state = NodeState.requestDownload;
+                            primitives += node.data.primitivesDelta;
+                            gpuBytes += node.data.gpuBytes;
                         }
-                    }
-                    if (node.state == NodeState.requestDownload) {
-                        // include projected resources in the budget
-                        primitives += node.data.primitivesDelta;
-                        gpuBytes += node.data.gpuBytes;
                     }
                 }
             }
@@ -304,8 +311,10 @@ class OctreeModuleContext implements RenderModuleContext {
 
 
     contextLost() {
-        this.downloader.abort();
-        this.rootNode?.dispose(); // TODO: consider retaining submesh js data
+        const { loader, downloader, rootNode } = this;
+        downloader.abort();
+        loader.abortAll();
+        rootNode?.dispose(); // TODO: consider retaining submesh js data
     }
 
     dispose() {

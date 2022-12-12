@@ -23,7 +23,7 @@ export class Downloader {
     private abortController = new AbortController();
     public static createImageData?: (blob: Blob) => Promise<ImageData>;
 
-    constructor(public baseUrl: URL = new URL((document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url)) {
+    constructor(public baseUrl?: URL) {
     }
 
     abort() {

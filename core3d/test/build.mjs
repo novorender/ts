@@ -1,4 +1,5 @@
 import { serve, buildSync } from "esbuild";
+import inlineWorkerPlugin from 'esbuild-plugin-inline-worker';
 import ip from "ip";
 
 const serveOptions = {
@@ -24,6 +25,7 @@ const buildOptions = {
         ".vert": "text",
         ".frag": "text",
     },
+    plugins: [inlineWorkerPlugin()],
 }
 
 // buildSync(buildOptions);

@@ -5,6 +5,7 @@ import { AbortableDownload, Downloader } from "./download";
 import { createMeshes, deleteMesh, Mesh, meshPrimitiveCount } from "./mesh";
 import { NodeData, parseNode } from "./parser";
 import { MaterialType } from "./schema";
+import { NodeLoader } from "./loader";
 
 export const enum Visibility {
     undefined,
@@ -22,6 +23,7 @@ export const enum NodeState {
 
 export interface OctreeContext {
     readonly renderContext: RenderContext;
+    readonly loader: NodeLoader;
     readonly downloader: Downloader;
     readonly version: string;
     readonly projectedSizeSplitThreshold: number;
@@ -43,7 +45,7 @@ export class OctreeNode {
     private readonly center4: ReadonlyVec4;
     private readonly corners: ReadonlyVec4[];
     state = NodeState.collapsed;
-    download: AbortableDownload | undefined;
+    download: { abort(): void } | undefined;
     visibility = Visibility.undefined;
     viewDistance = 0;
     projectedSize = 0;
@@ -238,15 +240,12 @@ export class OctreeNode {
     async downloadGeometry() {
         try {
             const { context, children, meshes, data } = this;
-            const { renderContext, downloader, version } = context;
+            const { renderContext, loader, version } = context;
             const { gl } = renderContext;
-            const download = downloader.downloadArrayBufferAbortable(this.path, new ArrayBuffer(data.byteSize));
-            this.download = download;
             this.state = NodeState.downloading;
-            const buffer = await download.result;
-            if (buffer) {
-                this.download = undefined;
-                const { childInfos, geometry } = parseNode(this.id, false, version, buffer);
+            const payload = await loader.loadNode(this, version); // do actual downloading and parsing in worker
+            if (payload) {
+                const { childInfos, geometry } = payload;
                 for (const data of childInfos) {
                     const child = new OctreeNode(context, data);
                     children.push(child);
@@ -255,7 +254,6 @@ export class OctreeNode {
                 meshes.push(...createMeshes(gl, geometry));
                 this.uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniformsData.buffer.byteLength });
                 glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
-
                 renderContext.changed = true;
             }
         } catch (error: any) {
