@@ -9,9 +9,15 @@ layout(std140) uniform Materials {
     uvec4 rgba[64];
 } materials;
 
+layout(std140) uniform Scene {
+    mat4 localViewMatrix;
+} scene;
+
 layout(std140) uniform Node {
-    mat4 modelViewMatrix;
+    mat4 modelLocalMatrix;
     vec4 debugColor;
+    vec3 min;
+    vec3 max;
 } node;
 
 struct VaryingsFlat {
@@ -26,12 +32,14 @@ const vec3 corners[8] = vec3[8](vec3(-1, -1, -1), vec3(-1, 1, 1), vec3(1, -1, 1)
 
 void main() {
     vec3 pos = corners[gl_VertexID / 12];
+    pos = (pos + 1.) / 2.;
+    pos = mix(node.min, node.max, pos);
     int idx = (gl_VertexID / 12) < 4 ? cwIndices[gl_VertexID % 12] : ccwIndices[gl_VertexID % 12];
     varyingsFlat.color = node.debugColor;
     if(idx > 0) {
         pos[idx - 1] *= size;
         varyingsFlat.color.rgb *= 0.75;
     }
-    vec4 posVS = node.modelViewMatrix * vec4(pos, 1);
+    vec4 posVS = scene.localViewMatrix * node.modelLocalMatrix * vec4(pos, 1);
     gl_Position = camera.viewClipMatrix * posVS;
 }

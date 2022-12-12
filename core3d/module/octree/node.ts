@@ -1,8 +1,8 @@
-import { mat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
+import { mat4, ReadonlyMat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
 import { createUniformsProxy, glDraw, DrawParams, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glState, glBuffer, glUpdateBuffer } from "webgl2";
 import { CoordSpace, DerivedRenderState, RenderContext } from "core3d";
 import { AbortableDownload, Downloader } from "./download";
-import { createMeshes, Mesh } from "./mesh";
+import { createMeshes, deleteMesh, Mesh, meshPrimitiveCount } from "./mesh";
 import { NodeData, parseNode } from "./parser";
 import { MaterialType } from "./schema";
 
@@ -25,6 +25,10 @@ export interface OctreeContext {
     readonly downloader: Downloader;
     readonly version: string;
     readonly projectedSizeSplitThreshold: number;
+    readonly debug: boolean;
+    readonly localSpaceChanged: boolean;
+    readonly localWorldMatrix: ReadonlyMat4;
+    readonly worldLocalMatrix: ReadonlyMat4;
 }
 
 export class OctreeNode {
@@ -41,6 +45,7 @@ export class OctreeNode {
     state = NodeState.collapsed;
     download: AbortableDownload | undefined;
     visibility = Visibility.undefined;
+    viewDistance = 0;
     projectedSize = 0;
 
     constructor(readonly context: OctreeContext, readonly data: NodeData) {
@@ -67,9 +72,17 @@ export class OctreeNode {
         const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         this.size = Math.pow(2, data.tolerance) * toleranceScale;
         this.uniformsData = createUniformsProxy({
-            modelViewMatrix: "mat4",
+            modelLocalMatrix: "mat4",
             debugColor: "vec4",
+            min: "vec3",
+            max: "vec3",
         });
+
+
+        const { offset, scale } = data;
+        const modelWorldMatrix = mat4.fromTranslation(mat4.create(), offset);
+        mat4.scale(modelWorldMatrix, modelWorldMatrix, vec3.fromValues(scale, scale, scale));
+        this.uniformsData.values.modelLocalMatrix = modelWorldMatrix;
     }
 
     dispose() {
@@ -77,7 +90,7 @@ export class OctreeNode {
         const { renderContext } = context;
         const { gl } = renderContext;
         for (const mesh of meshes) {
-            gl.deleteVertexArray(mesh.vao);
+            deleteMesh(gl, mesh);
         }
         if (uniforms) {
             gl.deleteBuffer(uniforms);
@@ -161,21 +174,17 @@ export class OctreeNode {
         return visibility;
     }
 
-    get renderedTriangles() {
-        let numTriangles = 0;
+    get renderedPrimitives() {
+        let numPrimitives = 0;
         if (this.visibility != Visibility.none) {
             const { renderedChildMask } = this;
             if (renderedChildMask) {
                 for (const mesh of this.meshes) {
-                    const renderedRanges = mesh.drawRanges.filter(r => ((1 << r.childIndex) & renderedChildMask) != 0);
-                    const primitiveType = mesh.drawParams.mode ?? "TRIANGLES";
-                    for (const drawRange of renderedRanges) {
-                        numTriangles += calcNumTriangles(drawRange.count, primitiveType);
-                    }
+                    numPrimitives += meshPrimitiveCount(mesh, renderedChildMask);
                 }
             }
         }
-        return numTriangles;
+        return numPrimitives;
     }
 
     update(state: DerivedRenderState, parentVisibility: Visibility = Visibility.partial) {
@@ -183,117 +192,70 @@ export class OctreeNode {
         this.visibility = (parentVisibility == Visibility.partial) ? this.computeVisibility(state) : parentVisibility;
 
         // update projected size
-        const { center4, visibility, radius, uniforms, data, uniformsData } = this;
+        const { context, center4, visibility, radius, uniforms, data, uniformsData, children } = this;
         const { camera, matrices, viewFrustum } = state;
         const imagePlane = viewFrustum.image;
         const projection = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
+        const viewDistance = this.viewDistance = vec4.dot(imagePlane, center4);
         if (visibility <= Visibility.none) {
             this.projectedSize = 0;
         } else if (camera.kind == "pinhole") {
-            const distance = Math.max(0.001, vec4.dot(imagePlane, center4) - radius); // we subtract radius to get the projection size at the extremity nearest the camera
+            const distance = Math.max(0.001, viewDistance - radius); // we subtract radius to get the projection size at the extremity nearest the camera
             this.projectedSize = (this.size * projection[5]) / (-distance * projection[11]);
         } else {
             this.projectedSize = this.size * projection[5];
         }
 
-        // update uniforms data        
-        const { offset, scale } = data;
-        const { values } = this.uniformsData;
-        const worldViewMatrix = state.matrices.getMatrix(CoordSpace.World, CoordSpace.View);
-        const modelWorldMatrix = mat4.fromTranslation(mat4.create(), offset);
-        mat4.scale(modelWorldMatrix, modelWorldMatrix, vec3.fromValues(scale, scale, scale));
-        const modelViewMatrix = mat4.mul(mat4.create(), worldViewMatrix, modelWorldMatrix);
-        values.modelViewMatrix = modelViewMatrix;
-        if (uniforms) {
-            glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniforms });
-        }
-    }
-
-    render(uniformBuffers: WebGLBuffer[], prepass = false, writeZ = true) {
-        const { context, data, uniforms, uniformsData } = this;
-        const { renderContext } = context;
-        const { gl } = renderContext;
-        if (uniforms) {
-            renderContext.updateUniformBuffer(uniforms, uniformsData);
-        }
-
-        const { renderedChildMask } = this;
-        if (renderedChildMask) {
-            for (const mesh of this.meshes) {
-                const { materialType } = mesh;
-                const isTransparent = materialType == MaterialType.transparent;
-                if (prepass && isTransparent)
-                    continue;
-                const blendEnable = isTransparent;
-                glState(gl, {
-                    uniformBuffers: [...uniformBuffers, uniforms],
-                    vertexArrayObject: prepass ? mesh.vaoPosOnly : mesh.vao,
-                    cullEnable: materialType == MaterialType.opaque,
-                    depthWriteMask: !isTransparent && writeZ,
-                    blendEnable,
-                    blendSrcRGB: blendEnable ? "SRC_ALPHA" : "ONE",
-                    blendSrcAlpha: "ZERO",
-                    blendDstRGB: blendEnable ? "ONE_MINUS_SRC_ALPHA" : "ZERO",
-                    blendDstAlpha: "ONE",
-                });
-                if (renderedChildMask == data.childMask) {
-                    glDraw(gl, mesh.drawParams);
-                } else {
-                    // determine which portions of the parent node must be rendered based on what children currently doesn't render themselves
-                    const multiDrawParams = getMultiDrawParams(mesh, renderedChildMask);
-                    if (multiDrawParams) {
-                        glDraw(gl, multiDrawParams);
-                    }
-                }
-            }
-        }
-    }
-
-    renderDebug(uniformBuffers: WebGLBuffer[]) {
-        const { context, uniforms, uniformsData, visibility, state } = this;
-        const { renderContext } = context;
-        const { gl } = renderContext;
-
-        if (this.renderedChildMask) {
+        if (context.debug) {
             let r = 0, g = 0, b = 0;
             switch (visibility) {
                 case Visibility.partial: g = 0.25; break;
                 case Visibility.full: g = 1; break;
             }
-            switch (state) {
+            switch (this.state) {
                 case NodeState.downloading: r = 1; break;
                 case NodeState.ready: b = 1; break;
             }
-            uniformsData.values.debugColor = vec4.fromValues(r, g, b, 1);
+            const { offset, scale } = data;
+            const modelWorldMatrix = mat4.fromTranslation(mat4.create(), offset);
+            const worldModelMatrix = mat4.invert(mat4.create(), modelWorldMatrix);
+            const { min, max } = data.bounds.box;
+            const { values } = uniformsData;
+            values.debugColor = vec4.fromValues(r, g, b, 1);
+            values.min = vec3.transformMat4(vec3.create(), min, worldModelMatrix);
+            values.max = vec3.transformMat4(vec3.create(), max, worldModelMatrix);
             if (uniforms) {
-                renderContext.updateUniformBuffer(uniforms, uniformsData);
+                glUpdateBuffer(context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniforms });
             }
         }
 
-        glState(gl, {
-            uniformBuffers: [...uniformBuffers, uniforms],
-        });
-        glDraw(gl, { kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
+        // recurse down the tree
+        for (const child of children) {
+            child.update(state, this.visibility);
+        }
     }
 
     async downloadGeometry() {
         try {
             const { context, children, meshes, data } = this;
             const { renderContext, downloader, version } = context;
-            const download = downloader.downloadArrayBufferAbortable(this.path, new ArrayBuffer(this.data.byteSize));
+            const { gl } = renderContext;
+            const download = downloader.downloadArrayBufferAbortable(this.path, new ArrayBuffer(data.byteSize));
             this.download = download;
             this.state = NodeState.downloading;
             const buffer = await download.result;
             if (buffer) {
                 this.download = undefined;
-                const { childInfos, geometry } = parseNode(this.id, true, version, buffer);
+                const { childInfos, geometry } = parseNode(this.id, false, version, buffer);
                 for (const data of childInfos) {
                     const child = new OctreeNode(context, data);
                     children.push(child);
                 }
                 this.state = NodeState.ready;
-                meshes.push(...createMeshes(renderContext.gl, geometry));
-                this.uniforms = glBuffer(renderContext.gl, { kind: "UNIFORM_BUFFER", size: this.uniformsData.buffer.byteLength });
+                meshes.push(...createMeshes(gl, geometry));
+                this.uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniformsData.buffer.byteLength });
+                glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
+
                 renderContext.changed = true;
             }
         } catch (error: any) {
@@ -304,54 +266,4 @@ export class OctreeNode {
             }
         }
     }
-}
-
-function getMultiDrawParams(mesh: Mesh, childMask: number): DrawParamsArraysMultiDraw | DrawParamsElementsMultiDraw | undefined {
-    // determine which draw ranges this parent node must render based on what children will render their own mesh
-    const drawRanges = mesh.drawRanges.filter(r => ((1 << r.childIndex) & childMask) != 0);
-    if (drawRanges.length == 0) {
-        return;
-    }
-    const offsetsList = new Int32Array(drawRanges.map(r => r.byteOffset));
-    const countsList = new Int32Array(drawRanges.map(r => r.count));
-    const drawCount = offsetsList.length;
-    const { drawParams } = mesh;
-    const { mode } = drawParams;
-    function isElements(params: DrawParams): params is DrawParamsElementsMultiDraw {
-        return "indexType" in params;
-    }
-    if (isElements(drawParams)) {
-        const { indexType } = drawParams;
-        return {
-            kind: "elements_multidraw",
-            mode,
-            drawCount,
-            indexType,
-            offsetsList,
-            countsList
-        };
-    } else {
-        return {
-            kind: "arrays_multidraw",
-            mode,
-            drawCount,
-            firstsList: offsetsList,
-            countsList
-        };
-    }
-}
-
-function calcNumTriangles(indices: number, primitiveType: string) {
-    switch (primitiveType) {
-        case "TRIANGLES":
-            indices /= 3; break;
-        case "TRIANGLE_STRIP":
-        case "TRIANGLE_FAN":
-            indices -= 2; break;
-        case "LINES":
-            indices /= 2; break;
-        case "LINE_STRIP":
-            indices -= 1; break;
-    }
-    return indices;
 }

@@ -26,8 +26,8 @@ export async function run(canvas: HTMLCanvasElement) {
     const controller = new OrbitController({ kind: "orbit" }, canvas);
     let state = defaultRenderState();
     let prevState = state;
-    const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
-    // const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    // const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     const backgroundUrl = new URL("/assets/env/lake/", scriptUrl).toString();
     const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
@@ -45,7 +45,8 @@ export async function run(canvas: HTMLCanvasElement) {
     controller.autoFitToScene(state);
 
     function resize() {
-        const scale = devicePixelRatio / 2;
+        // const scale = devicePixelRatio / 2;
+        const scale = 0.5;
         let { width, height } = canvas.getBoundingClientRect();
         width = Math.round(width * scale);
         height = Math.round(height * scale);

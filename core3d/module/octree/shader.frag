@@ -9,9 +9,15 @@ layout(std140) uniform Materials {
     uvec4 rgba[64];
 } materials;
 
+layout(std140) uniform Scene {
+    mat4 localViewMatrix;
+} scene;
+
 layout(std140) uniform Node {
-    mat4 modelViewMatrix;
+    mat4 modelLocalMatrix;
     vec4 debugColor;
+    vec3 min;
+    vec3 max;
 } node;
 
 in struct {
@@ -39,6 +45,14 @@ layout(location = 3) out uvec2 info;
 
 uniform samplerCube texture_ibl_diffuse;
 uniform samplerCube texture_ibl_specular;
+
+const mat4 ditherThresholds = mat4(0.0 / 16.0, 8.0 / 16.0, 2.0 / 16.0, 10.0 / 16.0, 12.0 / 16.0, 4.0 / 16.0, 14.0 / 16.0, 6.0 / 16.0, 3.0 / 16.0, 11.0 / 16.0, 1.0 / 16.0, 9.0 / 16.0, 15.0 / 16.0, 7.0 / 16.0, 13.0 / 16.0, 5.0 / 16.0);
+
+float dither(vec2 xy) {
+    int x = int(xy.x) & 3;
+    int y = int(xy.y) & 3;
+    return ditherThresholds[y][x];
+}
 
 const float GAMMA = 2.2;
 const float INV_GAMMA = 1.0 / GAMMA;
@@ -77,7 +91,11 @@ void main() {
 
     vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
 
-    if(materialColor.a == 0.) // we put this here (late) to avoid problems with derivative functions
+    // if(materialColor.a == 0.) 
+    //     discard;
+
+    // we put this here (late) to avoid problems with derivative functions
+    if((diffuseOpacity.a - 0.5 / 16.0) < dither(gl_FragCoord.xy))
         discard;
 
     color = vec4(rgb, materialColor.a);

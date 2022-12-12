@@ -85,7 +85,7 @@ export class RenderContext {
     }
 
     // use a pre-pass to fill in z-buffer for improved fill rate at the expense of triangle rate (useful when doing heavy shading, but unclear how efficient this is on tiled GPUs.)
-    readonly usePrepass = true;
+    readonly usePrepass = false;
 
     get width() {
         return this.gl.drawingBufferWidth;
@@ -118,6 +118,7 @@ export class RenderContext {
     }
 
     protected render(state: RenderState) {
+        const beginTime = performance.now();
         const { gl, canvas } = this;
         this.changed = false;
 
@@ -187,6 +188,9 @@ export class RenderContext {
         }
 
         this.buffers.invalidate();
+
+        const endTime = performance.now();
+        // console.log(endTime - beginTime);
     }
 
     private updateCameraUniforms(state: DerivedRenderState) {

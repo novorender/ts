@@ -9,9 +9,15 @@ layout(std140) uniform Materials {
     uvec4 rgba[64];
 } materials;
 
+layout(std140) uniform Scene {
+    mat4 localViewMatrix;
+} scene;
+
 layout(std140) uniform Node {
-    mat4 modelViewMatrix;
+    mat4 modelLocalMatrix;
     vec4 debugColor;
+    vec3 min;
+    vec3 max;
 } node;
 
 struct VaryingsFlat {
