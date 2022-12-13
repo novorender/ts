@@ -9,6 +9,12 @@ export * from "./state";
 export * from "./context";
 export * from "./module";
 
+function nextFrame() {
+    return new Promise<number>((resolve) => {
+        requestAnimationFrame(resolve);
+    });
+}
+
 export async function run(canvas: HTMLCanvasElement) {
     const options: WebGLContextAttributes = {
         alpha: true,
@@ -57,7 +63,7 @@ export async function run(canvas: HTMLCanvasElement) {
     }
     resize();
 
-    let context: RenderContext | undefined;
+    let context: RenderContext | undefined = new RenderContext(canvas, wasm, options);
 
     canvas.addEventListener("click", async (e) => {
         if (context) {
@@ -90,26 +96,23 @@ export async function run(canvas: HTMLCanvasElement) {
     let animId: number | undefined;
     function init() {
         context = new RenderContext(canvas, wasm, options);
-        function render(time: number) {
-            resize();
-            state = controller.updateRenderState(state);
-            if (context) {
-                if (context.isContextLost())
-                    return;
-                context["poll"]();
-                if (prevState !== state || context.changed) {
-                    prevState = state;
-                    context["render"](state);
-                    // console.log("render");
-                }
-            }
-            requestAnimationFrame(render);
-        }
-        animId = requestAnimationFrame(render);
-        emulateLostContext(context.gl, canvas);
     }
-
     init();
+    emulateLostContext(context.gl, canvas);
+
+    for (; ;) {
+        const renderTime = await nextFrame();
+        resize();
+        state = controller.updateRenderState(state);
+        if (context && !context.isContextLost()) {
+            context["poll"]();
+            if (prevState !== state || context.changed) {
+                prevState = state;
+                context["render"](state);
+                // console.log("render");
+            }
+        }
+    }
 
     // controller.dispose();
     // context.dispose();

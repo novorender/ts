@@ -26,7 +26,7 @@ export class OctreeModule implements RenderModule {
         // elevation colors
     } as const;
 
-    readonly loader = new NodeLoader();
+    readonly loader = new NodeLoader({ useWorker: true });
 
     withContext(context: RenderContext) {
         return new OctreeModuleContext(context, this);
