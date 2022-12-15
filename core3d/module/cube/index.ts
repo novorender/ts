@@ -48,8 +48,8 @@ class CubeModuleContext implements RenderModuleContext {
             triplets.set(pc, i * 3 + 6);
         }
         // create static GPU resources here
-        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Cube"] });
-        const program_line = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, uniformBufferBlocks: ["Camera", "Cube"] });
+        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
+        const program_line = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
         const program_transform = glProgram(gl, { vertexShader: transform_vs, uniformBufferBlocks: ["Cube"], transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
 
@@ -113,7 +113,7 @@ class CubeModuleContext implements RenderModuleContext {
     render() {
         const { context, resources, state } = this;
         const { program, program_line, program_transform, uniforms, vao, transformFeedback, vao_tri, vao_line, vb_line } = resources;
-        const { gl, cameraUniforms } = context;
+        const { gl, cameraUniforms, clippingUniforms } = context;
 
         if (state.current?.cube.enabled) {
             // transform vertex triplets into intersection lines
@@ -127,9 +127,10 @@ class CubeModuleContext implements RenderModuleContext {
             // render normal cube
             glState(gl, {
                 program,
-                uniformBuffers: [cameraUniforms, uniforms],
-                drawBuffers: ["COLOR_ATTACHMENT0"],
-                cullEnable: true,
+                uniformBuffers: [cameraUniforms, clippingUniforms, uniforms],
+                drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2"],
+                depthTest: true,
+                cullEnable: false,
                 vertexArrayObject: vao,
             });
             glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
@@ -137,6 +138,7 @@ class CubeModuleContext implements RenderModuleContext {
             // render intersection lines
             glState(gl, {
                 program: program_line,
+                drawBuffers: ["COLOR_ATTACHMENT0"],
                 depthTest: true,
                 vertexArrayObject: vao_line,
             });

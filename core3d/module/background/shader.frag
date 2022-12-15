@@ -13,10 +13,9 @@ layout(std140) uniform Background {
 uniform samplerCube textures_skybox;
 uniform samplerCube textures_diffuse;
 
-struct Varyings {
+in struct Varyings {
     vec3 dir;
-};
-in Varyings varyings;
+} varyings;
 
 layout(location = 0) out vec4 color;
 

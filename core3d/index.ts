@@ -1,5 +1,5 @@
 import { RenderContext } from "./context";
-import { defaultRenderState, modifyRenderState, TonemappingMode } from "./state";
+import { ClippingMode, ClippingPlane, defaultRenderState, modifyRenderState, TonemappingMode } from "./state";
 import { OrbitController } from "./controller";
 import { downloadScene } from "./scene";
 import { glExtensions } from "@novorender/webgl2";
@@ -32,27 +32,34 @@ export async function run(canvas: HTMLCanvasElement) {
     const controller = new OrbitController({ kind: "orbit" }, canvas);
     let state = defaultRenderState();
     let prevState = state;
-    // const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
-    const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    // const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     const backgroundUrl = new URL("/assets/env/lake/", scriptUrl).toString();
     const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
     const scene = await downloadScene(sceneUrl);
 
+    const planes: ClippingPlane[] = [
+        { normalOffset: [1, 0, 0, 0], color: [1, 0, 0, 0.5] },
+        { normalOffset: [0, 1, 0, 0], color: [0, 1, 0, 0.5] },
+        { normalOffset: [0, 0, 1, 0], color: [0, 0, 1, 0.5] },
+    ];
+
     state = modifyRenderState(state, {
-        scene,
+        // scene,
         background: { url: backgroundUrl, blur: 0.25 },
-        tonemapping: { mode: TonemappingMode.color },
-        camera: { near: 1, far: 1000 },
+        camera: { near: 1, far: 100 },
         // grid: { enabled: true, origin: scene.config.boundingSphere.center },
-        // cube: { enabled: true, clipDepth: 10 },
+        cube: { enabled: true, clipDepth: 1 },
+        clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
+        tonemapping: { mode: TonemappingMode.color },
     });
 
-    controller.autoFitToScene(state);
+    // controller.autoFitToScene(state);
 
     function resize() {
         // const scale = devicePixelRatio / 2;
-        const scale = 0.5;
+        const scale = 1.0;
         let { width, height } = canvas.getBoundingClientRect();
         width = Math.round(width * scale);
         height = Math.round(height * scale);

@@ -6,6 +6,7 @@ import { OctreeModule } from "./octree";
 import { TonemapModule } from "./tonemap";
 import { CubeModule } from "./cube";
 import type { UniformTypes } from "@novorender/webgl2";
+import { ClippingModule } from "./clipping";
 
 // constructor takes RenderState object
 // this object contains all state (geometry, textures etc), or has at least the ability to reload state on demand if e.g. webgl context is lost
@@ -27,8 +28,9 @@ export function createDefaultModules() {
     return [
         new BackgroundModule(),
         new CubeModule(),
-        new OctreeModule(),
-        new GridModule(),
+        // new OctreeModule(),
+        // new GridModule(),
+        new ClippingModule(),
         new TonemapModule(),
     ];
 }

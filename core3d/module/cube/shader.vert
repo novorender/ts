@@ -5,12 +5,20 @@ layout(std140) uniform Camera {
     mat3 viewWorldMatrixNormal;
 } camera;
 
+layout(std140) uniform Clipping {
+    vec4 planes[6];
+    vec4 colors[6];
+    uint numPlanes;
+    uint mode; // 0 = intersection, 1 = union
+} clipping;
+
 layout(std140) uniform Cube {
     mat4 modelViewMatrix;
     float clipDepth;
 } cube;
 
 out struct {
+    vec3 posVS;
     vec3 normal;
     vec3 color;
     float linearDepth;
@@ -23,6 +31,7 @@ layout(location = 2) in vec3 color;
 void main() {
     vec4 posVS = cube.modelViewMatrix * position;
     gl_Position = camera.viewClipMatrix * posVS;
+    varyings.posVS = posVS.xyz;
     varyings.normal = camera.worldViewMatrixNormal * normal;
     varyings.color = color;
     varyings.linearDepth = -posVS.z;

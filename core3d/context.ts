@@ -41,6 +41,7 @@ export class RenderContext {
         readonly samplerSingle: WebGLSampler; // use to read the other textures
         readonly numMipMaps: number; // # of diffuse mip map levels.
     } | undefined;
+    clippingUniforms: WebGLBuffer | undefined;
 
 
     constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {

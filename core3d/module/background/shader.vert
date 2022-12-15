@@ -13,10 +13,9 @@ layout(std140) uniform Background {
 uniform samplerCube textures_background;
 uniform samplerCube textures_radiance;
 
-struct Varyings {
+out struct Varyings {
     vec3 dir;
-};
-out Varyings varyings;
+} varyings;
 
 void main() {
     // Use degenerate triangle if ortho camera to use clear color instead

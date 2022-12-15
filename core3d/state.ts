@@ -69,6 +69,23 @@ export interface RenderStateScene {
     readonly config: OctreeSceneConfig;
 }
 
+export const enum ClippingMode {
+    intersection,
+    union,
+}
+
+export interface ClippingPlane {
+    readonly normalOffset: ReadonlyVec4,
+    readonly color?: RGBA;
+}
+
+export interface RenderStateClipping {
+    readonly enabled: boolean;
+    readonly draw: boolean;
+    readonly mode: ClippingMode;
+    readonly planes: readonly ClippingPlane[];
+}
+
 export const enum TonemappingMode {
     color,
     normal,
@@ -98,6 +115,7 @@ export interface RenderState {
     readonly grid: RenderStateGrid;
     readonly cube: RenderStateCube;
     readonly scene: RenderStateScene | undefined;
+    readonly clipping: RenderStateClipping;
     readonly tonemapping: RenderStateTonemapping;
 }
 
@@ -167,6 +185,12 @@ export function defaultRenderState(): RenderState {
             clipDepth: 1,
         },
         scene: undefined,
+        clipping: {
+            enabled: false,
+            draw: false,
+            mode: 0,
+            planes: [],
+        },
         tonemapping: {
             exposure: 0,
             mode: TonemappingMode.color,
