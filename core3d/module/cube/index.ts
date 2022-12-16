@@ -128,7 +128,7 @@ class CubeModuleContext implements RenderModuleContext {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, clippingUniforms, uniforms],
-                drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2"],
+                drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
                 depthTest: true,
                 cullEnable: false,
                 vertexArrayObject: vao,

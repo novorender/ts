@@ -1,13 +1,15 @@
+import { EXT_disjoint_timer_query_webgl2_ext, glExtensions } from "./extensions";
+
 export function createTimer(gl: WebGL2RenderingContext): Timer {
-    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') as EXT_disjoint_timer_query_webgl2;
-    if (ext) {
+    const { disjointTimerQuery } = glExtensions(gl);
+    if (disjointTimerQuery) {
         // Clear the disjoint state before starting to work with queries to increase the chances that the results will be valid.
-        gl.getParameter(ext.GPU_DISJOINT_EXT);
-        const useTimestamps = gl.getQuery(ext.TIMESTAMP_EXT, ext.QUERY_COUNTER_BITS_EXT) ?? 0 > 0;
+        gl.getParameter(disjointTimerQuery.GPU_DISJOINT_EXT);
+        const useTimestamps = gl.getQuery(disjointTimerQuery.TIMESTAMP_EXT, disjointTimerQuery.QUERY_COUNTER_BITS_EXT) ?? 0 > 0;
         if (useTimestamps)
-            return new GPUTimerTS(gl, ext);
+            return new GPUTimerTS(gl, disjointTimerQuery);
         else
-            return new GPUTimer(gl, ext);
+            return new GPUTimer(gl, disjointTimerQuery);
     } else {
         // console.log("using cpu timer.")
         return new CPUTimer(gl);
@@ -32,12 +34,12 @@ class CPUTimer {
     }
 
     begin() {
-        // this.gl.finish();
+        this.gl.getError(); // flush gpu pipeline
         this.#begin = performance.now();
     }
 
     end() {
-        // this.gl.finish();
+        this.gl.getError(); // flush gpu pipeline
         this.#end = performance.now();
     }
 
@@ -54,7 +56,7 @@ class GPUTimer {
     #resolve: ((value: number | PromiseLike<number>) => void) = undefined!;
     #reject: ((reason?: any) => void) = undefined!;
 
-    constructor(readonly gl: WebGL2RenderingContext, readonly ext: EXT_disjoint_timer_query_webgl2) {
+    constructor(readonly gl: WebGL2RenderingContext, readonly ext: EXT_disjoint_timer_query_webgl2_ext) {
         this.#creationTime = performance.now();
         this.query = gl.createQuery()!;
         this.promise = new Promise<number>((resolve, reject) => { this.#resolve = resolve; this.#reject = reject; });
@@ -104,7 +106,7 @@ class GPUTimerTS {
     #reject: ((reason?: any) => void) = undefined!;
 
 
-    constructor(readonly gl: WebGL2RenderingContext, readonly ext: EXT_disjoint_timer_query_webgl2) {
+    constructor(readonly gl: WebGL2RenderingContext, readonly ext: EXT_disjoint_timer_query_webgl2_ext) {
         this.#creationTime = performance.now();
         this.startQuery = gl.createQuery()!;
         this.endQuery = gl.createQuery()!;
@@ -146,13 +148,4 @@ class GPUTimerTS {
         }
         return false;
     }
-}
-
-// just a placeholder until this interface becomes part of the standard library types.
-interface EXT_disjoint_timer_query_webgl2 {
-    readonly QUERY_COUNTER_BITS_EXT: 0x8864; // GL.QUERY_COUNTER_BITS_EXT;
-    readonly TIME_ELAPSED_EXT: 0x88BF; // GL.TIME_ELAPSED_EXT;
-    readonly TIMESTAMP_EXT: 0x8E28; // GL.TIMESTAMP_EXT;
-    readonly GPU_DISJOINT_EXT: 0x8FBB;  // GL.GPU_DISJOINT_EXT;
-    queryCounterEXT(query: WebGLQuery, target: 0x8E28 /*GL.TIMESTAMP_EXT*/): void;
 }

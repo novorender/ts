@@ -1,3 +1,4 @@
+import { glExtensions } from "./extensions";
 import { glLimits, LimitsGL } from "./limits";
 
 export function glState(gl: WebGL2RenderingContext, params: StateParams | null) {
@@ -27,10 +28,23 @@ export function glState(gl: WebGL2RenderingContext, params: StateParams | null) 
         }
     }
 
-    setFlag("BLEND", "blendEnable");
+    const { drawBuffersIndexed } = glExtensions(gl);
+    if (drawBuffersIndexed) {
+        // only change settings for drawbuffer 0.
+        if (params.blendEnable) {
+            drawBuffersIndexed.enableiOES(gl.BLEND, 0);
+        } else {
+            drawBuffersIndexed.disableiOES(gl.BLEND, 0);
+        }
+        set((modeRGB, modeAlpha) => drawBuffersIndexed.blendEquationSeparateiOES(0, modeRGB, modeAlpha), "blendEquationRGB", "blendEquationAlpha");
+        set((srcRGB, dstRGB, srcAlpha, dstAlpha) => drawBuffersIndexed.blendFuncSeparateiOES(0, srcRGB, dstRGB, srcAlpha, dstAlpha), "blendSrcRGB", "blendDstRGB", "blendSrcAlpha", "blendDstAlpha");
+    } else {
+        setFlag("BLEND", "blendEnable");
+        set(gl.blendEquationSeparate, "blendEquationRGB", "blendEquationAlpha");
+        set(gl.blendFuncSeparate, "blendSrcRGB", "blendDstRGB", "blendSrcAlpha", "blendDstAlpha");
+    }
     set((rgba: readonly [number, number, number, number]) => { gl.blendColor(...rgba); }, "blendColor");
-    set(gl.blendEquationSeparate, "blendEquationRGB", "blendEquationAlpha");
-    set(gl.blendFuncSeparate, "blendSrcRGB", "blendDstRGB", "blendSrcAlpha", "blendDstAlpha");
+
 
     setFlag("CULL_FACE", "cullEnable");
     set(gl.cullFace, "cullMode");
@@ -134,6 +148,7 @@ export function glDefaultState(limits: LimitsGL): State {
 export type StateParams = Partial<State>;
 
 export interface State {
+    // blend state (except constant color) only applies to COLOR_ATTACHMENT0 if OES_draw_buffers_indexed is supported.
     readonly blendEnable: boolean; // BLEND
     readonly blendColor: RGBA; // BLEND_COLOR
     readonly blendDstAlpha: BlendFunction; // BLEND_DST_ALPHA

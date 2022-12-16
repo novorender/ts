@@ -57,6 +57,8 @@ export interface RenderStateGrid {
     readonly distance: number; // max distance to render grid
 }
 
+export const CubeId = 0xfffffff8;
+
 export interface RenderStateCube {
     readonly enabled: boolean; // default = false
     readonly position: ReadonlyVec3; // default = (0,0,0)
@@ -72,6 +74,10 @@ export interface RenderStateScene {
 export const enum ClippingMode {
     intersection,
     union,
+}
+
+export const enum ClippingId {
+    plane0 = 0xfffffff0, plane1, plane2, plane3, plane4, plane5, plane6
 }
 
 export interface ClippingPlane {

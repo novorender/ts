@@ -13,15 +13,19 @@ layout(std140) uniform Clipping {
 } clipping;
 
 in struct Varyings {
-    vec3 dir;
+    vec3 dirVS;
 } varyings;
 
 layout(location = 0) out vec4 color;
+layout(location = 1) out vec2 normal;
+layout(location = 2) out float linearDepth;
+layout(location = 3) out uvec2 info;
 
 const uint undefinedIndex = 7U;
+const uint clippingId = 0xfffffff0U;
 
 void main() {
-    vec3 dir = normalize(varyings.dir);
+    vec3 dir = normalize(varyings.dirVS);
     float rangeT[2] = float[](0., 1000000.); // min, max T
     uint idx[2] = uint[](undefinedIndex, undefinedIndex);
     float s = clipping.mode == 0U ? 1. : -1.;
@@ -54,7 +58,12 @@ void main() {
     vec4 posCS = camera.viewClipMatrix * posVS;
     float ndcDepth = (posCS.z / posCS.w);
     gl_FragDepth = (gl_DepthRange.diff * ndcDepth + gl_DepthRange.near + gl_DepthRange.far) / 2.;
-    color = clipping.colors[idx[i]];
-    if(color.a == 0.)
+    vec4 rgba = clipping.colors[idx[i]];
+    uint objectId = clippingId + idx[i];
+    if(rgba.a == 0.)
         discard;
+    color = rgba;
+    normal = clipping.planes[idx[i]].xy;
+    linearDepth = -posVS.z;
+    info = uvec2(objectId, 0);
 }

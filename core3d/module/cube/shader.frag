@@ -27,8 +27,10 @@ in struct {
 layout(location = 0) out vec4 color;
 layout(location = 1) out vec2 normal;
 layout(location = 2) out float linearDepth;
+layout(location = 3) out uvec2 info;
 
 const uint modeIntersection = 0U;
+const uint cubeId = 0xfffffff8U;
 
 bool clip(vec3 point) {
     float s = clipping.mode == modeIntersection ? -1. : 1.;
@@ -45,4 +47,5 @@ void main() {
     color = vec4(varyings.color, 1);
     normal = normalize(varyings.normal).xy;
     linearDepth = varyings.linearDepth;
+    info = uvec2(cubeId, 0);
 }
