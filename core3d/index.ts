@@ -51,7 +51,7 @@ export async function run(canvas: HTMLCanvasElement) {
         camera: { near: 1, far: 100 },
         // grid: { enabled: true, origin: scene.config.boundingSphere.center },
         cube: { enabled: true, clipDepth: 1 },
-        clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
+        // clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
         tonemapping: { mode: TonemappingMode.color },
     });
 

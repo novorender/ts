@@ -44,7 +44,7 @@ bool clip(vec3 point) {
 void main() {
     if(varyings.linearDepth < cube.clipDepth || clip(varyings.posVS))
         discard;
-    color = vec4(varyings.color, 1);
+    color = vec4(gl_FrontFacing ? varyings.color : vec3(.25), 1);
     normal = normalize(varyings.normal).xy;
     linearDepth = varyings.linearDepth;
     info = uvec2(cubeId, 0);
