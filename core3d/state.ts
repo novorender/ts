@@ -57,7 +57,7 @@ export interface RenderStateGrid {
     readonly distance: number; // max distance to render grid
 }
 
-export const CubeId = 0xfffffff8;
+export const CubeId = 0xfffffff8; // object_id for picking
 
 export interface RenderStateCube {
     readonly enabled: boolean; // default = false
@@ -76,7 +76,7 @@ export const enum ClippingMode {
     union,
 }
 
-export const enum ClippingId {
+export const enum ClippingId { // object_id's for picking
     plane0 = 0xfffffff0, plane1, plane2, plane3, plane4, plane5, plane6
 }
 
@@ -126,6 +126,7 @@ export interface RenderState {
 }
 
 export interface DerivedRenderState extends RenderState {
+    readonly localSpaceTranslation: ReadonlyVec3; // local space is a variant of world space that is much closer to camera to avoid excessively (for float32) large coordinates in shader
     readonly matrices: Matrices;
     readonly viewFrustum: ViewFrustum;
 }
@@ -140,7 +141,6 @@ export type RenderStateChanges = RecursivePartial<RenderState>;
 // use this to quickly check for changes.
 export function modifyRenderState(state: RenderState, changes: RenderStateChanges): RenderState {
     return mergeRecursive(state, changes) as RenderState;
-    // return { ...state, ...changes as RenderState };
 }
 
 function mergeRecursive(original: any, changes: any) {

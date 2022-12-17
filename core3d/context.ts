@@ -4,7 +4,7 @@ import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { RenderBuffers } from "./buffers";
 import { WasmInstance } from "./wasm";
-import { mat3, mat4, vec3, vec4 } from "gl-matrix";
+import { mat3, mat4, ReadonlyVec3, vec3, vec4 } from "gl-matrix";
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
@@ -18,6 +18,7 @@ export class RenderContext {
     private outputState;
     private cameraState;
     private cameraUniformsData;
+    private localSpaceTranslation = vec3.create() as ReadonlyVec3;
     readonly gl: WebGL2RenderingContext;
 
     // copy from last rendered state
@@ -42,7 +43,6 @@ export class RenderContext {
         readonly numMipMaps: number; // # of diffuse mip map levels.
     } | undefined;
     clippingUniforms: WebGLBuffer | undefined;
-
 
     constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
         const gl = canvas.getContext("webgl2", options);
@@ -69,6 +69,8 @@ export class RenderContext {
         this.cameraUniformsData = createUniformsProxy({
             clipViewMatrix: "mat4",
             viewClipMatrix: "mat4",
+            localViewMatrix: "mat4",
+            viewLocalMatrix: "mat4",
             worldViewMatrixNormal: "mat3",
             viewWorldMatrixNormal: "mat3",
         });
@@ -139,6 +141,17 @@ export class RenderContext {
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
         const derivedState = state as Mutable<DerivedRenderState>;
         if (resized || this.cameraState.hasChanged(state.camera)) {
+            const snapDist = 1024; // make local space roughly within 1KM of camera
+            const dist = Math.max(...vec3.sub(vec3.create(), state.camera.position, this.localSpaceTranslation).map(c => Math.abs(c)));
+            // don't change localspace unless camera is far enough away. we want to avoid flipping back and forth across snap boundaries.
+            if (dist >= snapDist) {
+                function snap(v: number) {
+                    return Math.round(v / snapDist) * snapDist;
+                }
+                this.localSpaceTranslation = vec3.fromValues(...(state.camera.position.map(v => snap(v)) as [number, number, number]))
+            }
+
+            derivedState.localSpaceTranslation = this.localSpaceTranslation; // update the object reference to indicate that values have changed
             derivedState.matrices = matricesFromRenderState(state);
             derivedState.viewFrustum = createViewFrustum(state, derivedState.matrices);
         }
@@ -195,11 +208,18 @@ export class RenderContext {
     }
 
     private updateCameraUniforms(state: DerivedRenderState) {
-        const { gl, cameraUniformsData } = this;
+        const { gl, cameraUniformsData, localSpaceTranslation } = this;
         const { matrices } = state;
         const { values } = cameraUniformsData;
+        const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
+        const viewWorldMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.World);
+        const worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), localSpaceTranslation));
+        const localWorldMatrix = mat4.fromTranslation(mat4.create(), localSpaceTranslation);
         values.clipViewMatrix = matrices.getMatrix(CoordSpace.Clip, CoordSpace.View);
         values.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
+        values.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
+        values.localViewMatrix = mat4.multiply(mat4.create(), worldViewMatrix, localWorldMatrix);
+        values.viewLocalMatrix = mat4.multiply(mat4.create(), worldLocalMatrix, viewWorldMatrix,);
         values.worldViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
         values.viewWorldMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
     }

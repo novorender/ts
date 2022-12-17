@@ -29,8 +29,6 @@ export interface OctreeContext {
     readonly projectedSizeSplitThreshold: number;
     readonly debug: boolean;
     readonly localSpaceChanged: boolean;
-    readonly localWorldMatrix: ReadonlyMat4;
-    readonly worldLocalMatrix: ReadonlyMat4;
 }
 
 export class OctreeNode {
@@ -44,6 +42,7 @@ export class OctreeNode {
     uniforms: WebGLBuffer | undefined;
     private readonly center4: ReadonlyVec4;
     private readonly corners: ReadonlyVec4[];
+    private hasValidModelLocalMatrix = false;
     state = NodeState.collapsed;
     download: { abort(): void } | undefined;
     visibility = Visibility.undefined;
@@ -79,12 +78,6 @@ export class OctreeNode {
             min: "vec3",
             max: "vec3",
         });
-
-
-        const { offset, scale } = data;
-        const modelWorldMatrix = mat4.fromTranslation(mat4.create(), offset);
-        mat4.scale(modelWorldMatrix, modelWorldMatrix, vec3.fromValues(scale, scale, scale));
-        this.uniformsData.values.modelLocalMatrix = modelWorldMatrix;
     }
 
     dispose() {
@@ -206,6 +199,23 @@ export class OctreeNode {
             this.projectedSize = (this.size * projection[5]) / (-distance * projection[11]);
         } else {
             this.projectedSize = this.size * projection[5];
+        }
+
+        if (context.localSpaceChanged || !this.hasValidModelLocalMatrix) {
+            const { offset, scale } = data;
+            const [ox, oy, oz] = offset;
+            const [tx, ty, tz] = state.localSpaceTranslation;
+            const modelLocalMatrix = mat4.fromValues(
+                scale, 0, 0, 0,
+                0, scale, 0, 0,
+                0, 0, scale, 0,
+                ox - tx, oy - ty, oz - tz, 1
+            );
+            this.uniformsData.values.modelLocalMatrix = modelLocalMatrix;
+            if (uniforms) {
+                glUpdateBuffer(context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniforms });
+            }
+            this.hasValidModelLocalMatrix = true;
         }
 
         if (context.debug) {

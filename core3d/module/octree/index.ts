@@ -1,7 +1,7 @@
 import { CoordSpace, DerivedRenderState, Matrices, RenderContext, RenderStateScene, ViewFrustum } from "core3d";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
 import { createSceneRootNode } from "core3d/scene";
-import { NodeState, OctreeNode, Visibility } from "./node";
+import { NodeState, OctreeContext, OctreeNode, Visibility } from "./node";
 import { Downloader } from "./download";
 import { createUniformsProxy, glBuffer, glDelete, glDraw, glProgram, glState, glUniformLocations, glUpdateBuffer } from "webgl2";
 import vertexShader from "./shader.vert";
@@ -10,12 +10,11 @@ import vertexShaderDebug from "./shader_debug.vert";
 import fragmentShaderDebug from "./shader_debug.frag";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
-import { mat4 } from "gl-matrix";
+import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
 import { NodeLoader } from "./loader";
 
 export class OctreeModule implements RenderModule {
     readonly uniforms = {
-        localViewMatrix: "mat4",
         // ibl params
         // sun params (+ambient)
         // headlight params
@@ -39,18 +38,15 @@ interface RelevantRenderState {
     viewFrustum: ViewFrustum;
 }
 
-class OctreeModuleContext implements RenderModuleContext {
+class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly state;
-    readonly sceneUniforms;
     readonly resources;
     readonly textureUniformLocations;
     readonly loader: NodeLoader;
     readonly downloader = new Downloader(new URL((document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url));
     readonly debug = false;
-    // Local space is a variant of world space that is occasionally offset to keep it close to camera. This helps avoid large coordinate values and float32 rounding errors in shaders.
+    localSpaceTranslation = vec3.create() as ReadonlyVec3;
     localSpaceChanged = false;
-    readonly localWorldMatrix = mat4.create();
-    readonly worldLocalMatrix = mat4.create();
     url: string | undefined;
     rootNode: OctreeNode | undefined;
     version: string = "";
@@ -58,28 +54,28 @@ class OctreeModuleContext implements RenderModuleContext {
 
     constructor(readonly renderContext: RenderContext, readonly data: OctreeModule) {
         this.state = new RenderModuleState<RelevantRenderState>();
-        this.sceneUniforms = createUniformsProxy(data.uniforms);
         this.loader = data.loader;
         const { gl } = renderContext;
         const flags = ["IOS_WORKAROUND"];
-        const uniformBufferBlocks = ["Camera", "Materials", "Scene", "Node"];
+        const uniformBufferBlocks = ["Camera", "Materials", "Node"];
         const program = glProgram(gl, { vertexShader, fragmentShader, flags, uniformBufferBlocks });
         const programZ = glProgram(gl, { vertexShader, fragmentShader, flags: [...flags, "POS_ONLY"], uniformBufferBlocks });
         const programDebug = glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
-        const sceneUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.sceneUniforms.buffer.byteLength });
         const materialsUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: 256 * 4 });
         this.textureUniformLocations = glUniformLocations(gl, program, ["diffuse", "specular"] as const, "texture_ibl_");
-        this.resources = { program, programZ, programDebug, sceneUniforms, materialsUniforms } as const;
+        this.resources = { program, programZ, programDebug, materialsUniforms } as const;
     }
 
     update(state: DerivedRenderState) {
         const beginTime = performance.now();
 
-        const { renderContext, resources, projectedSizeSplitThreshold, sceneUniforms } = this;
+        const { renderContext, resources, projectedSizeSplitThreshold } = this;
         const { gl } = renderContext;
+        const { scene, matrices, viewFrustum } = state;
 
-        if (this.state.hasChanged(state)) {
-            const { scene } = state;
+        if (this.state.hasChanged({ scene, matrices, viewFrustum })) {
+            this.localSpaceChanged = state.localSpaceTranslation !== this.localSpaceTranslation;
+            this.localSpaceTranslation = state.localSpaceTranslation;
             const url = scene?.url;
             if (url && url != this.url) {
                 const { config } = scene;
@@ -98,12 +94,6 @@ class OctreeModuleContext implements RenderModuleContext {
                 this.rootNode = undefined;
             }
             this.url = url;
-
-            // TODO: update local space, if needed, and if so, also update node UBOs.
-
-            const worldViewMatrix = state.matrices.getMatrix(CoordSpace.World, CoordSpace.View);
-            sceneUniforms.values.localViewMatrix = mat4.multiply(mat4.create(), worldViewMatrix, this.localWorldMatrix);
-            glUpdateBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: sceneUniforms.buffer, targetBuffer: resources.sceneUniforms });
         }
 
         const { rootNode } = this;
@@ -188,7 +178,7 @@ class OctreeModuleContext implements RenderModuleContext {
     render() {
         const { resources, renderContext, rootNode, debug } = this;
         const { usePrepass } = renderContext;
-        const { program, programDebug, materialsUniforms, sceneUniforms } = resources;
+        const { program, programDebug, materialsUniforms } = resources;
         const { gl, iblTextures, cameraUniforms } = renderContext;
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
@@ -200,7 +190,7 @@ class OctreeModuleContext implements RenderModuleContext {
             const specular = iblTextures?.specular ?? null;
             glState(gl, {
                 program: program,
-                uniformBuffers: [cameraUniforms, materialsUniforms, sceneUniforms],
+                uniformBuffers: [cameraUniforms, materialsUniforms],
                 cullEnable: true,
                 depthTest: true,
                 depthFunc: usePrepass ? "LEQUAL" : "LESS",
@@ -259,30 +249,17 @@ class OctreeModuleContext implements RenderModuleContext {
     }
 
     renderNode(node: OctreeNode, prepass = false, writeZ = true) {
-        const { renderContext, resources } = this;
-        const { materialsUniforms, sceneUniforms } = resources;
-        const { gl, cameraUniforms } = renderContext;
+        const { gl } = this.renderContext;
         const { data, renderedChildMask } = node;
         if (renderedChildMask) {
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 3, node.uniforms ?? null);
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, node.uniforms ?? null);
             for (const mesh of node.meshes) {
                 const { materialType } = mesh;
                 const isTransparent = materialType == MaterialType.transparent;
                 if (prepass && isTransparent)
                     continue;
                 gl.bindVertexArray(prepass ? mesh.vaoPosOnly : mesh.vao);
-                // const blendEnable = isTransparent;
-                // glState(gl, {
-                //     uniformBuffers: [cameraUniforms, materialsUniforms, sceneUniforms, node.uniforms],
-                //     vertexArrayObject: prepass ? mesh.vaoPosOnly : mesh.vao,
-                //     cullEnable: materialType == MaterialType.opaque,
-                //     depthWriteMask: !isTransparent && writeZ,
-                //     blendEnable,
-                //     blendSrcRGB: blendEnable ? "SRC_ALPHA" : "ONE",
-                //     blendSrcAlpha: "ZERO",
-                //     blendDstRGB: blendEnable ? "ONE_MINUS_SRC_ALPHA" : "ZERO",
-                //     blendDstAlpha: "ONE",
-                // });
+                gl.depthMask(writeZ);
                 if (renderedChildMask == data.childMask) {
                     glDraw(gl, mesh.drawParams);
                 } else {
@@ -298,12 +275,12 @@ class OctreeModuleContext implements RenderModuleContext {
 
     renderNodeDebug(node: OctreeNode) {
         const { renderContext, resources } = this;
-        const { materialsUniforms, sceneUniforms } = resources;
+        const { materialsUniforms } = resources;
         const { gl, cameraUniforms } = renderContext;
 
         if (node.renderedChildMask) {
             glState(gl, {
-                uniformBuffers: [cameraUniforms, sceneUniforms, materialsUniforms, node.uniforms],
+                uniformBuffers: [cameraUniforms, materialsUniforms, node.uniforms],
             });
             glDraw(gl, { kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
         }

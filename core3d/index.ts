@@ -1,9 +1,10 @@
 import { RenderContext } from "./context";
-import { ClippingMode, ClippingPlane, defaultRenderState, modifyRenderState, TonemappingMode } from "./state";
+import { ClippingPlane, defaultRenderState, modifyRenderState, TonemappingMode } from "./state";
 import { OrbitController } from "./controller";
 import { downloadScene } from "./scene";
 import { glExtensions } from "@novorender/webgl2";
 import { wasmInstance } from "./wasm";
+import { vec3 } from "gl-matrix";
 
 export * from "./state";
 export * from "./context";
@@ -16,6 +17,7 @@ function nextFrame() {
 }
 
 export async function run(canvas: HTMLCanvasElement) {
+    console.assert(Array.isArray(vec3.create())); // verify that glMatrix.setMatrixArrayType(Array) has been called
     const options: WebGLContextAttributes = {
         alpha: true,
         antialias: false,
@@ -29,11 +31,11 @@ export async function run(canvas: HTMLCanvasElement) {
     };
 
     const wasm = await wasmInstance();
-    const controller = new OrbitController({ kind: "orbit" }, canvas);
     let state = defaultRenderState();
     let prevState = state;
-    const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    // const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
     // const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    const sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     const backgroundUrl = new URL("/assets/env/lake/", scriptUrl).toString();
     const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
@@ -45,12 +47,15 @@ export async function run(canvas: HTMLCanvasElement) {
         { normalOffset: [0, 0, 1, 0], color: [0, 0, 1, 0.5] },
     ];
 
+    // const controller = new OrbitController({ kind: "orbit" }, canvas);
+    const controller = new OrbitController({ kind: "orbit", pivotPoint: [298995.87220525084, 48.56500795571233, -6699553.125910083] }, canvas);
+
     state = modifyRenderState(state, {
-        // scene,
+        scene,
         background: { url: backgroundUrl, blur: 0.25 },
-        camera: { near: 1, far: 100 },
+        camera: { near: 1, far: 10000, position: [298995.87220525084, 48.56500795571233, -6699553.125910083] },
         // grid: { enabled: true, origin: scene.config.boundingSphere.center },
-        cube: { enabled: true, clipDepth: 1 },
+        // cube: { enabled: true, clipDepth: 1 },
         // clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
         tonemapping: { mode: TonemappingMode.color },
     });

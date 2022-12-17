@@ -28,8 +28,8 @@ export function createDefaultModules() {
     return [
         new BackgroundModule(),
         new CubeModule(),
-        // new OctreeModule(),
-        // new GridModule(),
+        new OctreeModule(),
+        new GridModule(),
         new ClippingModule(),
         new TonemapModule(),
     ];

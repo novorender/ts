@@ -1,6 +1,8 @@
 layout(std140) uniform Camera {
     mat4 clipViewMatrix;
     mat4 viewClipMatrix;
+    mat4 localViewMatrix;
+    mat4 viewLocalMatrix;
     mat3 worldViewMatrixNormal;
     mat3 viewWorldMatrixNormal;
 } camera;
@@ -8,10 +10,6 @@ layout(std140) uniform Camera {
 layout(std140) uniform Materials {
     uvec4 rgba[64];
 } materials;
-
-layout(std140) uniform Scene {
-    mat4 localViewMatrix;
-} scene;
 
 layout(std140) uniform Node {
     mat4 modelLocalMatrix;
@@ -40,6 +38,6 @@ void main() {
         pos[idx - 1] *= size;
         varyingsFlat.color.rgb *= 0.75;
     }
-    vec4 posVS = scene.localViewMatrix * node.modelLocalMatrix * vec4(pos, 1);
+    vec4 posVS = camera.localViewMatrix * node.modelLocalMatrix * vec4(pos, 1);
     gl_Position = camera.viewClipMatrix * posVS;
 }

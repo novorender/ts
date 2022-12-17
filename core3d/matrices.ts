@@ -2,7 +2,7 @@ import { mat3, mat4, ReadonlyMat3, ReadonlyMat4, vec3, vec4 } from "gl-matrix";
 import { CoordSpace, Matrices, RenderStateCamera, RenderStateOutput } from "./state";
 
 function index(from: CoordSpace, to: CoordSpace): number {
-    return from * 4 + to;
+    return from * 3 + to;
 }
 
 export function matricesFromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }): Matrices {
