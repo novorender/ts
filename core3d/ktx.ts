@@ -1,4 +1,4 @@
-import type { CubeImages, Pow2, TextureParams, TextureParams2DUncompressedMipMapped, TextureParamsCubeUncompressedMipMapped } from "webgl2";
+import type { CubeImages, TextureParams } from "webgl2";
 import { GL } from "@novorender/webgl2/constants";
 
 export namespace KTX {
@@ -136,8 +136,8 @@ export namespace KTX {
     } as const;
     type TextureFormatInternal = keyof typeof textureFormatInternal;
 
-    function parseHeader(ktx: ArrayBuffer) {
-        const idDataView = new DataView(ktx, 0, 12);
+    function parseHeader(ktx: Uint8Array) {
+        const idDataView = new DataView(ktx.buffer, ktx.byteOffset, 12);
         for (let i = 0; i < identifier.length; i++) {
             if (idDataView.getUint8(i) != identifier[i]) {
                 throw new Error("texture missing KTX identifier");
@@ -146,7 +146,7 @@ export namespace KTX {
 
         // load the reset of the header in native 32 bit uint
         const dataSize = Uint32Array.BYTES_PER_ELEMENT;
-        const headerDataView = new DataView(ktx, 12, 13 * dataSize);
+        const headerDataView = new DataView(ktx.buffer, 12 + ktx.byteOffset, 13 * dataSize);
         const endianness = headerDataView.getUint32(0, true);
         const littleEndian = endianness === 0x04030201;
 
@@ -163,23 +163,25 @@ export namespace KTX {
             numberOfFaces: headerDataView.getUint32(10 * dataSize, littleEndian), // used for cubemap textures, should either be 1 or 6
             numberOfMipmapLevels: headerDataView.getUint32(11 * dataSize, littleEndian), // number of levels; disregard possibility of 0 for compressed textures
             bytesOfKeyValueData: headerDataView.getUint32(12 * dataSize, littleEndian), // the amount of space after the header for meta-data
+            littleEndian,
         };
     }
 
     type Header = ReturnType<typeof parseHeader>;
 
-    function* getImages(header: Header, ktx: ArrayBuffer) {
+    function* getImages(header: Header, ktx: Uint8Array, littleEndian: boolean) {
         const mips = Math.max(1, header.numberOfMipmapLevels);
         const elements = Math.max(1, header.numberOfArrayElements);
         const faces = header.numberOfFaces;
         const depth = Math.max(1, header.pixelDepth);
         let dataOffset = HEADER_LEN + header.bytesOfKeyValueData;
         const imageSizeDenom = (faces == 6 && header.numberOfArrayElements == 0) ? 1 : elements * faces * depth;
+        const dataView = new DataView(ktx.buffer, ktx.byteOffset);
 
         for (let mip = 0; mip < mips; mip++) {
             const width = header.pixelWidth >> mip;
             const height = header.pixelHeight >> mip;
-            const imageSize = new Int32Array(ktx, dataOffset, 1)[0];
+            const imageSize = dataView.getInt32(dataOffset, littleEndian);
             dataOffset += 4;
             const imageStride = imageSize / imageSizeDenom;
             console.assert(imageStride % 4 == 0);
@@ -190,7 +192,7 @@ export namespace KTX {
                         const begin = dataOffset;
                         dataOffset += imageStride;
                         const end = dataOffset;
-                        const image = { mip, element, face, width, height, blobRange: [begin, end], buffer: new Uint8Array(ktx, begin, end - begin) } as const;
+                        const image = { mip, element, face, width, height, blobRange: [begin, end], buffer: ktx.subarray(begin, end) } as const;
                         yield image;
                     }
                 }
@@ -199,8 +201,9 @@ export namespace KTX {
         console.assert(dataOffset == ktx.byteLength);
     }
 
-    export function parseKTX(ktx: ArrayBuffer): TextureParams {
+    export function parseKTX(ktx: Uint8Array): TextureParams {
         const header = parseHeader(ktx);
+        const { littleEndian } = header;
         const baseFormat = textureFormatBase[header.glBaseInternalFormat]; // we don't really need this here (but may be useful for debugging).
         const isArray = header.numberOfArrayElements > 0;
         const isCube = header.numberOfFaces == 6;
@@ -214,13 +217,13 @@ export namespace KTX {
         let mips: CubeImages[] | BufferSource[] = undefined!;
         if (isCube) {
             const images = new Array(numMips).fill(null).map(_ => ([] as any[]));
-            for (const image of getImages(header, ktx)) {
+            for (const image of getImages(header, ktx, littleEndian)) {
                 images[image.mip][image.face] = image.buffer;
             }
             mips = images as unknown as CubeImages[];
         } else {
             mips = new Array<BufferSource>(numMips);
-            for (const image of getImages(header, ktx)) {
+            for (const image of getImages(header, ktx, littleEndian)) {
                 mips[image.mip] = image.buffer;
             }
         }

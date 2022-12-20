@@ -1,7 +1,7 @@
 import type { DerivedRenderState, RenderContext, RenderStateBackground } from "core3d";
+import { KTX } from "core3d/ktx";
 import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
 import { createUniformsProxy, glClear, glProgram, glSampler, glTexture, glDraw, glUniformLocations, glState, TextureParams, glBuffer, glDelete, TextureParams2DUncompressedMipMapped } from "webgl2";
-import { KTX } from "./ktx";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
@@ -53,7 +53,7 @@ export class BackgroundModule implements RenderModule {
             const response = await fetch(url, { mode: "cors", signal });
             if (response.ok) {
                 var ktxData = await response.arrayBuffer();
-                var params = KTX.parseKTX(ktxData);
+                var params = KTX.parseKTX(new Uint8Array(ktxData));
                 return params;
             } else {
                 throw new Error(`HTTP Error:${response.status} ${response.status}`);

@@ -1,7 +1,9 @@
 import { ReadonlyVec3, vec3 } from "gl-matrix";
 import { AABB, BoundingSphere } from "core3d/scene";
-import { Double3, Float3, MaterialType, OptionalVertexAttribute, PrimitiveType, readSchema, Schema, SubMeshProjection } from "./schema";
+import { Double3, Float3, MaterialType, OptionalVertexAttribute, PrimitiveType, readSchema, Schema, SubMeshProjection, TextureSemantic } from "./schema";
 import { BufferReader, Float16Array } from "./util";
+import type { ComponentType, ShaderAttributeType, TextureParams, TextureParams2DArrayUncompressed, TextureParams2DUncompressed } from "webgl2";
+import { KTX } from "core3d/ktx";
 // import { Public, Render } from "types";
 // import { MeshDrawRange } from "../context";
 
@@ -38,21 +40,50 @@ export interface NodeData {
     readonly gpuBytes: number;
 }
 
+export interface VertexAttributeData {
+    readonly kind: ShaderAttributeType;
+    readonly componentType: ComponentType;
+    readonly buffer: number; // index into buffer array
+    readonly componentCount: 1 | 2 | 3 | 4;
+    readonly normalized: boolean;
+    readonly stride: number;
+    readonly offset?: number;
+};
+
+export interface VertexAttributes {
+    readonly position: VertexAttributeData;
+    readonly normal: VertexAttributeData | null;
+    readonly material: VertexAttributeData | null;
+    readonly objectId: VertexAttributeData | null;
+    readonly texCoord: VertexAttributeData | null;
+    readonly color: VertexAttributeData | null;
+    readonly intensity: VertexAttributeData | null;
+    readonly deviation: VertexAttributeData | null;
+}
+
 export interface SubMesh {
     readonly materialType: MaterialType;
     readonly primitiveType: PrimitiveTypeString;
-    readonly attributes: OptionalVertexAttribute;
+    readonly vertexAttributes: VertexAttributes;
     // either index range (if index buffer is defined) for use with drawElements(), or vertex range for use with drawArray()
     readonly drawRanges: MeshDrawRange[];
-    readonly positionBuffer: ArrayBuffer | undefined; // Buffer for positions only (for more efficient z-buffer pre-pass)
-    readonly vertexBuffer: ArrayBuffer; // Interleaved with all other attributes (including childIndex, objectId and materialIndex)
+    readonly vertexBuffers: readonly ArrayBuffer[];
+    // readonly positionBuffer: ArrayBuffer | undefined; // Buffer for positions only (for more efficient z-buffer pre-pass)
+    // readonly vertexBuffer: ArrayBuffer; // Interleaved with all other attributes (including childIndex, objectId and materialIndex)
     readonly indices: Uint16Array | Uint32Array | number; // Index buffer, or # vertices of none
+    readonly baseColorTexture: number | undefined; // texture index
+}
+
+export interface NodeTexture {
+    readonly semantic: TextureSemantic;
+    readonly transform: readonly number[]; // 3x3 matrix
+    readonly params: TextureParams;
 }
 
 // node geometry and textures
 export interface NodeGeometry {
     readonly subMeshes: readonly SubMesh[];
-    // TODO: include optional texture buffer and creation params, such as with/height and pixel format etc.
+    readonly textures: readonly (NodeTexture | undefined)[];
 }
 
 function getVec3(v: Float3 | Double3, i: number) {
@@ -144,7 +175,7 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
         if (predicate?.(objectId) ?? true) {
             const indices = subMeshProjection.numIndices[i];
             const vertices = subMeshProjection.numVertices[i];
-            const textureBytes = subMeshProjection.numTextureBytes[i];
+            const textureBytes = subMeshProjection.numTextureBytes[i]; // TODO: adjust by device profile/resolution
             const attributes = subMeshProjection.attributes[i];
             const primitiveType = subMeshProjection.primitiveType[i];
             const [pos, ...rest] = getVertexAttribNames(attributes);
@@ -208,7 +239,7 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
         const parentPrimitives = parentPrimitiveCounts[i];
         const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshRange, separatePositionBuffer, predicate);
         const primitivesDelta = primitives - (parentPrimitives ?? 0);
-        console.assert(primitivesDelta > 0);
+        // console.assert(primitivesDelta >= 0);
         children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
     }
     return children;
@@ -227,8 +258,9 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
             const attributes = subMesh.attributes[i];
             const vertexRange = getRange(subMesh.vertices, i);
             const indexRange = getRange(subMesh.indices, i);
+            const textureRange = getRange(subMesh.textures, i);
             if (materialType != MaterialType.elevation) // filter by material type (for now)
-                yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, vertexRange, indexRange };
+                yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, vertexRange, indexRange, textureRange };
         }
     }
 }
@@ -263,22 +295,23 @@ function fillToInterleavedArray<T extends TypedArray>(dst: T, src: number, byteO
 function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean): NodeGeometry {
     const { vertex, vertexIndex } = schema;
 
-    const optionalAttributes: OptionalVertexAttribute =
-        (vertex.normal ? OptionalVertexAttribute.normal : 0) |
-        (vertex.color ? OptionalVertexAttribute.color : 0) |
-        (vertex.texCoord ? OptionalVertexAttribute.texCoord : 0) |
-        (vertex.intensity ? OptionalVertexAttribute.intensity : 0) |
-        (vertex.deviation ? OptionalVertexAttribute.deviation : 0);
+    // const optionalAttributes: OptionalVertexAttribute =
+    //     (vertex.normal ? OptionalVertexAttribute.normal : 0) |
+    //     (vertex.color ? OptionalVertexAttribute.color : 0) |
+    //     (vertex.texCoord ? OptionalVertexAttribute.texCoord : 0) |
+    //     (vertex.intensity ? OptionalVertexAttribute.intensity : 0) |
+    //     (vertex.deviation ? OptionalVertexAttribute.deviation : 0);
 
     const filteredSubMeshes = [...getSubMeshes(schema, predicate)];
-    const allAttribNames = getVertexAttribNames(optionalAttributes);
-    const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're putting them in a separate buffer
-    const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
-    const positionStride = computeVertexOffsets([posName]).stride;
-    const attribOffsets = computeVertexOffsets(attribNames);
-    const vertexStride = attribOffsets.stride;
+    // const allAttribNames = getVertexAttribNames(optionalAttributes);
+    // const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're putting them in a separate buffer
+    // const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
+    // const positionStride = computeVertexOffsets([posName]).stride;
+    // const attribOffsets = computeVertexOffsets(attribNames);
+    // const vertexStride = attribOffsets.stride;
 
     let subMeshes: SubMesh[] = [];
+    const referencedTextures = new Set<number>();
 
     // group submeshes into drawable meshes (with common attributes)
     type Group = {
@@ -305,6 +338,13 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
         if (subMeshIndices.length == 0)
             continue;
         const groupMeshes = subMeshIndices.map(i => filteredSubMeshes[i]);
+
+        const allAttribNames = getVertexAttribNames(attributes);
+        const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're putting them in a separate buffer
+        const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
+        const positionStride = computeVertexOffsets([posName]).stride;
+        const attribOffsets = computeVertexOffsets(attribNames);
+        const vertexStride = attribOffsets.stride;
 
         const childIndices = [...new Set<number>(groupMeshes.map(sm => sm.childIndex))].sort();
         const numVertices = groupMeshes.map(sm => (sm.vertexRange[1] - sm.vertexRange[0])).reduce((a, b) => (a + b));
@@ -353,7 +393,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
                 }
 
                 if (positionBuffer) {
-                    // create seaparate positions buffer
+                    // create separate positions buffer
                     const i16 = new Int16Array(positionBuffer, vertexOffset * positionStride);
                     copyToInterleavedArray(i16, vertex.position.x, 0, positionStride, beginVtx, endVtx);
                     copyToInterleavedArray(i16, vertex.position.y, 2, positionStride, beginVtx, endVtx);
@@ -376,10 +416,63 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
         }
         console.assert(vertexOffset == numVertices);
         console.assert(idx == numIndices);
-        var indices = indexBuffer ?? numVertices;
-        subMeshes.push({ materialType, primitiveType: primitiveTypeStrings[primitiveType], attributes, positionBuffer, vertexBuffer, indices, drawRanges });
+        const indices = indexBuffer ?? numVertices;
+
+        const [beginTexture, endTexture] = groupMeshes[0].textureRange;
+        let baseColorTexture: number | undefined;
+        if (endTexture > beginTexture) {
+            console.assert(beginTexture + 3 == endTexture);
+            const textureRes = 0; // TODO: Adjust from device profile/resolution
+            baseColorTexture = beginTexture + textureRes;
+        }
+
+        if (baseColorTexture != undefined) {
+            referencedTextures.add(baseColorTexture);
+        }
+
+        const stride = vertexStride;
+        const buffer = 0;
+        const vertexBuffers = positionBuffer ? [vertexBuffer, positionBuffer] : [vertexBuffer];
+        const vertexAttributes = {
+            position: { kind: "FLOAT_VEC4", buffer: separatePositionBuffer ? 1 : 0, componentCount: 3, componentType: "SHORT", normalized: true, offset: attribOffsets["position"], stride: separatePositionBuffer ? 0 : stride },
+            normal: (attributes & OptionalVertexAttribute.normal) != 0 ? { kind: "FLOAT_VEC3", buffer, componentCount: 3, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["normal"], stride } : null,
+            material: { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, offset: attribOffsets["materialIndex"], stride },
+            objectId: { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, offset: attribOffsets["objectId"], stride },
+            texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, offset: attribOffsets["texCoord"], stride } : null,
+            color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["color"], stride } : null,
+            intensity: (attributes & OptionalVertexAttribute.intensity) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["intensity"], stride } : null,
+            deviation: (attributes & OptionalVertexAttribute.deviation) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "HALF_FLOAT", normalized: false, offset: attribOffsets["deviation"], stride } : null,
+        } as const satisfies VertexAttributes;
+
+        subMeshes.push({ materialType, primitiveType: primitiveTypeStrings[primitiveType], vertexAttributes, vertexBuffers, indices, baseColorTexture, drawRanges });
     }
-    return { subMeshes } as const;
+
+    const textures = new Array<NodeTexture | undefined>(schema.textureInfo.length);
+    const { textureInfo } = schema;
+    for (const i of referencedTextures) {
+        const [begin, end] = getRange(textureInfo.pixelRange, i);
+        const semantic = textureInfo.semantic[i];
+        const transform = [
+            textureInfo.transform.e00[i],
+            textureInfo.transform.e01[i],
+            textureInfo.transform.e02[i],
+            textureInfo.transform.e10[i],
+            textureInfo.transform.e11[i],
+            textureInfo.transform.e12[i],
+            textureInfo.transform.e20[i],
+            textureInfo.transform.e21[i],
+            textureInfo.transform.e22[i],
+        ] as const;
+        // const bytesPerPixel = 4;
+        // const size = 1 << Math.floor(Math.log2(Math.sqrt((end - begin) / bytesPerPixel)));
+        // const image = schema.texturePixels.subarray(end - size * size * bytesPerPixel, end);
+        // const params: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: size, height: size, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image };
+        const ktx = schema.texturePixels.subarray(begin, end);
+        const params = KTX.parseKTX(ktx);
+        textures[i] = { semantic, transform, params };
+    }
+
+    return { subMeshes, textures } as const satisfies NodeGeometry;
 }
 
 export function parseNode(id: string, separatePositionBuffer: boolean, version: string, buffer: ArrayBuffer) {

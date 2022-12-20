@@ -22,6 +22,7 @@ in struct {
     vec3 positionVS; // view space
     vec3 normalWS; // world spaec
     vec3 normalVS; // view space
+    vec2 texCoord0;
     float linearDepth;
 #ifdef IOS_WORKAROUND
     vec4 color;
@@ -41,6 +42,7 @@ layout(location = 1) out vec2 normal;
 layout(location = 2) out float linearDepth;
 layout(location = 3) out uvec2 info;
 
+uniform sampler2D texture_base_color;
 uniform samplerCube texture_ibl_diffuse;
 uniform samplerCube texture_ibl_specular;
 
@@ -63,40 +65,46 @@ vec3 sRGBToLinear(vec3 srgbIn) {
 }
 
 void main() {
-    vec4 materialColor;
+    vec4 baseColor;
     uint objectId;
 #if defined(IOS_WORKAROUND)
-    materialColor = varyings.color;
+    baseColor = varyings.color;
     objectId = uint(varyings.objectId[0]) | uint(varyings.objectId[1]) << 16U;
 #else
-    materialColor = varyingsFlat.color;
+    baseColor = varyingsFlat.color;
 #endif
 
-    vec4 diffuseOpacity = materialColor;
-    diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
+    vec4 rgba;
+    if(baseColor == vec4(0)) {
+        rgba = texture(texture_base_color, varyings.texCoord0);
+    } else {
+        vec4 diffuseOpacity = baseColor;
+        diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
 
-    vec4 specularShininess = vec4(mix(0.4, 0.1, materialColor.a)); // TODO: get from varyings instead
-    specularShininess.rgb = sRGBToLinear(specularShininess.rgb);
+        vec4 specularShininess = vec4(mix(0.4, 0.1, baseColor.a)); // TODO: get from varyings instead
+        specularShininess.rgb = sRGBToLinear(specularShininess.rgb);
 
-    vec3 V = camera.viewWorldMatrixNormal * normalize(varyings.positionVS);
-    vec3 N = normalize(gl_FrontFacing ? varyings.normalWS : -varyings.normalWS);
+        vec3 V = camera.viewWorldMatrixNormal * normalize(varyings.positionVS);
+        vec3 N = normalize(gl_FrontFacing ? varyings.normalWS : -varyings.normalWS);
 
-    vec3 irradiance = texture(texture_ibl_diffuse, N).rgb;
-    float perceptualRoughness = clamp((1.0 - specularShininess.a), 0.0, 1.0);
-    perceptualRoughness *= perceptualRoughness;
-    float lod = perceptualRoughness * (uMipCount - 1.0);
-    vec3 reflection = textureLod(texture_ibl_specular, reflect(V, N), lod).rgb;
+        vec3 irradiance = texture(texture_ibl_diffuse, N).rgb;
+        float perceptualRoughness = clamp((1.0 - specularShininess.a), 0.0, 1.0);
+        perceptualRoughness *= perceptualRoughness;
+        float lod = perceptualRoughness * (uMipCount - 1.0);
+        vec3 reflection = textureLod(texture_ibl_specular, reflect(V, N), lod).rgb;
 
-    vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
+        vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
+        rgba = vec4(rgb, baseColor.a);
+    }
 
-    // if(materialColor.a == 0.) 
-    //     discard;
-
-    // we put this here (late) to avoid problems with derivative functions
-    if((diffuseOpacity.a - 0.5 / 16.0) < dither(gl_FragCoord.xy))
+    // we put discards here (late) to avoid problems with derivative functions
+    if(rgba.a == 0.)
         discard;
 
-    color = vec4(rgb, materialColor.a);
+    if((rgba.a - 0.5 / 16.0) < dither(gl_FragCoord.xy))
+        discard;
+
+    color = rgba;
     normal = normalize(varyings.normalVS).xy;
     linearDepth = varyings.linearDepth;
     info = uvec2(objectId, 0);

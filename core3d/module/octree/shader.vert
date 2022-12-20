@@ -22,6 +22,7 @@ out struct {
     vec3 positionVS; // view space
     vec3 normalWS; // world space
     vec3 normalVS; // view space
+    vec2 texCoord0;
     float linearDepth;
 #ifdef IOS_WORKAROUND
     vec4 color;
@@ -41,10 +42,18 @@ layout(location = 0) in vec4 position;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in uint material;
 layout(location = 3) in uint objectId;
+layout(location = 4) in vec2 texCoord0;
+layout(location = 5) in vec4 color0;
+layout(location = 6) in float intensity;
+layout(location = 7) in float deviation;
 #else
 const vec3 normal = vec3(0);
 const uint material = uint(0);
 const uint objectId = uint(0);
+const vec2 texCoord0 = vec2(0);
+const vec4 color0 = vec4(0);
+const float intensity = 0.;
+const float deviation = 0.;
 #endif
 
 void main() {
@@ -53,8 +62,9 @@ void main() {
     varyings.positionVS = posVS.xyz;
     varyings.normalWS = normal;
     varyings.normalVS = camera.worldViewMatrixNormal * normal;
+    varyings.texCoord0 = texCoord0;
     varyings.linearDepth = -posVS.z;
-    uint rgba = materials.rgba[material / 4U][material % 4U];
+    uint rgba = material == 0xffU ? 0U : materials.rgba[material / 4U][material % 4U];
     vec4 unpack = vec4(float((rgba >> 0) & 0xffU), float((rgba >> 8) & 0xffU), float((rgba >> 16) & 0xffU), float((rgba >> 24) & 0xffU));
 #if defined(IOS_WORKAROUND)
     varyings.color = unpack / 255.0;

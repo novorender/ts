@@ -62,7 +62,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const programZ = glProgram(gl, { vertexShader, fragmentShader, flags: [...flags, "POS_ONLY"], uniformBufferBlocks });
         const programDebug = glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
         const materialsUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: 256 * 4 });
-        this.textureUniformLocations = glUniformLocations(gl, program, ["diffuse", "specular"] as const, "texture_ibl_");
+        this.textureUniformLocations = glUniformLocations(gl, program, ["ibl_diffuse", "ibl_specular", "base_color"] as const, "texture_");
         this.resources = { program, programZ, programDebug, materialsUniforms } as const;
     }
 
@@ -169,9 +169,11 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 program: programZ,
                 depthTest: true,
             });
+            gl.activeTexture(gl.TEXTURE0);
             for (const node of nodes) {
                 this.renderNode(node, true, true);
             }
+            gl.bindTexture(gl.TEXTURE_2D, null);
         }
     }
 
@@ -196,18 +198,21 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 depthFunc: usePrepass ? "LEQUAL" : "LESS",
                 depthWriteMask: true,
                 textures: [
-                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerSingle, uniform: textureUniformLocations.specular },
-                    { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerMip, uniform: textureUniformLocations.diffuse },
+                    { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle, uniform: textureUniformLocations.base_color },
+                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerSingle, uniform: textureUniformLocations.ibl_specular },
+                    { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerMip, uniform: textureUniformLocations.ibl_diffuse },
                 ],
                 // drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
                 drawBuffers: ["COLOR_ATTACHMENT0"],
             });
+            gl.activeTexture(gl.TEXTURE0);
             for (const node of nodes) {
                 if (node.visibility != Visibility.none) {
                     // TODO: extract meshes and sort by type so we can keep state changes to a minimum.
                     this.renderNode(node, false, !usePrepass);
                 }
             }
+            gl.bindTexture(gl.TEXTURE_2D, null);
 
             if (debug) {
                 glState(gl, {
@@ -260,6 +265,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     continue;
                 gl.bindVertexArray(prepass ? mesh.vaoPosOnly : mesh.vao);
                 gl.depthMask(writeZ);
+                gl.bindTexture(gl.TEXTURE_2D, mesh.baseColorTexture);
                 if (renderedChildMask == data.childMask) {
                     glDraw(gl, mesh.drawParams);
                 } else {

@@ -1,9 +1,12 @@
+import { glLimits } from "./limits";
+
 export function glVertexArray(gl: WebGL2RenderingContext, params: VertexArrayParams): WebGLVertexArrayObject {
     const vao = gl.createVertexArray()!;
+    const { MAX_VERTEX_ATTRIBS } = glLimits(gl);
     gl.bindVertexArray(vao);
-    let attribIndex = 0;
     const { attributes } = params;
-    for (const attribParams of attributes) {
+    for (let i = 0; i < MAX_VERTEX_ATTRIBS; i++) {
+        const attribParams = attributes[i];
         if (attribParams) {
             const { size, isInteger, defaultComponentType } = shaderTypeInfo[attribParams.kind];
             const componentType = attribParams.componentType ?? defaultComponentType;
@@ -13,17 +16,16 @@ export function glVertexArray(gl: WebGL2RenderingContext, params: VertexArrayPar
             const componentCount = attribParams.componentCount ?? (isMatrix(size) ? size[0] : size);
             const normalized = attribParams.normalized ?? false;
             gl.bindBuffer(gl.ARRAY_BUFFER, attribParams.buffer);
-            gl.enableVertexAttribArray(attribIndex);
+            gl.enableVertexAttribArray(i);
             if (isInteger) {
-                gl.vertexAttribIPointer(attribIndex, componentCount, gl[componentType], stride, offset);
+                gl.vertexAttribIPointer(i, componentCount, gl[componentType], stride, offset);
             } else {
-                gl.vertexAttribPointer(attribIndex, componentCount, gl[componentType], normalized, stride, offset);
+                gl.vertexAttribPointer(i, componentCount, gl[componentType], normalized, stride, offset);
             }
-            gl.vertexAttribDivisor(attribIndex, divisor);
+            gl.vertexAttribDivisor(i, divisor);
         } else {
-            gl.disableVertexAttribArray(attribIndex);
+            gl.disableVertexAttribArray(i);
         }
-        attribIndex++;
     };
     if (params.indices) {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, params.indices);
@@ -44,6 +46,7 @@ export type VertexAttribute = VertexAttributeFloat | VertexAttributeFloatNormali
 export type ComponentTypeFloat = "HALF_FLOAT" | "FLOAT";
 export type ComponentTypeInt = "BYTE" | "SHORT" | "INT";
 export type ComponentTypeUint = "UNSIGNED_BYTE" | "UNSIGNED_SHORT" | "UNSIGNED_INT";
+export type ComponentType = ComponentTypeFloat | ComponentTypeInt | ComponentTypeUint;
 export type ShaderTypeFloat = "FLOAT" | "FLOAT_VEC2" | "FLOAT_VEC3" | "FLOAT_VEC4" |
     // we allow matrix types as a convenience because gl.getActiveAttrib() could return such a type from a shader program.
     // each matrix row still has to be bound separately when defining attributes.
@@ -62,7 +65,7 @@ interface VertexAttributeCommon {
 
 export interface VertexAttributeFloat extends VertexAttributeCommon {
     readonly kind: ShaderTypeFloat;
-    readonly componentType?: ComponentTypeFloat | ComponentTypeInt | ComponentTypeUint; // default: FLOAT
+    readonly componentType?: ComponentType; // default: FLOAT
     readonly normalized?: false;
 }
 

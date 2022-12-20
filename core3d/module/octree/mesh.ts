@@ -1,6 +1,6 @@
-import { glBuffer, glVertexArray, DrawParams, VertexAttribute, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw } from "webgl2";
+import { glBuffer, glVertexArray, DrawParams, VertexAttribute, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glTexture } from "webgl2";
 import { MeshDrawRange, NodeGeometry } from "./parser";
-import { MaterialType } from "./schema";
+import { MaterialType, OptionalVertexAttribute } from "./schema";
 
 export interface Mesh {
     readonly materialType: MaterialType;
@@ -8,40 +8,78 @@ export interface Mesh {
     readonly vaoPosOnly: WebGLVertexArrayObject | null;
     readonly drawParams: DrawParams;
     readonly drawRanges: readonly MeshDrawRange[];
+    readonly baseColorTexture: WebGLTexture | null;
 }
 
+function layoutAttributes(attribs: readonly (VertexAttribute | null)[]): (VertexAttribute | null)[] {
+    const sizes = {
+        UNSIGNED_BYTE: 1,
+        BYTE: 1,
+        UNSIGNED_SHORT: 2,
+        SHORT: 2,
+        HALF_FLOAT: 2,
+        UNSIGNED_INT: 4,
+        INT: 4,
+        FLOAT: 4,
+    } as const;
+
+    let offset = 0;
+    const offsets: number[] = [];
+    function alignOffset(alignment: number) {
+        const padding = alignment - 1 - (offset + alignment - 1) % alignment;
+        offset += padding; // pad offset to be memory aligned.
+    }
+    let maxAlign = 1;
+    for (let i = 0; i < attribs.length; i++) {
+        const attrib = attribs[i];
+        if (attrib) {
+            const components = attrib.componentCount ?? 1;
+            const type = attrib.componentType ?? "FLOAT";
+            const bytesPerElement = sizes[type];
+            maxAlign = Math.max(maxAlign, bytesPerElement);
+            alignOffset(bytesPerElement);
+            offsets[i] = offset;
+            offset += bytesPerElement * components;
+        }
+    }
+    alignOffset(maxAlign); // align stride to largest attribute
+    const stride = offset;
+    return attribs.map((attrib, i) => { return attrib ? { ...attrib, offset: offsets[i], stride } as const satisfies VertexAttribute : null; });
+}
+
+
 export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry) {
+    const textures = geometry.textures.map(ti => {
+        if (ti) {
+            return glTexture(gl, ti.params);
+        }
+    });
+
     for (const subMesh of geometry.subMeshes) {
         // if (subMesh.materialType == MaterialType.transparent)
         //     continue;
-        const { positionBuffer, vertexBuffer, indices, drawRanges, materialType } = subMesh;
-        const pos = positionBuffer ? glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: positionBuffer }) : null;
-        const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vertexBuffer });
+        const { vertexAttributes, vertexBuffers, indices, drawRanges, materialType } = subMesh;
+        const buffers = vertexBuffers.map(vb => {
+            return glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vb });
+        })
         const ib = typeof indices != "number" ? glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
-        const attributes: VertexAttribute[] = pos ?
-            [
-                { kind: "FLOAT_VEC4", buffer: pos, componentCount: 3, componentType: "SHORT", normalized: true, stride: 0, offset: 0 }, // pos
-                { kind: "FLOAT_VEC3", buffer: vb, componentCount: 3, componentType: "BYTE", normalized: true, stride: 8, offset: 0 }, // normal
-                { kind: "UNSIGNED_INT", buffer: vb, componentType: "UNSIGNED_BYTE", stride: 8, offset: 3 }, // material index
-                { kind: "UNSIGNED_INT", buffer: vb, componentType: "UNSIGNED_INT", stride: 8, offset: 4 }, // object_id
-            ] :
-            [
-                { kind: "FLOAT_VEC4", buffer: vb, componentCount: 3, componentType: "SHORT", normalized: true, stride: 16, offset: 0 }, // pos
-                { kind: "FLOAT_VEC3", buffer: vb, componentCount: 3, componentType: "BYTE", normalized: true, stride: 16, offset: 6 }, // normal
-                { kind: "UNSIGNED_INT", buffer: vb, componentType: "UNSIGNED_BYTE", stride: 16, offset: 9 }, // material index
-                { kind: "UNSIGNED_INT", buffer: vb, componentType: "UNSIGNED_INT", stride: 16, offset: 12 }, // object_id
-            ];
+        const { position, normal, material, objectId, texCoord, color, intensity, deviation } = vertexAttributes;
+        const attributes = [position, normal, material, objectId, texCoord, color, intensity, deviation].
+            map(a => (a ? { ...a, buffer: buffers[a.buffer] } as VertexAttribute : null));
         const vao = glVertexArray(gl, { attributes, indices: ib });
-        const vaoPosOnly = glVertexArray(gl, { attributes: [attributes[0], null, null, null], indices: ib });
-        gl.deleteBuffer(pos);
-        gl.deleteBuffer(vb);
+        const vaoPosOnly = position.buffer == 1 ? glVertexArray(gl, { attributes: [attributes[0]], indices: ib }) : null;
+        for (const buffer of buffers) {
+            gl.deleteBuffer(buffer);
+        }
         if (ib) {
             gl.deleteBuffer(ib);
         }
         const drawParams: DrawParams = { kind: "elements", mode: subMesh.primitiveType, indexType, count };
-        yield { vao, vaoPosOnly, drawParams, drawRanges, materialType } as Mesh;
+        const baseColorTextureIndex = subMesh.baseColorTexture as number;
+        const baseColorTexture = textures[baseColorTextureIndex] ?? null;
+        yield { vao, vaoPosOnly, drawParams, drawRanges, materialType, baseColorTexture } as const satisfies Mesh;
     }
 }
 

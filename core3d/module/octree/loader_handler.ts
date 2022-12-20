@@ -88,13 +88,10 @@ export class LoaderHandler {
                 downloads.delete(id);
                 const { childInfos, geometry } = parseNode(id, separatePositionsBuffer, version, buffer);
                 response = { kind: "loaded", id, childInfos, geometry } as const satisfies LoadedMessage;
-                for (const { vertexBuffer, indices, positionBuffer } of geometry.subMeshes) {
-                    transfer.push(vertexBuffer);
+                for (const { vertexBuffers, indices } of geometry.subMeshes) {
+                    transfer.push(...vertexBuffers);
                     if (typeof indices != "number") {
                         transfer.push(indices.buffer);
-                    }
-                    if (positionBuffer) {
-                        transfer.push(positionBuffer);
                     }
                 }
             }

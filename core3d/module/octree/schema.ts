@@ -44,6 +44,9 @@ export interface VertexRange { readonly start: U32; readonly count: U32; };
 // Mesh vertex indices
 export interface VertexIndexRange { readonly start: U32; readonly count: U32; };
 
+// Mesh Textures
+export interface TextureInfoRange { readonly start: U8; readonly count: U8; };
+
 // Range into texture pixel blob.
 export interface PixelRange { readonly start: U32; readonly count: U32; };
 
@@ -118,6 +121,7 @@ export interface SubMesh {
     readonly attributes: EnumArray<OptionalVertexAttribute>;
     readonly vertices: VertexRange; // Vertices are local to each sub-mesh.
     readonly indices: VertexIndexRange; // Indices, if any, are 16-bit and relative to the local vertex range.
+    readonly textures: TextureInfoRange;
 };
 
 export interface TextureInfo {
@@ -252,6 +256,7 @@ export function readSchema(r: BufferReader) {
             attributes: r.u8(sizes[2]) as EnumArray<OptionalVertexAttribute>,
             vertices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexRange,
             indices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexIndexRange,
+            textures: { start: r.u8(sizes[2]), count: r.u8(sizes[2]) } as TextureInfoRange,
         } as SubMesh,
         textureInfo: {
             length: sizes[3],
