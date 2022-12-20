@@ -39,7 +39,7 @@ export function glProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
         for (const name of uniformBufferBlocks) {
             if (name) {
                 const blockIndex = gl.getUniformBlockIndex(program, name);
-                if (blockIndex != 0xffffffff) {
+                if (blockIndex != gl.INVALID_INDEX) {
                     gl.uniformBlockBinding(program, blockIndex, idx);
                 } else {
                     console.warn(`Shader has no uniform block named: ${name}!`);

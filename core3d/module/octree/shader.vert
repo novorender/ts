@@ -59,6 +59,7 @@ const float deviation = 0.;
 void main() {
     vec4 posVS = camera.localViewMatrix * node.modelLocalMatrix * position;
     gl_Position = camera.viewClipMatrix * posVS;
+    gl_PointSize = 1.; // TODO: set properly...
     varyings.positionVS = posVS.xyz;
     varyings.normalWS = normal;
     varyings.normalVS = camera.worldViewMatrixNormal * normal;

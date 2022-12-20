@@ -53,11 +53,11 @@ export async function run(canvas: HTMLCanvasElement) {
     state = modifyRenderState(state, {
         scene,
         background: { url: backgroundUrl, blur: 0.25 },
-        camera: { near: 1, far: 10000, position: [298995.87220525084, 48.56500795571233, -6699553.125910083] },
+        // camera: { near: 1, far: 10000, position: [298995.87220525084, 48.56500795571233, -6699553.125910083] },
         // grid: { enabled: true, origin: scene.config.boundingSphere.center },
         // cube: { enabled: true, clipDepth: 1 },
         // clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
-        tonemapping: { mode: TonemappingMode.color },
+        // tonemapping: { mode: TonemappingMode.objectId },
     });
 
     // controller.autoFitToScene(state);

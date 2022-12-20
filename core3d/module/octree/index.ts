@@ -206,6 +206,9 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 drawBuffers: ["COLOR_ATTACHMENT0"],
             });
             gl.activeTexture(gl.TEXTURE0);
+            // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
+            gl.vertexAttribI4ui(2, 0xff, 0, 0, 0); // material_index
+            gl.vertexAttribI4ui(3, 0xffffffff, 0, 0, 0); // object_id
             for (const node of nodes) {
                 if (node.visibility != Visibility.none) {
                     // TODO: extract meshes and sort by type so we can keep state changes to a minimum.

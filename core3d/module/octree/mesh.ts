@@ -76,7 +76,9 @@ export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry
         if (ib) {
             gl.deleteBuffer(ib);
         }
-        const drawParams: DrawParams = { kind: "elements", mode: subMesh.primitiveType, indexType, count };
+        const drawParams: DrawParams = ib ?
+            { kind: "elements", mode: subMesh.primitiveType, indexType, count } :
+            { kind: "arrays", mode: subMesh.primitiveType, count };
         const baseColorTextureIndex = subMesh.baseColorTexture as number;
         const baseColorTexture = textures[baseColorTextureIndex] ?? null;
         yield { vao, vaoPosOnly, drawParams, drawRanges, materialType, baseColorTexture } as const satisfies Mesh;

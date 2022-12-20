@@ -151,14 +151,19 @@ function computeVertexOffsets(attribs: readonly VertexAttribNames[]) {
     return offsets as { readonly [P in VertexAttribNames]?: number; } & { readonly stride: number; };
 }
 
-function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute) {
+function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, hasMaterials: boolean, hasObjectIds: boolean) {
     const attribNames: VertexAttribNames[] = ["position"];
     if (optionalAttributes & OptionalVertexAttribute.normal) attribNames.push("normal");
     if (optionalAttributes & OptionalVertexAttribute.color) attribNames.push("color");
     if (optionalAttributes & OptionalVertexAttribute.texCoord) attribNames.push("texCoord");
     if (optionalAttributes & OptionalVertexAttribute.intensity) attribNames.push("intensity");
     if (optionalAttributes & OptionalVertexAttribute.deviation) attribNames.push("deviation");
-    attribNames.push("materialIndex", "objectId");
+    if (hasMaterials) {
+        attribNames.push("materialIndex");
+    }
+    if (hasObjectIds) {
+        attribNames.push("objectId");
+    }
     return attribNames;
 }
 
@@ -170,6 +175,7 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
     let totalNumIndices = 0;
     let totalNumVertices = 0;
     let totalNumVertexBytes = 0;
+
     for (let i = begin; i < end; i++) {
         const objectId = subMeshProjection.objectId[i];
         if (predicate?.(objectId) ?? true) {
@@ -178,7 +184,11 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
             const textureBytes = subMeshProjection.numTextureBytes[i]; // TODO: adjust by device profile/resolution
             const attributes = subMeshProjection.attributes[i];
             const primitiveType = subMeshProjection.primitiveType[i];
-            const [pos, ...rest] = getVertexAttribNames(attributes);
+            // we assume that textured nodes are terrain with no material index (but object_id?).
+            // TODO: state these values explicitly in binary format instead
+            const hasMaterials = textureBytes == 0;
+            const hasObjectIds = true;
+            const [pos, ...rest] = getVertexAttribNames(attributes, hasMaterials, hasObjectIds);
             const numBytesPerVertex = separatePositionBuffer ?
                 computeVertexOffsets([pos]).stride + computeVertexOffsets(rest).stride :
                 computeVertexOffsets([pos, ...rest]).stride;
@@ -295,20 +305,7 @@ function fillToInterleavedArray<T extends TypedArray>(dst: T, src: number, byteO
 function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean): NodeGeometry {
     const { vertex, vertexIndex } = schema;
 
-    // const optionalAttributes: OptionalVertexAttribute =
-    //     (vertex.normal ? OptionalVertexAttribute.normal : 0) |
-    //     (vertex.color ? OptionalVertexAttribute.color : 0) |
-    //     (vertex.texCoord ? OptionalVertexAttribute.texCoord : 0) |
-    //     (vertex.intensity ? OptionalVertexAttribute.intensity : 0) |
-    //     (vertex.deviation ? OptionalVertexAttribute.deviation : 0);
-
     const filteredSubMeshes = [...getSubMeshes(schema, predicate)];
-    // const allAttribNames = getVertexAttribNames(optionalAttributes);
-    // const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're putting them in a separate buffer
-    // const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
-    // const positionStride = computeVertexOffsets([posName]).stride;
-    // const attribOffsets = computeVertexOffsets(attribNames);
-    // const vertexStride = attribOffsets.stride;
 
     let subMeshes: SubMesh[] = [];
     const referencedTextures = new Set<number>();
@@ -338,8 +335,10 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
         if (subMeshIndices.length == 0)
             continue;
         const groupMeshes = subMeshIndices.map(i => filteredSubMeshes[i]);
+        const hasMaterials = groupMeshes.some(m => m.materialIndex != 0xff);
+        const hasObjectIds = groupMeshes.some(m => m.objectId != 0xffffffff);
 
-        const allAttribNames = getVertexAttribNames(attributes);
+        const allAttribNames = getVertexAttribNames(attributes, hasMaterials, hasObjectIds);
         const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're putting them in a separate buffer
         const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
         const positionStride = computeVertexOffsets([posName]).stride;
@@ -436,8 +435,9 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
         const vertexAttributes = {
             position: { kind: "FLOAT_VEC4", buffer: separatePositionBuffer ? 1 : 0, componentCount: 3, componentType: "SHORT", normalized: true, offset: attribOffsets["position"], stride: separatePositionBuffer ? 0 : stride },
             normal: (attributes & OptionalVertexAttribute.normal) != 0 ? { kind: "FLOAT_VEC3", buffer, componentCount: 3, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["normal"], stride } : null,
-            material: { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, offset: attribOffsets["materialIndex"], stride },
-            objectId: { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, offset: attribOffsets["objectId"], stride },
+            // material: hasMaterials ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, offset: attribOffsets["materialIndex"], stride } : null,
+            material: hasMaterials ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, offset: attribOffsets["materialIndex"], stride } : null,
+            objectId: hasObjectIds ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, offset: attribOffsets["objectId"], stride } : null,
             texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, offset: attribOffsets["texCoord"], stride } : null,
             color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["color"], stride } : null,
             intensity: (attributes & OptionalVertexAttribute.intensity) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["intensity"], stride } : null,
