@@ -1,7 +1,7 @@
-import type { DerivedRenderState, Matrices, RenderContext, RenderStateCamera, RenderStateClipping } from "core3d";
+import type { DerivedRenderState, RenderContext } from "core3d";
 import { CoordSpace } from "core3d";
-import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, glUniformsInfo } from "webgl2";
+import { RenderModuleContext, RenderModule } from "..";
+import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, glUniformsInfo, UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat4, vec3, vec4 } from "gl-matrix";
@@ -22,25 +22,18 @@ export class ClippingModule implements RenderModule {
         "colors.5": "vec4",
         numPlanes: "uint",
         mode: "uint",
-    } as const;
+    } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
         return new ClippingModuleContext(context, this);
     }
 }
 
-interface RelevantRenderState {
-    clipping: RenderStateClipping;
-    matrices: Matrices;
-};
-
 class ClippingModuleContext implements RenderModuleContext {
-    private readonly state;
     readonly uniforms;
     readonly resources;
 
     constructor(readonly context: RenderContext, readonly data: ClippingModule) {
-        this.state = new RenderModuleState<RelevantRenderState>();
         this.uniforms = createUniformsProxy(data.uniforms);
         const { gl } = context;
         const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Clipping"] });
@@ -54,7 +47,7 @@ class ClippingModuleContext implements RenderModuleContext {
         const { context, resources } = this;
         const { clipping, matrices } = state;
         const { uniforms } = resources;
-        if (this.state.hasChanged({ clipping, matrices })) {
+        if (context.hasStateChanged({ clipping, matrices })) {
             const { values } = this.uniforms;
             const { enabled, mode, planes } = clipping;
             // transform clipping planes into view space
@@ -80,13 +73,13 @@ class ClippingModuleContext implements RenderModuleContext {
         }
     }
 
-    render() {
-        const { context, resources, state } = this;
+    render(state: DerivedRenderState) {
+        const { context, resources } = this;
         const { program, uniforms } = resources;
         const { gl, cameraUniforms } = context;
-        const { current } = state;
+        const { clipping } = state;
 
-        if (current?.clipping.enabled && current?.clipping.draw) {
+        if (clipping.enabled && clipping.draw) {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],

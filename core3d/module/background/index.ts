@@ -1,7 +1,7 @@
-import type { DerivedRenderState, RenderContext, RenderStateBackground } from "core3d";
+import type { DerivedRenderState, RenderContext } from "core3d";
 import { KTX } from "core3d/ktx";
-import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformsProxy, glClear, glProgram, glSampler, glTexture, glDraw, glUniformLocations, glState, TextureParams, glBuffer, glDelete, TextureParams2DUncompressedMipMapped } from "webgl2";
+import { RenderModuleContext, RenderModule } from "..";
+import { createUniformsProxy, glClear, glProgram, glSampler, glTexture, glDraw, glUniformLocations, glState, TextureParams, glBuffer, glDelete, TextureParams2DUncompressedMipMapped, UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
@@ -19,10 +19,10 @@ export class BackgroundModule implements RenderModule {
     readonly uniforms = {
         envBlurNormalized: "float",
         mipCount: "int",
-    } as const;
+    } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
-        return new BackgroundModuleInstance(context, this);
+        return new BackgroundModuleContext(context, this);
     }
 
     // TODO: Move into worker?
@@ -62,18 +62,12 @@ export class BackgroundModule implements RenderModule {
     }
 }
 
-interface RelevantRenderState {
-    background: RenderStateBackground;
-};
-
-class BackgroundModuleInstance implements RenderModuleContext {
-    readonly state;
+class BackgroundModuleContext implements RenderModuleContext {
     readonly uniforms;
     readonly textureUniformLocations;
     readonly resources;
 
     constructor(readonly context: RenderContext, readonly data: BackgroundModule) {
-        this.state = new RenderModuleState<RelevantRenderState>();
         const { gl } = context;
         this.uniforms = createUniformsProxy(data.uniforms);
         const uniformBufferBlocks = ["Camera", "Background"];
@@ -85,7 +79,7 @@ class BackgroundModuleInstance implements RenderModuleContext {
         this.textureUniformLocations = glUniformLocations(gl, program, ["skybox", "diffuse"] as const, "textures_");
     }
 
-    updateUniforms(state: RelevantRenderState) {
+    updateUniforms(state: DerivedRenderState) {
         const { background } = state;
         const { values } = this.uniforms;
         values.envBlurNormalized = background.blur ?? 0;
@@ -116,7 +110,7 @@ class BackgroundModuleInstance implements RenderModuleContext {
             data.textureParams = undefined; // we already copied the pixels into texture, so get no longer need the original.
         }
 
-        if (this.state.hasChanged({ background }) || textureParams) {
+        if (context.hasStateChanged({ background }) || textureParams) {
             this.updateUniforms(state);
             context.updateUniformBuffer(resources.uniforms, this.uniforms);
             const { url } = state.background;
@@ -141,8 +135,8 @@ class BackgroundModuleInstance implements RenderModuleContext {
         glClear(this.context.gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
     }
 
-    render() {
-        const { context, resources, state } = this;
+    render(state: DerivedRenderState) {
+        const { context, resources } = this;
         const { program, uniforms, samplerSingle, samplerMip } = resources;
         const { gl, cameraUniforms } = context;
 
@@ -174,7 +168,7 @@ class BackgroundModuleInstance implements RenderModuleContext {
             });
             glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
         } else {
-            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.current?.background.color });
+            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
         }
     }
 

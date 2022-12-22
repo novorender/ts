@@ -1,7 +1,7 @@
-import type { DerivedRenderState, Matrices, RenderContext, RenderStateCamera, RenderStateGrid } from "core3d";
+import type { DerivedRenderState, RenderContext } from "core3d";
 import { CoordSpace } from "core3d";
-import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete } from "webgl2";
+import { RenderModuleContext, RenderModule } from "..";
+import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
@@ -16,26 +16,18 @@ export class GridModule implements RenderModule {
         size2: "float",
         color: "vec3",
         distance: "float",
-    } as const;
+    } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
         return new GridModuleContext(context, this);
     }
 }
 
-interface RelevantRenderState {
-    camera: RenderStateCamera;
-    grid: RenderStateGrid;
-    matrices: Matrices;
-};
-
 class GridModuleContext implements RenderModuleContext {
-    private readonly state;
     readonly uniforms;
     readonly resources;
 
     constructor(readonly context: RenderContext, readonly data: GridModule) {
-        this.state = new RenderModuleState<RelevantRenderState>();
         this.uniforms = createUniformsProxy(data.uniforms);
         const { gl } = context;
         const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Grid"] });
@@ -46,7 +38,7 @@ class GridModuleContext implements RenderModuleContext {
     update(state: DerivedRenderState) {
         const { context, resources } = this;
         const { uniforms } = resources;
-        if (this.state.hasChanged(state)) {
+        if (context.hasStateChanged(state)) {
             const { data } = this;
             const { values } = this.uniforms;
             const { grid, matrices, camera } = state;
@@ -64,12 +56,12 @@ class GridModuleContext implements RenderModuleContext {
         }
     }
 
-    render() {
-        const { context, resources, state } = this;
+    render(state: DerivedRenderState) {
+        const { context, resources } = this;
         const { program, uniforms } = resources;
         const { gl } = context;
 
-        if (state.current?.grid.enabled) {
+        if (state.grid.enabled) {
             glState(gl, {
                 program,
                 uniformBuffers: [uniforms],

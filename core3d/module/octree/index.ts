@@ -1,30 +1,34 @@
-import { CoordSpace, DerivedRenderState, Matrices, RenderContext, RenderStateScene, ViewFrustum } from "core3d";
-import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
+import { DerivedRenderState, RenderContext } from "core3d";
+import { RenderModuleContext, RenderModule } from "..";
 import { createSceneRootNode } from "core3d/scene";
 import { NodeState, OctreeContext, OctreeNode, Visibility } from "./node";
 import { Downloader } from "./download";
-import { createUniformsProxy, glBuffer, glDelete, glDraw, glProgram, glState, glUniformLocations, glUpdateBuffer } from "webgl2";
+import { glBuffer, glDelete, glDraw, glProgram, glState, glUniformLocations, glUpdateBuffer } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import vertexShaderDebug from "./shader_debug.vert";
 import fragmentShaderDebug from "./shader_debug.frag";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
-import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
+import { ReadonlyVec3, vec3 } from "gl-matrix";
 import { NodeLoader } from "./loader";
 
-export class OctreeModule implements RenderModule {
-    readonly uniforms = {
-        // ibl params
-        // sun params (+ambient)
-        // headlight params
-        // elevation params
-        // outline params
-        // clipping planes
-        // materials
-        // elevation colors
-    } as const;
+/*
+add new highlight vertex attribute
+  one byte per vertex
+  keep in separate vertex buffer
+  can be null if no highlights are applied to mesh
+when objects groups changes
+  recreate vertex buffer from submesh info
+  foreach group
+    foreach object_id
+       ranges = map<object_id,ranges> of currently loaded submeshes
+       foreach range
+         buffer.fill(group.highlight_index, range)
+keep highlight transforms in uniform_buffer, or texture as before
+*/
 
+export class OctreeModule implements RenderModule {
     readonly loader = new NodeLoader({ useWorker: true });
 
     withContext(context: RenderContext) {
@@ -32,14 +36,7 @@ export class OctreeModule implements RenderModule {
     }
 }
 
-interface RelevantRenderState {
-    scene: RenderStateScene | undefined;
-    matrices: Matrices;
-    viewFrustum: ViewFrustum;
-}
-
 class OctreeModuleContext implements RenderModuleContext, OctreeContext {
-    readonly state;
     readonly resources;
     readonly textureUniformLocations;
     readonly loader: NodeLoader;
@@ -53,7 +50,6 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly projectedSizeSplitThreshold = 1 / 0.5; // / (settings.quality.detail.value * deviceProfile.detailBias); // baseline node size split threshold = 50% of view height
 
     constructor(readonly renderContext: RenderContext, readonly data: OctreeModule) {
-        this.state = new RenderModuleState<RelevantRenderState>();
         this.loader = data.loader;
         const { gl } = renderContext;
         const flags = ["IOS_WORKAROUND"];
@@ -73,7 +69,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { gl } = renderContext;
         const { scene, matrices, viewFrustum } = state;
 
-        if (this.state.hasChanged({ scene, matrices, viewFrustum })) {
+        if (renderContext.hasStateChanged({ scene, matrices, viewFrustum })) {
             this.localSpaceChanged = state.localSpaceTranslation !== this.localSpaceTranslation;
             this.localSpaceTranslation = state.localSpaceTranslation;
             const url = scene?.url;

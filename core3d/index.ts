@@ -34,8 +34,9 @@ export async function run(canvas: HTMLCanvasElement) {
     let state = defaultRenderState();
     let prevState = state;
     // const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
-    // const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
-    const sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
+    const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    // const sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim
+    // const sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     const backgroundUrl = new URL("/assets/env/lake/", scriptUrl).toString();
     const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
@@ -47,8 +48,14 @@ export async function run(canvas: HTMLCanvasElement) {
         { normalOffset: [0, 0, 1, 0], color: [0, 0, 1, 0.5] },
     ];
 
-    // const controller = new OrbitController({ kind: "orbit" }, canvas);
-    const controller = new OrbitController({ kind: "orbit", pivotPoint: [298995.87220525084, 48.56500795571233, -6699553.125910083] }, canvas);
+    /*
+    Pack vertex attributes more tightly (fill in gaps)
+    Use model space xz coords for UV on terrain (fix offset/aabb)
+    weighted center/sort triangle by area
+    */
+
+    const controller = new OrbitController({ kind: "orbit" }, canvas);
+    // const controller = new OrbitController({ kind: "orbit", pivotPoint: [298995.87220525084, 48.56500795571233, -6699553.125910083] }, canvas);
 
     state = modifyRenderState(state, {
         scene,
@@ -60,7 +67,7 @@ export async function run(canvas: HTMLCanvasElement) {
         // tonemapping: { mode: TonemappingMode.objectId },
     });
 
-    // controller.autoFitToScene(state);
+    controller.autoFitToScene(state);
 
     function resize() {
         // const scale = devicePixelRatio / 2;

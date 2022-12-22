@@ -1,4 +1,4 @@
-import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderModuleState, RenderStateCamera, CoordSpace, createDefaultModules } from "./";
+import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderStateCamera, CoordSpace, createDefaultModules } from "./";
 import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformsProxy, UniformsProxy } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
@@ -15,8 +15,6 @@ export class RenderContext {
     private static defaultModules: readonly RenderModule[] | undefined;
     private readonly modules: readonly RenderModule[];
     private readonly moduleContexts: (RenderModuleContext | undefined)[];
-    private outputState;
-    private cameraState;
     private cameraUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
     readonly gl: WebGL2RenderingContext;
@@ -31,6 +29,7 @@ export class RenderContext {
     // readonly iblUniforms: WebGLBuffer | null = null;
 
     // shared mutable state
+    prevState: DerivedRenderState | undefined;
     changed = true; // flag to force a re-render when internal render module state has changed, e.g. on download complete.
     buffers: RenderBuffers = undefined!; // output render buffers
     iblTextures: { // these are set by the background module, once download is complete
@@ -63,8 +62,6 @@ export class RenderContext {
                 this.moduleContexts[i] = m;
             });
         });
-        this.outputState = new RenderModuleState<RenderStateOutput>();
-        this.cameraState = new RenderModuleState<RenderStateCamera>();
 
         this.cameraUniformsData = createUniformsProxy({
             clipViewMatrix: "mat4",
@@ -110,6 +107,21 @@ export class RenderContext {
         }
     }
 
+    hasStateChanged(state: Partial<DerivedRenderState>) {
+        const { prevState } = this;
+        let changed = false;
+        // do a shallow reference comparison of root properties
+        for (const prop in state) {
+            const p = prop as keyof RenderState;
+            if (!prevState || prevState[p] !== state[p]) {
+                changed = true;
+                break;
+            }
+        }
+        return changed;
+    }
+
+
     protected contextLost() {
         for (const module of this.moduleContexts) {
             module?.contextLost();
@@ -122,12 +134,12 @@ export class RenderContext {
 
     protected render(state: RenderState) {
         const beginTime = performance.now();
-        const { gl, canvas } = this;
+        const { gl, canvas, prevState } = this;
         this.changed = false;
 
         // handle resizes
         let resized = false;
-        if (this.outputState.hasChanged(state.output)) {
+        if (state.output !== prevState?.output) {
             const { width, height } = state.output;
             console.assert(Number.isInteger(width) && Number.isInteger(height));
             canvas.width = width;
@@ -140,7 +152,7 @@ export class RenderContext {
 
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
         const derivedState = state as Mutable<DerivedRenderState>;
-        if (resized || this.cameraState.hasChanged(state.camera)) {
+        if (resized || state.camera !== prevState?.camera) {
             const snapDist = 1024; // make local space roughly within 1KM of camera
             const dist = Math.max(...vec3.sub(vec3.create(), state.camera.position, this.localSpaceTranslation).map(c => Math.abs(c)));
             // don't change localspace unless camera is far enough away. we want to avoid flipping back and forth across snap boundaries.
@@ -180,7 +192,7 @@ export class RenderContext {
                         drawBuffers: [],
                         // colorMask: [false, false, false, false],
                     })
-                    module.prepass();
+                    module.prepass(derivedState);
                     // reset gl state
                     glState(gl, null);
                 }
@@ -195,13 +207,14 @@ export class RenderContext {
                     frameBuffer: this.buffers.resources.frameBuffer,
                     drawBuffers: ["COLOR_ATTACHMENT0"],
                 })
-                module.render();
+                module.render(derivedState);
                 // reset gl state
                 glState(gl, null);
             }
         }
 
         this.buffers.invalidate();
+        this.prevState = derivedState;
 
         const endTime = performance.now();
         // console.log(endTime - beginTime);

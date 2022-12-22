@@ -1,6 +1,6 @@
-import type { DerivedRenderState, RenderContext, RenderStateCamera, RenderStateTonemapping } from "core3d";
-import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformsProxy, glProgram, glSampler, glDraw, glUniformLocations, glState, glDelete, glBuffer } from "webgl2";
+import type { DerivedRenderState, RenderContext } from "core3d";
+import { RenderModuleContext, RenderModule } from "..";
+import { createUniformsProxy, glProgram, glSampler, glDraw, glUniformLocations, glState, glDelete, glBuffer, UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
@@ -9,27 +9,20 @@ export class TonemapModule implements RenderModule {
         exposure: "float",
         mode: "uint",
         maxLinearDepth: "float",
-    } as const;
+    } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
-        return new TonemapModuleInstance(context, this);
+        return new TonemapModuleContext(context, this);
     }
 }
 
-interface RelevantRenderState {
-    readonly camera: RenderStateCamera;
-    readonly tonemapping: RenderStateTonemapping;
-};
-
-class TonemapModuleInstance implements RenderModuleContext {
-    readonly state;
+class TonemapModuleContext implements RenderModuleContext {
     readonly uniforms;
     readonly textureUniformLocations;
     readonly resources;
 
     constructor(readonly context: RenderContext, readonly data: TonemapModule) {
         const { gl } = context;
-        this.state = new RenderModuleState<RelevantRenderState>();
         this.uniforms = createUniformsProxy(data.uniforms);
         const uniformBufferBlocks = ["Tonemapping"];
         const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks });
@@ -44,7 +37,7 @@ class TonemapModuleInstance implements RenderModuleContext {
         const { uniforms } = this.resources
         const { camera, tonemapping } = state;
 
-        if (this.state.hasChanged({ camera, tonemapping })) {
+        if (context.hasStateChanged({ camera, tonemapping })) {
             const { camera, tonemapping } = state;
             const { values } = this.uniforms;
             values.exposure = Math.pow(2, tonemapping.exposure);
@@ -53,7 +46,6 @@ class TonemapModuleInstance implements RenderModuleContext {
             context.updateUniformBuffer(uniforms, this.uniforms);
         }
     }
-
 
     render() {
         const { context, textureUniformLocations } = this;

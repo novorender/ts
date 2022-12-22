@@ -1,7 +1,7 @@
-import type { DerivedRenderState, Matrices, RenderContext, RenderStateCube } from "core3d";
+import type { DerivedRenderState, RenderContext } from "core3d";
 import { CoordSpace } from "core3d";
-import { RenderModuleContext, RenderModule, RenderModuleState } from "..";
-import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, glTransformFeedback } from "webgl2";
+import { RenderModuleContext, RenderModule } from "..";
+import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, glTransformFeedback, UniformTypes } from "webgl2";
 import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
@@ -13,25 +13,18 @@ export class CubeModule implements RenderModule {
     readonly uniforms = {
         modelViewMatrix: "mat4",
         clipDepth: "float",
-    } as const;
+    } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
         return new CubeModuleContext(context, this);
     }
 }
 
-interface RelevantRenderState {
-    cube: RenderStateCube;
-    matrices: Matrices;
-};
-
 class CubeModuleContext implements RenderModuleContext {
-    private readonly state;
     readonly uniforms;
     readonly resources;
 
     constructor(readonly context: RenderContext, readonly data: CubeModule) {
-        this.state = new RenderModuleState<RelevantRenderState>();
         this.uniforms = createUniformsProxy(data.uniforms);
         const { gl } = context;
         const vertices = createVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
@@ -89,11 +82,10 @@ class CubeModuleContext implements RenderModuleContext {
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
-        if (this.state.hasChanged(state)) {
-            const { data } = this;
+        const { cube, matrices } = state;
+        if (context.hasStateChanged({ cube, matrices })) {
             const { values } = this.uniforms;
-            const { matrices } = state;
-            const { scale, position, clipDepth } = state.cube;
+            const { scale, position, clipDepth } = cube;
             const m = [
                 scale, 0, 0, 0,
                 0, scale, 0, 0,
@@ -109,13 +101,12 @@ class CubeModuleContext implements RenderModuleContext {
         }
     }
 
-
-    render() {
-        const { context, resources, state } = this;
+    render(state: DerivedRenderState) {
+        const { context, resources } = this;
         const { program, program_line, program_transform, uniforms, vao, transformFeedback, vao_tri, vao_line, vb_line } = resources;
         const { gl, cameraUniforms, clippingUniforms } = context;
 
-        if (state.current?.cube.enabled) {
+        if (state.cube.enabled) {
             // transform vertex triplets into intersection lines
             glState(gl, {
                 program: program_transform,
