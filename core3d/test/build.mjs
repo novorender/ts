@@ -21,6 +21,7 @@ const buildOptions = {
     outdir: "./dist",
     loader: {
         ".wasm": "binary",
+        ".bin": "binary",
         ".glsl": "text",
         ".vert": "text",
         ".frag": "text",

@@ -5,13 +5,12 @@ import { GridModule } from "./grid";
 import { OctreeModule } from "./octree";
 import { TonemapModule } from "./tonemap";
 import { CubeModule } from "./cube";
-// import type { UniformTypes } from "@novorender/webgl2";
 import { ClippingModule } from "./clipping";
+import { WatermarkModule } from "./watermark";
 
 // contains all state (geometry, textures etc), or has at least the ability to reload state on demand if e.g. webgl context is lost
 export interface RenderModule {
     withContext(context: RenderContext): RenderModuleContext | Promise<RenderModuleContext>;
-    // readonly uniforms: Record<string, UniformTypes>;
 }
 
 // contains module's GPU resources
@@ -30,6 +29,7 @@ export function createDefaultModules() {
         new OctreeModule(),
         new GridModule(),
         new ClippingModule(),
+        new WatermarkModule(),
         new TonemapModule(),
     ];
 }

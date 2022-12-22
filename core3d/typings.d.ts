@@ -22,3 +22,9 @@ declare module "*.worker.js" {
     const createWorker: () => Worker;
     export default createWorker;
 }
+
+declare module "*.bin" {
+    const data: Uint8Array;
+    export default data;
+}
+

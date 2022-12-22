@@ -23,7 +23,7 @@
 - [x] tonemapping (and debug shading)
 - [ ] sun light (with ambient)
 - [ ] camera headlight
-- [ ] watermark
+- [x] watermark
 - [ ] ocean?
 - [ ] camera controllers
 - [ ] device profile
