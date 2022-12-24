@@ -4,6 +4,8 @@ import { OctreeSceneConfig } from "./scene";
 export type RGB = readonly [red: number, green: number, blue: number];
 export type RGBA = readonly [red: number, green: number, blue: number, alpha: number];
 
+export type FixedSizeArray<N extends number, T> = N extends 0 ? never[] : { 0: T; length: N; } & ReadonlyArray<T>;
+
 export interface ViewFrustum {
     readonly left: ReadonlyVec4;
     readonly right: ReadonlyVec4;
@@ -92,6 +94,28 @@ export interface RenderStateClipping {
     readonly planes: readonly ClippingPlane[];
 }
 
+export interface RenderStateHighlightGroup {
+    /** 5x4 row-major matrix for color/opacity transform.
+     * @remarks
+     * This matrix defines the linear transformation that is applied to the original RGBA color before rendering.
+     * The fifth column is multiplied by a constant 1, making it useful for translation.
+     * The resulting colors are computed thus:
+     * ```
+     * output_red = r*m[0] + g*m[1] + b*m[2] + a*m[3] + m[4]
+     * output_green = r*m[5] + g*m[6] + b*m[7] + a*m[8] + m[9]
+     * output_blue = r*m[10] + g*m[11] + b*m[12] + a*m[13] + m[14]
+     * output_alpha = r*m[15] + g*m[16] + b*m[17] + a*m[18] + m[19]
+     * ```
+     * All input values are between 0 and 1 and output value will be clamped to this range.
+     */
+    readonly rgbaTransform: FixedSizeArray<20, number>;
+    readonly objectIds: Iterable<number>; // must be sorted in ascending order!
+}
+
+export interface RenderStateHighlightGroups {
+    readonly groups: readonly RenderStateHighlightGroup[];
+}
+
 export const enum TonemappingMode {
     color,
     normal,
@@ -122,6 +146,7 @@ export interface RenderState {
     readonly cube: RenderStateCube;
     readonly scene: RenderStateScene | undefined;
     readonly clipping: RenderStateClipping;
+    readonly highlights: RenderStateHighlightGroups;
     readonly tonemapping: RenderStateTonemapping;
 }
 
@@ -196,6 +221,9 @@ export function defaultRenderState(): RenderState {
             draw: false,
             mode: 0,
             planes: [],
+        },
+        highlights: {
+            groups: [],
         },
         tonemapping: {
             exposure: 0,

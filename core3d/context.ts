@@ -299,6 +299,9 @@ export class RenderContext {
         gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
         const [nx, ny, depth] = floats;
         const [objectId] = uints;
+        if (objectId == 0xffffffff) {
+            return undefined;
+        }
         const [deviation16, intensity16] = new Uint16Array(uints.buffer, 4);
         const deviation = wasm.float32(deviation16);
         const intensity = wasm.float32(intensity16);

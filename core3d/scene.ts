@@ -50,7 +50,7 @@ export interface OctreeSceneConfig {
     readonly materialProperties: MaterialProperties;
 
     readonly modelWorldMatrix?: ReadonlyMat4; // model -> world space transformation matrix
-    readonly subtrees?: ("terrain" | "triangles" | "lines" | "points")[];
+    readonly subtrees?: ("terrain" | "triangles" | "lines" | "points" | "documents")[];
     readonly variants?: ("deviation" | "intensity")[];
 }
 

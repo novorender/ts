@@ -29,7 +29,8 @@ keep highlight transforms in uniform_buffer, or texture as before
 */
 
 export class OctreeModule implements RenderModule {
-    readonly loader = new NodeLoader({ useWorker: true });
+    readonly loader = new NodeLoader({ useWorker: false });
+    readonly maxHighlights = 8;
 
     withContext(context: RenderContext) {
         return new OctreeModuleContext(context, this);
@@ -53,13 +54,14 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         this.loader = data.loader;
         const { gl } = renderContext;
         const flags = ["IOS_WORKAROUND"];
-        const uniformBufferBlocks = ["Camera", "Materials", "Node"];
+        const uniformBufferBlocks = ["Camera", "Materials", "Highlights", "Node"];
         const program = glProgram(gl, { vertexShader, fragmentShader, flags, uniformBufferBlocks });
         const programZ = glProgram(gl, { vertexShader, fragmentShader, flags: [...flags, "POS_ONLY"], uniformBufferBlocks });
         const programDebug = glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
         const materialsUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: 256 * 4 });
+        const highlightUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: data.maxHighlights * 5 * 4 * 4 });
         this.textureUniformLocations = glUniformLocations(gl, program, ["ibl_diffuse", "ibl_specular", "base_color"] as const, "texture_");
-        this.resources = { program, programZ, programDebug, materialsUniforms } as const;
+        this.resources = { program, programZ, programDebug, materialsUniforms, highlightUniforms } as const;
     }
 
     update(state: DerivedRenderState) {
@@ -67,7 +69,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         const { renderContext, resources, projectedSizeSplitThreshold } = this;
         const { gl } = renderContext;
-        const { scene, matrices, viewFrustum } = state;
+        const { scene, matrices, viewFrustum, highlights } = state;
 
         if (renderContext.hasStateChanged({ scene, matrices, viewFrustum })) {
             this.localSpaceChanged = state.localSpaceTranslation !== this.localSpaceTranslation;
@@ -90,6 +92,37 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 this.rootNode = undefined;
             }
             this.url = url;
+        }
+
+        if (renderContext.hasStateChanged({ highlights })) {
+            const { groups } = highlights;
+            const transforms = groups.map(g => g.rgbaTransform);
+            const prevTransforms = renderContext.prevState?.highlights.groups.map(g => g.rgbaTransform) ?? [];
+            if (!sequenceEqual(transforms, prevTransforms)) {
+                console.log("updating highlight matrices...");
+                const n = groups.length;
+                const highlightUniformsData = new Float32Array(n * 20);
+                for (let i = 0; i < n; i++) {
+                    const { rgbaTransform } = groups[i];
+                    for (let row = 0; row < 4; row++) {
+                        // copy 4x4 matrix
+                        for (let col = 0; col < 4; col++) {
+                            highlightUniformsData[i * 20 + row * 4 + col] = rgbaTransform[row * 5 + col];
+                        }
+                        // copy translation vector
+                        highlightUniformsData[i * 20 + 16 + row] = rgbaTransform[row * 5 + 4];
+                    }
+                }
+                glUpdateBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: highlightUniformsData, targetBuffer: resources.highlightUniforms });
+            }
+            const objectIds = groups.map(g => g.objectIds);
+            const prevObjectIds = renderContext.prevState?.highlights.groups.map(g => g.objectIds) ?? [];
+            if (!sequenceEqual(objectIds, prevObjectIds)) {
+                console.log("updating highlight vertex attributes...");
+                for (const node of iterateNodes(this.rootNode)) {
+                    node.applyHighlightGroups(groups);
+                }
+            }
         }
 
         const { rootNode } = this;
@@ -176,7 +209,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     render() {
         const { resources, renderContext, rootNode, debug } = this;
         const { usePrepass } = renderContext;
-        const { program, programDebug, materialsUniforms } = resources;
+        const { program, programDebug, materialsUniforms, highlightUniforms } = resources;
         const { gl, iblTextures, cameraUniforms } = renderContext;
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
@@ -188,7 +221,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const specular = iblTextures?.specular ?? null;
             glState(gl, {
                 program: program,
-                uniformBuffers: [cameraUniforms, materialsUniforms],
+                uniformBuffers: [cameraUniforms, materialsUniforms, highlightUniforms],
                 cullEnable: true,
                 depthTest: true,
                 depthFunc: usePrepass ? "LEQUAL" : "LESS",
@@ -198,13 +231,14 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerSingle, uniform: textureUniformLocations.ibl_specular },
                     { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerMip, uniform: textureUniformLocations.ibl_diffuse },
                 ],
-                // drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
-                drawBuffers: ["COLOR_ATTACHMENT0"],
+                drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
+                // drawBuffers: ["COLOR_ATTACHMENT0"],
             });
             gl.activeTexture(gl.TEXTURE0);
             // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
             gl.vertexAttribI4ui(2, 0xff, 0, 0, 0); // material_index
             gl.vertexAttribI4ui(3, 0xffffffff, 0, 0, 0); // object_id
+            gl.vertexAttribI4ui(8, 0, 0, 0, 0); // highlight_index
             for (const node of nodes) {
                 if (node.visibility != Visibility.none) {
                     // TODO: extract meshes and sort by type so we can keep state changes to a minimum.
@@ -256,7 +290,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { gl } = this.renderContext;
         const { data, renderedChildMask } = node;
         if (renderedChildMask) {
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, node.uniforms ?? null);
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, 3, node.uniforms ?? null);
             for (const mesh of node.meshes) {
                 const { materialType } = mesh;
                 const isTransparent = materialType == MaterialType.transparent;
@@ -280,17 +314,16 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
     renderNodeDebug(node: OctreeNode) {
         const { renderContext, resources } = this;
-        const { materialsUniforms } = resources;
+        const { materialsUniforms, highlightUniforms } = resources;
         const { gl, cameraUniforms } = renderContext;
 
         if (node.renderedChildMask) {
             glState(gl, {
-                uniformBuffers: [cameraUniforms, materialsUniforms, node.uniforms],
+                uniformBuffers: [cameraUniforms, materialsUniforms, highlightUniforms, node.uniforms],
             });
             glDraw(gl, { kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
         }
     }
-
 
     contextLost() {
         const { loader, downloader, rootNode } = this;
@@ -325,10 +358,12 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 }
 
 
-function* iterateNodes(node: OctreeNode): IterableIterator<OctreeNode> {
-    yield node;
-    for (const child of node.children) {
-        yield* iterateNodes(child);
+function* iterateNodes(node: OctreeNode | undefined): IterableIterator<OctreeNode> {
+    if (node) {
+        yield node;
+        for (const child of node.children) {
+            yield* iterateNodes(child);
+        }
     }
 }
 
@@ -356,4 +391,16 @@ function interleaveRGBA(r: Uint8ClampedArray, g: Uint8ClampedArray, b: Uint8Clam
         rgba[j++] = a[i];
     }
     return rgba;
+}
+
+function sequenceEqual(a: any[], b: any[]) {
+    if (a.length != b.length) {
+        return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] != b[i]) {
+            return false;
+        }
+    }
+    return true;
 }

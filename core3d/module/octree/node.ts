@@ -1,8 +1,8 @@
 import { mat4, ReadonlyMat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
 import { createUniformsProxy, glDraw, DrawParams, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glState, glBuffer, glUpdateBuffer } from "webgl2";
-import { CoordSpace, DerivedRenderState, RenderContext } from "core3d";
+import { CoordSpace, DerivedRenderState, RenderContext, RenderStateHighlightGroup } from "core3d";
 import { AbortableDownload, Downloader } from "./download";
-import { createMeshes, deleteMesh, Mesh, meshPrimitiveCount } from "./mesh";
+import { createMeshes, deleteMesh, Mesh, meshPrimitiveCount, updateMeshHighlightGroups } from "./mesh";
 import { NodeData, parseNode } from "./parser";
 import { MaterialType } from "./schema";
 import { NodeLoader } from "./loader";
@@ -249,7 +249,7 @@ export class OctreeNode {
 
     async downloadGeometry() {
         try {
-            const { context, children, meshes, data } = this;
+            const { context, children, meshes } = this;
             const { renderContext, loader, version } = context;
             const { gl } = renderContext;
             this.state = NodeState.downloading;
@@ -264,6 +264,10 @@ export class OctreeNode {
                 meshes.push(...createMeshes(gl, geometry));
                 this.uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniformsData.buffer.byteLength });
                 glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
+                const groups = renderContext.prevState?.highlights.groups;
+                if (groups && groups.length) {
+                    this.applyHighlightGroups(groups);
+                }
                 renderContext.changed = true;
             }
         } catch (error: any) {
@@ -271,6 +275,16 @@ export class OctreeNode {
                 console.error(error);
             } else {
                 console.info(`abort ${this.id}`);
+            }
+        }
+    }
+
+    applyHighlightGroups(groups: readonly RenderStateHighlightGroup[]) {
+        const { meshes } = this;
+        if (meshes) {
+            const { gl } = this.context.renderContext;
+            for (const mesh of meshes) {
+                updateMeshHighlightGroups(gl, mesh, groups);
             }
         }
     }

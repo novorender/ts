@@ -11,6 +11,15 @@ layout(std140) uniform Materials {
     uvec4 rgba[64];
 } materials;
 
+const uint maxHighlights = 8U;
+struct HighlightMatrix {
+    mat4 transform;
+    vec4 translate;
+};
+layout(std140) uniform Highlights {
+    HighlightMatrix matrix[maxHighlights];
+} highlights;
+
 layout(std140) uniform Node {
     mat4 modelLocalMatrix;
     vec4 debugColor;
@@ -26,7 +35,8 @@ out struct {
     float linearDepth;
 #ifdef IOS_WORKAROUND
     vec4 color;
-    vec2 objectId; // older (<A15) IOS and Ipads crash if we use uint here, so we use two floats instead
+    vec2 objectId; // older (<A15) IOS and IPADs crash if we use uint here, so we use two floats instead
+    float highlight;
 #endif
 } varyings;
 
@@ -34,6 +44,7 @@ out struct {
 flat out struct {
     vec4 color;
     uint objectId;
+    uint highlight;
 } varyingsFlat;
 #endif
 
@@ -46,14 +57,16 @@ layout(location = 4) in vec2 texCoord0;
 layout(location = 5) in vec4 color0;
 layout(location = 6) in float intensity;
 layout(location = 7) in float deviation;
+layout(location = 8) in uint highlight;
 #else
 const vec3 normal = vec3(0);
-const uint material = uint(0);
-const uint objectId = uint(0);
+const uint material = 0U;
+const uint objectId = 0U;
 const vec2 texCoord0 = vec2(0);
 const vec4 color0 = vec4(0);
 const float intensity = 0.;
 const float deviation = 0.;
+const uint highlight = 0U;
 #endif
 
 void main() {
@@ -70,8 +83,10 @@ void main() {
 #if defined(IOS_WORKAROUND)
     varyings.color = unpack / 255.0;
     varyings.objectId = vec2(objectId & 0xffffU, objectId >> 16U) + 0.5;
+    varyings.highlight = float(highlight);
 #else
     varyingsFlat.color = unpack / 255.0;
     varyingsFlat.objectId = objectId;
+    varyingsFlat.highlight = highlight;
 #endif
 }

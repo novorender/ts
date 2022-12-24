@@ -40,6 +40,7 @@ class CubeModuleContext implements RenderModuleContext {
             triplets.set(pb, i * 3 + 3);
             triplets.set(pc, i * 3 + 6);
         }
+
         // create static GPU resources here
         const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
         const program_line = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });

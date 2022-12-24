@@ -1,5 +1,5 @@
 import { RenderContext } from "./context";
-import { ClippingPlane, defaultRenderState, modifyRenderState, TonemappingMode } from "./state";
+import { ClippingMode, ClippingPlane, defaultRenderState, modifyRenderState, TonemappingMode } from "./state";
 import { OrbitController } from "./controller";
 import { downloadScene } from "./scene";
 import { glExtensions } from "@novorender/webgl2";
@@ -33,8 +33,8 @@ export async function run(canvas: HTMLCanvasElement) {
     const wasm = await wasmInstance();
     let state = defaultRenderState();
     let prevState = state;
-    // const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
-    const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    // const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
     // const sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim
     // const sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
@@ -61,7 +61,7 @@ export async function run(canvas: HTMLCanvasElement) {
         scene,
         background: { url: backgroundUrl, blur: 0.25 },
         // camera: { near: 1, far: 10000, position: [298995.87220525084, 48.56500795571233, -6699553.125910083] },
-        // grid: { enabled: true, origin: scene.config.boundingSphere.center },
+        // grid: { enabled: true, /* origin: scene.config.boundingSphere.center */ },
         // cube: { enabled: true, clipDepth: 1 },
         // clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
         // tonemapping: { mode: TonemappingMode.objectId },
@@ -84,9 +84,25 @@ export async function run(canvas: HTMLCanvasElement) {
 
     let context: RenderContext | undefined = new RenderContext(canvas, wasm, options);
 
+    const rgbaTransform = [
+        0, 0, 0, 0, 1, // red
+        0, 0, 0, 0, 0, // green
+        0, 0, 0, 0, 0, // blue
+        0, 0, 0, 0, 1, // alpha
+    ] as const;
+
     canvas.addEventListener("click", async (e) => {
         if (context) {
             const r = await context["pick"](e.offsetX, e.offsetY);
+            if (r) {
+                const { objectId } = r;
+                state = modifyRenderState(state, {
+                    highlights: {
+                        groups: [{ rgbaTransform, objectIds: [objectId] }]
+                    }
+                });
+            }
+            // TODO: figure out why perf sux on safari
             console.log(r);
         }
     });

@@ -11,6 +11,15 @@ layout(std140) uniform Materials {
     uvec4 rgba[64];
 } materials;
 
+const uint maxHighlights = 8U;
+struct HighlightMatrix {
+    mat4 transform;
+    vec4 translate;
+};
+layout(std140) uniform Highlights {
+    HighlightMatrix matrix[maxHighlights];
+} highlights;
+
 layout(std140) uniform Node {
     mat4 modelLocalMatrix;
     vec4 debugColor;
@@ -27,6 +36,7 @@ in struct {
 #ifdef IOS_WORKAROUND
     vec4 color;
     vec2 objectId; // older (<A15) IOS and Ipads crash if we use uint here, so we use two floats instead
+    float highlight;
 #endif
 } varyings;
 
@@ -34,6 +44,7 @@ in struct {
 flat in struct {
     vec4 color;
     uint objectId;
+    uint highlight;
 } varyingsFlat;
 #endif
 
@@ -67,11 +78,15 @@ vec3 sRGBToLinear(vec3 srgbIn) {
 void main() {
     vec4 baseColor;
     uint objectId;
+    uint highlight;
 #if defined(IOS_WORKAROUND)
     baseColor = varyings.color;
     objectId = uint(varyings.objectId[0]) | uint(varyings.objectId[1]) << 16U;
+    highlight = uint(round(varyings.highlight));
 #else
     baseColor = varyingsFlat.color;
+    objectId = varyingsFlat.objectId;
+    highlight = varyingsFlat.highlight;
 #endif
 
     vec4 rgba;
@@ -95,6 +110,11 @@ void main() {
 
         vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
         rgba = vec4(rgb, baseColor.a);
+    }
+
+    if(highlight != 0U) {
+        HighlightMatrix mtx = highlights.matrix[int(highlight) - 1];
+        rgba = mtx.transform * rgba + mtx.translate;
     }
 
     // we put discards here (late) to avoid problems with derivative functions
