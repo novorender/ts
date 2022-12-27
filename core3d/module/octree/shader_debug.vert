@@ -7,10 +7,6 @@ layout(std140) uniform Camera {
     mat3 viewWorldMatrixNormal;
 } camera;
 
-layout(std140) uniform Materials {
-    uvec4 rgba[64];
-} materials;
-
 const uint maxHighlights = 256U;
 
 layout(std140) uniform Node {

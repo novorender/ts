@@ -7,10 +7,6 @@ layout(std140) uniform Camera {
     mat3 viewWorldMatrixNormal;
 } camera;
 
-layout(std140) uniform Materials {
-    uvec4 rgba[64];
-} materials;
-
 const uint maxHighlights = 256U;
 
 layout(std140) uniform Node {
@@ -20,7 +16,8 @@ layout(std140) uniform Node {
     vec3 max;
 } node;
 
-uniform sampler2D texture_ColorMatrices;
+uniform sampler2D texture_materials;
+uniform sampler2D texture_highlights;
 
 out struct {
     vec3 positionVS; // view space
@@ -73,14 +70,13 @@ void main() {
     varyings.normalVS = camera.worldViewMatrixNormal * normal;
     varyings.texCoord0 = texCoord0;
     varyings.linearDepth = -posVS.z;
-    uint rgba = material == 0xffU ? 0U : materials.rgba[material / 4U][material % 4U];
-    vec4 unpack = vec4(float((rgba >> 0) & 0xffU), float((rgba >> 8) & 0xffU), float((rgba >> 16) & 0xffU), float((rgba >> 24) & 0xffU));
+    vec4 color = material == 0xffU ? vec4(0) : texture(texture_materials, vec2((float(material) + .5) / 256., .5));
 #if defined(IOS_WORKAROUND)
-    varyings.color = unpack / 255.0;
+    varyings.color = color;
     varyings.objectId = vec2(objectId & 0xffffU, objectId >> 16U) + 0.5;
     varyings.highlight = float(highlight);
 #else
-    varyingsFlat.color = unpack / 255.0;
+    varyingsFlat.color = color;
     varyingsFlat.objectId = objectId;
     varyingsFlat.highlight = highlight;
 #endif

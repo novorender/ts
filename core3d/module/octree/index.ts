@@ -3,7 +3,7 @@ import { RenderModuleContext, RenderModule } from "..";
 import { createSceneRootNode } from "core3d/scene";
 import { NodeState, OctreeContext, OctreeNode, Visibility } from "./node";
 import { Downloader } from "./download";
-import { glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glUniformLocations, glUpdateBuffer, glUpdateTexture } from "webgl2";
+import { glDelete, glDraw, glProgram, glSampler, glState, glTexture, glUniformLocations, glUpdateTexture } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import vertexShaderDebug from "./shader_debug.vert";
@@ -39,15 +39,15 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         this.loader = data.loader;
         const { gl } = renderContext;
         const flags = ["IOS_WORKAROUND"];
-        const uniformBufferBlocks = ["Camera", "Materials", "Node"];
+        const uniformBufferBlocks = ["Camera", "Node"];
         const program = glProgram(gl, { vertexShader, fragmentShader, flags, uniformBufferBlocks });
         const programZ = glProgram(gl, { vertexShader, fragmentShader, flags: [...flags, "POS_ONLY"], uniformBufferBlocks });
         const programDebug = glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
-        const materialsUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: 256 * 4 });
         const samplerNearest = glSampler(gl, { minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        const materialTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null }); // using a texture is faster than a uniform buffer on safari
         const highlightTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image: null }); // using a texture is faster than a uniform buffer on safari
-        this.textureUniformLocations = glUniformLocations(gl, program, ["ibl_diffuse", "ibl_specular", "base_color", "color_matrices"] as const, "texture_");
-        this.resources = { program, programZ, programDebug, materialsUniforms, samplerNearest, highlightTexture } as const;
+        this.textureUniformLocations = glUniformLocations(gl, program, ["ibl_diffuse", "ibl_specular", "base_color", "materials", "highlights"] as const, "texture_");
+        this.resources = { program, programZ, programDebug, samplerNearest, materialTexture, highlightTexture } as const;
     }
 
     update(state: DerivedRenderState) {
@@ -69,9 +69,9 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 this.downloader.baseUrl = new URL(url);
                 this.rootNode = createSceneRootNode(this, config);
                 this.rootNode.downloadGeometry();
-                const materialUniformsData = this.makeMaterialUniforms(state);
-                if (materialUniformsData) {
-                    glUpdateBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: materialUniformsData, targetBuffer: resources.materialsUniforms });
+                const materialData = this.makeMaterialUniforms(state);
+                if (materialData) {
+                    glUpdateTexture(gl, resources.materialTexture, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: materialData });
                 }
             } else if (!url) {
                 this.rootNode?.dispose();
@@ -183,7 +183,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     render() {
         const { resources, renderContext, rootNode, debug } = this;
         const { usePrepass } = renderContext;
-        const { program, programDebug, materialsUniforms, samplerNearest, highlightTexture } = resources;
+        const { program, programDebug, samplerNearest, materialTexture, highlightTexture } = resources;
         const { gl, iblTextures, cameraUniforms } = renderContext;
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
@@ -195,7 +195,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const specular = iblTextures?.specular ?? null;
             glState(gl, {
                 program: program,
-                uniformBuffers: [cameraUniforms, materialsUniforms],
+                uniformBuffers: [cameraUniforms],
                 cullEnable: true,
                 depthTest: true,
                 depthFunc: usePrepass ? "LEQUAL" : "LESS",
@@ -204,7 +204,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle, uniform: textureUniformLocations.base_color },
                     { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerSingle, uniform: textureUniformLocations.ibl_specular },
                     { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerMip, uniform: textureUniformLocations.ibl_diffuse },
-                    { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest, uniform: textureUniformLocations.color_matrices },
+                    { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest, uniform: textureUniformLocations.materials },
+                    { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest, uniform: textureUniformLocations.highlights },
                 ],
                 drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
                 // drawBuffers: ["COLOR_ATTACHMENT0"],
@@ -265,7 +266,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { gl } = this.renderContext;
         const { data, renderedChildMask } = node;
         if (renderedChildMask) {
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, node.uniforms ?? null);
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, node.uniforms ?? null);
             for (const mesh of node.meshes) {
                 const { materialType } = mesh;
                 const isTransparent = materialType == MaterialType.transparent;
@@ -289,12 +290,11 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
     renderNodeDebug(node: OctreeNode) {
         const { renderContext, resources } = this;
-        const { materialsUniforms } = resources;
         const { gl, cameraUniforms } = renderContext;
 
         if (node.renderedChildMask) {
             glState(gl, {
-                uniformBuffers: [cameraUniforms, materialsUniforms, node.uniforms],
+                uniformBuffers: [cameraUniforms, node.uniforms],
             });
             glDraw(gl, { kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
         }
@@ -383,7 +383,7 @@ function decodeBase64(base64: string | undefined): Uint8ClampedArray | undefined
 function interleaveRGBA(r: Uint8ClampedArray, g: Uint8ClampedArray, b: Uint8ClampedArray, a: Uint8ClampedArray) {
     const n = r.length;
     console.assert(n == g.length && n == b.length && n == a.length);
-    const rgba = new Uint8ClampedArray(n * 4);
+    const rgba = new Uint8ClampedArray(256 * 4);
     let j = 0;
     for (let i = 0; i < n; i++) {
         rgba[j++] = r[i];

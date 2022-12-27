@@ -7,10 +7,6 @@ layout(std140) uniform Camera {
     mat3 viewWorldMatrixNormal;
 } camera;
 
-layout(std140) uniform Materials {
-    uvec4 rgba[64];
-} materials;
-
 const uint maxHighlights = 256U;
 
 layout(std140) uniform Node {
@@ -49,7 +45,8 @@ layout(location = 3) out uvec2 info;
 uniform sampler2D texture_base_color;
 uniform samplerCube texture_ibl_diffuse;
 uniform samplerCube texture_ibl_specular;
-uniform sampler2D texture_color_matrices;
+uniform sampler2D texture_materials;
+uniform sampler2D texture_highlights;
 
 const mat4 ditherThresholds = mat4(0.0 / 16.0, 8.0 / 16.0, 2.0 / 16.0, 10.0 / 16.0, 12.0 / 16.0, 4.0 / 16.0, 14.0 / 16.0, 6.0 / 16.0, 3.0 / 16.0, 11.0 / 16.0, 1.0 / 16.0, 9.0 / 16.0, 15.0 / 16.0, 7.0 / 16.0, 13.0 / 16.0, 5.0 / 16.0);
 
@@ -109,15 +106,12 @@ void main() {
     if(highlight != 0U) {
         float u = (float(highlight) - 0.5) / float(maxHighlights);
         mat4 colorTransform;
-        colorTransform[0] = texture(texture_color_matrices, vec2(u, 0.5 / 5.0));
-        colorTransform[1] = texture(texture_color_matrices, vec2(u, 1.5 / 5.0));
-        colorTransform[2] = texture(texture_color_matrices, vec2(u, 2.5 / 5.0));
-        colorTransform[3] = texture(texture_color_matrices, vec2(u, 3.5 / 5.0));
-        vec4 colorTranslation = texture(texture_color_matrices, vec2(u, 4.5 / 5.0));
+        colorTransform[0] = texture(texture_highlights, vec2(u, 0.5 / 5.0));
+        colorTransform[1] = texture(texture_highlights, vec2(u, 1.5 / 5.0));
+        colorTransform[2] = texture(texture_highlights, vec2(u, 2.5 / 5.0));
+        colorTransform[3] = texture(texture_highlights, vec2(u, 3.5 / 5.0));
+        vec4 colorTranslation = texture(texture_highlights, vec2(u, 4.5 / 5.0));
         rgba = colorTransform * rgba + colorTranslation;
-        // mat4 transform = highlights.transform[int(highlight) - 1];
-        // vec4 translate = highlights.translate[int(highlight) - 1];
-        // rgba = transform * rgba + translate;
     }
 
     // we put discards here (late) to avoid problems with derivative functions
