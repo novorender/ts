@@ -11,7 +11,7 @@
 - [x] loading/parsing in web worker
 - [x] pick
 - [ ] measure
-- [ ] **highlighting**
+- [x] **highlighting**
 - [x] materials
 - [x] large coordinates
 - [ ] terrain elevation

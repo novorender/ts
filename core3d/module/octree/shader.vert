@@ -11,14 +11,7 @@ layout(std140) uniform Materials {
     uvec4 rgba[64];
 } materials;
 
-const uint maxHighlights = 8U;
-struct HighlightMatrix {
-    mat4 transform;
-    vec4 translate;
-};
-layout(std140) uniform Highlights {
-    HighlightMatrix matrix[maxHighlights];
-} highlights;
+const uint maxHighlights = 256U;
 
 layout(std140) uniform Node {
     mat4 modelLocalMatrix;
@@ -26,6 +19,8 @@ layout(std140) uniform Node {
     vec3 min;
     vec3 max;
 } node;
+
+uniform sampler2D texture_ColorMatrices;
 
 out struct {
     vec3 positionVS; // view space
@@ -54,18 +49,18 @@ layout(location = 1) in vec3 normal;
 layout(location = 2) in uint material;
 layout(location = 3) in uint objectId;
 layout(location = 4) in vec2 texCoord0;
-layout(location = 5) in vec4 color0;
-layout(location = 6) in float intensity;
-layout(location = 7) in float deviation;
-layout(location = 8) in uint highlight;
+// layout(location = 5) in vec4 color0;
+// layout(location = 6) in float intensity;
+// layout(location = 7) in float deviation;
+layout(location = 5) in uint highlight;
 #else
 const vec3 normal = vec3(0);
 const uint material = 0U;
 const uint objectId = 0U;
 const vec2 texCoord0 = vec2(0);
-const vec4 color0 = vec4(0);
-const float intensity = 0.;
-const float deviation = 0.;
+// const vec4 color0 = vec4(0);
+// const float intensity = 0.;
+// const float deviation = 0.;
 const uint highlight = 0U;
 #endif
 

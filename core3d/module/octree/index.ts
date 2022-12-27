@@ -1,9 +1,9 @@
-import { DerivedRenderState, RenderContext } from "core3d";
+import { DerivedRenderState, RenderContext, RenderStateHighlightGroup } from "core3d";
 import { RenderModuleContext, RenderModule } from "..";
 import { createSceneRootNode } from "core3d/scene";
 import { NodeState, OctreeContext, OctreeNode, Visibility } from "./node";
 import { Downloader } from "./download";
-import { glBuffer, glDelete, glDraw, glProgram, glState, glUniformLocations, glUpdateBuffer } from "webgl2";
+import { glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glUniformLocations, glUpdateBuffer, glUpdateTexture } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import vertexShaderDebug from "./shader_debug.vert";
@@ -12,21 +12,6 @@ import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
 import { ReadonlyVec3, vec3 } from "gl-matrix";
 import { NodeLoader } from "./loader";
-
-/*
-add new highlight vertex attribute
-  one byte per vertex
-  keep in separate vertex buffer
-  can be null if no highlights are applied to mesh
-when objects groups changes
-  recreate vertex buffer from submesh info
-  foreach group
-    foreach object_id
-       ranges = map<object_id,ranges> of currently loaded submeshes
-       foreach range
-         buffer.fill(group.highlight_index, range)
-keep highlight transforms in uniform_buffer, or texture as before
-*/
 
 export class OctreeModule implements RenderModule {
     readonly loader = new NodeLoader({ useWorker: false });
@@ -54,14 +39,15 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         this.loader = data.loader;
         const { gl } = renderContext;
         const flags = ["IOS_WORKAROUND"];
-        const uniformBufferBlocks = ["Camera", "Materials", "Highlights", "Node"];
+        const uniformBufferBlocks = ["Camera", "Materials", "Node"];
         const program = glProgram(gl, { vertexShader, fragmentShader, flags, uniformBufferBlocks });
         const programZ = glProgram(gl, { vertexShader, fragmentShader, flags: [...flags, "POS_ONLY"], uniformBufferBlocks });
         const programDebug = glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
         const materialsUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: 256 * 4 });
-        const highlightUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: data.maxHighlights * 5 * 4 * 4 });
-        this.textureUniformLocations = glUniformLocations(gl, program, ["ibl_diffuse", "ibl_specular", "base_color"] as const, "texture_");
-        this.resources = { program, programZ, programDebug, materialsUniforms, highlightUniforms } as const;
+        const samplerNearest = glSampler(gl, { minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        const highlightTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image: null }); // using a texture is faster than a uniform buffer on safari
+        this.textureUniformLocations = glUniformLocations(gl, program, ["ibl_diffuse", "ibl_specular", "base_color", "color_matrices"] as const, "texture_");
+        this.resources = { program, programZ, programDebug, materialsUniforms, samplerNearest, highlightTexture } as const;
     }
 
     update(state: DerivedRenderState) {
@@ -99,26 +85,14 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const transforms = groups.map(g => g.rgbaTransform);
             const prevTransforms = renderContext.prevState?.highlights.groups.map(g => g.rgbaTransform) ?? [];
             if (!sequenceEqual(transforms, prevTransforms)) {
-                console.log("updating highlight matrices...");
-                const n = groups.length;
-                const highlightUniformsData = new Float32Array(n * 20);
-                for (let i = 0; i < n; i++) {
-                    const { rgbaTransform } = groups[i];
-                    for (let row = 0; row < 4; row++) {
-                        // copy 4x4 matrix
-                        for (let col = 0; col < 4; col++) {
-                            highlightUniformsData[i * 20 + row * 4 + col] = rgbaTransform[row * 5 + col];
-                        }
-                        // copy translation vector
-                        highlightUniformsData[i * 20 + 16 + row] = rgbaTransform[row * 5 + 4];
-                    }
-                }
-                glUpdateBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: highlightUniformsData, targetBuffer: resources.highlightUniforms });
+                // update highlight matrices
+                const image = createColorTransforms(groups);
+                glUpdateTexture(gl, resources.highlightTexture, { kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image });
             }
             const objectIds = groups.map(g => g.objectIds);
             const prevObjectIds = renderContext.prevState?.highlights.groups.map(g => g.objectIds) ?? [];
             if (!sequenceEqual(objectIds, prevObjectIds)) {
-                console.log("updating highlight vertex attributes...");
+                // update highlight vertex attributes
                 for (const node of iterateNodes(this.rootNode)) {
                     node.applyHighlightGroups(groups);
                 }
@@ -209,7 +183,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     render() {
         const { resources, renderContext, rootNode, debug } = this;
         const { usePrepass } = renderContext;
-        const { program, programDebug, materialsUniforms, highlightUniforms } = resources;
+        const { program, programDebug, materialsUniforms, samplerNearest, highlightTexture } = resources;
         const { gl, iblTextures, cameraUniforms } = renderContext;
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
@@ -221,7 +195,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const specular = iblTextures?.specular ?? null;
             glState(gl, {
                 program: program,
-                uniformBuffers: [cameraUniforms, materialsUniforms, highlightUniforms],
+                uniformBuffers: [cameraUniforms, materialsUniforms],
                 cullEnable: true,
                 depthTest: true,
                 depthFunc: usePrepass ? "LEQUAL" : "LESS",
@@ -230,6 +204,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle, uniform: textureUniformLocations.base_color },
                     { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerSingle, uniform: textureUniformLocations.ibl_specular },
                     { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerMip, uniform: textureUniformLocations.ibl_diffuse },
+                    { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest, uniform: textureUniformLocations.color_matrices },
                 ],
                 drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
                 // drawBuffers: ["COLOR_ATTACHMENT0"],
@@ -238,7 +213,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
             gl.vertexAttribI4ui(2, 0xff, 0, 0, 0); // material_index
             gl.vertexAttribI4ui(3, 0xffffffff, 0, 0, 0); // object_id
-            gl.vertexAttribI4ui(8, 0, 0, 0, 0); // highlight_index
+            gl.vertexAttribI4ui(5, 0, 0, 0, 0); // highlight_index
             for (const node of nodes) {
                 if (node.visibility != Visibility.none) {
                     // TODO: extract meshes and sort by type so we can keep state changes to a minimum.
@@ -290,7 +265,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { gl } = this.renderContext;
         const { data, renderedChildMask } = node;
         if (renderedChildMask) {
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 3, node.uniforms ?? null);
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, node.uniforms ?? null);
             for (const mesh of node.meshes) {
                 const { materialType } = mesh;
                 const isTransparent = materialType == MaterialType.transparent;
@@ -314,12 +289,12 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
     renderNodeDebug(node: OctreeNode) {
         const { renderContext, resources } = this;
-        const { materialsUniforms, highlightUniforms } = resources;
+        const { materialsUniforms } = resources;
         const { gl, cameraUniforms } = renderContext;
 
         if (node.renderedChildMask) {
             glState(gl, {
-                uniformBuffers: [cameraUniforms, materialsUniforms, highlightUniforms, node.uniforms],
+                uniformBuffers: [cameraUniforms, materialsUniforms, node.uniforms],
             });
             glDraw(gl, { kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
         }
@@ -366,6 +341,32 @@ function* iterateNodes(node: OctreeNode | undefined): IterableIterator<OctreeNod
         }
     }
 }
+
+function createColorTransforms(groups: readonly RenderStateHighlightGroup[]) {
+    const numColorMatrices = 256;
+    const numColorMatrixCols = 5;
+    const numColorMatrixRows = 4;
+
+    const colorMatrices = new Float32Array(numColorMatrices * numColorMatrixRows * numColorMatrixCols);
+    // initialize with identity matrices
+    for (let i = 0; i < numColorMatrices; i++) {
+        for (let j = 0; j < numColorMatrixCols; j++) {
+            colorMatrices[(numColorMatrices * j + i) * 4 + j] = 1;
+        }
+    }
+
+    // Copy transformation matrices
+    for (let i = 0; i < groups.length; i++) {
+        const { rgbaTransform } = groups[i];
+        for (let col = 0; col < numColorMatrixCols; col++) {
+            for (let row = 0; row < numColorMatrixRows; row++) {
+                colorMatrices[(numColorMatrices * col + i) * 4 + row] = rgbaTransform[col + row * numColorMatrixCols];
+            }
+        }
+    }
+    return colorMatrices;
+}
+
 
 function decodeBase64(base64: string | undefined): Uint8ClampedArray | undefined {
     if (base64) {

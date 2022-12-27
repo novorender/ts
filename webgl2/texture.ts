@@ -12,7 +12,7 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
 
     const { internalFormat, format, type, arrayType } = getFormatInfo(gl, params.internalFormat, "type" in params ? params.type : undefined);
 
-    function createImage(imgTarget: typeof gl[TextureImageTargetString], data: BufferSource | null, level: number, sizeX: number, sizeY: number, sizeZ = 0) {
+    function textureImage(imgTarget: typeof gl[TextureImageTargetString], data: BufferSource | null, level: number, sizeX: number, sizeY: number, sizeZ = 0) {
         if (!data)
             return;
         const source = data;
@@ -39,7 +39,7 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
         }
     }
 
-    function createMipLevel(level: number, image: BufferSource | readonly BufferSource[] | null) {
+    function textureMipLevel(level: number, image: BufferSource | readonly BufferSource[] | null) {
         function isArray(img: typeof image): img is readonly BufferSource[] {
             return Array.isArray(img);
         }
@@ -50,26 +50,26 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
             if (cubeImages) {
                 let side = gl.TEXTURE_CUBE_MAP_POSITIVE_X;
                 for (let img of image) {
-                    createImage(side++, img, level, width / n, height / n);
+                    textureImage(side++, img, level, width / n, height / n);
                 }
             }
         } else {
             if (depth) {
                 if (target == gl.TEXTURE_3D) {
-                    createImage(gl.TEXTURE_3D, image, level, width / n, height / n, depth / n);
+                    textureImage(gl.TEXTURE_3D, image, level, width / n, height / n, depth / n);
                 }
                 else {
                     console.assert(target == gl.TEXTURE_2D_ARRAY);
-                    createImage(gl.TEXTURE_3D, image, level, width / n, height / n, depth);
+                    textureImage(gl.TEXTURE_3D, image, level, width / n, height / n, depth);
                 }
             } else {
                 console.assert(target == gl.TEXTURE_2D);
-                createImage(gl.TEXTURE_2D, image, level, width, height);
+                textureImage(gl.TEXTURE_2D, image, level, width, height);
             }
         }
     }
 
-    function createStorage(levels: number = 1) {
+    function textureStorage(levels: number = 1) {
         if (depth) {
             gl.texStorage3D(target, levels, internalFormat, width, height, depth);
         } else {
@@ -82,12 +82,12 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
         const { mipMaps } = params;
         const isNumber = typeof mipMaps == "number";
         const levels = isNumber ? mipMaps : mipMaps.length;
-        createStorage(levels);
+        textureStorage(levels);
         if (!isNumber) {
             for (let level = 0; level < levels; level++) {
                 const mipMap = mipMaps[level];
                 if (mipMap) {
-                    createMipLevel(level, mipMap);
+                    textureMipLevel(level, mipMap);
                 }
             }
         }
@@ -97,14 +97,108 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
             throw new Error(`Cannot generate mip maps on a texture of non-power of two sizes (${width}, ${height})!`);
         }
         const levels = generateMipMaps ? Math.log2(Math.min(width, height)) : 1;
-        createStorage(levels);
-        createMipLevel(0, params.image);
+        textureStorage(levels);
+        textureMipLevel(0, params.image);
         if (generateMipMaps && params.image) {
             gl.generateMipmap(target);
         }
     }
     gl.bindTexture(target, null);
     return texture;
+}
+
+
+export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGLTexture, params: TextureParams) {
+    const { width, height } = params;
+    const target = gl[params.kind];
+    const depth = "depth" in params ? params.depth : undefined;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(target, targetTexture);
+
+    const { internalFormat, format, type, arrayType } = getFormatInfo(gl, params.internalFormat, "type" in params ? params.type : undefined);
+
+    function textureImage(imgTarget: typeof gl[TextureImageTargetString], data: BufferSource | null, level: number, sizeX: number, sizeY: number, sizeZ = 0) {
+        if (!data)
+            return;
+        const source = data;
+        const view = ArrayBuffer.isView(source) ? source : undefined;
+        const buffer = ArrayBuffer.isView(view) ? view.buffer : source as ArrayBufferLike;
+        const byteOffset = view?.byteOffset ?? 0;
+        const byteLength = view?.byteLength ?? buffer?.byteLength;
+        const pixels = buffer === null ? null : new arrayType(buffer, byteOffset, byteLength / arrayType.BYTES_PER_ELEMENT);
+        const offsetX = 0;
+        const offsetY = 0
+        const offsetZ = 0;
+        if (type) {
+            if (sizeZ) {
+                gl.texSubImage3D(imgTarget, level, offsetX, offsetY, offsetZ, sizeX, sizeY, sizeZ, format as number, type, pixels);
+            } else {
+                gl.texSubImage2D(imgTarget, level, offsetX, offsetY, sizeX, sizeY, format as number, type, pixels);
+            }
+        } else {
+            if (sizeZ) {
+                gl.compressedTexSubImage3D(imgTarget, level, offsetX, offsetY, offsetZ, sizeX, sizeY, sizeZ, internalFormat, pixels!);
+            } else {
+                gl.compressedTexSubImage2D(imgTarget, level, offsetX, offsetY, sizeX, sizeY, internalFormat, pixels!);
+            }
+        }
+    }
+
+    function textureMipLevel(level: number, image: BufferSource | readonly BufferSource[] | null) {
+        function isArray(img: typeof image): img is readonly BufferSource[] {
+            return Array.isArray(img);
+        }
+        const n = 1 << level;
+        if (isArray(image)) {
+            console.assert(target == gl.TEXTURE_CUBE_MAP);
+            const cubeImages = image[level];
+            if (cubeImages) {
+                let side = gl.TEXTURE_CUBE_MAP_POSITIVE_X;
+                for (let img of image) {
+                    textureImage(side++, img, level, width / n, height / n);
+                }
+            }
+        } else {
+            if (depth) {
+                if (target == gl.TEXTURE_3D) {
+                    textureImage(gl.TEXTURE_3D, image, level, width / n, height / n, depth / n);
+                }
+                else {
+                    console.assert(target == gl.TEXTURE_2D_ARRAY);
+                    textureImage(gl.TEXTURE_3D, image, level, width / n, height / n, depth);
+                }
+            } else {
+                console.assert(target == gl.TEXTURE_2D);
+                textureImage(gl.TEXTURE_2D, image, level, width, height);
+            }
+        }
+    }
+
+    if ("mipMaps" in params) {
+        // mip mapped
+        const { mipMaps } = params;
+        const isNumber = typeof mipMaps == "number";
+        const levels = isNumber ? mipMaps : mipMaps.length;
+        if (!isNumber) {
+            for (let level = 0; level < levels; level++) {
+                const mipMap = mipMaps[level];
+                if (mipMap) {
+                    textureMipLevel(level, mipMap);
+                }
+            }
+        }
+    } else {
+        const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
+        if (generateMipMaps && !(isPowerOf2(width) && isPowerOf2(height) && type)) {
+            throw new Error(`Cannot generate mip maps on a texture of non-power of two sizes (${width}, ${height})!`);
+        }
+        const levels = generateMipMaps ? Math.log2(Math.min(width, height)) : 1;
+        textureMipLevel(0, params.image);
+        if (generateMipMaps && params.image) {
+            gl.generateMipmap(target);
+        }
+    }
+    gl.bindTexture(target, null);
 }
 
 function isPowerOf2(value: number) {

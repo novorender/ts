@@ -11,14 +11,7 @@ layout(std140) uniform Materials {
     uvec4 rgba[64];
 } materials;
 
-const uint maxHighlights = 8U;
-struct HighlightMatrix {
-    mat4 transform;
-    vec4 translate;
-};
-layout(std140) uniform Highlights {
-    HighlightMatrix matrix[maxHighlights];
-} highlights;
+const uint maxHighlights = 256U;
 
 layout(std140) uniform Node {
     mat4 modelLocalMatrix;

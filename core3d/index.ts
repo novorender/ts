@@ -33,8 +33,8 @@ export async function run(canvas: HTMLCanvasElement) {
     const wasm = await wasmInstance();
     let state = defaultRenderState();
     let prevState = state;
-    const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
-    // const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    // const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
     // const sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim
     // const sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;

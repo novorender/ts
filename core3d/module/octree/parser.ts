@@ -62,9 +62,9 @@ export interface VertexAttributes {
     readonly material: VertexAttributeData | null;
     readonly objectId: VertexAttributeData | null;
     readonly texCoord: VertexAttributeData | null;
-    readonly color: VertexAttributeData | null;
-    readonly intensity: VertexAttributeData | null;
-    readonly deviation: VertexAttributeData | null;
+    // readonly color: VertexAttributeData | null;
+    // readonly intensity: VertexAttributeData | null;
+    // readonly deviation: VertexAttributeData | null;
 }
 
 export interface SubMesh {
@@ -160,10 +160,10 @@ function computeVertexOffsets(attribs: readonly VertexAttribNames[]) {
 function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, hasMaterials: boolean, hasObjectIds: boolean) {
     const attribNames: VertexAttribNames[] = ["position"];
     if (optionalAttributes & OptionalVertexAttribute.normal) attribNames.push("normal");
-    if (optionalAttributes & OptionalVertexAttribute.color) attribNames.push("color");
     if (optionalAttributes & OptionalVertexAttribute.texCoord) attribNames.push("texCoord");
-    if (optionalAttributes & OptionalVertexAttribute.intensity) attribNames.push("intensity");
-    if (optionalAttributes & OptionalVertexAttribute.deviation) attribNames.push("deviation");
+    // if (optionalAttributes & OptionalVertexAttribute.color) attribNames.push("color");
+    // if (optionalAttributes & OptionalVertexAttribute.intensity) attribNames.push("intensity");
+    // if (optionalAttributes & OptionalVertexAttribute.deviation) attribNames.push("deviation");
     if (hasMaterials) {
         attribNames.push("materialIndex");
     }
@@ -455,9 +455,9 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
             material: hasMaterials ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, offset: attribOffsets["materialIndex"], stride } : null,
             objectId: hasObjectIds ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, offset: attribOffsets["objectId"], stride } : null,
             texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, offset: attribOffsets["texCoord"], stride } : null,
-            color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["color"], stride } : null,
-            intensity: (attributes & OptionalVertexAttribute.intensity) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["intensity"], stride } : null,
-            deviation: (attributes & OptionalVertexAttribute.deviation) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "HALF_FLOAT", normalized: false, offset: attribOffsets["deviation"], stride } : null,
+            // color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["color"], stride } : null,
+            // intensity: (attributes & OptionalVertexAttribute.intensity) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["intensity"], stride } : null,
+            // deviation: (attributes & OptionalVertexAttribute.deviation) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "HALF_FLOAT", normalized: false, offset: attribOffsets["deviation"], stride } : null,
         } as const satisfies VertexAttributes;
 
         objectRanges.sort((a, b) => (a.objectId - b.objectId));
