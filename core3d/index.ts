@@ -102,7 +102,6 @@ export async function run(canvas: HTMLCanvasElement) {
                     }
                 });
             }
-            // TODO: figure out why perf sux on safari
             console.log(r);
         }
     });
