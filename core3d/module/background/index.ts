@@ -41,9 +41,9 @@ export class BackgroundModule implements RenderModule {
                 download(new URL("irradiance.ktx", baseUrl)),
                 download(new URL("background.ktx", baseUrl)),
             ];
-            const [lut_ggx, diffuse, specular, skybox] = await Promise.all(promises);
+            const [lut_ggx, specular, diffuse, skybox] = await Promise.all(promises);
             this.textureParams = { lut_ggx, specular, diffuse, skybox } as const;
-            const { mipMaps } = diffuse as TextureParams2DUncompressedMipMapped;
+            const { mipMaps } = specular as TextureParams2DUncompressedMipMapped;
             this.numMipMaps = typeof mipMaps == "number" ? mipMaps : mipMaps.length;
         } finally {
             this.abortController = undefined;
@@ -76,7 +76,7 @@ class BackgroundModuleContext implements RenderModuleContext {
         const samplerMip = glSampler(gl, { minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniforms.buffer.byteLength });
         this.resources = { program, samplerSingle, samplerMip, uniforms } as const;
-        this.textureUniformLocations = glUniformLocations(gl, program, ["skybox", "diffuse"] as const, "textures_");
+        this.textureUniformLocations = glUniformLocations(gl, program, ["skybox", "specular"] as const, "textures_");
     }
 
     updateUniforms(state: DerivedRenderState) {
@@ -154,14 +154,14 @@ class BackgroundModuleContext implements RenderModuleContext {
         });
 
         if (context.iblTextures) {
-            const { skybox, diffuse } = context.iblTextures;
+            const { skybox, specular } = context.iblTextures;
             const { textureUniformLocations } = this;
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],
                 textures: [
                     { kind: "TEXTURE_CUBE_MAP", texture: skybox, sampler: samplerSingle, uniform: textureUniformLocations.skybox },
-                    { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerMip, uniform: textureUniformLocations.diffuse },
+                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip, uniform: textureUniformLocations.specular },
                 ],
                 depthTest: false,
                 depthWriteMask: false,

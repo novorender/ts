@@ -13,7 +13,7 @@ layout(std140) uniform Background {
 } background;
 
 uniform samplerCube textures_skybox;
-uniform samplerCube textures_diffuse;
+uniform samplerCube textures_specular;
 
 in struct Varyings {
     vec3 dir;
@@ -26,7 +26,7 @@ void main() {
     if(background.envBlurNormalized == 0.) {
         rgb = texture(textures_skybox, normalize(varyings.dir)).rgb;
     } else {
-        rgb = textureLod(textures_diffuse, normalize(varyings.dir), background.envBlurNormalized * float(background.mipCount - 1)).rgb;
+        rgb = textureLod(textures_specular, normalize(varyings.dir), background.envBlurNormalized * float(background.mipCount - 1)).rgb;
     }
     color = vec4(rgb, 1);
 }

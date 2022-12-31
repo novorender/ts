@@ -42,19 +42,19 @@ export function glDraw(gl: WebGL2RenderingContext, params: DrawParams) {
 }
 
 function isInstanced(params: DrawParams): params is DrawParamsArraysInstanced | DrawParamsElementsInstanced {
-    return "instanceCount" in params;
+    return "instanceCount" in params && params.instanceCount != undefined;
 }
 
 function isElements(params: DrawParams): params is DrawParamsElements | DrawParamsElementsInstanced | DrawParamsElementsRange | DrawParamsElementsMultiDraw {
-    return "indexType" in params;
+    return "indexType" in params && params.indexType != undefined;
 }
 
 function isRange(params: DrawParams): params is DrawParamsElementsRange {
-    return "start" in params && "end" in params;
+    return "start" in params && "end" in params && params.start != undefined;
 }
 
 function isMultiDraw(params: DrawParams): params is DrawParamsArraysMultiDraw | DrawParamsElementsMultiDraw {
-    return "drawCount" in params;
+    return "drawCount" in params && params.drawCount != undefined;
 }
 
 export type DrawParams =

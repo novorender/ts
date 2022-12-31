@@ -13,7 +13,7 @@ layout(std140) uniform Background {
 } background;
 
 uniform samplerCube textures_background;
-uniform samplerCube textures_radiance;
+uniform samplerCube textures_specular;
 
 out struct Varyings {
     vec3 dir;

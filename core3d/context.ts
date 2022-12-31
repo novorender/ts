@@ -26,7 +26,6 @@ export class RenderContext {
     private viewWorldMatrixNormal = mat3.create();
 
     readonly cameraUniforms: WebGLBuffer;
-    // readonly iblUniforms: WebGLBuffer | null = null;
 
     // shared mutable state
     prevState: DerivedRenderState | undefined;

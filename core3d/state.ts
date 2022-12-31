@@ -1,3 +1,4 @@
+import { DrawMode, MagFilterString, MinFilterString, TextureParams2DUncompressed, VertexArrayParams, VertexAttribute, WrapString } from "@novorender/webgl2";
 import { quat, vec3, ReadonlyQuat, ReadonlyVec3, ReadonlyVec4, ReadonlyMat4, ReadonlyMat3 } from "gl-matrix";
 import { OctreeSceneConfig } from "./scene";
 
@@ -82,7 +83,7 @@ export const enum ClippingId { // object_id's for picking
     plane0 = 0xfffffff0, plane1, plane2, plane3, plane4, plane5, plane6
 }
 
-export interface ClippingPlane {
+export interface RenderStateClippingPlane {
     readonly normalOffset: ReadonlyVec4,
     readonly color?: RGBA;
 }
@@ -91,7 +92,7 @@ export interface RenderStateClipping {
     readonly enabled: boolean;
     readonly draw: boolean;
     readonly mode: ClippingMode;
-    readonly planes: readonly ClippingPlane[];
+    readonly planes: readonly RenderStateClippingPlane[];
 }
 
 export interface RenderStateHighlightGroup {
@@ -138,6 +139,108 @@ export interface RenderStateTonemapping {
     readonly mode: TonemappingMode;
 }
 
+export interface RenderStateDynamicImage {
+    readonly params: TextureParams2DUncompressed; // TODO: Add support for compressed textures
+}
+
+export interface RenderStateDynamicSampler {
+    readonly minificationFilter?: MinFilterString;
+    readonly magnificationFilter?: MagFilterString;
+    readonly wrap?: readonly [WrapString, WrapString];
+}
+
+export interface RenderStateDynamicTexture {
+    readonly image: RenderStateDynamicImage;
+    readonly sampler?: RenderStateDynamicSampler;
+}
+
+export interface RenderStateDynamicTextureReference {
+    readonly texture: RenderStateDynamicTexture | null;
+    readonly texCoord?: 0 | 1; // default: 0
+    readonly transform?: ReadonlyMat3; // default: identity matrix
+}
+
+export interface RenderStateDynamicNormalTextureReference extends RenderStateDynamicTextureReference {
+    readonly scale?: number; // default: 1
+}
+
+export interface RenderStateDynamicOcclusionTextureReference extends RenderStateDynamicTextureReference {
+    readonly strength?: number; // default: 1
+}
+
+export type RenderStateDynamicVertexAttribute = Omit<VertexAttribute, "buffer"> & { readonly buffer: BufferSource };
+
+export interface RenderStateDynamicVertexAttributes {
+    readonly position: RenderStateDynamicVertexAttribute;
+    readonly normal?: RenderStateDynamicVertexAttribute;
+    readonly tangent?: RenderStateDynamicVertexAttribute;
+    readonly color0?: RenderStateDynamicVertexAttribute;
+    readonly texCoord0?: RenderStateDynamicVertexAttribute;
+    readonly texCoord1?: RenderStateDynamicVertexAttribute;
+}
+
+export interface RenderStateDynamicGeometry {
+    readonly primitiveType: DrawMode;
+    readonly attributes: RenderStateDynamicVertexAttributes;
+    readonly indices: Uint32Array | Uint16Array | Uint8Array | number;
+}
+
+export interface RenderStateDynamicMeshPrimitive {
+    readonly geometry: RenderStateDynamicGeometry;
+    readonly material: RenderStateDynamicMaterial;
+}
+
+export interface RenderStateDynamicMesh {
+    readonly primitives: readonly RenderStateDynamicMeshPrimitive[];
+}
+
+interface RenderStateDynamicMaterialCommon {
+    readonly doubleSided?: boolean; // default: false
+    readonly alphaMode?: "OPAQUE" | "MASK" | "BLEND"; // default: "OPAQUE"
+    readonly alphaCutoff?: number; // default 0.5
+}
+
+
+export interface RenderStateDynamicMaterialUnlit extends RenderStateDynamicMaterialCommon {
+    readonly kind: "unlit";
+    readonly baseColorFactor?: RGBA; // default: [1,1,1,1]
+    readonly baseColorTexture?: RenderStateDynamicTextureReference;
+}
+
+export interface RenderStateDynamicMaterialGGX extends RenderStateDynamicMaterialCommon {
+    readonly kind: "ggx";
+    readonly baseColorFactor?: RGBA; // default [1,1,1,1]
+    readonly metallicFactor?: number; // default: 1
+    readonly roughnessFactor?: number; // default: 1
+    readonly emissiveFactor?: RGB; // default [0,0,0]
+    readonly baseColorTexture?: RenderStateDynamicTextureReference;
+    readonly metallicRoughnessTexture?: RenderStateDynamicTextureReference;
+    readonly normalTexture?: RenderStateDynamicNormalTextureReference;
+    readonly occlusionTexture?: RenderStateDynamicOcclusionTextureReference;
+    readonly emissiveTexture?: RenderStateDynamicTextureReference;
+    // TODO: include specular, ior and clearcoat?
+}
+
+export type RenderStateDynamicMaterial = RenderStateDynamicMaterialUnlit | RenderStateDynamicMaterialGGX;
+
+export interface RenderStateDynamicInstance {
+    // parent/children?
+    readonly transform: ReadonlyMat4;
+    readonly objectId?: number;
+}
+
+export interface RenderStateDynamicObject {
+    readonly mesh: RenderStateDynamicMesh;
+    readonly instance: RenderStateDynamicInstance;
+}
+
+export interface RenderStateDynamicObjects {
+    readonly objects: readonly RenderStateDynamicObject[];
+}
+
+// TODO: Render dynamic geometry
+// TODO: make gltf parser generate render state
+
 export interface RenderState {
     readonly output: RenderStateOutput;
     readonly background: RenderStateBackground;
@@ -145,6 +248,7 @@ export interface RenderState {
     readonly grid: RenderStateGrid;
     readonly cube: RenderStateCube;
     readonly scene: RenderStateScene | undefined;
+    readonly dynamic: RenderStateDynamicObjects;
     readonly clipping: RenderStateClipping;
     readonly highlights: RenderStateHighlightGroups;
     readonly tonemapping: RenderStateTonemapping;
@@ -216,6 +320,9 @@ export function defaultRenderState(): RenderState {
             clipDepth: 1,
         },
         scene: undefined,
+        dynamic: {
+            objects: [],
+        },
         clipping: {
             enabled: false,
             draw: false,

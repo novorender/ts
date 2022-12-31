@@ -91,7 +91,7 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
                 }
             }
         }
-    } else {
+    } else if (isBufferSource(params.image)) {
         const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
         if (generateMipMaps && !(isPowerOf2(width) && isPowerOf2(height) && type)) {
             throw new Error(`Cannot generate mip maps on a texture of non-power of two sizes (${width}, ${height})!`);
@@ -100,6 +100,13 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
         textureStorage(levels);
         textureMipLevel(0, params.image);
         if (generateMipMaps && params.image) {
+            gl.generateMipmap(target);
+        }
+    } else {
+        const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
+        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, params.width, params.height, 0, format!, type!, params.image as TexImageSource);
+        if (generateMipMaps && isPowerOf2(width) && isPowerOf2(height)) {
             gl.generateMipmap(target);
         }
     }
@@ -187,7 +194,7 @@ export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGL
                 }
             }
         }
-    } else {
+    } else if (isBufferSource(params.image)) {
         const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
         if (generateMipMaps && !(isPowerOf2(width) && isPowerOf2(height) && type)) {
             throw new Error(`Cannot generate mip maps on a texture of non-power of two sizes (${width}, ${height})!`);
@@ -195,6 +202,13 @@ export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGL
         const levels = generateMipMaps ? Math.log2(Math.min(width, height)) : 1;
         textureMipLevel(0, params.image);
         if (generateMipMaps && params.image) {
+            gl.generateMipmap(target);
+        }
+    } else {
+        const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
+        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, params.width, params.height, 0, format!, type!, params.image as TexImageSource);
+        if (generateMipMaps && isPowerOf2(width) && isPowerOf2(height)) {
             gl.generateMipmap(target);
         }
     }
@@ -207,6 +221,10 @@ function isPowerOf2(value: number) {
 
 function isFormatCompressed(format: UncompressedTextureFormatString | CompressedTextureFormatString): format is CompressedTextureFormatString {
     return format.startsWith("COMPRESSED");
+}
+
+function isBufferSource(image: unknown): image is BufferSource {
+    return image == undefined || Array.isArray(image) || image instanceof ArrayBuffer || ArrayBuffer.isView(image);
 }
 
 function getFormatInfo(gl: WebGL2RenderingContext, internalFormatString: UncompressedTextureFormatString | CompressedTextureFormatString, typeString?: TexelTypeString) {
@@ -234,7 +252,7 @@ export type TextureParams =
 // 2D
 export type TextureParams2DUncompressed = Uncompressed & Size2D & GenMipMap & {
     readonly kind: "TEXTURE_2D";
-    readonly image: BufferSource | null;
+    readonly image: BufferSource | TexImageSource | null;
 };
 
 export interface TextureParams2DCompressed extends Compressed, Size2D {

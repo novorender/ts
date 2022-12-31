@@ -7,6 +7,7 @@ import { TonemapModule } from "./tonemap";
 import { CubeModule } from "./cube";
 import { ClippingModule } from "./clipping";
 import { WatermarkModule } from "./watermark";
+import { DynamicModule } from "./dynamic";
 
 // contains all state (geometry, textures etc), or has at least the ability to reload state on demand if e.g. webgl context is lost
 export interface RenderModule {
@@ -27,6 +28,7 @@ export function createDefaultModules() {
         new BackgroundModule(),
         new CubeModule(),
         new OctreeModule(),
+        new DynamicModule(),
         new GridModule(),
         new ClippingModule(),
         new WatermarkModule(),
