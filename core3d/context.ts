@@ -49,6 +49,9 @@ export class RenderContext {
         this.gl = gl;
         const extensions = glExtensions(gl, true);
         console.assert(extensions.loseContext != null, extensions.multiDraw != null, extensions.colorBufferFloat != null);
+
+        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+
         this.modules = modules ?? RenderContext.defaultModules ?? RenderContext.defaultModules ?? createDefaultModules();
         RenderContext.defaultModules = this.modules;
 

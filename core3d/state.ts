@@ -155,7 +155,7 @@ export interface RenderStateDynamicTexture {
 }
 
 export interface RenderStateDynamicTextureReference {
-    readonly texture: RenderStateDynamicTexture | null;
+    readonly texture: RenderStateDynamicTexture;
     readonly texCoord?: 0 | 1; // default: 0
     readonly transform?: ReadonlyMat3; // default: identity matrix
 }

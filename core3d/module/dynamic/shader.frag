@@ -25,6 +25,7 @@ layout(std140) uniform Material {
 
 layout(std140) uniform Instance {
     mat4 modelLocalMatrix;
+    mat3 modelLocalMatrixNormal;
     uint objectId;
 } instance;
 
@@ -41,8 +42,6 @@ in struct {
     vec4 color0;
     vec2 texCoord0;
     vec2 texCoord1;
-    vec3 normal;
-    // vec3 tangent;
     float linearDepth;
     mat3 tbn; // in world space
     vec3 toCamera; // in world space (camera - position)
@@ -77,8 +76,13 @@ struct NormalInfo {
 // Get normal, tangent and bitangent vectors.
 NormalInfo getNormalInfo(vec3 v) {
     vec2 UV = material.normalUVSet == 0 ? varyings.texCoord0 : varyings.texCoord1;
-    vec3 uv_dx = dFdx(vec3(UV, 0.0));
-    vec3 uv_dy = dFdy(vec3(UV, 0.0));
+    vec3 uv_dx = dFdx(vec3(UV, 0));
+    vec3 uv_dy = dFdy(vec3(UV, 0));
+
+    if(length(uv_dx) + length(uv_dy) <= 1e-6) {
+        uv_dx = vec3(1.0, 0.0, 0.0);
+        uv_dy = vec3(0.0, 1.0, 0.0);
+    }
 
     vec3 t_ = (uv_dy.t * dFdx(v) - uv_dx.t * dFdy(v)) / (uv_dx.s * uv_dy.t - uv_dy.s * uv_dx.t);
 
@@ -86,7 +90,7 @@ NormalInfo getNormalInfo(vec3 v) {
 
     ng = normalize(varyings.tbn[2]);
     t = normalize(t_ - ng * dot(ng, t_));
-    b = cross(ng, t);    
+    b = cross(ng, t);
 
     // // Normalize eigenvectors as matrix is linearly interpolated.
     // t = normalize(varyings.tbn[0]);
@@ -94,15 +98,15 @@ NormalInfo getNormalInfo(vec3 v) {
     // ng = normalize(varyings.tbn[2]);
 
     // For a back-facing surface, the tangential basis vectors are negated.
-    float facing = step(0.0, dot(v, ng)) * 2.0 - 1.0;
+    float facing = step(0., dot(v, ng)) * 2. - 1.;
     t *= facing;
     b *= facing;
     ng *= facing;
 
     // Compute pertubed normals:
     if(material.normalUVSet >= 0) {
-        n = texture(texture_normal, UV).rgb * 2.0 - vec3(1.0);
-        n *= vec3(material.normalScale, material.normalScale, 1.0);
+        n = texture(texture_normal, UV).rgb * 2. - vec3(1.);
+        n *= vec3(material.normalScale, material.normalScale, 1.);
         n = mat3(t, b, ng) * normalize(n);
     } else {
         n = ng;
@@ -164,7 +168,7 @@ vec3 getIBLRadianceGGX(vec3 n, vec3 v, float perceptualRoughness, vec3 specularC
 }
 
 vec3 getIBLRadianceLambertian(vec3 n, vec3 diffuseColor) {
-    vec3 diffuseLight = texture(texture_ibl_diffuse, n).rgb; // rgbmToFloat(texture(texIrradiance, n)).rgb;
+    vec3 diffuseLight = texture(texture_ibl_diffuse, n).rgb;
     return diffuseLight * diffuseColor;
 }
 
@@ -179,12 +183,14 @@ void main() {
     if(baseColor.a < material.alphaCutoff)
         discard;
 
-#if defined(PBR_METALLIC_ROUGHNESS)
     vec3 v = normalize(varyings.toCamera);
     NormalInfo normalInfo = getNormalInfo(v);
     vec3 n = normalInfo.n;
+    vec3 normal = normalInfo.n;
     // vec3 l = normalize(uSunDir);   // Direction from surface point to light
     // vec3 h = normalize(l + v);     // Direction of the vector between l and v, called halfway vector
+
+#if defined(PBR_METALLIC_ROUGHNESS)
 
     MaterialInfo materialInfo;
     materialInfo.baseColor = baseColor.rgb;
@@ -259,7 +265,7 @@ void main() {
 
     // only write to pick buffers for opaque triangles
     if(fragColor.a >= 0.99) {
-        fragNormal = normalize(varyings.normal).xy;
+        fragNormal = (camera.worldViewMatrixNormal * normal).xy;
         fragLinearDepth = varyings.linearDepth;
         fragInfo = uvec2(instance.objectId, 0);
     }

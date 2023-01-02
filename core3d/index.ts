@@ -44,7 +44,7 @@ export async function run(canvas: HTMLCanvasElement) {
     // const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
     // const scene = await downloadScene(sceneUrl);
 
-    const gltfObjects = await loadGLTF(new URL("/assets/gltf/box.glb", scriptUrl));
+    const gltfObjects = await loadGLTF(new URL("/assets/gltf/boxtextured.glb", scriptUrl));
 
     const planes: RenderStateClippingPlane[] = [
         { normalOffset: [1, 0, 0, 0], color: [1, 0, 0, 0.5] },

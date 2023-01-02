@@ -1,10 +1,9 @@
-import { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicVertexAttribute } from "core3d";
-import { CoordSpace } from "core3d";
+import { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes, glVertexArray, VertexArrayParams, VertexAttribute, DrawParamsElements, DrawParamsArrays, StateParams, glUniformLocations } from "webgl2";
+import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes, glVertexArray, VertexArrayParams, VertexAttribute, DrawParamsElements, DrawParamsArrays, StateParams, glUniformLocations, glTexture, glSampler } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { mat4, vec3 } from "gl-matrix";
+import { mat3, mat4, vec3 } from "gl-matrix";
 
 // TODO: Create (programatically) and render cube
 // TODO: Create (from gltf)
@@ -30,6 +29,10 @@ class DynamicModuleContext implements RenderModuleContext {
     readonly geometries = new Map<RenderStateDynamicGeometry, GeometryAsset>();
     readonly instances = new Map<RenderStateDynamicInstance, InstanceAsset>();
     readonly materials = new Map<RenderStateDynamicMaterial, MaterialAsset>();
+    readonly images = new Map<RenderStateDynamicImage, TextureAsset>();
+    readonly samplers = new Map<RenderStateDynamicSampler, SamplerAsset>();
+    readonly defaultTexture: WebGLTexture;
+    readonly defaultSampler: WebGLSampler;
 
     constructor(readonly context: RenderContext, readonly data: DynamicModule) {
         const { gl } = context;
@@ -43,6 +46,8 @@ class DynamicModuleContext implements RenderModuleContext {
             unlit: glUniformLocations(gl, unlit, textureNames, "texture_"),
             ggx: glUniformLocations(gl, ggx, textureNames, "texture_"),
         } as const;
+        this.defaultSampler = glSampler(gl, { magnificationFilter: "LINEAR", minificationFilter: "LINEAR_MIPMAP_LINEAR", wrap: ["REPEAT", "REPEAT"] });
+        this.defaultTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array(4) }); // used to avoid warnings on android
     }
 
     update(state: DerivedRenderState) {
@@ -52,18 +57,39 @@ class DynamicModuleContext implements RenderModuleContext {
         if (context.hasStateChanged({ dynamic })) {
             // synchronizing assets by reference is slower than array indexing, but it makes the render state safer and simpler to modify.
             // performance should not be a major issue for < 1000 objects or so
+            function* getTextures(material: RenderStateDynamicMaterial) {
+                const { baseColorTexture } = material;
+                if (baseColorTexture)
+                    yield baseColorTexture.texture;
+                if (material.kind == "ggx") {
+                    const { emissiveTexture, metallicRoughnessTexture, normalTexture, occlusionTexture } = material;
+                    if (emissiveTexture)
+                        yield emissiveTexture.texture;
+                    if (metallicRoughnessTexture)
+                        yield metallicRoughnessTexture.texture;
+                    if (normalTexture)
+                        yield normalTexture.texture;
+                    if (occlusionTexture)
+                        yield occlusionTexture.texture;
+                }
+            }
             const primitives = [...new Set<RenderStateDynamicMeshPrimitive>(dynamic.objects.flatMap(o => o.mesh.primitives))];
             const geometries = [...new Set<RenderStateDynamicGeometry>(primitives.map(p => p.geometry))];
             const materials = [...new Set<RenderStateDynamicMaterial>(primitives.map(p => p.material))];
+            const textures = [...new Set<RenderStateDynamicTexture>(materials.flatMap(m => [...getTextures(m)]))];
+            const images = [...new Set<RenderStateDynamicImage>(textures.map(t => t.image))];
+            const samplers = [...new Set<RenderStateDynamicSampler>(textures.map(t => t.sampler!).filter(s => s))];
             const instances = [...new Set<RenderStateDynamicInstance>(dynamic.objects.map(o => o.instance))];
             const vertexBuffers = new Set<BufferSource>(geometries.flatMap(g => [...Object.values(g.attributes).map((a: RenderStateDynamicVertexAttribute) => a.buffer).filter(b => b)]));
             const indexBuffers = new Set<BufferSource>(geometries.map(g => typeof g.indices == "number" ? undefined : g.indices).filter(b => b) as BufferSource[]);
             const numVertexBuffers = vertexBuffers.size;
             const buffers = [...vertexBuffers, ...indexBuffers];
             syncAssets(gl, buffers, this.buffers, (data, idx) => new BufferAsset(gl, idx < numVertexBuffers ? "ARRAY_BUFFER" : "ELEMENT_ARRAY_BUFFER", data));
+            syncAssets(gl, images, this.images, data => new TextureAsset(gl, data));
+            syncAssets(gl, samplers, this.samplers, data => new SamplerAsset(gl, data));
             syncAssets(gl, geometries, this.geometries, data => new GeometryAsset(gl, data, this.buffers));
             syncAssets(gl, instances, this.instances, data => new InstanceAsset(context, data, state));
-            syncAssets(gl, materials, this.materials, data => new MaterialAsset(context, data, programs[data.kind]));
+            syncAssets(gl, materials, this.materials, data => new MaterialAsset(context, data, this.images, this.samplers, this.defaultTexture, this.defaultSampler, programs[data.kind]));
         }
         if (context.hasStateChanged({ localSpaceTranslation })) {
             for (const instance of this.instances.values()) {
@@ -73,7 +99,7 @@ class DynamicModuleContext implements RenderModuleContext {
         if (context.iblTextures != this.iblTextures) {
             this.iblTextures = context.iblTextures;
             for (const material of this.materials.values()) {
-                material.update(context, state, textureUniformLocations[material.kind]);
+                material.update(context, state, this.defaultTexture, textureUniformLocations[material.kind]);
             }
         }
     }
@@ -118,12 +144,12 @@ class DynamicModuleContext implements RenderModuleContext {
         for (const { material, instance, geometry } of meshes) {
             if (currentMaterial != material) {
                 currentMaterial = material;
-                gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, material.resources.uniforms);
+                gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, material.uniformsBuffer);
                 glState(gl, currentMaterial.stateParams);
             }
             if (currentInstance != instance) {
                 currentInstance = instance;
-                gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, instance.resources.uniforms);
+                gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, instance.uniformsBuffer);
             }
             gl.bindVertexArray(geometry.resources.vao);
             glDraw(gl, geometry.drawParams);
@@ -227,46 +253,56 @@ class InstanceAsset {
     index = 0;
     private readonly modelWorldMatrix;
     private readonly uniforms;
-    readonly resources;
+    readonly uniformsBuffer;
 
     constructor(context: RenderContext, data: RenderStateDynamicInstance, state: DerivedRenderState) {
         this.modelWorldMatrix = data.transform;
         const uniformsDesc = {
             modelLocalMatrix: "mat4",
+            modelLocalMatrixNormal: "mat3",
             objectId: "uint",
         } as const satisfies Record<string, UniformTypes>;
         this.uniforms = createUniformsProxy(uniformsDesc);
         const { values } = this.uniforms;
         values.objectId = data.objectId ?? 0xffffffff;
         const { gl } = context;
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
-        this.resources = { uniforms } as const;
+        this.uniformsBuffer = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
         this.update(context, state);
     }
 
     update(context: RenderContext, state: DerivedRenderState) {
-        const { uniforms, modelWorldMatrix, resources } = this;
+        const { uniforms, modelWorldMatrix, uniformsBuffer } = this;
         const { values } = uniforms;
         const worldLocalMatrix = mat4.fromTranslation(mat4.create(), state.localSpaceTranslation);
-        values.modelLocalMatrix = mat4.multiply(mat4.create(), worldLocalMatrix, modelWorldMatrix);
-        context.updateUniformBuffer(resources.uniforms, uniforms);
+        const modelLocalMatrix = mat4.multiply(mat4.create(), worldLocalMatrix, modelWorldMatrix);
+        values.modelLocalMatrix = modelLocalMatrix;
+        values.modelLocalMatrixNormal = mat3.normalFromMat4(mat3.create(), modelLocalMatrix);
+        context.updateUniformBuffer(uniformsBuffer, uniforms);
     }
 
     dispose(gl: WebGL2RenderingContext) {
-        glDelete(gl, this.resources);
+        gl.deleteBuffer(this.uniformsBuffer);
     }
 }
+
+type TextureNames = "baseColor" | "emissive" | "normal" | "occlusion" | "metallicRoughness";
 
 class MaterialAsset {
     index = 0;
     readonly kind;
     readonly uniforms;
     readonly stateParams: StateParams;
-    readonly resources;
+    readonly uniformsBuffer;
+    readonly textures = {} as { [P in TextureNames]?: WebGLTexture };
+    readonly samplers = {} as { [P in TextureNames]?: WebGLSampler };
 
     constructor(
         context: RenderContext,
         data: RenderStateDynamicMaterial,
+        textures: Map<RenderStateDynamicImage, TextureAsset>,
+        samplers: Map<RenderStateDynamicSampler, SamplerAsset>,
+        defaultTexture: WebGLTexture,
+        defaultSamper: WebGLSampler,
         program: DynamicModuleContext["programs"]["ggx"],
     ) {
         const { gl } = context;
@@ -300,21 +336,45 @@ class MaterialAsset {
             radianceMipCount: "uint",
         } as const satisfies Record<string, UniformTypes>;
         const uniformsProxy = this.uniforms = createUniformsProxy(uniformsDesc);
+        let tex = this.textures;
+        let samp = this.samplers;
         const { values } = uniformsProxy;
+        const { baseColorTexture } = data;
         values.baseColorFactor = data.baseColorFactor ?? [1, 1, 1, 1];
         values.baseColorUVSet = data.baseColorTexture ? data.baseColorTexture.texCoord ?? 0 : -1;
         values.alphaCutoff = data.alphaCutoff ?? data.alphaMode == "MASK" ? .5 : 0;
         values.radianceMipCount = context.iblTextures?.numMipMaps ?? 0;
+        if (baseColorTexture) {
+            tex.baseColor = textures.get(baseColorTexture.texture.image)!.texture;
+            samp.baseColor = samplers.get(baseColorTexture.texture.sampler!)?.sampler ?? defaultSamper;
+        }
         if (data.kind == "ggx") {
-            values.roughnessFactor = data.roughnessFactor ?? 1;
-            values.metallicFactor = data.metallicFactor ?? 1;
-            values.emissiveFactor = data.emissiveFactor ?? [0, 0, 0];
-            values.metallicRoughnessUVSet = data.metallicRoughnessTexture ? data.metallicRoughnessTexture.texCoord ?? 0 : -1;
-            values.normalUVSet = data.normalTexture ? data.normalTexture.texCoord ?? 0 : -1;
-            values.normalScale = data.normalTexture?.scale ?? 0;
-            values.occlusionUVSet = data.occlusionTexture ? data.occlusionTexture.texCoord ?? 0 : -1;
-            values.occlusionStrength = data.occlusionTexture?.strength ?? 0;
-            values.emissiveUVSet = data.emissiveTexture ? data.emissiveTexture.texCoord ?? 0 : -1;
+            const { roughnessFactor, metallicFactor, emissiveFactor, emissiveTexture, normalTexture, occlusionTexture, metallicRoughnessTexture } = data;
+            values.roughnessFactor = roughnessFactor ?? 1;
+            values.metallicFactor = metallicFactor ?? 1;
+            values.emissiveFactor = emissiveFactor ?? [0, 0, 0];
+            values.metallicRoughnessUVSet = metallicRoughnessTexture ? metallicRoughnessTexture.texCoord ?? 0 : -1;
+            values.normalUVSet = normalTexture ? normalTexture.texCoord ?? 0 : -1;
+            values.normalScale = normalTexture?.scale ?? 1;
+            values.occlusionUVSet = occlusionTexture ? occlusionTexture.texCoord ?? 0 : -1;
+            values.occlusionStrength = occlusionTexture?.strength ?? 1;
+            values.emissiveUVSet = emissiveTexture ? emissiveTexture.texCoord ?? 0 : -1;
+            if (emissiveTexture) {
+                tex.emissive = textures.get(emissiveTexture.texture.image)!.texture;
+                samp.emissive = samplers.get(emissiveTexture.texture.sampler!)?.sampler ?? defaultSamper;
+            }
+            if (normalTexture) {
+                tex.normal = textures.get(normalTexture.texture.image)!.texture;
+                samp.normal = samplers.get(normalTexture.texture.sampler!)?.sampler ?? defaultSamper;
+            }
+            if (occlusionTexture) {
+                tex.occlusion = textures.get(occlusionTexture.texture.image)!.texture;
+                samp.occlusion = samplers.get(occlusionTexture.texture.sampler!)?.sampler ?? defaultSamper;
+            }
+            if (metallicRoughnessTexture) {
+                tex.metallicRoughness = textures.get(metallicRoughnessTexture.texture.image)!.texture;
+                samp.metallicRoughness = samplers.get(metallicRoughnessTexture.texture.sampler!)?.sampler ?? defaultSamper;
+            }
         } else {
             values.roughnessFactor = 1;
             values.metallicFactor = 1;
@@ -326,14 +386,13 @@ class MaterialAsset {
             values.occlusionStrength = 0;
             values.emissiveUVSet = -1;
         }
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
-        this.resources = { uniforms } as const;
+        this.uniformsBuffer = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
     }
 
-    update(context: RenderContext, state: DerivedRenderState, textureUniformLocations: DynamicModuleContext["textureUniformLocations"]["ggx"]) {
+    update(context: RenderContext, state: DerivedRenderState, defaultTexture: WebGLTexture, textureUniformLocations: DynamicModuleContext["textureUniformLocations"]["ggx"]) {
         const { iblTextures } = context;
         if (iblTextures) {
-            const { uniforms, resources } = this;
+            const { uniforms, uniformsBuffer, textures, samplers } = this;
             const { samplerSingle, samplerMip, diffuse, specular, lut_ggx, numMipMaps } = iblTextures;
             type Mutable<T> = { -readonly [P in keyof T]: T[P] };
             const mutableState = this.stateParams as Mutable<StateParams>;
@@ -341,14 +400,44 @@ class MaterialAsset {
                 { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerSingle, uniform: textureUniformLocations.ibl_lut_ggx },
                 { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerSingle, uniform: textureUniformLocations.ibl_diffuse },
                 { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip, uniform: textureUniformLocations.ibl_specular },
-                // TODO: Add rest of textures
+                { kind: "TEXTURE_2D", texture: textures.baseColor ?? defaultTexture, sampler: samplers.baseColor ?? null, uniform: textureUniformLocations.base_color },
+                { kind: "TEXTURE_2D", texture: textures.metallicRoughness ?? defaultTexture, sampler: samplers.metallicRoughness ?? null, uniform: textureUniformLocations.metallic_roughness },
+                { kind: "TEXTURE_2D", texture: textures.normal ?? defaultTexture, sampler: samplers.normal ?? null, uniform: textureUniformLocations.normal },
+                { kind: "TEXTURE_2D", texture: textures.emissive ?? defaultTexture, sampler: samplers.emissive ?? null, uniform: textureUniformLocations.emissive },
+                { kind: "TEXTURE_2D", texture: textures.occlusion ?? defaultTexture, sampler: samplers.occlusion ?? null, uniform: textureUniformLocations.occlusion },
             ] as const;
             uniforms.values.radianceMipCount = numMipMaps;
-            context.updateUniformBuffer(resources.uniforms, uniforms);
+            context.updateUniformBuffer(uniformsBuffer, uniforms);
         }
     }
 
     dispose(gl: WebGL2RenderingContext) {
-        glDelete(gl, this.resources);
+        gl.deleteBuffer(this.uniformsBuffer);
+    }
+}
+
+class TextureAsset {
+    index = 0;
+    readonly texture: WebGLTexture;
+
+    constructor(gl: WebGL2RenderingContext, image: RenderStateDynamicImage) {
+        this.texture = glTexture(gl, image.params);
+    }
+
+    dispose(gl: WebGL2RenderingContext) {
+        gl.deleteTexture(this.texture);
+    }
+}
+
+class SamplerAsset {
+    index = 0;
+    readonly sampler: WebGLSampler;
+
+    constructor(gl: WebGL2RenderingContext, sampler: RenderStateDynamicSampler) {
+        this.sampler = glSampler(gl, sampler);
+    }
+
+    dispose(gl: WebGL2RenderingContext) {
+        gl.deleteSampler(this.sampler);
     }
 }

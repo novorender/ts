@@ -31,6 +31,7 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
         [GL.NEAREST_MIPMAP_NEAREST]: "NEAREST_MIPMAP_NEAREST",
         [GL.LINEAR_MIPMAP_NEAREST]: "LINEAR_MIPMAP_NEAREST",
         [GL.NEAREST_MIPMAP_LINEAR]: "NEAREST_MIPMAP_LINEAR",
+        [GL.LINEAR_MIPMAP_LINEAR]: "LINEAR_MIPMAP_LINEAR",
     } as { [index: number]: string };
 
     const wrappings = {
@@ -87,10 +88,14 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
     } as const;
 
     /** Spec: https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#accessor-element-size */
-    const indexBufferTypes = {
+    const bufferTypes = {
         [GL.UNSIGNED_BYTE]: Uint8Array,
         [GL.UNSIGNED_SHORT]: Uint16Array,
         [GL.UNSIGNED_INT]: Uint32Array,
+        [GL.BYTE]: Int8Array,
+        [GL.SHORT]: Int16Array,
+        [GL.INT]: Int32Array,
+        [GL.FLOAT]: Float32Array,
     } as const;
 
     const bufferViews = gltf.bufferViews!.map(v => {
@@ -113,7 +118,7 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
         }
         const image = await createImageBitmap(blob, { colorSpaceConversion: "none" });
         const { width, height } = image;
-        const params: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width, height, generateMipMaps: true, internalFormat: "SRGB8_ALPHA8", type: "UNSIGNED_BYTE", image };
+        const params: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width, height, generateMipMaps: true, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image };
         return { params } as RenderStateDynamicImage;
     }) ?? [];
     const images = await Promise.all(imagePromises);
@@ -121,9 +126,9 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
     const samplers = gltf.samplers?.map(s => {
         // https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#samplers
         const { magFilter, minFilter, wrapS, wrapT } = s;
-        const minificationFilter = filters[minFilter ?? GL.NEAREST] as MinFilterString;
-        const magnificationFilter = filters[magFilter ?? GL.NEAREST] as MagFilterString;
-        const wrap = wrapS && wrapT ? [wrappings[wrapS] as WrapString, wrappings[wrapT] as WrapString] as const : undefined;
+        const minificationFilter = filters[minFilter ?? GL.LINEAR_MIPMAP_LINEAR] as MinFilterString;
+        const magnificationFilter = filters[magFilter ?? GL.LINEAR] as MagFilterString;
+        const wrap = wrapS && wrapT ? [wrappings[wrapS] as WrapString, wrappings[wrapT] as WrapString] as const : ["REPEAT", "REPEAT"] as const;
         return { minificationFilter, magnificationFilter, wrap } as RenderStateDynamicSampler;
     }) ?? [];
 
@@ -192,21 +197,25 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
             const attributes = {} as RenderStateDynamicVertexAttributes;
             for (const [key, value] of Object.entries(p.attributes)) {
                 const name = attributeNames[key as keyof typeof attributeNames];
+                // if (name != "position")
+                //     continue;
                 const accessor = gltf.accessors![value];
+                console.assert(!accessor.sparse);
                 const bufferView = gltf.bufferViews![accessor.bufferView!];
                 const buffer = bufferViews[accessor.bufferView!];
                 const componentType = accessor.componentType as keyof typeof attributeCompontentTypes;
                 const prefix = attributeCompontentTypePrefixes[componentType];
                 const type = accessor.type as "SCALAR" | "VEC2" | "VEC3" | "VEC4";
                 const kind = accessor.type == "SCALAR" ? prefix : `${prefix}_${type as Exclude<typeof type, "SCALAR">}` as const;
+                // const floatView = new Float32Array(buffer.buffer, buffer.byteOffset + (accessor.byteOffset ?? 0), accessor.count);
                 const attrib = {
                     kind,
                     buffer,
                     componentType: attributeCompontentTypes[componentType],
                     componentCount: attributeComponentCounts[type],
-                    normalized: accessor.normalized,
-                    stride: bufferView.byteStride,
-                    offset: accessor.byteOffset,
+                    normalized: accessor.normalized ?? false,
+                    stride: bufferView.byteStride ?? 0,
+                    offset: accessor.byteOffset ?? 0,
                 } as const satisfies RenderStateDynamicVertexAttribute;
                 Reflect.set(attributes, name, attrib);
             };
@@ -214,9 +223,9 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
             const indicesAccessor = p.indices != undefined ? gltf.accessors![p.indices] : undefined;
             const count = indicesAccessor ? indicesAccessor.count : gltf.accessors![p.attributes["POSITION"]!].count;
             const ib = bufferViews[indicesAccessor?.bufferView ?? -1];
-            const IndexBufferType = indicesAccessor ? indexBufferTypes[indicesAccessor.componentType as keyof typeof indexBufferTypes] : undefined;
-            const indices = IndexBufferType ? new IndexBufferType(ib.buffer, ib.byteOffset, ib.length / IndexBufferType.BYTES_PER_ELEMENT) : count;
-            const mode = topologies[p.mode as keyof typeof topologies];
+            const IndexBufferType = indicesAccessor ? bufferTypes[indicesAccessor.componentType as GL.UNSIGNED_BYTE | GL.UNSIGNED_SHORT | GL.UNSIGNED_INT] : undefined;
+            const indices = IndexBufferType ? new IndexBufferType(ib.buffer, ib.byteOffset + (indicesAccessor!.byteOffset ?? 0), indicesAccessor!.count) : count;
+            const mode = topologies[p.mode as keyof typeof topologies] ?? "TRIANGLES";
 
             const geometry: RenderStateDynamicGeometry = {
                 primitiveType: mode,

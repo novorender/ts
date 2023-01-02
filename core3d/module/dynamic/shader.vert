@@ -25,6 +25,7 @@ layout(std140) uniform Material {
 
 layout(std140) uniform Instance {
     mat4 modelLocalMatrix;
+    mat3 modelLocalMatrixNormal;
     uint objectId;
 } instance;
 
@@ -41,8 +42,6 @@ out struct {
     vec4 color0;
     vec2 texCoord0;
     vec2 texCoord1;
-    vec3 normal;
-    // vec3 tangent;
     float linearDepth;
     mat3 tbn; // in local space
     vec3 toCamera; // in local space (camera - position)
@@ -58,13 +57,14 @@ layout(location = 5) in vec2 texCoord1;
 void main() {
     vec4 posVS = camera.localViewMatrix * instance.modelLocalMatrix * position;
     gl_Position = camera.viewClipMatrix * posVS;
+    vec3 normalLS = instance.modelLocalMatrixNormal * normal;
+    vec3 tangentLS = instance.modelLocalMatrixNormal * tangent.xyz;
     vec3 cameraPosLS = camera.viewLocalMatrix[3].xyz;
     vec3 vertexPosLS = (instance.modelLocalMatrix * position).xyz;
-    vec3 bitangent = cross(normal, tangent.xyz) * tangent.w;
-    varyings.tbn = mat3(tangent.xyz, bitangent, normal);
+    vec3 bitangentLS = cross(normalLS, tangentLS.xyz) * tangent.w;
+    varyings.tbn = mat3(tangentLS, bitangentLS, normalLS);
 
     varyings.toCamera = cameraPosLS - vertexPosLS;
-    varyings.normal = camera.worldViewMatrixNormal * normal;
     // varyings.tangent = camera.worldViewMatrixNormal * tangent.xyz;
     varyings.texCoord0 = texCoord0;
     varyings.texCoord1 = texCoord1;

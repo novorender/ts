@@ -104,7 +104,6 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
         }
     } else {
         const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
-        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
         gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, params.width, params.height, 0, format!, type!, params.image as TexImageSource);
         if (generateMipMaps && isPowerOf2(width) && isPowerOf2(height)) {
             gl.generateMipmap(target);
