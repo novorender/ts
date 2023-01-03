@@ -103,8 +103,8 @@ void main() {
         rgba = vec4(rgb, baseColor.a);
     }
 
-    if(highlight != 0U) {
-        float u = (float(highlight) - 0.5) / float(maxHighlights);
+    {
+        float u = (float(highlight) + 0.5) / float(maxHighlights);
         mat4 colorTransform;
         colorTransform[0] = texture(texture_highlights, vec2(u, 0.5 / 5.0));
         colorTransform[1] = texture(texture_highlights, vec2(u, 1.5 / 5.0));

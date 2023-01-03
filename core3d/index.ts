@@ -8,11 +8,13 @@ import lut_ggx_png from "./lut_ggx.png";
 import { vec3 } from "gl-matrix";
 import { createTestCube, createTestSphere } from "./geometry";
 import { loadGLTF } from "./gltf";
+import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight } from "./highlight";
 
 
 export * from "./state";
 export * from "./context";
 export * from "./module";
+export * from "./highlight";
 
 function nextFrame() {
     return new Promise<number>((resolve) => {
@@ -102,12 +104,11 @@ export async function run(canvas: HTMLCanvasElement) {
 
     let context: RenderContext | undefined;
 
-    const rgbaTransform = [
-        0, 0, 0, 0, 1, // red
-        0, 0, 0, 0, 0, // green
-        0, 0, 0, 0, 0, // blue
-        0, 0, 0, 0, 1, // alpha
-    ] as const;
+    const rgbaTransforms = {
+        neutral: createNeutralHighlight(),
+        red: createColorSetHighlight([1, 0, 0]),
+        gray: createHSLATransformHighlight({ saturation: 0 }),
+    } as const;
 
     canvas.addEventListener("click", async (e) => {
         if (context) {
@@ -117,12 +118,14 @@ export async function run(canvas: HTMLCanvasElement) {
                 const { objectId } = centerSample;
                 state = modifyRenderState(state, {
                     highlights: {
-                        groups: [{ rgbaTransform, objectIds: [objectId] }]
+                        defaultHighlight: rgbaTransforms.gray,
+                        groups: [{ rgbaTransform: rgbaTransforms.red, objectIds: [objectId] }]
                     }
                 });
             } else {
                 state = modifyRenderState(state, {
                     highlights: {
+                        defaultHighlight: rgbaTransforms.neutral,
                         groups: []
                     }
                 });

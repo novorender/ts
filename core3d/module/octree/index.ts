@@ -1,4 +1,4 @@
-import { DerivedRenderState, RenderContext, RenderStateHighlightGroup } from "core3d";
+import { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "core3d";
 import { RenderModuleContext, RenderModule } from "..";
 import { createSceneRootNode } from "core3d/scene";
 import { NodeState, OctreeContext, OctreeNode, Visibility } from "./node";
@@ -82,11 +82,15 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         if (renderContext.hasStateChanged({ highlights })) {
             const { groups } = highlights;
-            const transforms = groups.map(g => g.rgbaTransform);
-            const prevTransforms = renderContext.prevState?.highlights.groups.map(g => g.rgbaTransform) ?? [];
+            const transforms = [highlights.defaultHighlight, ...groups.map(g => g.rgbaTransform)];
+            const prevTransforms = renderContext.prevState ?
+                [
+                    renderContext.prevState.highlights.defaultHighlight,
+                    ...renderContext.prevState.highlights.groups.map(g => g.rgbaTransform)
+                ] : [];
             if (!sequenceEqual(transforms, prevTransforms)) {
                 // update highlight matrices
-                const image = createColorTransforms(groups);
+                const image = createColorTransforms(highlights);
                 glUpdateTexture(gl, resources.highlightTexture, { kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image });
             }
             const objectIds = groups.map(g => g.objectIds);
@@ -339,7 +343,7 @@ function* iterateNodes(node: OctreeNode | undefined): IterableIterator<OctreeNod
     }
 }
 
-function createColorTransforms(groups: readonly RenderStateHighlightGroup[]) {
+function createColorTransforms(highlights: RenderStateHighlightGroups) {
     const numColorMatrices = 256;
     const numColorMatrixCols = 5;
     const numColorMatrixRows = 4;
@@ -352,14 +356,25 @@ function createColorTransforms(groups: readonly RenderStateHighlightGroup[]) {
         }
     }
 
-    // Copy transformation matrices
-    for (let i = 0; i < groups.length; i++) {
-        const { rgbaTransform } = groups[i];
+    function copyMatrix(index: number, rgbaTransform: RGBATransform) {
         for (let col = 0; col < numColorMatrixCols; col++) {
             for (let row = 0; row < numColorMatrixRows; row++) {
-                colorMatrices[(numColorMatrices * col + i) * 4 + row] = rgbaTransform[col + row * numColorMatrixCols];
+                colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform[col + row * numColorMatrixCols];
             }
         }
+    }
+
+    // Copy transformation matrices
+    const { defaultHighlight, groups } = highlights;
+    copyMatrix(0, defaultHighlight);
+    for (let i = 0; i < groups.length; i++) {
+        copyMatrix(i + 1, groups[i].rgbaTransform);
+        // const { rgbaTransform } = groups[i];
+        // for (let col = 0; col < numColorMatrixCols; col++) {
+        //     for (let row = 0; row < numColorMatrixRows; row++) {
+        //         colorMatrices[(numColorMatrices * col + i) * 4 + row] = rgbaTransform[col + row * numColorMatrixCols];
+        //     }
+        // }
     }
     return colorMatrices;
 }
