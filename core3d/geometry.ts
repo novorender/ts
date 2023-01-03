@@ -1,4 +1,4 @@
-import { mat4, quat, ReadonlyVec2, ReadonlyVec3, vec2, vec3 } from "gl-matrix";
+import { mat4, ReadonlyVec2, ReadonlyVec3, vec2, vec3 } from "gl-matrix";
 import { RenderStateDynamicGeometry, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicVertexAttributes } from "./state";
 
 const defaultMaterial: RenderStateDynamicMaterial = {

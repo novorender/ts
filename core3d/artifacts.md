@@ -15,13 +15,13 @@
 - [x] materials
 - [x] large coordinates
 - [ ] terrain elevation
-- [ ] **gltf/glb objects**
+- [x] **gltf/glb objects**
 - [x] clipping volumes
 - [x] clipping box rendering (using volumes)
 - [x] clipping outlines (only on cube, for now...)
 - [ ] point clouds (with variable sized point discs)
 - [x] tonemapping (and debug shading)
-- [ ] sun light (with ambient)
+- [x] default ibl (instead of sun light)
 - [ ] camera headlight
 - [x] watermark
 - [ ] ocean?
@@ -38,6 +38,7 @@
 - [x] **new binary format**
 - [x] **filter-on-load "ready"**
 - [x] async picking
+- [x] **dynamic procedural geometry**
 - [x] attribute defaults on no value
 - [ ] attribute defaults on single value
 - [ ] improved attribute packing

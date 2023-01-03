@@ -28,3 +28,9 @@ declare module "*.bin" {
     export default data;
 }
 
+declare module "*.png" {
+    const data: Uint8Array;
+    export default data;
+}
+
+

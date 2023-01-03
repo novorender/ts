@@ -1,7 +1,7 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import { KTX } from "core3d/ktx";
 import { RenderModuleContext, RenderModule } from "..";
-import { createUniformsProxy, glClear, glProgram, glSampler, glTexture, glDraw, glUniformLocations, glState, TextureParams, glBuffer, glDelete, TextureParams2DUncompressedMipMapped, UniformTypes } from "webgl2";
+import { createUniformsProxy, glClear, glProgram, glTexture, glDraw, glUniformLocations, glState, TextureParams, glBuffer, glDelete, UniformTypes, TextureParamsCubeUncompressed, TextureParamsCubeUncompressedMipMapped } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
@@ -9,12 +9,10 @@ export class BackgroundModule implements RenderModule {
     private abortController: AbortController | undefined;
     url: string | undefined;
     textureParams: {
-        readonly lut_ggx: TextureParams;
-        readonly diffuse: TextureParams;
-        readonly specular: TextureParams;
-        readonly skybox: TextureParams;
-    } | null | undefined = null; // null means no textures, whereas undefined means no change in textures
-    numMipMaps = 0;
+        readonly diffuse: TextureParamsCubeUncompressed;
+        readonly specular: TextureParamsCubeUncompressedMipMapped;
+        readonly skybox: TextureParamsCubeUncompressed;
+    } | undefined; // undefined means no change in textures
 
     readonly uniforms = {
         envBlurNormalized: "float",
@@ -36,25 +34,22 @@ export class BackgroundModule implements RenderModule {
             const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
             const baseUrl = new URL(urlDir, scriptUrl);
             const promises = [
-                download(new URL("../lut_ggx.ktx", baseUrl)),
-                download(new URL("radiance.ktx", baseUrl)),
-                download(new URL("irradiance.ktx", baseUrl)),
-                download(new URL("background.ktx", baseUrl)),
-            ];
-            const [lut_ggx, specular, diffuse, skybox] = await Promise.all(promises);
-            this.textureParams = { lut_ggx, specular, diffuse, skybox } as const;
-            const { mipMaps } = specular as TextureParams2DUncompressedMipMapped;
-            this.numMipMaps = typeof mipMaps == "number" ? mipMaps : mipMaps.length;
+                download<TextureParamsCubeUncompressedMipMapped>(new URL("radiance.ktx", baseUrl)),
+                download<TextureParamsCubeUncompressed>(new URL("irradiance.ktx", baseUrl)),
+                download<TextureParamsCubeUncompressed>(new URL("background.ktx", baseUrl)),
+            ] as const;
+            const [specular, diffuse, skybox] = await Promise.all(promises);
+            this.textureParams = { diffuse, specular, skybox } as const;
         } finally {
             this.abortController = undefined;
         }
 
-        async function download(url: URL) {
+        async function download<T extends TextureParams>(url: URL) {
             const response = await fetch(url, { mode: "cors", signal });
             if (response.ok) {
                 var ktxData = await response.arrayBuffer();
                 var params = KTX.parseKTX(new Uint8Array(ktxData));
-                return params;
+                return params as T;
             } else {
                 throw new Error(`HTTP Error:${response.status} ${response.status}`);
             }
@@ -66,68 +61,45 @@ class BackgroundModuleContext implements RenderModuleContext {
     readonly uniforms;
     readonly textureUniformLocations;
     readonly resources;
+    skybox: WebGLTexture;
 
     constructor(readonly context: RenderContext, readonly data: BackgroundModule) {
         const { gl } = context;
         this.uniforms = createUniformsProxy(data.uniforms);
         const uniformBufferBlocks = ["Camera", "Background"];
         const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks });
-        const samplerSingle = glSampler(gl, { minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
-        const samplerMip = glSampler(gl, { minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniforms.buffer.byteLength });
-        this.resources = { program, samplerSingle, samplerMip, uniforms } as const;
+        this.skybox = glTexture(gl, context.defaultIBLTextureParams);
+        this.resources = { program, uniforms } as const;
         this.textureUniformLocations = glUniformLocations(gl, program, ["skybox", "specular"] as const, "textures_");
     }
 
-    updateUniforms(state: DerivedRenderState) {
-        const { background } = state;
-        const { values } = this.uniforms;
-        values.envBlurNormalized = background.blur ?? 0;
-        values.mipCount = this.data.numMipMaps; // 9
-    }
-
     update(state: DerivedRenderState) {
-        const { context, resources, data } = this;
+        const { context, resources, data, uniforms } = this;
         const { gl } = context;
-        const { textureParams } = data;
         const { background } = state;
 
-        if (textureParams !== undefined) {
-            if (textureParams !== null) {
-                const { lut_ggx, diffuse, specular, skybox } = textureParams;
-                context.iblTextures = {
-                    lut_ggx: glTexture(gl, lut_ggx),
-                    diffuse: glTexture(gl, diffuse),
-                    specular: glTexture(gl, specular),
-                    skybox: glTexture(gl, skybox),
-                    samplerMip: this.resources.samplerMip,
-                    samplerSingle: this.resources.samplerSingle,
-                    numMipMaps: data.numMipMaps,
-                };
-            } else {
-                context.iblTextures = undefined;
-            }
-            data.textureParams = undefined; // we already copied the pixels into texture, so get no longer need the original.
-        }
-
-        if (context.hasStateChanged({ background }) || textureParams) {
-            this.updateUniforms(state);
+        if (context.hasStateChanged({ background })) {
+            uniforms.values.envBlurNormalized = background.blur ?? 0;
             context.updateUniformBuffer(resources.uniforms, this.uniforms);
             const { url } = state.background;
-            if (url && (url != data.url)) {
-                data.downloadTextures(url).then(() => { context.changed = true; });
-            } else if (!url) {
-                const { iblTextures } = context;
-                if (iblTextures) {
-                    const { skybox, diffuse, specular } = iblTextures;
-                    gl.deleteTexture(skybox);
-                    gl.deleteTexture(diffuse);
-                    gl.deleteTexture(specular);
-                    context.iblTextures = undefined;
-                    data.textureParams = null;
+            if (url) {
+                if (url != data.url) {
+                    data.downloadTextures(url).then(() => { context.changed = true; });
                 }
+            } else {
+                context.updateIBLTextures(null);
             }
             data.url = url;
+        }
+
+        if (data.textureParams) {
+            context.updateIBLTextures(data.textureParams);
+            gl.deleteTexture(this.skybox);
+            this.skybox = glTexture(gl, data.textureParams.skybox);
+            uniforms.values.mipCount = context.iblTextures.numMipMaps;
+            context.updateUniformBuffer(resources.uniforms, this.uniforms);
+            data.textureParams = undefined; // we already copied the pixels into texture, so we no longer need the original.
         }
     }
 
@@ -136,9 +108,9 @@ class BackgroundModuleContext implements RenderModuleContext {
     }
 
     render(state: DerivedRenderState) {
-        const { context, resources } = this;
-        const { program, uniforms, samplerSingle, samplerMip } = resources;
-        const { gl, cameraUniforms } = context;
+        const { context, resources, skybox } = this;
+        const { program, uniforms } = resources;
+        const { gl, cameraUniforms, samplerSingle, samplerMip } = context;
 
         glState(gl, {
             drawBuffers: ["NONE", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
@@ -153,8 +125,10 @@ class BackgroundModuleContext implements RenderModuleContext {
             drawBuffers: ["COLOR_ATTACHMENT0"],
         });
 
-        if (context.iblTextures) {
-            const { skybox, specular } = context.iblTextures;
+        if (state.background.color) {
+            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
+        } else {
+            const { specular } = context.iblTextures;
             const { textureUniformLocations } = this;
             glState(gl, {
                 program,
@@ -167,25 +141,19 @@ class BackgroundModuleContext implements RenderModuleContext {
                 depthWriteMask: false,
             });
             glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
-        } else {
-            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
         }
     }
 
     contextLost() {
         const { data } = this;
-        data.url = undefined; // force a envmap texture reload
+        data.url = undefined; // force an envmap texture reload
     }
 
     dispose() {
-        const { context, resources } = this;
-        const { iblTextures } = context;
+        const { context, resources, skybox } = this;
         const { gl } = context;
         this.contextLost();
         glDelete(gl, resources);
-        if (iblTextures) {
-            glDelete(gl, { resources: iblTextures });
-            context.iblTextures = undefined;
-        }
+        gl.deleteTexture(skybox);
     }
 }

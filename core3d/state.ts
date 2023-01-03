@@ -35,7 +35,7 @@ export interface RenderStateOutput {
 }
 
 export interface RenderStateBackground {
-    readonly color: RGBA;
+    readonly color?: RGBA;
     readonly url?: string;
     readonly blur?: number;
 }
@@ -269,7 +269,14 @@ export type RenderStateChanges = RecursivePartial<RenderState>;
 // this function will create a copy where unchanged properties have same identity (=== operator yields true)
 // use this to quickly check for changes.
 export function modifyRenderState(state: RenderState, changes: RenderStateChanges): RenderState {
-    return mergeRecursive(state, changes) as RenderState;
+    const newState = mergeRecursive(state, changes) as RenderState;
+    if (changes.output) {
+        verifyOutputState(newState.output);
+    }
+    if (changes.clipping) {
+        verifyClippingState(newState.clipping);
+    }
+    return newState;
 }
 
 function mergeRecursive(original: any, changes: any) {
@@ -286,6 +293,18 @@ function mergeRecursive(original: any, changes: any) {
     return clone;
 }
 
+function verifyOutputState(state: RenderStateOutput) {
+    const { width, height } = state;
+    if (!Number.isInteger(width) || !Number.isInteger(height))
+        throw new Error(`Output size dimentions (width:${width}, height:${height}) must be integers!`);
+}
+
+function verifyClippingState(state: RenderStateClipping) {
+    const { planes } = state;
+    if (planes.length > 6)
+        throw new Error(`A maximum of six clippings planes are allowed!`);
+}
+
 export function defaultRenderState(): RenderState {
     const state: RenderState = {
         output: {
@@ -293,7 +312,6 @@ export function defaultRenderState(): RenderState {
             height: 256,
         },
         background: {
-            color: [0, 0, 0.25, 1],
         },
         camera: {
             kind: "pinhole",

@@ -22,6 +22,7 @@ const buildOptions = {
     loader: {
         ".wasm": "binary",
         ".bin": "binary",
+        ".png": "binary",
         ".glsl": "text",
         ".vert": "text",
         ".frag": "text",

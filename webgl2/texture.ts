@@ -3,8 +3,8 @@ import { getBufferViewType } from "./misc.js";
 
 export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
     const texture = gl.createTexture()!;
-
-    const { width, height } = params;
+    const width = params.width ?? params.image.width;
+    const height = params.height ?? params.image.height;
     const target = gl[params.kind];
     const depth = "depth" in params ? params.depth : undefined;
     gl.activeTexture(gl.TEXTURE0);
@@ -104,7 +104,7 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
         }
     } else {
         const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
-        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, params.width, params.height, 0, format!, type!, params.image as TexImageSource);
+        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format!, type!, params.image as TexImageSource);
         if (generateMipMaps && isPowerOf2(width) && isPowerOf2(height)) {
             gl.generateMipmap(target);
         }
@@ -115,7 +115,8 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
 
 
 export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGLTexture, params: TextureParams) {
-    const { width, height } = params;
+    const width = params.width ?? params.image.width;
+    const height = params.height ?? params.image.height;
     const target = gl[params.kind];
     const depth = "depth" in params ? params.depth : undefined;
     gl.activeTexture(gl.TEXTURE0);
@@ -206,7 +207,7 @@ export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGL
     } else {
         const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, params.width, params.height, 0, format!, type!, params.image as TexImageSource);
+        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format!, type!, params.image as TexImageSource);
         if (generateMipMaps && isPowerOf2(width) && isPowerOf2(height)) {
             gl.generateMipmap(target);
         }
@@ -243,12 +244,17 @@ function getFormatInfo(gl: WebGL2RenderingContext, internalFormatString: Uncompr
 }
 
 export type TextureParams =
-    TextureParams2DUncompressed | TextureParams2DCompressed | TextureParams2DUncompressedMipMapped | TextureParams2DCompressedMipMapped |
+    TextureParams2DUncompressedImage | TextureParams2DUncompressed | TextureParams2DCompressed | TextureParams2DUncompressedMipMapped | TextureParams2DCompressedMipMapped |
     TextureParamsCubeUncompressed | TextureParamsCubeCompressed | TextureParamsCubeUncompressedMipMapped | TextureParamsCubeCompressedMipMapped |
     TextureParams3DUncompressed | TextureParams3DCompressed | TextureParams3DUncompressedMipMapped | TextureParams3DCompressedMipMapped |
     TextureParams2DArrayUncompressed | TextureParams2DArrayCompressed | TextureParams2DArrayUncompressedMipMapped | TextureParams2DArrayCompressedMipMapped;
 
 // 2D
+export type TextureParams2DUncompressedImage = Uncompressed & Partial<Size2D> & GenMipMap & {
+    readonly kind: "TEXTURE_2D";
+    readonly image: TexImageSource;
+};
+
 export type TextureParams2DUncompressed = Uncompressed & Size2D & GenMipMap & {
     readonly kind: "TEXTURE_2D";
     readonly image: BufferSource | TexImageSource | null;

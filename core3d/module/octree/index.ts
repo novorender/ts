@@ -182,17 +182,14 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
     render() {
         const { resources, renderContext, rootNode, debug } = this;
-        const { usePrepass } = renderContext;
+        const { usePrepass, samplerSingle, samplerMip } = renderContext;
         const { program, programDebug, samplerNearest, materialTexture, highlightTexture } = resources;
         const { gl, iblTextures, cameraUniforms } = renderContext;
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
             nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
             const { textureUniformLocations } = this;
-            const samplerSingle = iblTextures?.samplerSingle ?? null;
-            const samplerMip = iblTextures?.samplerMip ?? null;
-            const diffuse = iblTextures?.diffuse ?? null;
-            const specular = iblTextures?.specular ?? null;
+            const { diffuse, specular } = iblTextures;
             glState(gl, {
                 program: program,
                 uniformBuffers: [cameraUniforms],

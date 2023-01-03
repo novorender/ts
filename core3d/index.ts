@@ -4,9 +4,11 @@ import { OrbitController } from "./controller";
 import { downloadScene } from "./scene";
 import { glExtensions } from "@novorender/webgl2";
 import { wasmInstance } from "./wasm";
+import lut_ggx_png from "./lut_ggx.png";
 import { vec3 } from "gl-matrix";
 import { createTestCube, createTestSphere } from "./geometry";
 import { loadGLTF } from "./gltf";
+
 
 export * from "./state";
 export * from "./context";
@@ -33,18 +35,24 @@ export async function run(canvas: HTMLCanvasElement) {
     };
 
     const wasm = await wasmInstance();
+
+    const blob = new Blob([lut_ggx_png], { type: "image/png" });
+    const lut_ggx = await createImageBitmap(blob);
+
     let state = defaultRenderState();
     let prevState = state;
-    // const sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
-    // const sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
-    // const sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim
-    // const sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
+    let sceneId = "";
+    // sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    // sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    // sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim
+    // sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     const backgroundUrl = new URL("/assets/env/lake/", scriptUrl).toString();
-    // const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
-    // const scene = await downloadScene(sceneUrl);
+    const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
+    const scene = sceneId ? await downloadScene(sceneUrl) : undefined;
 
-    const gltfObjects = await loadGLTF(new URL("/assets/gltf/boxtextured.glb", scriptUrl));
+    // const gltfObjects = await loadGLTF(new URL("/assets/gltf/logo.glb", scriptUrl));
+    // const gltfObjects = await loadGLTF(new URL("/assets/gltf/boxtextured.glb", scriptUrl));
 
     const planes: RenderStateClippingPlane[] = [
         { normalOffset: [1, 0, 0, 0], color: [1, 0, 0, 0.5] },
@@ -53,19 +61,19 @@ export async function run(canvas: HTMLCanvasElement) {
     ];
 
     // const testCube = createTestCube();
-    // const testSphere = createTestSphere(1, 0);
+    const testSphere = createTestSphere(1, 5);
 
     /*
     Pack vertex attributes more tightly (fill in gaps)
     Use model space xz coords for UV on terrain (fix offset/aabb)
-    weighted center/sort triangle by area
+    weighted center/sort triangle by area for z-buffer prepass
     */
 
     const controller = new OrbitController({ kind: "orbit" }, canvas);
     // const controller = new OrbitController({ kind: "orbit", pivotPoint: [298995.87220525084, 48.56500795571233, -6699553.125910083] }, canvas);
 
     state = modifyRenderState(state, {
-        // scene,
+        scene,
         background: { url: backgroundUrl, blur: 0.25 },
         // camera: { near: 1, far: 10000, position: [298995.87220525084, 48.56500795571233, -6699553.125910083] },
         grid: { enabled: true, /* origin: scene.config.boundingSphere.center */ },
@@ -73,8 +81,8 @@ export async function run(canvas: HTMLCanvasElement) {
         // clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
         // tonemapping: { mode: TonemappingMode.normal },
         dynamic: {
-            objects: gltfObjects,
-            // objects: [testSphere],
+            // objects: gltfObjects,
+            objects: [testSphere],
         }
     });
 
@@ -91,9 +99,9 @@ export async function run(canvas: HTMLCanvasElement) {
             state = modifyRenderState(state, { output: { width, height } });
         }
     }
-    resize();
+    // resize();
 
-    let context: RenderContext | undefined = new RenderContext(canvas, wasm, options);
+    let context: RenderContext | undefined;
 
     const rgbaTransform = [
         0, 0, 0, 0, 1, // red
@@ -140,10 +148,10 @@ export async function run(canvas: HTMLCanvasElement) {
 
     let animId: number | undefined;
     function init() {
-        context = new RenderContext(canvas, wasm, options);
+        context = new RenderContext(canvas, wasm, lut_ggx, options);
     }
     init();
-    emulateLostContext(context.gl, canvas);
+    emulateLostContext(context!.gl, canvas);
 
     for (; ;) {
         const renderTime = await nextFrame();

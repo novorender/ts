@@ -22,7 +22,7 @@ export class DynamicModule implements RenderModule {
 }
 
 class DynamicModuleContext implements RenderModuleContext {
-    iblTextures: RenderContext["iblTextures"];
+    iblTextures;
     readonly programs;
     readonly textureUniformLocations;
     readonly buffers = new Map<BufferSource, BufferAsset>();
@@ -48,6 +48,7 @@ class DynamicModuleContext implements RenderModuleContext {
         } as const;
         this.defaultSampler = glSampler(gl, { magnificationFilter: "LINEAR", minificationFilter: "LINEAR_MIPMAP_LINEAR", wrap: ["REPEAT", "REPEAT"] });
         this.defaultTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array(4) }); // used to avoid warnings on android
+        this.iblTextures = context.iblTextures;
     }
 
     update(state: DerivedRenderState) {
@@ -107,9 +108,6 @@ class DynamicModuleContext implements RenderModuleContext {
     render(state: DerivedRenderState) {
         const { context } = this;
         const { gl, cameraUniforms } = context;
-        if (!context.iblTextures) {
-            return;
-        }
 
         glState(gl, {
             uniformBuffers: [cameraUniforms],
@@ -343,7 +341,7 @@ class MaterialAsset {
         values.baseColorFactor = data.baseColorFactor ?? [1, 1, 1, 1];
         values.baseColorUVSet = data.baseColorTexture ? data.baseColorTexture.texCoord ?? 0 : -1;
         values.alphaCutoff = data.alphaCutoff ?? data.alphaMode == "MASK" ? .5 : 0;
-        values.radianceMipCount = context.iblTextures?.numMipMaps ?? 0;
+        values.radianceMipCount = context.iblTextures.numMipMaps;
         if (baseColorTexture) {
             tex.baseColor = textures.get(baseColorTexture.texture.image)!.texture;
             samp.baseColor = samplers.get(baseColorTexture.texture.sampler!)?.sampler ?? defaultSamper;
@@ -390,10 +388,10 @@ class MaterialAsset {
     }
 
     update(context: RenderContext, state: DerivedRenderState, defaultTexture: WebGLTexture, textureUniformLocations: DynamicModuleContext["textureUniformLocations"]["ggx"]) {
-        const { iblTextures } = context;
+        const { iblTextures, lut_ggx, samplerSingle, samplerMip } = context;
         if (iblTextures) {
             const { uniforms, uniformsBuffer, textures, samplers } = this;
-            const { samplerSingle, samplerMip, diffuse, specular, lut_ggx, numMipMaps } = iblTextures;
+            const { diffuse, specular, numMipMaps } = iblTextures;
             type Mutable<T> = { -readonly [P in keyof T]: T[P] };
             const mutableState = this.stateParams as Mutable<StateParams>;
             mutableState.textures = [

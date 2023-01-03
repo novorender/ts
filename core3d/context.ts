@@ -1,5 +1,5 @@
 import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderStateCamera, CoordSpace, createDefaultModules } from "./";
-import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformsProxy, UniformsProxy } from "webgl2";
+import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformsProxy, UniformsProxy, glTexture, glSampler, TextureParams, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { RenderBuffers } from "./buffers";
@@ -25,24 +25,27 @@ export class RenderContext {
     private viewWorldMatrix = mat4.create();
     private viewWorldMatrixNormal = mat3.create();
 
+    readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
+
+    // constant gl resources
     readonly cameraUniforms: WebGLBuffer;
+    readonly lut_ggx: WebGLTexture;
+    readonly samplerMip: WebGLSampler; // use to read diffuse texture
+    readonly samplerSingle: WebGLSampler; // use to read the other textures
 
     // shared mutable state
     prevState: DerivedRenderState | undefined;
     changed = true; // flag to force a re-render when internal render module state has changed, e.g. on download complete.
-    buffers: RenderBuffers = undefined!; // output render buffers
-    iblTextures: { // these are set by the background module, once download is complete
-        readonly lut_ggx: WebGLTexture; // 2D lookup texture for ggx function.
-        readonly diffuse: WebGLTexture; // irradiance, mipped cubemap
-        readonly specular: WebGLTexture; // radiance, no-mip cubemap
-        readonly skybox: WebGLTexture; // high-res background panorama image cubemap.
-        readonly samplerMip: WebGLSampler; // use to read diffuse texture
-        readonly samplerSingle: WebGLSampler; // use to read the other textures
-        readonly numMipMaps: number; // # of diffuse mip map levels.
-    } | undefined;
+    buffers: RenderBuffers = undefined!; // output render buffers. will be set on first render as part of resize.
+    iblTextures: { // these are changed by the background module, once download is complete
+        readonly diffuse: WebGLTexture; // irradiance cubemap
+        readonly specular: WebGLTexture; // radiance cubemap
+        readonly numMipMaps: number; // # of radiance/specular mip map levels.
+    };
     clippingUniforms: WebGLBuffer | undefined;
 
-    constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
+    constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TexImageSource, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
+        // init gl context
         const gl = canvas.getContext("webgl2", options);
         if (!gl)
             throw new Error("Unable to create WebGL 2 context!");
@@ -50,11 +53,27 @@ export class RenderContext {
         const extensions = glExtensions(gl, true);
         console.assert(extensions.loseContext != null, extensions.multiDraw != null, extensions.colorBufferFloat != null);
 
+        // ggx lookup texture and ibl samplers
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+        this.lut_ggx = glTexture(gl, { kind: "TEXTURE_2D", internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: lut_ggx });
+        this.samplerSingle = glSampler(gl, { minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        this.samplerMip = glSampler(gl, { minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
 
+        // create default ibl textures
+        const top = new Uint8Array([192, 192, 192, 255]);
+        const side = new Uint8Array([128, 128, 128, 255]);
+        const bottom = new Uint8Array([64, 64, 64, 255]);
+        const image = [side, side, top, bottom, side, side] as const;
+        const textureParams = this.defaultIBLTextureParams = { kind: "TEXTURE_CUBE_MAP", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: image } as const;
+        this.iblTextures = {
+            diffuse: glTexture(gl, textureParams),
+            specular: glTexture(gl, textureParams),
+            numMipMaps: 1,
+        };
+
+        // initialize modules
         this.modules = modules ?? RenderContext.defaultModules ?? RenderContext.defaultModules ?? createDefaultModules();
         RenderContext.defaultModules = this.modules;
-
         this.moduleContexts = this.modules.map((m, i) => {
             const module = m.withContext(this);
             if (!isPromise(module)) {
@@ -65,6 +84,7 @@ export class RenderContext {
             });
         });
 
+        // camera uniforms
         this.cameraUniformsData = createUniformsProxy({
             clipViewMatrix: "mat4",
             viewClipMatrix: "mat4",
@@ -76,8 +96,19 @@ export class RenderContext {
         this.cameraUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength + 256 });
     }
 
+    private deleteIblTextures() {
+        const { gl, iblTextures } = this;
+        const { diffuse, specular } = iblTextures;
+        gl.deleteTexture(diffuse);
+        gl.deleteTexture(specular);
+    }
+
     dispose() {
-        const { gl, cameraUniforms, buffers, moduleContexts } = this;
+        const { gl, cameraUniforms, buffers, moduleContexts, lut_ggx, samplerSingle, samplerMip } = this;
+        this.deleteIblTextures();
+        gl.deleteTexture(lut_ggx);
+        gl.deleteSampler(samplerSingle);
+        gl.deleteSampler(samplerMip);
         gl.deleteBuffer(cameraUniforms);
         buffers?.dispose();
         for (const module of moduleContexts) {
@@ -106,6 +137,25 @@ export class RenderContext {
             const { begin, end } = proxy.dirtyRange;
             glUpdateBuffer(this.gl, { kind: "UNIFORM_BUFFER", srcData: proxy.buffer, targetBuffer: uniformBuffer, srcOffset: begin, targetOffset: begin, size: end - begin });
             proxy.dirtyRange.clear();
+        }
+    }
+
+    updateIBLTextures(params: { readonly diffuse: TextureParamsCubeUncompressed, readonly specular: TextureParamsCubeUncompressedMipMapped } | null) {
+        const { gl } = this;
+        this.deleteIblTextures();
+        if (params) {
+            const { diffuse, specular } = params;
+            this.iblTextures = {
+                diffuse: glTexture(gl, diffuse),
+                specular: glTexture(gl, specular),
+                numMipMaps: typeof specular.mipMaps == "number" ? specular.mipMaps : specular.mipMaps.length,
+            };
+        } else {
+            this.iblTextures = {
+                diffuse: glTexture(gl, this.defaultIBLTextureParams),
+                specular: glTexture(gl, this.defaultIBLTextureParams),
+                numMipMaps: 1,
+            };
         }
     }
 
