@@ -42,7 +42,7 @@ export async function run(canvas: HTMLCanvasElement) {
     let state = defaultRenderState();
     let prevState = state;
     let sceneId = "";
-    // sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
     // sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
     // sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim
     // sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
@@ -61,7 +61,7 @@ export async function run(canvas: HTMLCanvasElement) {
     ];
 
     // const testCube = createTestCube();
-    const testSphere = createTestSphere(1, 5);
+    // const testSphere = createTestSphere(1, 5);
 
     /*
     Pack vertex attributes more tightly (fill in gaps)
@@ -80,10 +80,10 @@ export async function run(canvas: HTMLCanvasElement) {
         // cube: { enabled: true, clipDepth: 1 },
         // clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
         // tonemapping: { mode: TonemappingMode.normal },
-        dynamic: {
-            // objects: gltfObjects,
-            objects: [testSphere],
-        }
+        // dynamic: {
+        //     // objects: gltfObjects,
+        //     objects: [testSphere],
+        // }
     });
 
     controller.autoFitToScene(state);
@@ -99,7 +99,6 @@ export async function run(canvas: HTMLCanvasElement) {
             state = modifyRenderState(state, { output: { width, height } });
         }
     }
-    // resize();
 
     let context: RenderContext | undefined;
 
@@ -112,16 +111,23 @@ export async function run(canvas: HTMLCanvasElement) {
 
     canvas.addEventListener("click", async (e) => {
         if (context) {
-            const r = await context["pick"](e.offsetX, e.offsetY);
-            if (r) {
-                const { objectId } = r;
+            const samples = await context["pick"](e.offsetX, e.offsetY);
+            const centerSample = samples.find(s => s.x == 0 && s.y == 0);
+            if (centerSample) {
+                const { objectId } = centerSample;
                 state = modifyRenderState(state, {
                     highlights: {
                         groups: [{ rgbaTransform, objectIds: [objectId] }]
                     }
                 });
+            } else {
+                state = modifyRenderState(state, {
+                    highlights: {
+                        groups: []
+                    }
+                });
             }
-            console.log(r);
+            console.log(centerSample);
         }
     });
 

@@ -10,7 +10,7 @@
 - [x] textured terrain
 - [x] loading/parsing in web worker
 - [x] pick
-- [ ] measure
+- [x] measure (via pick sample disc)
 - [x] **highlighting**
 - [x] materials
 - [x] large coordinates
@@ -38,6 +38,7 @@
 - [x] **new binary format**
 - [x] **filter-on-load "ready"**
 - [x] async picking
+- [x] pick sample disc (for measure and improve line picking)
 - [x] **dynamic procedural geometry**
 - [x] attribute defaults on no value
 - [ ] attribute defaults on single value

@@ -1,5 +1,5 @@
-import { RenderModuleContext, RenderModule, RenderStateOutput, DerivedRenderState, RenderState, RenderStateCamera, CoordSpace, createDefaultModules } from "./";
-import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformsProxy, UniformsProxy, glTexture, glSampler, TextureParams, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed } from "webgl2";
+import { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, CoordSpace, createDefaultModules } from "./";
+import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformsProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { RenderBuffers } from "./buffers";
@@ -114,7 +114,6 @@ export class RenderContext {
         for (const module of moduleContexts) {
             module?.dispose();
         }
-        this.deletePick();
     }
 
     // use a pre-pass to fill in z-buffer for improved fill rate at the expense of triangle rate (useful when doing heavy shading, but unclear how efficient this is on tiled GPUs.)
@@ -181,7 +180,7 @@ export class RenderContext {
     }
 
     protected poll() {
-        this.pollPick();
+        this.buffers?.pollPickFence();
     }
 
     protected render(state: RenderState) {
@@ -201,6 +200,7 @@ export class RenderContext {
             this.buffers?.dispose();
             this.buffers = new RenderBuffers(gl, width, height);
         }
+        this.buffers.readBuffersNeedUpdate = true;
 
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
         const derivedState = state as Mutable<DerivedRenderState>;
@@ -289,91 +289,80 @@ export class RenderContext {
         values.viewWorldMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
     }
 
-    pickInfo: {
-        readonly sync: WebGLSync,
-        readonly promises: { readonly resolve: () => void, readonly reject: (reason: string) => void }[],
-    } | undefined;
-
-    private pollPick() {
-        const { gl, pickInfo } = this;
-        if (pickInfo) {
-            const { sync, promises } = pickInfo;
-            const status = gl.clientWaitSync(sync, gl.SYNC_FLUSH_COMMANDS_BIT, 0);
-            if (status == gl.WAIT_FAILED) {
-                for (const promise of promises) {
-                    promise.reject("Pick failed!");
-                }
-                this.deletePick();
-            } else if (status != gl.TIMEOUT_EXPIRED) {
-                for (const promise of promises) {
-                    promise.resolve();
-                }
-                this.deletePick();
-            }
-        }
-    }
-
-    private deletePick() {
-        this.gl.deleteSync(this.pickInfo?.sync ?? null);
-        this.pickInfo = undefined;
-    }
-
-    protected async pick(x: number, y: number) {
-        const { gl, canvas, wasm, buffers, width, height } = this;
-        const { resources } = buffers;
-        const r = canvas.getBoundingClientRect(); // dim in css pixels
-        const cssWidth = r.width;
-        const cssHeight = r.height;
+    protected async pick(x: number, y: number, sampleDiscRadius = 0): Promise<PickSample[]> {
+        if (sampleDiscRadius < 0)
+            return [];
+        const { canvas, wasm, buffers, width, height } = this;
+        const rect = canvas.getBoundingClientRect(); // dim in css pixels
+        const cssWidth = rect.width;
+        const cssHeight = rect.height;
         // convert to pixel coords
         const px = Math.round(x / cssWidth * width);
         const py = Math.round((1 - (y + 0.5) / cssHeight) * height);
         console.assert(px >= 0 && py >= 0 && px < width && py < height);
-        if (!this.pickInfo) {
-            buffers.read();
-            const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)!;
-            this.pickInfo = { sync, promises: [] };
+        const { normals, depths, infos } = await buffers.pickBuffers();
+
+        // fetch sample rectangle from read buffers
+        const r = Math.ceil(sampleDiscRadius);
+        const r2 = sampleDiscRadius * sampleDiscRadius;
+        let x0 = px - r;
+        let x1 = px + r + 1;
+        let y0 = py - r;
+        let y1 = py + r + 1;
+        if (x0 < 0) x0 = 0;
+        if (x1 > width) x1 = width;
+        if (y0 < 0) y0 = 0;
+        if (y1 > width) y1 = width;
+        const samples: PickSample[] = [];
+        const { isOrtho, viewClipMatrix, viewWorldMatrix, viewWorldMatrixNormal } = this;
+        for (let iy = y0; iy < y1; iy++) {
+            const dy = iy - py;
+            for (let ix = x0; ix < x1; ix++) {
+                const dx = ix - px;
+                if (dx * dx + dy * dy > r2)
+                    continue; // filter out samples that lie outside sample disc radius
+                const buffOffs = ix + iy * width;
+                const objectId = infos[buffOffs * 2];
+                if (objectId != 0xffffffff) {
+                    const nx = wasm.float32(normals[buffOffs * 2 + 0]);
+                    const ny = wasm.float32(normals[buffOffs * 2 + 1]);
+                    const depth = depths[buffOffs];
+                    const [deviation16, intensity16] = new Uint16Array(infos.buffer, buffOffs * 8, 2);
+                    const deviation = wasm.float32(deviation16);
+                    const intensity = wasm.float32(intensity16);
+
+                    // compute clip space x,y coords
+                    const xCS = ((ix + 0.5) / width) * 2 - 1;
+                    const yCS = ((iy + 0.5) / height) * 2 - 1;
+
+                    // compute view space position and normal
+                    const scale = isOrtho ? 1 : depth;
+                    const posVS = vec3.fromValues((xCS / viewClipMatrix[0]) * scale, (yCS / viewClipMatrix[5]) * scale, -depth);
+                    const nz = Math.sqrt(1 - (nx * nx + ny * ny));
+                    const normalVS = vec3.fromValues(nx, ny, nz);
+
+                    // convert into world space.
+                    const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrix);
+                    const normal = vec3.transformMat3(vec3.create(), normalVS, viewWorldMatrixNormal);
+                    vec3.normalize(normal, normal);
+
+                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, deviation, intensity } as const;
+                    samples.push(sample);
+                }
+            }
         }
-        const { promises } = this.pickInfo;
-        const promise = new Promise<void>((resolve, reject) => {
-            promises.push({ resolve, reject });
-        });
-        await promise;
-
-        const pixOffs = px + py * width;
-        const floats = new Float32Array(3);
-        const uints = new Uint32Array(2);
-        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readNormal);
-        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 4, floats, 0, 2);
-        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readLinearDepth);
-        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 4, floats, 2, 1);
-        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readInfo);
-        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, pixOffs * 8, uints, 0, 2);
-        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
-        const [nx, ny, depth] = floats;
-        const [objectId] = uints;
-        if (objectId == 0xffffffff) {
-            return undefined;
-        }
-        const [deviation16, intensity16] = new Uint16Array(uints.buffer, 4);
-        const deviation = wasm.float32(deviation16);
-        const intensity = wasm.float32(intensity16);
-
-        // compute clip space x,y coords
-        const xCS = ((x + 0.5) / width) * 2 - 1;
-        const yCS = ((y + 0.5) / height) * 2 - 1;
-
-        // compute view space position and normal
-        const scale = this.isOrtho ? 1 : depth;
-        const posVS = vec3.fromValues((xCS / this.viewClipMatrix[0]) * scale, (yCS / this.viewClipMatrix[5]) * scale, -depth);
-        const nz = Math.sqrt(1 - (nx * nx + ny * ny));
-        const normalVS = vec3.fromValues(nx, ny, nz);
-
-        // convert into world space.
-        const position = vec3.transformMat4(vec3.create(), posVS, this.viewWorldMatrix);
-        const normal = vec3.transformMat3(vec3.create(), normalVS, this.viewWorldMatrixNormal);
-        vec3.normalize(normal, normal);
-
-        return { position, normal, objectId, deviation, intensity } as const;
+        return samples;
     }
 }
 
+export interface PickSample {
+    // relative x/y pixel (not css pixel) coordinate from pick center.
+    readonly x: number;
+    readonly y: number;
+    // position and normals are in world space.
+    readonly position: ReadonlyVec3;
+    readonly normal: ReadonlyVec3;
+    readonly objectId: number;
+    readonly deviation: number;
+    readonly intensity: number;
+};
