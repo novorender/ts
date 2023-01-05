@@ -1,8 +1,11 @@
 layout(std140) uniform Camera {
     mat4 clipViewMatrix;
     mat4 viewClipMatrix;
-    mat3 worldViewMatrixNormal;
-    mat3 viewWorldMatrixNormal;
+    mat4 localViewMatrix;
+    mat4 viewLocalMatrix;
+    mat3 localViewMatrixNormal;
+    mat3 viewLocalMatrixNormal;
+    vec2 viewSize;
 } camera;
 
 layout(std140) uniform Clipping {

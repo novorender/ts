@@ -4,14 +4,13 @@ import { RenderModuleContext, RenderModule } from "..";
 import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
+import { mat4, vec3 } from "gl-matrix";
 
 export class GridModule implements RenderModule {
     readonly uniforms = {
-        worldClipMatrix: "mat4",
         origin: "vec3",
         axisX: "vec3",
         axisY: "vec3",
-        cameraPosition: "vec3",
         size1: "float",
         size2: "float",
         color: "vec3",
@@ -30,7 +29,7 @@ class GridModuleContext implements RenderModuleContext {
     constructor(readonly context: RenderContext, readonly data: GridModule) {
         this.uniforms = createUniformsProxy(data.uniforms);
         const { gl } = context;
-        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Grid"] });
+        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Grid"] });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
         this.resources = { program, uniforms } as const;
     }
@@ -38,19 +37,17 @@ class GridModuleContext implements RenderModuleContext {
     update(state: DerivedRenderState) {
         const { context, resources } = this;
         const { uniforms } = resources;
-        if (context.hasStateChanged(state)) {
-            const { data } = this;
+        const { grid, localSpaceTranslation } = state;
+        if (context.hasStateChanged({ grid, localSpaceTranslation })) {
             const { values } = this.uniforms;
-            const { grid, matrices, camera } = state;
             const { axisX, axisY, origin } = grid;
-            values.worldClipMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.Clip);
-            values.origin = origin;
+            const worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), localSpaceTranslation));
+            values.origin = vec3.transformMat4(vec3.create(), origin, worldLocalMatrix);
             values.axisX = axisX;
             values.axisY = axisY;
             values.color = grid.color;
             values.size1 = grid.size1;
             values.size2 = grid.size2;
-            values.cameraPosition = camera.position;
             values.distance = grid.distance;
             context.updateUniformBuffer(uniforms, this.uniforms);
         }
@@ -59,12 +56,12 @@ class GridModuleContext implements RenderModuleContext {
     render(state: DerivedRenderState) {
         const { context, resources } = this;
         const { program, uniforms } = resources;
-        const { gl } = context;
+        const { gl, cameraUniforms } = context;
 
         if (state.grid.enabled) {
             glState(gl, {
                 program,
-                uniformBuffers: [uniforms],
+                uniformBuffers: [cameraUniforms, uniforms],
                 depthTest: true,
                 depthWriteMask: false,
                 blendEnable: true,

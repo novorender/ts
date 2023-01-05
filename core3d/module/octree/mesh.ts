@@ -69,8 +69,8 @@ export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry
         const ib = typeof indices != "number" ? glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
-        const { position, normal, material, objectId, texCoord/*, color, intensity, deviation*/ } = vertexAttributes;
-        const attributes = [position, normal, material, objectId, texCoord/*, color, intensity, deviation*/].
+        const { position, normal, material, objectId, texCoord, color, deviation } = vertexAttributes;
+        const attributes = [position, normal, material, objectId, texCoord, color, deviation].
             map(a => (a ? { ...a, buffer: buffers[a.buffer] } as VertexAttribute : null));
 
         // add extra highlight vertex buffer and attribute

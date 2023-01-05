@@ -271,7 +271,7 @@ class InstanceAsset {
     update(context: RenderContext, state: DerivedRenderState) {
         const { uniforms, modelWorldMatrix, uniformsBuffer } = this;
         const { values } = uniforms;
-        const worldLocalMatrix = mat4.fromTranslation(mat4.create(), state.localSpaceTranslation);
+        const worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), state.localSpaceTranslation));
         const modelLocalMatrix = mat4.multiply(mat4.create(), worldLocalMatrix, modelWorldMatrix);
         values.modelLocalMatrix = modelLocalMatrix;
         values.modelLocalMatrixNormal = mat3.normalFromMat4(mat3.create(), modelLocalMatrix);

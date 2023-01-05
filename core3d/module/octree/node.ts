@@ -74,10 +74,12 @@ export class OctreeNode {
         this.size = Math.pow(2, data.tolerance) * toleranceScale;
         this.uniformsData = createUniformsProxy({
             modelLocalMatrix: "mat4",
+            tolerance: "float",
             debugColor: "vec4",
             min: "vec3",
             max: "vec3",
         });
+        this.uniformsData.values.tolerance = data.tolerance;
     }
 
     dispose() {
@@ -211,7 +213,8 @@ export class OctreeNode {
                 0, 0, scale, 0,
                 ox - tx, oy - ty, oz - tz, 1
             );
-            this.uniformsData.values.modelLocalMatrix = modelLocalMatrix;
+            const { values } = this.uniformsData;
+            values.modelLocalMatrix = modelLocalMatrix;
             if (uniforms) {
                 glUpdateBuffer(context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniforms });
             }
@@ -228,14 +231,15 @@ export class OctreeNode {
                 case NodeState.downloading: r = 1; break;
                 case NodeState.ready: b = 1; break;
             }
-            const { offset, scale } = data;
-            const modelWorldMatrix = mat4.fromTranslation(mat4.create(), offset);
-            const worldModelMatrix = mat4.invert(mat4.create(), modelWorldMatrix);
+            // const { offset, scale } = data;
+            // const modelWorldMatrix = mat4.fromTranslation(mat4.create(), offset);
+            // const worldModelMatrix = mat4.invert(mat4.create(), modelWorldMatrix);
+            const worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), state.localSpaceTranslation));
             const { min, max } = data.bounds.box;
             const { values } = uniformsData;
             values.debugColor = vec4.fromValues(r, g, b, 1);
-            values.min = vec3.transformMat4(vec3.create(), min, worldModelMatrix);
-            values.max = vec3.transformMat4(vec3.create(), max, worldModelMatrix);
+            values.min = vec3.transformMat4(vec3.create(), min, worldLocalMatrix);
+            values.max = vec3.transformMat4(vec3.create(), max, worldLocalMatrix);
             if (uniforms) {
                 glUpdateBuffer(context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniforms });
             }

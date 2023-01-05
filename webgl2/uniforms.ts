@@ -191,15 +191,15 @@ const uniformTypes = {
     float: { type: "f32", alignment: 1, components: 1, rows: 1 },
 
     ivec2: { type: "i32", alignment: 2, components: 2, rows: 1 },
-    uivec2: { type: "u32", alignment: 2, components: 2, rows: 1 },
+    uvec2: { type: "u32", alignment: 2, components: 2, rows: 1 },
     vec2: { type: "f32", alignment: 2, components: 2, rows: 1 },
 
     ivec3: { type: "i32", alignment: 4, components: 3, rows: 1 },
-    uivec3: { type: "u32", alignment: 4, components: 3, rows: 1 },
+    uvec3: { type: "u32", alignment: 4, components: 3, rows: 1 },
     vec3: { type: "f32", alignment: 4, components: 3, rows: 1 },
 
     ivec4: { type: "i32", alignment: 4, components: 3, rows: 1 },
-    uivec4: { type: "u32", alignment: 4, components: 3, rows: 1 },
+    uvec4: { type: "u32", alignment: 4, components: 3, rows: 1 },
     vec4: { type: "f32", alignment: 4, components: 4, rows: 1 },
 
     mat3: { type: "f32", alignment: 4, components: 3, rows: 3 },

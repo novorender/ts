@@ -5,7 +5,7 @@ import { downloadScene } from "./scene";
 import { glExtensions } from "@novorender/webgl2";
 import { wasmInstance } from "./wasm";
 import lut_ggx_png from "./lut_ggx.png";
-import { vec3 } from "gl-matrix";
+import { ReadonlyVec3, vec3 } from "gl-matrix";
 import { createTestCube, createTestSphere } from "./geometry";
 import { loadGLTF } from "./gltf";
 import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight } from "./highlight";
@@ -44,14 +44,19 @@ export async function run(canvas: HTMLCanvasElement) {
     let state = defaultRenderState();
     let prevState = state;
     let sceneId = "";
-    sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    let initPos: ReadonlyVec3 | undefined;
+    // sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
     // sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
     // sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim
     // sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
+    // initPos = [298995.87220525084, 48.56500795571233, -6699553.125910083];
+    sceneId = "6ecdecf66a164c4dbd4dd2c40f1236a7"; // tunnel
+    initPos = [94483.4765625, 73.49801635742188, -1839260.25];
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     const backgroundUrl = new URL("/assets/env/lake/", scriptUrl).toString();
     const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
     const scene = sceneId ? await downloadScene(sceneUrl) : undefined;
+    const center = initPos ?? scene?.config.boundingSphere.center ?? vec3.create();
 
     // const gltfObjects = await loadGLTF(new URL("/assets/gltf/logo.glb", scriptUrl));
     // const gltfObjects = await loadGLTF(new URL("/assets/gltf/boxtextured.glb", scriptUrl));
@@ -71,14 +76,14 @@ export async function run(canvas: HTMLCanvasElement) {
     weighted center/sort triangle by area for z-buffer prepass
     */
 
-    const controller = new OrbitController({ kind: "orbit" }, canvas);
+    const controller = new OrbitController({ kind: "orbit", pivotPoint: center }, canvas);
     // const controller = new OrbitController({ kind: "orbit", pivotPoint: [298995.87220525084, 48.56500795571233, -6699553.125910083] }, canvas);
 
     state = modifyRenderState(state, {
         scene,
         background: { url: backgroundUrl, blur: 0.25 },
         // camera: { near: 1, far: 10000, position: [298995.87220525084, 48.56500795571233, -6699553.125910083] },
-        grid: { enabled: true, /* origin: scene.config.boundingSphere.center */ },
+        grid: { enabled: true, origin: center },
         // cube: { enabled: true, clipDepth: 1 },
         // clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
         // tonemapping: { mode: TonemappingMode.normal },
@@ -88,7 +93,7 @@ export async function run(canvas: HTMLCanvasElement) {
         // }
     });
 
-    controller.autoFitToScene(state);
+    // controller.autoFitToScene(state);
 
     function resize() {
         // const scale = devicePixelRatio / 2;

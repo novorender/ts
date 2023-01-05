@@ -3,8 +3,9 @@ layout(std140) uniform Camera {
     mat4 viewClipMatrix;
     mat4 localViewMatrix;
     mat4 viewLocalMatrix;
-    mat3 worldViewMatrixNormal;
-    mat3 viewWorldMatrixNormal;
+    mat3 localViewMatrixNormal;
+    mat3 viewLocalMatrixNormal;
+    vec2 viewSize;
 } camera;
 
 layout(std140) uniform Background {
@@ -25,5 +26,5 @@ void main() {
     vec2 pos = vec2(gl_VertexID % 2, gl_VertexID / 2) * 2.0 - 1.0;
     gl_Position = isPerspective ? vec4(pos, 1, 1) : vec4(0);
     vec3 dirVS = vec3(pos.x / camera.viewClipMatrix[0][0], pos.y / camera.viewClipMatrix[1][1], -1);
-    varyings.dir = camera.viewWorldMatrixNormal * dirVS;
+    varyings.dir = camera.viewLocalMatrixNormal * dirVS;
 }

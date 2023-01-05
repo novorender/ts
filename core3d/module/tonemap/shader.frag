@@ -1,13 +1,11 @@
 const float maxDeviation = 1.;
-const float maxIntensity = 255.;
 
 const uint modeColor = 0U;
 const uint modeNormal = 1U;
 const uint modeDepth = 2U;
 const uint modeObjectId = 3U;
 const uint modeDeviation = 4U;
-const uint modeIntensity = 5U;
-const uint modeZbuffer = 6U;
+const uint modeZbuffer = 5U;
 
 layout(std140) uniform Tonemapping {
     float exposure;
@@ -115,11 +113,6 @@ void main() {
         case modeDeviation: {
             float deviation = unpackHalf2x16(texture(textures_info, varyings.uv).y).x;
             color.rgb = deviation > 0. ? vec3(0, deviation / maxDeviation, 0) : vec3(-deviation / maxDeviation, 0, 0);
-            break;
-        }
-        case modeIntensity: {
-            float intensity = unpackHalf2x16(texture(textures_info, varyings.uv).y).y;
-            color.rgb = vec3(intensity / maxIntensity);
             break;
         }
         case modeZbuffer: {

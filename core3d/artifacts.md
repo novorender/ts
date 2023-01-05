@@ -14,12 +14,12 @@
 - [x] **highlighting**
 - [x] materials
 - [x] large coordinates
-- [ ] terrain elevation
+- [x] terrain elevation
 - [x] **gltf/glb objects**
 - [x] clipping volumes
 - [x] clipping box rendering (using volumes)
 - [x] clipping outlines (only on cube, for now...)
-- [ ] point clouds (with variable sized point discs)
+- [x] point clouds (with variable sized point discs)
 - [x] tonemapping (and debug shading)
 - [x] default ibl (instead of sun light)
 - [ ] camera headlight

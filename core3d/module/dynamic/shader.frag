@@ -3,8 +3,9 @@ layout(std140) uniform Camera {
     mat4 viewClipMatrix;
     mat4 localViewMatrix;
     mat4 viewLocalMatrix;
-    mat3 worldViewMatrixNormal;
-    mat3 viewWorldMatrixNormal;
+    mat3 localViewMatrixNormal;
+    mat3 viewLocalMatrixNormal;
+    vec2 viewSize;
 } camera;
 
 layout(std140) uniform Material {
@@ -265,7 +266,7 @@ void main() {
 
     // only write to pick buffers for opaque triangles
     if(fragColor.a >= 0.99) {
-        fragNormal = (camera.worldViewMatrixNormal * normal).xy;
+        fragNormal = (camera.localViewMatrixNormal * normal).xy;
         fragLinearDepth = varyings.linearDepth;
         fragInfo = uvec2(instance.objectId, 0);
     }

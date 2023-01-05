@@ -372,13 +372,14 @@ export class OrbitController extends BaseController {
         const { pivotPoint } = this;
         const { center, radius } = scene.config.boundingSphere;
         vec3.copy(pivotPoint, center);
+        const maxDistance = 100;
 
         switch (camera.kind) {
             case "pinhole":
-                this.distance = radius / Math.tan(glMatrix.toRadian(camera.fov) / 2);
+                this.distance = Math.max(maxDistance, radius / Math.tan(glMatrix.toRadian(camera.fov) / 2));
                 break;
             case "orthographic":
-                this.distance = radius;
+                this.distance = Math.max(maxDistance, radius);
                 // camera.fieldOfView = radius * 2;
                 break;
         }

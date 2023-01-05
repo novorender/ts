@@ -1,12 +1,10 @@
 const float maxDeviation = 1.;
-const float maxIntensity = 255.;
 
 const uint modeColor = 0U;
 const uint modeNormal = 1U;
 const uint modeDepth = 2U;
 const uint modeObjectId = 3U;
 const uint modeDeviation = 4U;
-const uint modeIntensity = 5U;
 const uint modeZbuffer = 6U;
 
 layout(std140) uniform Tonemapping {

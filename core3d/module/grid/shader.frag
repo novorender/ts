@@ -1,9 +1,18 @@
+layout(std140) uniform Camera {
+    mat4 clipViewMatrix;
+    mat4 viewClipMatrix;
+    mat4 localViewMatrix;
+    mat4 viewLocalMatrix;
+    mat3 localViewMatrixNormal;
+    mat3 viewLocalMatrixNormal;
+    vec2 viewSize;
+} camera;
+
 layout(std140) uniform Grid {
-    mat4 worldClipMatrix;
+    // below coords are in local space
     vec3 origin;
     vec3 axisX;
     vec3 axisY;
-    vec3 cameraPosition; // in world space
     float size1;
     float size2;
     vec3 color;
@@ -12,7 +21,7 @@ layout(std140) uniform Grid {
 
 in struct {
     vec2 posOS;
-    vec3 posWS;
+    vec3 posLS;
 } varyings;
 
 layout(location = 0) out vec4 color;
@@ -24,7 +33,8 @@ float getGrid(vec2 r) {
 }
 
 void main() {
-    float d = 1.0 - min(distance(grid.cameraPosition, varyings.posWS) / grid.distance, 1.0);
+    vec3 cameraPosLS = camera.viewLocalMatrix[3].xyz;
+    float d = 1.0 - min(distance(cameraPosLS, varyings.posLS) / grid.distance, 1.0);
     float g1 = getGrid(varyings.posOS / grid.size1);
     float g2 = getGrid(varyings.posOS / grid.size2);
     color = vec4(grid.color, mix(g2, g1, g1) * pow(d, 3.0));

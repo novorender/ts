@@ -13,13 +13,12 @@ export const enum PrimitiveType {
     triangle_fan = 6,
 };
 
-// Bitwise flags for which vertex attributes will be used in child geometry.
+// Bitwise flags for which vertex attributes will be used in geometry.
 export const enum OptionalVertexAttribute {
     normal = 1,
     color = 2,
     texCoord = 4,
-    intensity = 8,
-    deviation = 16,
+    deviation = 8,
 };
 
 // Type of material.
@@ -152,7 +151,6 @@ export interface Vertex {
     readonly normal?: Int8_3;
     readonly color?: RGBA_U8;
     readonly texCoord?: Half2;
-    readonly intensity?: U8;
     readonly deviation?: F16;
 };
 
@@ -186,7 +184,7 @@ export interface Half2 {
 
 export function readSchema(r: BufferReader) {
     const sizes = r.u32(7);
-    const flags = r.u8(6);
+    const flags = r.u8(5);
     const schema = {
         childInfo: {
             length: sizes[0],
@@ -301,10 +299,9 @@ export function readSchema(r: BufferReader) {
                 x: r.f16(sizes[4]),
                 y: r.f16(sizes[4]),
             } as Half2,
-            intensity: !flags[3] ? undefined : r.u8(sizes[4]),
-            deviation: !flags[4] ? undefined : r.f16(sizes[4]),
+            deviation: !flags[3] ? undefined : r.f16(sizes[4]),
         } as Vertex,
-        vertexIndex: !flags[5] ? undefined : r.u16(sizes[5]),
+        vertexIndex: !flags[4] ? undefined : r.u16(sizes[5]),
         texturePixels: r.u8(sizes[6]),
     } as const;
     console.assert(r.eof);

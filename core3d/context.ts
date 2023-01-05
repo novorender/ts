@@ -90,10 +90,11 @@ export class RenderContext {
             viewClipMatrix: "mat4",
             localViewMatrix: "mat4",
             viewLocalMatrix: "mat4",
-            worldViewMatrixNormal: "mat3",
-            viewWorldMatrixNormal: "mat3",
+            localViewMatrixNormal: "mat3",
+            viewLocalMatrixNormal: "mat3",
+            windowSize: "vec2",
         });
-        this.cameraUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength + 256 });
+        this.cameraUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength });
     }
 
     private deleteIblTextures() {
@@ -274,7 +275,7 @@ export class RenderContext {
 
     private updateCameraUniforms(state: DerivedRenderState) {
         const { gl, cameraUniformsData, localSpaceTranslation } = this;
-        const { matrices } = state;
+        const { output, matrices } = state;
         const { values } = cameraUniformsData;
         const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
         const viewWorldMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.World);
@@ -285,8 +286,9 @@ export class RenderContext {
         values.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
         values.localViewMatrix = mat4.multiply(mat4.create(), worldViewMatrix, localWorldMatrix);
         values.viewLocalMatrix = mat4.multiply(mat4.create(), worldLocalMatrix, viewWorldMatrix,);
-        values.worldViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
-        values.viewWorldMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
+        values.localViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
+        values.viewLocalMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
+        values.windowSize = [output.width, output.height];
     }
 
     protected async pick(x: number, y: number, sampleDiscRadius = 0): Promise<PickSample[]> {
