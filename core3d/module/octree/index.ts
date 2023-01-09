@@ -7,7 +7,7 @@ import { createUniformsProxy, DrawMode, DrawParams, glBuffer, glDelete, glDraw, 
 import { MaterialType, PrimitiveType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
 import { ReadonlyVec3, vec3 } from "gl-matrix";
-import { NodeLoader } from "./loader";
+import { NodeLoader, NodeLoaderOptions } from "./loader";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import vertexShaderDebug from "./shader_debug.vert";
@@ -32,7 +32,7 @@ export class OctreeModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     readonly gradientImageParams: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: Gradient.size, height: 2, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null };
-    readonly loader = new NodeLoader({ useWorker: false });
+    readonly nodeLoaderOptions: NodeLoaderOptions = { useWorker: true };
     readonly maxHighlights = 8;
 
     withContext(context: RenderContext) {
@@ -60,7 +60,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     constructor(readonly renderContext: RenderContext, readonly data: OctreeModule) {
         this.sceneUniforms = createUniformsProxy(data.sceneUniforms);
         const meshUniforms = createUniformsProxy(data.meshUniforms);
-        this.loader = data.loader;
+        this.loader = new NodeLoader(data.nodeLoaderOptions);
         const { gl } = renderContext;
         const flags = ["IOS_WORKAROUND"];
         const uniformBufferBlocks = ["Camera", "Scene", "Node", "Mesh"];
@@ -86,7 +86,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         const { renderContext, resources, sceneUniforms, projectedSizeSplitThreshold, data } = this;
         const { gl } = renderContext;
-        const { scene, matrices, viewFrustum, highlights, points, terrain } = state;
+        const { scene, localSpaceTranslation, highlights, points, terrain } = state;
         const { values } = sceneUniforms;
 
         if (values.iblMipCount != renderContext.iblTextures.numMipMaps) {
@@ -125,10 +125,9 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             glUpdateTexture(gl, resources.gradientsTexture, { ...data.gradientImageParams, image: this.gradientsImage });
         }
 
-        if (renderContext.hasStateChanged({ scene, matrices, viewFrustum })) {
-            this.localSpaceChanged = state.localSpaceTranslation !== this.localSpaceTranslation;
-            this.localSpaceTranslation = state.localSpaceTranslation;
+        if (renderContext.hasStateChanged({ scene })) {
             const url = scene?.url;
+            this.loader.init(scene); // will abort any pending downloads for previous scene
             if (url && url != this.url) {
                 const { config } = scene;
                 this.rootNode?.dispose();
@@ -146,6 +145,11 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 this.rootNode = undefined;
             }
             this.url = url;
+        }
+
+        if (renderContext.hasStateChanged({ localSpaceTranslation })) {
+            this.localSpaceChanged = localSpaceTranslation !== this.localSpaceTranslation;
+            this.localSpaceTranslation = localSpaceTranslation;
         }
 
         if (renderContext.hasStateChanged({ highlights })) {

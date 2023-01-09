@@ -1,5 +1,5 @@
 import { RenderContext } from "./context";
-import { ClippingMode, RenderStateClippingPlane, defaultRenderState, modifyRenderState, TonemappingMode } from "./state";
+import { ClippingMode, RenderStateClippingPlane, defaultRenderState, modifyRenderState, TonemappingMode, ObjectIdFilter } from "./state";
 import { OrbitController } from "./controller";
 import { downloadScene } from "./scene";
 import { glExtensions } from "@novorender/webgl2";
@@ -45,13 +45,13 @@ export async function run(canvas: HTMLCanvasElement) {
     let prevState = state;
     let sceneId = "";
     let initPos: ReadonlyVec3 | undefined;
-    // sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
+    sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
     // sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
     // sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim
     // sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
     // initPos = [298995.87220525084, 48.56500795571233, -6699553.125910083];
-    sceneId = "6ecdecf66a164c4dbd4dd2c40f1236a7"; // tunnel
-    initPos = [94483.4765625, 73.49801635742188, -1839260.25];
+    // sceneId = "6ecdecf66a164c4dbd4dd2c40f1236a7"; // tunnel
+    // initPos = [94483.4765625, 73.49801635742188, -1839260.25];
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     const backgroundUrl = new URL("/assets/env/lake/", scriptUrl).toString();
     const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
@@ -70,20 +70,14 @@ export async function run(canvas: HTMLCanvasElement) {
     // const testCube = createTestCube();
     // const testSphere = createTestSphere(1, 5);
 
-    /*
-    Pack vertex attributes more tightly (fill in gaps)
-    Use model space xz coords for UV on terrain (fix offset/aabb)
-    weighted center/sort triangle by area for z-buffer prepass
-    */
-
-    const controller = new OrbitController({ kind: "orbit", pivotPoint: center }, canvas);
+    const controller = new OrbitController({ kind: "orbit" }, canvas);
     // const controller = new OrbitController({ kind: "orbit", pivotPoint: [298995.87220525084, 48.56500795571233, -6699553.125910083] }, canvas);
 
     state = modifyRenderState(state, {
         scene,
         background: { url: backgroundUrl, blur: 0.25 },
         // camera: { near: 1, far: 10000, position: [298995.87220525084, 48.56500795571233, -6699553.125910083] },
-        grid: { enabled: true, origin: center },
+        // grid: { enabled: true, origin: center },
         // cube: { enabled: true, clipDepth: 1 },
         // clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
         // tonemapping: { mode: TonemappingMode.normal },
@@ -93,7 +87,7 @@ export async function run(canvas: HTMLCanvasElement) {
         // }
     });
 
-    // controller.autoFitToScene(state);
+    controller.autoFitToScene(state, center);
 
     function resize() {
         // const scale = devicePixelRatio / 2;
@@ -106,6 +100,16 @@ export async function run(canvas: HTMLCanvasElement) {
             state = modifyRenderState(state, { output: { width, height } });
         }
     }
+
+    function filter() {
+        const { scene } = state;
+        if (scene) {
+            let objectIds = new Array<number>(Math.floor(scene.config.numObjects / 10)).fill(0).map((_, i) => i);
+            const filter: ObjectIdFilter = { mode: "include", objectIds: objectIds };
+            state = modifyRenderState(state, { scene: { ...scene, filter } });
+        }
+    }
+    // filter();
 
     let context: RenderContext | undefined;
 

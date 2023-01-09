@@ -36,7 +36,7 @@
 
 - [x] **handle loss of gl context**
 - [x] **new binary format**
-- [x] **filter-on-load "ready"**
+- [x] **filter-on-load**
 - [x] async picking
 - [x] pick sample disc (for measure and improve line picking)
 - [x] **dynamic procedural geometry**
@@ -49,6 +49,7 @@
 - [x] **immutable render state**
 - [ ] render state validation
 - [x] z-buffer prepass
+- [ ] sort triangles by aread (zbuf prepass)
 - [ ] logarithmic z-buffer
 - [ ] points with spherical z-buffer
 - [ ] double sided rendering (with "solid" backside)

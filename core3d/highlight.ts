@@ -1,4 +1,4 @@
-import type { RGB, RGBA, RGBATransform } from "./state";
+import type { AtLeastOne, RGB, RGBA, RGBATransform } from "./state";
 
 export function createNeutralHighlight(): RGBATransform {
     return [
@@ -127,5 +127,3 @@ export interface LinearTransform {
     /** Addend for scaled input value. Default = 0. */
     readonly offset?: number;
 }
-
-type AtLeastOne<T, U = { [K in keyof T]: Pick<T, K> }> = Partial<T> & U[keyof U];

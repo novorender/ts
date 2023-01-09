@@ -1,5 +1,5 @@
 import { ReadonlyVec3, vec3 } from "gl-matrix";
-import { AABB, BoundingSphere } from "core3d/scene";
+import { AABB, BoundingSphere } from "core3d/state";
 import { Double3, Float3, MaterialType, OptionalVertexAttribute, PrimitiveType, readSchema, Schema, SubMeshProjection, TextureSemantic } from "./schema";
 import { BufferReader, Float16Array } from "./util";
 import type { ComponentType, ShaderAttributeType, TextureParams, TextureParams2DArrayUncompressed, TextureParams2DUncompressed } from "webgl2";
@@ -278,6 +278,14 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
     }
 }
 
+export function* getObjectIds(schema: Schema) {
+    const { subMesh } = schema;
+    for (let i = 0; i < subMesh.length; i++) {
+        const objectId = subMesh.objectId[i];
+        yield objectId;
+    }
+}
+
 type TypedArray = Uint8Array | Uint16Array | Uint32Array | Int8Array | Int16Array | Int32Array | Float32Array | Float64Array;
 
 // Candidates for wasm implementation?
@@ -477,10 +485,6 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
             textureInfo.transform.e21[i],
             textureInfo.transform.e22[i],
         ] as const;
-        // const bytesPerPixel = 4;
-        // const size = 1 << Math.floor(Math.log2(Math.sqrt((end - begin) / bytesPerPixel)));
-        // const image = schema.texturePixels.subarray(end - size * size * bytesPerPixel, end);
-        // const params: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: size, height: size, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image };
         const ktx = schema.texturePixels.subarray(begin, end);
         const params = KTX.parseKTX(ktx);
         textures[i] = { semantic, transform, params };
@@ -489,13 +493,22 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
     return { subMeshes, textures } as const satisfies NodeGeometry;
 }
 
-export function parseNode(id: string, separatePositionBuffer: boolean, version: string, buffer: ArrayBuffer) {
+export async function parseNode(id: string, separatePositionBuffer: boolean, version: string, buffer: ArrayBuffer, filterObjectIds: (ids: Uint32Array) => Promise<Uint32Array | undefined>) {
     console.assert(version == "1.7");
     // const begin = performance.now();
     const r = new BufferReader(buffer);
     var schema = readSchema(r);
-    const childInfos = getChildren(id, schema, separatePositionBuffer);
-    const geometry = getGeometry(schema, separatePositionBuffer);
+    async function filter() {
+        let objectIds: Uint32Array | undefined = new Uint32Array(new Set<number>(getObjectIds(schema)));
+        objectIds.sort();
+        objectIds = await filterObjectIds(objectIds);
+        return objectIds ? new Set<number>(objectIds) : undefined;
+    }
+    const filteredObjectIds = await filter();
+    const predicate = filteredObjectIds ? (objectId: number) => (filteredObjectIds.has(objectId)) : undefined;
+    // const predicate = (objectId: number) => (true);
+    const childInfos = getChildren(id, schema, separatePositionBuffer, predicate);
+    const geometry = getGeometry(schema, separatePositionBuffer, predicate);
     // const end = performance.now();
     // console.log((end - begin));
     return { childInfos, geometry } as const;

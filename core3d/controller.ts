@@ -364,22 +364,22 @@ export class OrbitController extends BaseController {
         this.clampDistance();
     }
 
-    override autoFitToScene(state: RenderState): void {
+    override autoFitToScene(state: RenderState, centerPos?: ReadonlyVec3): void {
         const { camera, scene } = state;
         if (!scene) {
             return;
         }
         const { pivotPoint } = this;
         const { center, radius } = scene.config.boundingSphere;
-        vec3.copy(pivotPoint, center);
+        vec3.copy(pivotPoint, centerPos ?? center);
         const maxDistance = 100;
 
         switch (camera.kind) {
             case "pinhole":
-                this.distance = Math.max(maxDistance, radius / Math.tan(glMatrix.toRadian(camera.fov) / 2));
+                this.distance = Math.min(maxDistance, radius / Math.tan(glMatrix.toRadian(camera.fov) / 2));
                 break;
             case "orthographic":
-                this.distance = Math.max(maxDistance, radius);
+                this.distance = Math.min(maxDistance, radius);
                 // camera.fieldOfView = radius * 2;
                 break;
         }

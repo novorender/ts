@@ -1,5 +1,6 @@
-import type { RenderStateHighlightGroup } from "core3d";
 import { glBuffer, glVertexArray, DrawParams, VertexAttribute, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glTexture, glUpdateBuffer } from "webgl2";
+import type { RenderStateHighlightGroup } from "core3d";
+import { mergeSorted } from "core3d/iterate";
 import { MeshDrawRange, MeshObjectRange, NodeGeometry } from "./parser";
 import { MaterialType } from "./schema";
 
@@ -14,43 +15,6 @@ export interface Mesh {
     readonly objectRanges: readonly MeshObjectRange[];
     readonly baseColorTexture: WebGLTexture | null;
 }
-
-function layoutAttributes(attribs: readonly (VertexAttribute | null)[]): (VertexAttribute | null)[] {
-    const sizes = {
-        UNSIGNED_BYTE: 1,
-        BYTE: 1,
-        UNSIGNED_SHORT: 2,
-        SHORT: 2,
-        HALF_FLOAT: 2,
-        UNSIGNED_INT: 4,
-        INT: 4,
-        FLOAT: 4,
-    } as const;
-
-    let offset = 0;
-    const offsets: number[] = [];
-    function alignOffset(alignment: number) {
-        const padding = alignment - 1 - (offset + alignment - 1) % alignment;
-        offset += padding; // pad offset to be memory aligned.
-    }
-    let maxAlign = 1;
-    for (let i = 0; i < attribs.length; i++) {
-        const attrib = attribs[i];
-        if (attrib) {
-            const components = attrib.componentCount ?? 1;
-            const type = attrib.componentType ?? "FLOAT";
-            const bytesPerElement = sizes[type];
-            maxAlign = Math.max(maxAlign, bytesPerElement);
-            alignOffset(bytesPerElement);
-            offsets[i] = offset;
-            offset += bytesPerElement * components;
-        }
-    }
-    alignOffset(maxAlign); // align stride to largest attribute
-    const stride = offset;
-    return attribs.map((attrib, i) => { return attrib ? { ...attrib, offset: offsets[i], stride } as const satisfies VertexAttribute : null; });
-}
-
 
 export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry) {
     const textures = geometry.textures.map(ti => {
@@ -95,45 +59,11 @@ export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry
     }
 }
 
-class NumberIterator {
-    currentValue = -1;
-
-    constructor(private readonly iterator: Iterator<number>, readonly highlightIndex: number) {
-        this.next();
-    }
-
-    next() {
-        const { value } = this.iterator.next();
-        this.currentValue = value;
-        return value != undefined;
-    }
-}
-
 // this functon returns all the objectIDs from highlight groups in ascending order, along with their respective highlight index.
 // brute force iteration is slower than using maps or lookup arrays, but requires far less memory.
-function* traverseObjectIds(groups: readonly RenderStateHighlightGroup[]) {
-    const iterators = groups.map((g, i) => new NumberIterator(g.objectIds[Symbol.iterator](), i)).filter(it => it.currentValue != undefined);
-    while (iterators.length > 0) {
-        let minObjectId = Number.MAX_SAFE_INTEGER;
-        let minIdx: number | undefined;
-        for (let i = 0; i < iterators.length; i++) {
-            const iterator = iterators[i];
-            const currentGroupObjectId = iterator.currentValue;
-            console.assert(minObjectId != currentGroupObjectId); // an objectID should only be assigned to one group
-            if (minObjectId > currentGroupObjectId) {
-                minObjectId = currentGroupObjectId;
-                minIdx = i;
-            }
-        }
-        if (minIdx == undefined) {
-            throw new Error("Object Id traversal error!"); // are group objectIds sorted?
-        }
-        const minIterator = iterators[minIdx];
-        yield { objectId: minObjectId, highlightIndex: minIterator.highlightIndex } as const;
-        if (!minIterator.next()) { // iterate iterator one step forward
-            iterators.splice(minIdx, 1); // remove iterator if we reached the end
-        }
-    }
+function traverseObjectIds(groups: readonly RenderStateHighlightGroup[]) {
+    const iterators = groups.map(g => g.objectIds[Symbol.iterator]());
+    return mergeSorted(iterators);
 }
 
 // this is a potentially slow, but memory efficient way to update highlight vertex attributes
@@ -142,16 +72,16 @@ export function updateMeshHighlightGroups(gl: WebGL2RenderingContext, mesh: Mesh
         const highlightBuffer = new Uint8Array(mesh.numVertices);
         const iterator = mesh.objectRanges[Symbol.iterator]();
         let currentRange = iterator.next().value as MeshObjectRange | undefined;
-        for (const { objectId, highlightIndex } of traverseObjectIds(groups)) {
-            while (currentRange && currentRange.objectId < objectId) {
+        for (const { value, sourceIndex } of traverseObjectIds(groups)) {
+            while (currentRange && currentRange.objectId < value) {
                 currentRange = iterator.next().value as MeshObjectRange | undefined;
             }
             if (!currentRange) {
                 break;
             }
-            if (currentRange.objectId == objectId) {
+            if (currentRange.objectId == value) {
                 const { beginVertex, endVertex } = currentRange;
-                highlightBuffer.fill(highlightIndex + 1, beginVertex, endVertex);
+                highlightBuffer.fill(sourceIndex + 1, beginVertex, endVertex);
             }
         }
         glUpdateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: highlightBuffer, targetBuffer: mesh.highlightVB });
@@ -209,7 +139,6 @@ export function meshPrimitiveCount(mesh: Mesh, renderedChildMask: number) {
     }
     return numPrimitives;
 }
-
 
 function calcNumPrimitives(vertexCount: number, primitiveType: string) {
     let primitiveCount = 0;

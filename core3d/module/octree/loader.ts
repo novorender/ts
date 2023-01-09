@@ -1,30 +1,61 @@
 ///@ts-ignore
 import createWorker from "./loader.worker.js"; // uses esbuild-plugin-inline-worker to inline worker code.
-import { AbortAllMessage, AbortMessage, CloseMessage, LoaderHandler, LoadMessage, MessageResponse, NodePayload } from "./loader_handler";
+import type { RenderStateScene } from "core3d/state";
+import { AbortAllMessage, AbortMessage, CloseMessage, FilteredMessage, FilterMessage, LoaderHandler, LoadMessage, MessageRequest, MessageResponse, NodePayload } from "./loader_handler";
 import { OctreeNode } from "./node.js";
+import { filterSortedExclude, filterSortedInclude } from "core3d/iterate.js";
 
-type PromiseMethods = { readonly resolve: (value: NodePayload | undefined) => void, readonly reject: (reason: string) => void };
+interface PayloadPromiseMethods { readonly resolve: (value: NodePayload | undefined) => void, readonly reject: (reason: string) => void };
+
+export interface NodeLoaderOptions {
+    readonly useWorker: boolean;
+}
 
 export class NodeLoader {
     readonly worker: Worker | undefined;
-    readonly handler = new LoaderHandler();
-    readonly promises = new Map<string, PromiseMethods>();
+    readonly handler;
+    readonly payloadPromises = new Map<string, PayloadPromiseMethods>();
+    private state: RenderStateScene | undefined;
 
-    constructor(options: { readonly useWorker: boolean }) {
+    constructor(options: NodeLoaderOptions) {
         if (options.useWorker) {
             const worker = this.worker = createWorker() as Worker;
             worker.onmessage = e => {
-                this.handleResponse(e.data as MessageResponse);
+                this.receive(e.data as MessageResponse);
             }
+        }
+        this.handler = new LoaderHandler(this.receive.bind(this));
+    }
+
+    init(state: RenderStateScene | undefined) {
+        if (this.state && state != this.state) {
+            this.abortAll();
+        }
+        this.state = state;
+    }
+
+    private send(msg: MessageRequest) {
+        const { worker, handler } = this;
+        if (worker) {
+            worker.postMessage(msg);
+        } else {
+            handler.receive(msg);
         }
     }
 
-    private handleResponse(msg: MessageResponse) {
+    private receive(msg: MessageResponse) {
         const { id } = msg;
-        const promise = this.promises.get(id);
-        if (promise) {
-            this.promises.delete(id);
-            const { resolve, reject } = promise;
+        switch (msg.kind) {
+            case "filter":
+                this.filter(msg);
+                return;
+        }
+
+        const { payloadPromises } = this;
+        const payloadPromise = payloadPromises.get(id);
+        if (payloadPromise) {
+            payloadPromises.delete(id);
+            const { resolve, reject } = payloadPromise;
             switch (msg.kind) {
                 case "loaded":
                     resolve(msg);
@@ -40,49 +71,42 @@ export class NodeLoader {
     }
 
     abortAll() {
-        const { worker, handler } = this;
         const msg: AbortAllMessage = { kind: "abort_all" };
-        if (worker) {
-            worker.postMessage(msg);
-        } else {
-            handler.handleMessage(msg)
-        }
+        this.send(msg);
     }
 
     dispose() {
-        const { worker, handler } = this;
         const msg: CloseMessage = { kind: "close" };
-        if (worker) {
-            worker.postMessage(msg);
-        } else {
-            handler.handleMessage(msg);
-        }
+        this.send(msg);
     }
 
     loadNode(node: OctreeNode, version: string): Promise<NodePayload | undefined> {
-        const { worker, promises, handler } = this;
+        const { payloadPromises } = this;
         const { id, data } = node;
         const url = new URL(node.path, node.context.downloader.baseUrl).toString();
         const { byteSize } = data;
-        const msg: LoadMessage = { kind: "load", id, version, url, byteSize, separatePositionsBuffer: false };
-        const abort: AbortMessage = { kind: "abort", id };
-        if (worker) {
-            node.download = {
-                abort: () => { worker.postMessage(abort); }
-            };
-            worker.postMessage(msg);
-        } else {
-            node.download = {
-                abort: () => { handler.handleMessage(abort); }
-            };
-            handler.handleMessage(msg)?.then(ret => {
-                if (ret) {
-                    this.handleResponse(ret.response);
-                }
-            });
-        }
+        const loadMsg: LoadMessage = { kind: "load", id, version, url, byteSize, separatePositionsBuffer: false };
+        const abortMsg: AbortMessage = { kind: "abort", id };
+        const abort = () => { this.send(abortMsg); }
+        node.download = { abort };
+        this.send(loadMsg);
         return new Promise<NodePayload | undefined>((resolve, reject) => {
-            promises.set(id, { resolve, reject });
+            payloadPromises.set(id, { resolve, reject });
         });
+    }
+
+    filter(filterMsg: FilterMessage) {
+        const { id } = filterMsg;
+        let { objectIds } = filterMsg;
+        const { state } = this;
+        if (state) {
+            const { filter } = state;
+            if (filter) {
+                const filterFunc = filter.mode == "include" ? filterSortedInclude : filterSortedExclude;
+                objectIds = new Uint32Array([...(filterFunc(objectIds, filter.objectIds))]);
+            }
+        }
+        const filteredMsg: FilteredMessage = { kind: "filtered", id, objectIds };
+        this.send(filteredMsg);
     }
 }
