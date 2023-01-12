@@ -1,5 +1,17 @@
-layout(location = 0) out vec4 color;
+layout(std140) uniform Camera {
+    CameraUniforms camera;
+};
+
+layout(std140) uniform Clipping {
+    ClippingUniforms clipping;
+};
+
+layout(std140) uniform Cube {
+    CubeUniforms cube;
+};
+
+layout(location = 0) out vec4 fragColor;
 
 void main() {
-    color = vec4(10, 10, 10, 1);
+    fragColor = vec4(10, 10, 10, 1);
 }

@@ -1,41 +1,26 @@
 layout(std140) uniform Camera {
-    mat4 clipViewMatrix;
-    mat4 viewClipMatrix;
-    mat4 localViewMatrix;
-    mat4 viewLocalMatrix;
-    mat3 localViewMatrixNormal;
-    mat3 viewLocalMatrixNormal;
-    vec2 viewSize;
-} camera;
+    CameraUniforms camera;
+};
 
 layout(std140) uniform Clipping {
-    vec4 planes[6];
-    vec4 colors[6];
-    uint numPlanes;
-    uint mode; // 0 = intersection, 1 = union
-} clipping;
+    ClippingUniforms clipping;
+};
 
 layout(std140) uniform Cube {
-    mat4 modelViewMatrix;
-    float clipDepth;
-} cube;
+    CubeUniforms cube;
+};
 
-out struct {
-    vec3 posVS;
-    vec3 normal;
-    vec3 color;
-    float linearDepth;
-} varyings;
+out CubeVaryings varyings;
 
-layout(location = 0) in vec4 position;
-layout(location = 1) in vec3 normal;
-layout(location = 2) in vec3 color;
+layout(location = 0) in vec4 vertexPosition;
+layout(location = 1) in vec3 vertexNormal;
+layout(location = 2) in vec3 vertexColor;
 
 void main() {
-    vec4 posVS = cube.modelViewMatrix * position;
+    vec4 posVS = camera.localViewMatrix * cube.modelLocalMatrix * vertexPosition;
     gl_Position = camera.viewClipMatrix * posVS;
     varyings.posVS = posVS.xyz;
-    varyings.normal = camera.localViewMatrixNormal * normal;
-    varyings.color = color;
+    varyings.normal = camera.localViewMatrixNormal * vertexNormal;
+    varyings.color = vertexColor;
     varyings.linearDepth = -posVS.z;
 }

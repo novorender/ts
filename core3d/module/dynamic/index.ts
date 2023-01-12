@@ -1,6 +1,6 @@
-import { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "core3d";
+import { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes, glVertexArray, VertexArrayParams, VertexAttribute, DrawParamsElements, DrawParamsArrays, StateParams, glUniformLocations, glTexture, glSampler } from "webgl2";
+import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes, glVertexArray, VertexArrayParams, VertexAttribute, DrawParamsElements, DrawParamsArrays, StateParams, glTexture, glSampler } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat3, mat4, vec3 } from "gl-matrix";
@@ -24,7 +24,6 @@ export class DynamicModule implements RenderModule {
 class DynamicModuleContext implements RenderModuleContext {
     iblTextures;
     readonly programs;
-    readonly textureUniformLocations;
     readonly buffers = new Map<BufferSource, BufferAsset>();
     readonly geometries = new Map<RenderStateDynamicGeometry, GeometryAsset>();
     readonly instances = new Map<RenderStateDynamicInstance, InstanceAsset>();
@@ -35,24 +34,20 @@ class DynamicModuleContext implements RenderModuleContext {
     readonly defaultSampler: WebGLSampler;
 
     constructor(readonly context: RenderContext, readonly data: DynamicModule) {
-        const { gl } = context;
+        const { gl, commonChunk } = context;
         const uniformBufferBlocks = ["Camera", "Material", "Instance"];
-
-        const unlit = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks });
-        const ggx = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks, flags: ["PBR_METALLIC_ROUGHNESS"] });
+        const textureNames = ["lut_ggx", "ibl.diffuse", "ibl.specular", "base_color", "metallic_roughness", "normal", "emissive", "occlusion"] as const;
+        const textureUniforms = textureNames.map(name => `textures.${name}`);
+        const unlit = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
+        const ggx = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags: ["PBR_METALLIC_ROUGHNESS"] });
         this.programs = { unlit, ggx } as const;
-        const textureNames = ["ibl_lut_ggx", "ibl_diffuse", "ibl_specular", "base_color", "metallic_roughness", "normal", "emissive", "occlusion"] as const;
-        this.textureUniformLocations = {
-            unlit: glUniformLocations(gl, unlit, textureNames, "texture_"),
-            ggx: glUniformLocations(gl, ggx, textureNames, "texture_"),
-        } as const;
         this.defaultSampler = glSampler(gl, { magnificationFilter: "LINEAR", minificationFilter: "LINEAR_MIPMAP_LINEAR", wrap: ["REPEAT", "REPEAT"] });
         this.defaultTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array(4) }); // used to avoid warnings on android
         this.iblTextures = context.iblTextures;
     }
 
     update(state: DerivedRenderState) {
-        const { context, programs, textureUniformLocations } = this;
+        const { context, programs } = this;
         const { gl } = context;
         const { dynamic, localSpaceTranslation } = state;
         if (context.hasStateChanged({ dynamic })) {
@@ -100,7 +95,7 @@ class DynamicModuleContext implements RenderModuleContext {
         if (context.iblTextures != this.iblTextures) {
             this.iblTextures = context.iblTextures;
             for (const material of this.materials.values()) {
-                material.update(context, state, this.defaultTexture, textureUniformLocations[material.kind]);
+                material.update(context, state, this.defaultTexture);
             }
         }
     }
@@ -387,7 +382,7 @@ class MaterialAsset {
         this.uniformsBuffer = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
     }
 
-    update(context: RenderContext, state: DerivedRenderState, defaultTexture: WebGLTexture, textureUniformLocations: DynamicModuleContext["textureUniformLocations"]["ggx"]) {
+    update(context: RenderContext, state: DerivedRenderState, defaultTexture: WebGLTexture) {
         const { iblTextures, lut_ggx, samplerSingle, samplerMip } = context;
         if (iblTextures) {
             const { uniforms, uniformsBuffer, textures, samplers } = this;
@@ -395,14 +390,14 @@ class MaterialAsset {
             type Mutable<T> = { -readonly [P in keyof T]: T[P] };
             const mutableState = this.stateParams as Mutable<StateParams>;
             mutableState.textures = [
-                { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerSingle, uniform: textureUniformLocations.ibl_lut_ggx },
-                { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerSingle, uniform: textureUniformLocations.ibl_diffuse },
-                { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip, uniform: textureUniformLocations.ibl_specular },
-                { kind: "TEXTURE_2D", texture: textures.baseColor ?? defaultTexture, sampler: samplers.baseColor ?? null, uniform: textureUniformLocations.base_color },
-                { kind: "TEXTURE_2D", texture: textures.metallicRoughness ?? defaultTexture, sampler: samplers.metallicRoughness ?? null, uniform: textureUniformLocations.metallic_roughness },
-                { kind: "TEXTURE_2D", texture: textures.normal ?? defaultTexture, sampler: samplers.normal ?? null, uniform: textureUniformLocations.normal },
-                { kind: "TEXTURE_2D", texture: textures.emissive ?? defaultTexture, sampler: samplers.emissive ?? null, uniform: textureUniformLocations.emissive },
-                { kind: "TEXTURE_2D", texture: textures.occlusion ?? defaultTexture, sampler: samplers.occlusion ?? null, uniform: textureUniformLocations.occlusion },
+                { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerSingle },
+                { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerSingle },
+                { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
+                { kind: "TEXTURE_2D", texture: textures.baseColor ?? defaultTexture, sampler: samplers.baseColor ?? null },
+                { kind: "TEXTURE_2D", texture: textures.metallicRoughness ?? defaultTexture, sampler: samplers.metallicRoughness ?? null },
+                { kind: "TEXTURE_2D", texture: textures.normal ?? defaultTexture, sampler: samplers.normal ?? null },
+                { kind: "TEXTURE_2D", texture: textures.emissive ?? defaultTexture, sampler: samplers.emissive ?? null },
+                { kind: "TEXTURE_2D", texture: textures.occlusion ?? defaultTexture, sampler: samplers.occlusion ?? null },
             ] as const;
             uniforms.values.radianceMipCount = numMipMaps;
             context.updateUniformBuffer(uniformsBuffer, uniforms);

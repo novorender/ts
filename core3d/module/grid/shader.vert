@@ -1,28 +1,12 @@
 layout(std140) uniform Camera {
-    mat4 clipViewMatrix;
-    mat4 viewClipMatrix;
-    mat4 localViewMatrix;
-    mat4 viewLocalMatrix;
-    mat3 localViewMatrixNormal;
-    mat3 viewLocalMatrixNormal;
-    vec2 viewSize;
-} camera;
+    CameraUniforms camera;
+};
 
 layout(std140) uniform Grid {
-    // below coords are in local space
-    vec3 origin;
-    vec3 axisX;
-    vec3 axisY;
-    float size1;
-    float size2;
-    vec3 color;
-    float distance;
-} grid;
+    GridUniforms grid;
+};
 
-out struct {
-    vec2 posOS;
-    vec3 posLS;
-} varyings;
+out GridVaryings varyings;
 
 void main() {
     vec3 cameraPosLS = camera.viewLocalMatrix[3].xyz;

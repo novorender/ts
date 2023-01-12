@@ -1,23 +1,12 @@
 layout(std140) uniform Camera {
-    mat4 clipViewMatrix;
-    mat4 viewClipMatrix;
-    mat4 localViewMatrix;
-    mat4 viewLocalMatrix;
-    mat3 localViewMatrixNormal;
-    mat3 viewLocalMatrixNormal;
-    vec2 viewSize;
-} camera;
+    CameraUniforms camera;
+};
 
 layout(std140) uniform Clipping {
-    vec4 planes[6];
-    vec4 colors[6];
-    uint numPlanes;
-    uint mode;
-} clipping;
+    ClippingUniforms clipping;
+};
 
-out struct Varyings {
-    vec3 dirVS;
-} varyings;
+out ClippingVaryings varyings;
 
 void main() {
     vec2 pos = vec2(gl_VertexID % 2, gl_VertexID / 2) * 2.0 - 1.0;

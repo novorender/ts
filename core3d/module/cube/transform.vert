@@ -1,11 +1,14 @@
-layout(std140) uniform Cube {
-    mat4 modelViewMatrix;
-    float clipDepth;
-} cube;
+layout(std140) uniform Camera {
+    CameraUniforms camera;
+};
 
-layout(location = 0) in vec4 pos0;
-layout(location = 1) in vec4 pos1;
-layout(location = 2) in vec4 pos2;
+layout(std140) uniform Cube {
+    CubeUniforms cube;
+};
+
+layout(location = 0) in vec4 vertexPos0;
+layout(location = 1) in vec4 vertexPos1;
+layout(location = 2) in vec4 vertexPos2;
 
 vec2 intersectEdge(vec3 p0, vec3 p1) {
     float t = (-cube.clipDepth - p0.z) / (p1.z - p0.z);
@@ -15,9 +18,9 @@ vec2 intersectEdge(vec3 p0, vec3 p1) {
 out vec4 line_vertices;
 
 void main() {
-    vec3 posVS0 = (cube.modelViewMatrix * pos0).xyz;
-    vec3 posVS1 = (cube.modelViewMatrix * pos1).xyz;
-    vec3 posVS2 = (cube.modelViewMatrix * pos2).xyz;
+    vec3 posVS0 = (camera.localViewMatrix * cube.modelLocalMatrix * vertexPos0).xyz;
+    vec3 posVS1 = (camera.localViewMatrix * cube.modelLocalMatrix * vertexPos1).xyz;
+    vec3 posVS2 = (camera.localViewMatrix * cube.modelLocalMatrix * vertexPos2).xyz;
     vec3 z = vec3(posVS0.z, posVS1.z, posVS2.z);
     bvec3 gt = greaterThan(z, vec3(-cube.clipDepth));
     bvec3 lt = lessThan(z, vec3(-cube.clipDepth));

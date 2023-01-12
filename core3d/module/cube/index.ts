@@ -1,5 +1,4 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
-import { CoordSpace } from "core3d";
 import { RenderModuleContext, RenderModule } from "..";
 import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, glTransformFeedback, UniformTypes } from "webgl2";
 import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
@@ -11,7 +10,7 @@ import transform_vs from "./transform.vert";
 
 export class CubeModule implements RenderModule {
     readonly uniforms = {
-        modelViewMatrix: "mat4",
+        modelLocalMatrix: "mat4",
         clipDepth: "float",
     } as const satisfies Record<string, UniformTypes>;
 
@@ -26,7 +25,7 @@ class CubeModuleContext implements RenderModuleContext {
 
     constructor(readonly context: RenderContext, readonly data: CubeModule) {
         this.uniforms = createUniformsProxy(data.uniforms);
-        const { gl } = context;
+        const { gl, commonChunk } = context;
         const vertices = createVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
         const pos = createVertices((pos) => (pos));
         const indices = createIndices();
@@ -42,9 +41,9 @@ class CubeModuleContext implements RenderModuleContext {
         }
 
         // create static GPU resources here
-        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
-        const program_line = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
-        const program_transform = glProgram(gl, { vertexShader: transform_vs, uniformBufferBlocks: ["Cube"], transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
+        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
+        const program_line = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
+        const program_transform = glProgram(gl, { vertexShader: transform_vs, commonChunk, uniformBufferBlocks: ["Camera", "Cube"], transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
 
         const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vertices });
@@ -83,20 +82,18 @@ class CubeModuleContext implements RenderModuleContext {
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
-        const { cube, matrices } = state;
-        if (context.hasStateChanged({ cube, matrices })) {
+        const { cube, localSpaceTranslation } = state;
+        if (context.hasStateChanged({ cube, localSpaceTranslation })) {
             const { values } = this.uniforms;
             const { scale, position, clipDepth } = cube;
+            const posLS = vec3.subtract(vec3.create(), position, localSpaceTranslation);
             const m = [
                 scale, 0, 0, 0,
                 0, scale, 0, 0,
                 0, 0, scale, 0,
-                ...position, 1
+                ...posLS, 1
             ] as Parameters<typeof mat4.fromValues>;
-            const modelWorldMatrix = mat4.fromValues(...m);
-            const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
-            const modelViewMatrix = mat4.multiply(mat4.create(), worldViewMatrix, modelWorldMatrix);
-            values.modelViewMatrix = modelViewMatrix;
+            values.modelLocalMatrix = mat4.fromValues(...m);
             values.clipDepth = clipDepth;
             context.updateUniformBuffer(resources.uniforms, this.uniforms);
         }
@@ -111,7 +108,7 @@ class CubeModuleContext implements RenderModuleContext {
             // transform vertex triplets into intersection lines
             glState(gl, {
                 program: program_transform,
-                uniformBuffers: [uniforms],
+                uniformBuffers: [cameraUniforms, uniforms],
                 vertexArrayObject: vao_tri,
             });
             glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line], count: 12 });

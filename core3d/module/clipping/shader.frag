@@ -1,31 +1,17 @@
 layout(std140) uniform Camera {
-    mat4 clipViewMatrix;
-    mat4 viewClipMatrix;
-    mat4 localViewMatrix;
-    mat4 viewLocalMatrix;
-    mat3 localViewMatrixNormal;
-    mat3 viewLocalMatrixNormal;
-    vec2 viewSize;
-} camera;
+    CameraUniforms camera;
+};
 
 layout(std140) uniform Clipping {
-    vec4 planes[6];
-    vec4 colors[6];
-    uint numPlanes;
-    uint mode; // 0 = intersection, 1 = union
-} clipping;
+    ClippingUniforms clipping;
+};
 
-in struct Varyings {
-    vec3 dirVS;
-} varyings;
+in ClippingVaryings varyings;
 
-layout(location = 0) out vec4 color;
-layout(location = 1) out vec2 normal;
-layout(location = 2) out float linearDepth;
-layout(location = 3) out uvec2 info;
-
-const uint undefinedIndex = 7U;
-const uint clippingId = 0xfffffff0U;
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out vec2 fragNormal;
+layout(location = 2) out float fragLinearDepth;
+layout(location = 3) out uvec2 fragInfo;
 
 void main() {
     vec3 dir = normalize(varyings.dirVS);
@@ -65,8 +51,8 @@ void main() {
     uint objectId = clippingId + idx[i];
     if(rgba.a == 0.)
         discard;
-    color = rgba;
-    normal = clipping.planes[idx[i]].xy;
-    linearDepth = -posVS.z;
-    info = uvec2(objectId, 0);
+    fragColor = rgba;
+    fragNormal = clipping.planes[idx[i]].xy;
+    fragLinearDepth = -posVS.z;
+    fragInfo = uvec2(objectId, 0);
 }

@@ -1,39 +1,21 @@
 layout(std140) uniform Camera {
-    mat4 clipViewMatrix;
-    mat4 viewClipMatrix;
-    mat4 localViewMatrix;
-    mat4 viewLocalMatrix;
-    mat3 localViewMatrixNormal;
-    mat3 viewLocalMatrixNormal;
-    vec2 viewSize;
-} camera;
+    CameraUniforms camera;
+};
 
 layout(std140) uniform Clipping {
-    vec4 planes[6];
-    vec4 colors[6];
-    uint numPlanes;
-    uint mode; // 0 = intersection, 1 = union
-} clipping;
+    ClippingUniforms clipping;
+};
 
 layout(std140) uniform Cube {
-    mat4 modelViewMatrix;
-    float clipDepth;
-} cube;
+    CubeUniforms cube;
+};
 
-in struct {
-    vec3 posVS;
-    vec3 normal;
-    vec3 color;
-    float linearDepth;
-} varyings;
+in CubeVaryings varyings;
 
-layout(location = 0) out vec4 color;
-layout(location = 1) out vec2 normal;
-layout(location = 2) out float linearDepth;
-layout(location = 3) out uvec2 info;
-
-const uint modeIntersection = 0U;
-const uint cubeId = 0xfffffff8U;
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out vec2 fragNormal;
+layout(location = 2) out float fragLinearDepth;
+layout(location = 3) out uvec2 fragInfo;
 
 bool clip(vec3 point) {
     float s = clipping.mode == modeIntersection ? -1. : 1.;
@@ -47,8 +29,8 @@ bool clip(vec3 point) {
 void main() {
     if(varyings.linearDepth < cube.clipDepth || clip(varyings.posVS))
         discard;
-    color = vec4(gl_FrontFacing ? varyings.color : vec3(.25), 1);
-    normal = normalize(varyings.normal).xy;
-    linearDepth = varyings.linearDepth;
-    info = uvec2(cubeId, 0);
+    fragColor = vec4(gl_FrontFacing ? varyings.color : vec3(.25), 1);
+    fragNormal = normalize(varyings.normal).xy;
+    fragLinearDepth = varyings.linearDepth;
+    fragInfo = uvec2(cubeId, 0);
 }

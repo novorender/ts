@@ -28,8 +28,8 @@ class GridModuleContext implements RenderModuleContext {
 
     constructor(readonly context: RenderContext, readonly data: GridModule) {
         this.uniforms = createUniformsProxy(data.uniforms);
-        const { gl } = context;
-        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Grid"] });
+        const { gl, commonChunk } = context;
+        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Camera", "Grid"] });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
         this.resources = { program, uniforms } as const;
     }

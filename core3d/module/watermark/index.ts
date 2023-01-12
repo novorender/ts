@@ -34,11 +34,11 @@ class WatermarkModuleContext implements RenderModuleContext {
 
     constructor(readonly context: RenderContext, readonly data: WatermarkModule) {
         this.uniforms = createUniformsProxy(data.uniforms);
-        const { gl } = context;
+        const { gl, commonChunk } = context;
         const { vertices, indices } = data.geometry();
 
         // create static GPU resources here
-        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Watermark"] });
+        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Watermark"] });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
         const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vertices });
         const ib = glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });

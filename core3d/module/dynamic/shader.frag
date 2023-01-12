@@ -1,67 +1,23 @@
 layout(std140) uniform Camera {
-    mat4 clipViewMatrix;
-    mat4 viewClipMatrix;
-    mat4 localViewMatrix;
-    mat4 viewLocalMatrix;
-    mat3 localViewMatrixNormal;
-    mat3 viewLocalMatrixNormal;
-    vec2 viewSize;
-} camera;
+    CameraUniforms camera;
+};
 
 layout(std140) uniform Material {
-    vec4 baseColorFactor;
-    vec3 emissiveFactor;
-    float roughnessFactor;
-    float metallicFactor;
-    float normalScale;
-    float occlusionStrength;
-    float alphaCutoff;
-    int baseColorUVSet;
-    int metallicRoughnessUVSet;
-    int normalUVSet;
-    int occlusionUVSet;
-    int emissiveUVSet;
-    uint radianceMipCount;
-} material;
+    MaterialUniforms material;
+};
 
 layout(std140) uniform Instance {
-    mat4 modelLocalMatrix;
-    mat3 modelLocalMatrixNormal;
-    uint objectId;
-} instance;
+    InstanceUniforms instance;
+};
 
-uniform sampler2D texture_ibl_lut_ggx;
-uniform samplerCube texture_ibl_diffuse;
-uniform samplerCube texture_ibl_specular;
-uniform sampler2D texture_base_color;
-uniform sampler2D texture_metallic_roughness;
-uniform sampler2D texture_normal;
-uniform sampler2D texture_emissive;
-uniform sampler2D texture_occlusion;
+uniform DynamicTextures textures;
 
-in struct {
-    vec4 color0;
-    vec2 texCoord0;
-    vec2 texCoord1;
-    float linearDepth;
-    mat3 tbn; // in world space
-    vec3 toCamera; // in world space (camera - position)
-} varyings;
+in DynamicVaryings varyings;
 
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec2 fragNormal;
 layout(location = 2) out float fragLinearDepth;
 layout(location = 3) out uvec2 fragInfo;
-
-const float GAMMA = 2.2;
-
-const vec3 ambientLight = vec3(0);
-
-// sRGB to linear approximation
-// see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
-vec3 sRGBToLinear(vec3 srgbIn) {
-    return vec3(pow(srgbIn.xyz, vec3(GAMMA)));
-}
 
 float clampedDot(vec3 x, vec3 y) {
     return clamp(dot(x, y), 0.0, 1.0);
@@ -106,7 +62,7 @@ NormalInfo getNormalInfo(vec3 v) {
 
     // Compute pertubed normals:
     if(material.normalUVSet >= 0) {
-        n = texture(texture_normal, UV).rgb * 2. - vec3(1.);
+        n = texture(textures.normal, UV).rgb * 2. - vec3(1.);
         n *= vec3(material.normalScale, material.normalScale, 1.);
         n = mat3(t, b, ng) * normalize(n);
     } else {
@@ -143,7 +99,7 @@ MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, float f0_ior) {
         vec2 uv = material.metallicRoughnessUVSet == 0 ? varyings.texCoord0 : varyings.texCoord1;
         // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
         // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
-        vec4 mrSample = texture(texture_metallic_roughness, uv);
+        vec4 mrSample = texture(textures.metallic_roughness, uv);
         info.perceptualRoughness *= mrSample.g;
         info.metallic *= mrSample.b;
     }
@@ -161,15 +117,15 @@ vec3 getIBLRadianceGGX(vec3 n, vec3 v, float perceptualRoughness, vec3 specularC
     float NdotV = clampedDot(n, v);
     vec3 reflection = normalize(reflect(-v, n));
     vec2 brdfSamplePoint = clamp(vec2(NdotV, perceptualRoughness), vec2(0.0, 0.0), vec2(1.0, 1.0));
-    vec2 brdf = texture(texture_ibl_lut_ggx, brdfSamplePoint).rg;
+    vec2 brdf = texture(textures.lut_ggx, brdfSamplePoint).rg;
     float lod = clamp(perceptualRoughness * float(material.radianceMipCount), 0.0, float(material.radianceMipCount));
-    vec4 specularSample = textureLod(texture_ibl_specular, reflection, lod);
+    vec4 specularSample = textureLod(textures.ibl.specular, reflection, lod);
     vec3 specularLight = specularSample.rgb;
     return specularLight * (specularColor * brdf.x + brdf.y);
 }
 
 vec3 getIBLRadianceLambertian(vec3 n, vec3 diffuseColor) {
-    vec3 diffuseLight = texture(texture_ibl_diffuse, n).rgb;
+    vec3 diffuseLight = texture(textures.ibl.diffuse, n).rgb;
     return diffuseLight * diffuseColor;
 }
 
@@ -178,7 +134,7 @@ void main() {
 
     if(material.baseColorUVSet >= 0) {
         vec2 uv = material.baseColorUVSet < 1 ? varyings.texCoord0 : varyings.texCoord1;
-        vec4 bc = texture(texture_base_color, uv);
+        vec4 bc = texture(textures.base_color, uv);
         baseColor *= vec4(sRGBToLinear(bc.rgb), bc.a);
     }
     if(baseColor.a < material.alphaCutoff)
@@ -243,7 +199,7 @@ void main() {
     f_emissive = material.emissiveFactor;
     if(material.emissiveUVSet >= 0) {
         vec2 uv = material.emissiveUVSet == 0 ? varyings.texCoord0 : varyings.texCoord1;
-        f_emissive *= sRGBToLinear(texture(texture_emissive, uv).rgb);
+        f_emissive *= sRGBToLinear(texture(textures.emissive, uv).rgb);
     }
 
     vec3 color = (f_emissive + f_diffuse + f_specular) + ambientLight * materialInfo.albedoColor;
@@ -251,7 +207,7 @@ void main() {
     // Apply optional PBR terms for additional (optional) shading
     if(material.occlusionUVSet >= 0) {
         vec2 uv = material.occlusionUVSet == 0 ? varyings.texCoord0 : varyings.texCoord1;
-        float ao = texture(texture_occlusion, uv).r;
+        float ao = texture(textures.occlusion, uv).r;
         color = mix(color, color * ao, material.occlusionStrength);
     }
 

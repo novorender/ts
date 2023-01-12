@@ -5,6 +5,7 @@ import { createViewFrustum } from "./viewFrustum";
 import { RenderBuffers } from "./buffers";
 import { WasmInstance } from "./wasm";
 import { mat3, mat4, ReadonlyVec3, vec3, vec4 } from "gl-matrix";
+import commonShaderCore from "./common.glsl";
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
@@ -18,14 +19,14 @@ export class RenderContext {
     private cameraUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
     readonly gl: WebGL2RenderingContext;
+    readonly commonChunk: string;
+    readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
 
     // copy from last rendered state
     private isOrtho = false;
     private viewClipMatrix = mat4.create();
     private viewWorldMatrix = mat4.create();
     private viewWorldMatrixNormal = mat3.create();
-
-    readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
 
     // constant gl resources
     readonly cameraUniforms: WebGLBuffer;
@@ -52,6 +53,7 @@ export class RenderContext {
         this.gl = gl;
         const extensions = glExtensions(gl, true);
         console.assert(extensions.loseContext != null, extensions.multiDraw != null, extensions.colorBufferFloat != null);
+        this.commonChunk = commonShaderCore;
 
         // ggx lookup texture and ibl samplers
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);

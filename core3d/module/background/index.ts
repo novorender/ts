@@ -1,7 +1,7 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import { KTX } from "core3d/ktx";
 import { RenderModuleContext, RenderModule } from "..";
-import { createUniformsProxy, glClear, glProgram, glTexture, glDraw, glUniformLocations, glState, TextureParams, glBuffer, glDelete, UniformTypes, TextureParamsCubeUncompressed, TextureParamsCubeUncompressedMipMapped } from "webgl2";
+import { createUniformsProxy, glClear, glProgram, glTexture, glDraw, glState, TextureParams, glBuffer, glDelete, UniformTypes, TextureParamsCubeUncompressed, TextureParamsCubeUncompressedMipMapped } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
@@ -59,19 +59,18 @@ export class BackgroundModule implements RenderModule {
 
 class BackgroundModuleContext implements RenderModuleContext {
     readonly uniforms;
-    readonly textureUniformLocations;
     readonly resources;
     skybox: WebGLTexture;
 
     constructor(readonly context: RenderContext, readonly data: BackgroundModule) {
-        const { gl } = context;
+        const { gl, commonChunk } = context;
         this.uniforms = createUniformsProxy(data.uniforms);
         const uniformBufferBlocks = ["Camera", "Background"];
-        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks });
+        const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
+        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniforms.buffer.byteLength });
         this.skybox = glTexture(gl, context.defaultIBLTextureParams);
         this.resources = { program, uniforms } as const;
-        this.textureUniformLocations = glUniformLocations(gl, program, ["skybox", "specular"] as const, "textures_");
     }
 
     update(state: DerivedRenderState) {
@@ -129,13 +128,13 @@ class BackgroundModuleContext implements RenderModuleContext {
             glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
         } else {
             const { specular } = context.iblTextures;
-            const { textureUniformLocations } = this;
+            // const { textureUniformLocations } = this;
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],
                 textures: [
-                    { kind: "TEXTURE_CUBE_MAP", texture: skybox, sampler: samplerSingle, uniform: textureUniformLocations.skybox },
-                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip, uniform: textureUniformLocations.specular },
+                    { kind: "TEXTURE_CUBE_MAP", texture: skybox, sampler: samplerSingle },
+                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
                 ],
                 depthTest: false,
                 depthWriteMask: false,

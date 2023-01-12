@@ -35,8 +35,8 @@ class ClippingModuleContext implements RenderModuleContext {
 
     constructor(readonly context: RenderContext, readonly data: ClippingModule) {
         this.uniforms = createUniformsProxy(data.uniforms);
-        const { gl } = context;
-        const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Clipping"] });
+        const { gl, commonChunk } = context;
+        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Camera", "Clipping"] });
         const info = glUniformsInfo(gl, program);
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
         context.clippingUniforms = uniforms;

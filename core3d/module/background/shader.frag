@@ -1,33 +1,23 @@
 layout(std140) uniform Camera {
-    mat4 clipViewMatrix;
-    mat4 viewClipMatrix;
-    mat4 localViewMatrix;
-    mat4 viewLocalMatrix;
-    mat3 localViewMatrixNormal;
-    mat3 viewLocalMatrixNormal;
-    vec2 viewSize;
-} camera;
+    CameraUniforms camera;
+};
 
 layout(std140) uniform Background {
-    float envBlurNormalized;
-    int mipCount;
+    BackgroundUniforms uniforms;
 } background;
 
-uniform samplerCube textures_skybox;
-uniform samplerCube textures_specular;
+uniform BackgroundTextures textures;
 
-in struct Varyings {
-    vec3 dir;
-} varyings;
+in BackgroundVaryings varyings;
 
-layout(location = 0) out vec4 color;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     vec3 rgb;
-    if(background.envBlurNormalized == 0.) {
-        rgb = texture(textures_skybox, normalize(varyings.dir)).rgb;
+    if(background.uniforms.envBlurNormalized == 0.) {
+        rgb = texture(textures.skybox, normalize(varyings.dir)).rgb;
     } else {
-        rgb = textureLod(textures_specular, normalize(varyings.dir), background.envBlurNormalized * float(background.mipCount - 1)).rgb;
+        rgb = textureLod(textures.ibl.specular, normalize(varyings.dir), background.uniforms.envBlurNormalized * float(background.uniforms.mipCount - 1)).rgb;
     }
-    color = vec4(rgb, 1);
+    fragColor = vec4(rgb, 1);
 }

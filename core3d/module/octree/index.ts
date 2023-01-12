@@ -3,8 +3,8 @@ import { RenderModuleContext, RenderModule } from "..";
 import { createSceneRootNode } from "core3d/scene";
 import { NodeState, OctreeContext, OctreeNode, Visibility } from "./node";
 import { Downloader } from "./download";
-import { createUniformsProxy, DrawMode, DrawParams, glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glUniformLocations, glUpdateTexture, TextureParams, TextureParams2DUncompressed, UniformTypes } from "webgl2";
-import { MaterialType, PrimitiveType } from "./schema";
+import { createUniformsProxy, glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glUpdateTexture, TextureParams2DUncompressed, UniformTypes } from "webgl2";
+import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
 import { ReadonlyVec3, vec3 } from "gl-matrix";
 import { NodeLoader, NodeLoaderOptions } from "./loader";
@@ -45,7 +45,6 @@ const enum Gradient { size = 1024 };
 class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly sceneUniforms;
     readonly resources;
-    readonly textureUniformLocations;
     readonly loader: NodeLoader;
     readonly downloader = new Downloader(new URL((document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url));
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
@@ -61,12 +60,14 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         this.sceneUniforms = createUniformsProxy(data.sceneUniforms);
         const meshUniforms = createUniformsProxy(data.meshUniforms);
         this.loader = new NodeLoader(data.nodeLoaderOptions);
-        const { gl } = renderContext;
-        const flags = ["IOS_WORKAROUND"];
+        const { gl, commonChunk } = renderContext;
+        const flags: string[] = ["IOS_WORKAROUND"]; // without this flag, complex scenes crash after a few frames on older IOS and iPad devices.
+        const textureNames = ["base_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients"] as const;
+        const textureUniforms = textureNames.map(name => `textures.${name}`);
         const uniformBufferBlocks = ["Camera", "Scene", "Node", "Mesh"];
-        const program = glProgram(gl, { vertexShader, fragmentShader, flags, uniformBufferBlocks });
-        const programZ = glProgram(gl, { vertexShader, fragmentShader, flags: [...flags, "POS_ONLY"], uniformBufferBlocks });
-        const programDebug = glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, uniformBufferBlocks });
+        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags });
+        const programZ = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags: [...flags, "POS_ONLY"] });
+        const programDebug = this.debug ? glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, commonChunk, uniformBufferBlocks }) : null;
         const sceneUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.sceneUniforms.buffer.byteLength });
         meshUniforms.values.mode = 0;
         const meshUniforms0 = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: meshUniforms.buffer });
@@ -77,7 +78,6 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const materialTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null });
         const highlightTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image: null });
         const gradientsTexture = glTexture(gl, data.gradientImageParams);
-        this.textureUniformLocations = glUniformLocations(gl, program, ["ibl_diffuse", "ibl_specular", "base_color", "materials", "highlights", "gradients"] as const, "texture_");
         this.resources = { program, programZ, programDebug, sceneUniforms, meshUniforms0, meshUniforms1, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture } as const;
     }
 
@@ -268,7 +268,6 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
             nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
-            const { textureUniformLocations } = this;
             const { diffuse, specular } = iblTextures;
             glState(gl, {
                 program: program,
@@ -278,12 +277,12 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 depthFunc: usePrepass ? "LEQUAL" : "LESS",
                 depthWriteMask: true,
                 textures: [
-                    { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle, uniform: textureUniformLocations.base_color }, // this will be overridden by nodes that have textures, e.g. terrain nodes.
-                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerSingle, uniform: textureUniformLocations.ibl_specular },
-                    { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerMip, uniform: textureUniformLocations.ibl_diffuse },
-                    { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest, uniform: textureUniformLocations.materials },
-                    { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest, uniform: textureUniformLocations.highlights },
-                    { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest, uniform: textureUniformLocations.gradients },
+                    { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // basecolor - will be overridden by nodes that have textures, e.g. terrain nodes.
+                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerSingle },
+                    { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerMip },
+                    { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest },
+                    { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
+                    { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
                 ],
                 drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
                 // drawBuffers: ["COLOR_ATTACHMENT0"],

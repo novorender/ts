@@ -1,27 +1,17 @@
 layout(std140) uniform Camera {
-    mat4 clipViewMatrix;
-    mat4 viewClipMatrix;
-    mat4 localViewMatrix;
-    mat4 viewLocalMatrix;
-    mat3 localViewMatrixNormal;
-    mat3 viewLocalMatrixNormal;
-    vec2 viewSize;
-} camera;
+    CameraUniforms camera;
+};
 
 layout(std140) uniform Background {
-    float envBlurNormalized;
-    int mipCount;
+    BackgroundUniforms uniforms;
 } background;
 
-uniform samplerCube textures_background;
-uniform samplerCube textures_specular;
+uniform BackgroundTextures textures;
 
-out struct Varyings {
-    vec3 dir;
-} varyings;
+out BackgroundVaryings varyings;
 
 void main() {
-    // Use degenerate triangle if ortho camera to use clear color instead
+    // output degenerate triangle if ortho camera to use clear color instead
     bool isPerspective = camera.viewClipMatrix[3][3] == 0.0;
     vec2 pos = vec2(gl_VertexID % 2, gl_VertexID / 2) * 2.0 - 1.0;
     gl_Position = isPerspective ? vec4(pos, 1, 1) : vec4(0);

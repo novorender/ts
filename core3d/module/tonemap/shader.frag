@@ -1,27 +1,10 @@
-const float maxDeviation = 1.;
-
-const uint modeColor = 0U;
-const uint modeNormal = 1U;
-const uint modeDepth = 2U;
-const uint modeObjectId = 3U;
-const uint modeDeviation = 4U;
-const uint modeZbuffer = 5U;
-
 layout(std140) uniform Tonemapping {
-    float exposure;
-    uint mode;
-    float maxLinearDepth;
-} tonemapping;
+    TonemappingUniforms tonemapping;
+};
 
-uniform sampler2D textures_color;
-uniform sampler2D textures_normal;
-uniform sampler2D textures_depth;
-uniform usampler2D textures_info;
-uniform sampler2D textures_zbuffer;
+uniform TonemappingTextures textures;
 
-in struct {
-    vec2 uv;
-} varyings;
+in TonemappingVaryings varyings;
 
 layout(location = 0) out vec4 fragColor;
 
@@ -32,20 +15,6 @@ uint hash(uint x) {
     x ^= (x >> 11u);
     x += (x << 15u);
     return x;
-}
-const float GAMMA = 2.2;
-const float INV_GAMMA = 1.0 / GAMMA;
-
-// linear to sRGB approximation
-// see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
-vec3 linearTosRGB(vec3 color) {
-    return pow(color, vec3(INV_GAMMA));
-}
-
-// sRGB to linear approximation
-// see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
-vec3 sRGBToLinear(vec3 srgbIn) {
-    return vec3(pow(srgbIn.xyz, vec3(GAMMA)));
 }
 
 // ACES tone map (faster approximation)
@@ -70,14 +39,14 @@ vec3 RRTAndODTFit(vec3 color) {
 void main() {
     vec4 color = vec4(1, 0, 0, 1);
     switch(tonemapping.mode) {
-        case modeColor: {
-            color = texture(textures_color, varyings.uv);
+        case tonemapModeColor: {
+            color = texture(textures.color, varyings.uv);
             color.rgb = RRTAndODTFit(color.rgb * tonemapping.exposure);
             color.rgb = linearTosRGB(color.rgb);// * color.a;
             break;
         }
-        case modeNormal: {
-            vec2 xy = texture(textures_normal, varyings.uv).xy;
+        case tonemapModeNormal: {
+            vec2 xy = texture(textures.normal, varyings.uv).xy;
             if(any(isnan(xy))) {
                 color.rgb = vec3(0);
             } else {
@@ -86,8 +55,8 @@ void main() {
             }
             break;
         }
-        case modeDepth: {
-            float linearDepth = texture(textures_depth, varyings.uv).x;
+        case tonemapModeDepth: {
+            float linearDepth = texture(textures.depth, varyings.uv).x;
             if(isinf(linearDepth)) {
                 color.rgb = vec3(0, 0, 0.25);
             } else {
@@ -96,8 +65,8 @@ void main() {
             }
             break;
         }
-        case modeObjectId: {
-            uint objectId = texture(textures_info, varyings.uv).x;
+        case tonemapModeObjectId: {
+            uint objectId = texture(textures.info, varyings.uv).x;
             if(objectId == 0xffffffffU) {
                 color.rgb = vec3(0);
             } else {
@@ -110,13 +79,13 @@ void main() {
             }
             break;
         }
-        case modeDeviation: {
-            float deviation = unpackHalf2x16(texture(textures_info, varyings.uv).y).x;
-            color.rgb = deviation > 0. ? vec3(0, deviation / maxDeviation, 0) : vec3(-deviation / maxDeviation, 0, 0);
+        case tonemapModeDeviation: {
+            float deviation = unpackHalf2x16(texture(textures.info, varyings.uv).y).x;
+            color.rgb = deviation > 0. ? vec3(0, deviation / tonemapMaxDeviation, 0) : vec3(-deviation / tonemapMaxDeviation, 0, 0);
             break;
         }
-        case modeZbuffer: {
-            float z = texture(textures_zbuffer, varyings.uv).x;
+        case tonemapModeZbuffer: {
+            float z = texture(textures.zbuffer, varyings.uv).x;
             color.rgb = vec3(z);
             break;
         }

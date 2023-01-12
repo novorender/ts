@@ -1,15 +1,17 @@
 import { glExtensions } from "./extensions";
 
 export function glProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
-    const { flags, transformFeedback, uniformBufferBlocks } = params;
+    const { flags, transformFeedback, uniformBufferBlocks, textureUniforms, headerChunk, commonChunk } = params;
     const extensions: string[] = [];
     if (glExtensions(gl).multiDraw) {
         extensions.push("#extension GL_ANGLE_multi_draw : require\n");
     }
-    const header = `#version 300 es\n${extensions.join("")}precision highp float;\nprecision highp int;\nprecision highp usampler2D;\n`;
+    const defaultHeader = `#version 300 es\n${extensions.join("")}precision highp float;\nprecision highp int;\nprecision highp usampler2D;\n`;
+    const header = headerChunk ?? defaultHeader;
     const defines = flags?.map(flag => `#define ${flag}\n`)?.join("") ?? "";
-    const vs = header + defines + params.vertexShader;
-    const fs = header + defines + (params.fragmentShader ?? "void main() {}");
+    const common = commonChunk ?? "";
+    const vs = header + defines + common + params.vertexShader;
+    const fs = header + defines + common + (params.fragmentShader ?? "void main() {}");
     const vertexShader = compileShader(gl, "VERTEX_SHADER", vs);
     const fragmentShader = compileShader(gl, "FRAGMENT_SHADER", fs);
     const program = gl.createProgram()!;
@@ -49,6 +51,16 @@ export function glProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
         }
     }
 
+    if (textureUniforms) {
+        gl.useProgram(program);
+        let i = 0;
+        for (const name of textureUniforms) {
+            const location = gl.getUniformLocation(program, name);
+            gl.uniform1i(location, i++);
+        }
+        gl.useProgram(null);
+    }
+
     return program;
 }
 
@@ -67,8 +79,11 @@ function compileShader(gl: WebGLRenderingContext, type: "VERTEX_SHADER" | "FRAGM
 export interface ProgramParams {
     readonly vertexShader: string;
     readonly fragmentShader?: string;
-    readonly flags?: readonly string[];
+    readonly headerChunk?: string; // this string is injected at the very top of shaders prior to compilation for things that must come before #define's, such as #version and extention directives
+    readonly flags?: readonly string[]; // flags are turned into preprocessor #define's with no values (#ifdef)
+    readonly commonChunk?: string; // this string is injected before the shader code prior to compilation
     readonly uniformBufferBlocks?: string[]; // The names of the shader uniform blocks, which will be bound to the index in which the name appears in this array using gl.uniformBlockBinding().
+    readonly textureUniforms?: readonly string[]; // Texture uniforms will be bound to the index in which they appear in the name array.
     readonly transformFeedback?: {
         readonly bufferMode: "INTERLEAVED_ATTRIBS" | "SEPARATE_ATTRIBS";
         readonly varyings: readonly string[];
