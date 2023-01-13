@@ -24,6 +24,7 @@
 - [x] default ibl (instead of sun light)
 - [ ] camera headlight
 - [x] watermark
+- [ ] **proper test app**
 - [ ] ocean?
 - [ ] camera controllers
 - [ ] device profile

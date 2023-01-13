@@ -10,6 +10,7 @@ import { KTX } from "core3d/ktx";
 export interface MeshDrawRange {
     readonly childIndex: number;
     readonly byteOffset: number; // in bytes
+    readonly first: number; // # indices
     readonly count: number; // # indices
 }
 
@@ -64,6 +65,7 @@ export interface VertexAttributes {
     readonly texCoord: VertexAttributeData | null;
     readonly color: VertexAttributeData | null;
     readonly deviation: VertexAttributeData | null;
+    readonly triplets: readonly [VertexAttributeData, VertexAttributeData, VertexAttributeData] | null;
 }
 
 export interface SubMesh {
@@ -71,6 +73,7 @@ export interface SubMesh {
     readonly primitiveType: PrimitiveTypeString;
     readonly vertexAttributes: VertexAttributes;
     readonly numVertices: number;
+    readonly numTriplets: number;
     readonly objectRanges: readonly MeshObjectRange[];
     // either index range (if index buffer is defined) for use with drawElements(), or vertex range for use with drawArray()
     readonly drawRanges: readonly MeshDrawRange[];
@@ -350,23 +353,36 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
         const hasObjectIds = groupMeshes.some(m => m.objectId != 0xffffffff);
 
         const allAttribNames = getVertexAttribNames(attributes, hasMaterials, hasObjectIds);
-        const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're putting them in a separate buffer
+        const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're potentially putting them in a separate buffer
         const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
         const positionStride = computeVertexOffsets([posName]).stride;
+        const tripletStride = positionStride;
         const attribOffsets = computeVertexOffsets(attribNames);
         const vertexStride = attribOffsets.stride;
 
         const childIndices = [...new Set<number>(groupMeshes.map(sm => sm.childIndex))].sort();
-        const numVertices = groupMeshes.map(sm => (sm.vertexRange[1] - sm.vertexRange[0])).reduce((a, b) => (a + b));
-        const numIndices = groupMeshes.map(sm => (sm.indexRange[1] - sm.indexRange[0])).reduce((a, b) => (a + b));
+        let numVertices = 0;
+        let numIndices = 0;
+        let numTriplets = 0;
+        for (let i = 0; i < groupMeshes.length; i++) {
+            const sm = groupMeshes[i];
+            const vtxCnt = sm.vertexRange[1] - sm.vertexRange[0];
+            const idxCnt = sm.indexRange[1] - sm.indexRange[0];
+            numVertices += vtxCnt;
+            numIndices += idxCnt;
+            numTriplets += (idxCnt > 0 ? idxCnt : vtxCnt) / 3;
+        }
+        console.assert(Number.isInteger(numTriplets));
         const vertexBuffer = new ArrayBuffer(numVertices * vertexStride);
+        const tripletBuffer = primitiveType >= PrimitiveType.triangles ? new Int16Array(new ArrayBuffer(numTriplets * 3 * tripletStride)) : undefined;
         const positionBuffer = separatePositionBuffer ? new ArrayBuffer(numVertices * positionStride) : undefined;
         let indexBuffer: Uint32Array | Uint16Array | undefined;
         if (vertexIndex) {
             indexBuffer = new (numVertices < 0xffff ? Uint16Array : Uint32Array)(numIndices);
         }
-        let idx = 0;
+        let indexOffset = 0;
         let vertexOffset = 0;
+        let tripletOffset = 0;
         let drawRanges: MeshDrawRange[] = [];
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
         const objectRanges: Mutable<MeshObjectRange>[] = [];
@@ -376,7 +392,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
             if (meshes.length == 0)
                 continue;
 
-            const drawRangeBegin = indexBuffer ? idx : vertexOffset;
+            const drawRangeBegin = indexBuffer ? indexOffset : vertexOffset;
 
             for (const subMesh of meshes) {
                 const { vertexRange, indexRange, materialIndex, objectId } = subMesh;
@@ -404,6 +420,25 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
                     }
                 }
 
+                // create triplet vertex buffer for clipping intersection
+                if (tripletBuffer) {
+                    const { x, y, z } = vertex.position;
+                    if (vertexIndex && indexBuffer) {
+                        for (let i = beginIdx; i < endIdx; i++) {
+                            const idxIn = vertexIndex[i] + beginVtx;
+                            tripletBuffer[tripletOffset++] = x[idxIn];
+                            tripletBuffer[tripletOffset++] = y[idxIn];
+                            tripletBuffer[tripletOffset++] = z[idxIn];
+                        }
+                    } else {
+                        for (let i = beginVtx; i < endVtx; i++) {
+                            tripletBuffer[tripletOffset++] = x[i];
+                            tripletBuffer[tripletOffset++] = y[i];
+                            tripletBuffer[tripletOffset++] = z[i];
+                        }
+                    }
+                }
+
                 if (positionBuffer) {
                     // create separate positions buffer
                     const i16 = new Int16Array(positionBuffer, vertexOffset * positionStride);
@@ -415,7 +450,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
                 // create index buffer (if any)
                 if (vertexIndex && indexBuffer) {
                     for (let i = beginIdx; i < endIdx; i++) {
-                        indexBuffer[idx++] = vertexIndex[i] + vertexOffset;
+                        indexBuffer[indexOffset++] = vertexIndex[i] + vertexOffset;
                     }
                 }
 
@@ -430,13 +465,14 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
                 vertexOffset += endVtx - beginVtx;
             }
 
-            const drawRangeEnd = indexBuffer ? idx : vertexOffset;
+            const drawRangeEnd = indexBuffer ? indexOffset : vertexOffset;
             const byteOffset = drawRangeBegin * (indexBuffer ? indexBuffer.BYTES_PER_ELEMENT : vertexStride);
             const count = drawRangeEnd - drawRangeBegin;
-            drawRanges.push({ childIndex, byteOffset, count });
+            drawRanges.push({ childIndex, byteOffset, first: drawRangeBegin, count });
         }
         console.assert(vertexOffset == numVertices);
-        console.assert(idx == numIndices);
+        console.assert(indexOffset == numIndices);
+        console.assert(tripletOffset == tripletBuffer?.length ?? 0);
         const indices = indexBuffer ?? numVertices;
 
         const [beginTexture, endTexture] = groupMeshes[0].textureRange;
@@ -453,20 +489,32 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
 
         const stride = vertexStride;
         const buffer = 0;
-        const vertexBuffers = positionBuffer ? [vertexBuffer, positionBuffer] : [vertexBuffer];
+        const vertexBuffers: ArrayBuffer[] = [vertexBuffer];
+        if (tripletBuffer) {
+            vertexBuffers.push(tripletBuffer.buffer);
+        }
+        if (positionBuffer) {
+            vertexBuffers.push(positionBuffer);
+        }
+        const posBufferIndex = positionBuffer ? tripletBuffer ? 2 : 1 : 0;
         const vertexAttributes = {
-            position: { kind: "FLOAT_VEC4", buffer: separatePositionBuffer ? 1 : 0, componentCount: 3, componentType: "SHORT", normalized: true, offset: attribOffsets["position"], stride: separatePositionBuffer ? 0 : stride },
+            position: { kind: "FLOAT_VEC4", buffer: posBufferIndex, componentCount: 3, componentType: "SHORT", normalized: true, offset: attribOffsets["position"], stride: separatePositionBuffer ? 0 : stride },
             normal: (attributes & OptionalVertexAttribute.normal) != 0 ? { kind: "FLOAT_VEC3", buffer, componentCount: 3, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["normal"], stride } : null,
             material: hasMaterials ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, offset: attribOffsets["materialIndex"], stride } : null,
             objectId: hasObjectIds ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, offset: attribOffsets["objectId"], stride } : null,
             texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, offset: attribOffsets["texCoord"], stride } : null,
             color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["color"], stride } : null,
             deviation: (attributes & OptionalVertexAttribute.deviation) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "HALF_FLOAT", normalized: false, offset: attribOffsets["deviation"], stride } : null,
+            triplets: tripletBuffer ? [
+                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, offset: 0, stride: 18 },
+                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, offset: 6, stride: 18 },
+                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, offset: 12, stride: 18 }
+            ] : null,
         } as const satisfies VertexAttributes;
 
         objectRanges.sort((a, b) => (a.objectId - b.objectId));
 
-        subMeshes.push({ materialType, primitiveType: primitiveTypeStrings[primitiveType], numVertices, objectRanges, vertexAttributes, vertexBuffers, indices, baseColorTexture, drawRanges });
+        subMeshes.push({ materialType, primitiveType: primitiveTypeStrings[primitiveType], numVertices, numTriplets, objectRanges, vertexAttributes, vertexBuffers, indices, baseColorTexture, drawRanges });
     }
 
     const textures = new Array<NodeTexture | undefined>(schema.textureInfo.length);

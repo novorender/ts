@@ -13,5 +13,5 @@ layout(std140) uniform Cube {
 layout(location = 0) out vec4 fragColor;
 
 void main() {
-    fragColor = vec4(10, 10, 10, 1);
+    fragColor = vec4(cube.nearOutlineColor, 1);
 }

@@ -95,6 +95,7 @@ export class RenderContext {
             localViewMatrixNormal: "mat3",
             viewLocalMatrixNormal: "mat3",
             windowSize: "vec2",
+            near: "float",
         });
         this.cameraUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength });
     }
@@ -277,7 +278,7 @@ export class RenderContext {
 
     private updateCameraUniforms(state: DerivedRenderState) {
         const { gl, cameraUniformsData, localSpaceTranslation } = this;
-        const { output, matrices } = state;
+        const { output, camera, matrices } = state;
         const { values } = cameraUniformsData;
         const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
         const viewWorldMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.World);
@@ -291,6 +292,7 @@ export class RenderContext {
         values.localViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
         values.viewLocalMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
         values.windowSize = [output.width, output.height];
+        values.near = camera.near;
     }
 
     protected async pick(x: number, y: number, sampleDiscRadius = 0): Promise<PickSample[]> {

@@ -6,12 +6,12 @@ import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import line_vs from "./line.vert";
 import line_fs from "./line.frag";
-import transform_vs from "./transform.vert";
+import intersect_vs from "./intersect.vert";
 
 export class CubeModule implements RenderModule {
     readonly uniforms = {
         modelLocalMatrix: "mat4",
-        clipDepth: "float",
+        nearOutlineColor: "vec3",
     } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
@@ -43,7 +43,7 @@ class CubeModuleContext implements RenderModuleContext {
         // create static GPU resources here
         const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
         const program_line = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
-        const program_transform = glProgram(gl, { vertexShader: transform_vs, commonChunk, uniformBufferBlocks: ["Camera", "Cube"], transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
+        const program_transform = glProgram(gl, { vertexShader: intersect_vs, commonChunk, uniformBufferBlocks: ["Camera", "Cube"], transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
 
         const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vertices });
@@ -82,10 +82,10 @@ class CubeModuleContext implements RenderModuleContext {
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
-        const { cube, localSpaceTranslation } = state;
+        const { cube, localSpaceTranslation, outlines } = state;
+        const { values } = this.uniforms;
         if (context.hasStateChanged({ cube, localSpaceTranslation })) {
-            const { values } = this.uniforms;
-            const { scale, position, clipDepth } = cube;
+            const { scale, position } = cube;
             const posLS = vec3.subtract(vec3.create(), position, localSpaceTranslation);
             const m = [
                 scale, 0, 0, 0,
@@ -94,9 +94,11 @@ class CubeModuleContext implements RenderModuleContext {
                 ...posLS, 1
             ] as Parameters<typeof mat4.fromValues>;
             values.modelLocalMatrix = mat4.fromValues(...m);
-            values.clipDepth = clipDepth;
-            context.updateUniformBuffer(resources.uniforms, this.uniforms);
         }
+        if (context.hasStateChanged({ outlines })) {
+            values.nearOutlineColor = outlines.nearClipping.color;
+        }
+        context.updateUniformBuffer(resources.uniforms, this.uniforms);
     }
 
     render(state: DerivedRenderState) {
@@ -105,14 +107,6 @@ class CubeModuleContext implements RenderModuleContext {
         const { gl, cameraUniforms, clippingUniforms } = context;
 
         if (state.cube.enabled) {
-            // transform vertex triplets into intersection lines
-            glState(gl, {
-                program: program_transform,
-                uniformBuffers: [cameraUniforms, uniforms],
-                vertexArrayObject: vao_tri,
-            });
-            glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line], count: 12 });
-
             // render normal cube
             glState(gl, {
                 program,
@@ -124,14 +118,24 @@ class CubeModuleContext implements RenderModuleContext {
             });
             glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
 
-            // render intersection lines
-            glState(gl, {
-                program: program_line,
-                drawBuffers: ["COLOR_ATTACHMENT0"],
-                depthTest: true,
-                vertexArrayObject: vao_line,
-            });
-            glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });
+            if (state.outlines.nearClipping.enable) {
+                // transform vertex triplets into intersection lines
+                glState(gl, {
+                    program: program_transform,
+                    uniformBuffers: [cameraUniforms, uniforms],
+                    vertexArrayObject: vao_tri,
+                });
+                glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line], count: 12 });
+
+                // render intersection lines
+                glState(gl, {
+                    program: program_line,
+                    drawBuffers: ["COLOR_ATTACHMENT0"],
+                    depthTest: true,
+                    vertexArrayObject: vao_line,
+                });
+                glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });
+            }
         }
     }
 

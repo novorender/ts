@@ -34,7 +34,7 @@ export function createViewFrustum(state: RenderState, matrices: Matrices): ViewF
         vec4.set(bottom, 0, -Math.cos(halfAngleY), Math.sin(halfAngleY), 0);
     }
 
-    // transform into view space
+    // transform into world space
     const normal = vec3.create();
     const position = vec3.create();
     const matrix = matrices.getMatrix(CoordSpace.View, CoordSpace.World);

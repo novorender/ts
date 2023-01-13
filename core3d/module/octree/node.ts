@@ -131,6 +131,26 @@ export class OctreeNode {
         return this.isRoot || (visibility != Visibility.none && projectedSize > projectedSizeSplitThreshold);
     }
 
+    intersectsPlane(plane: ReadonlyVec4) {
+        const { center4, radius, corners } = this;
+        const distance = vec4.dot(plane, center4);
+        if (Math.abs(distance) > radius) {
+            return false;
+        }
+        let side = 0;
+        for (const corner of corners) {
+            const distance = vec4.dot(plane, corner);
+            const distSgn = Math.sign(distance);
+            if (side && distSgn != side) {
+                return true;
+            }
+            if (distSgn) {
+                side = distSgn;
+            }
+        }
+        return false;
+    }
+
     private computeVisibility(state: DerivedRenderState): Visibility {
         const { center4, radius, corners } = this;
         let fullyInside = true;

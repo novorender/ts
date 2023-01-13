@@ -31,7 +31,6 @@ export function defaultRenderState(): RenderState {
             enabled: false,
             position: [0, 0, 0],
             scale: 1,
-            clipDepth: 1,
         },
         scene: undefined,
         terrain: {
@@ -62,6 +61,12 @@ export function defaultRenderState(): RenderState {
                 0, 0, 0, 1, 0,
             ],
             groups: [],
+        },
+        outlines: {
+            nearClipping: {
+                enable: false,
+                color: [10, 10, 10], // bright white (overexposed)
+            }
         },
         tonemapping: {
             exposure: 0,

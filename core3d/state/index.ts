@@ -67,7 +67,6 @@ export interface RenderStateCube {
     readonly enabled: boolean; // default = false
     readonly position: ReadonlyVec3; // default = (0,0,0)
     readonly scale: number; // default = 1
-    readonly clipDepth: number; // default = 1
 }
 
 /** Gradient curve knot node. */
@@ -190,6 +189,15 @@ export const enum TonemappingMode {
     zbuffer,
 };
 
+export interface RenderStateOutlinesNearClipping {
+    readonly enable: boolean;
+    readonly color: RGB;
+}
+
+export interface RenderStateOutlines {
+    readonly nearClipping: RenderStateOutlinesNearClipping;
+}
+
 export interface RenderStateTonemapping {
     /** Camera light exposure as stops of power of 2.
      * @remarks
@@ -213,6 +221,7 @@ export interface RenderState {
     readonly dynamic: RenderStateDynamicObjects;
     readonly clipping: RenderStateClipping;
     readonly highlights: RenderStateHighlightGroups;
+    readonly outlines: RenderStateOutlines;
     readonly tonemapping: RenderStateTonemapping;
     readonly points: RenderStatePointCloud;
 }
@@ -220,7 +229,7 @@ export interface RenderState {
 export interface DerivedRenderState extends RenderState {
     readonly localSpaceTranslation: ReadonlyVec3; // local space is a variant of world space that is much closer to camera to avoid excessively (for float32) large coordinates in shader
     readonly matrices: Matrices;
-    readonly viewFrustum: ViewFrustum;
+    readonly viewFrustum: ViewFrustum; // in world space
 }
 
 export type RenderStateChanges = RecursivePartial<RenderState>;

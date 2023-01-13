@@ -1,15 +1,17 @@
 import { glBuffer, glVertexArray, DrawParams, VertexAttribute, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glTexture, glUpdateBuffer } from "webgl2";
 import type { RenderStateHighlightGroup } from "core3d";
 import { mergeSorted } from "core3d/iterate";
-import { MeshDrawRange, MeshObjectRange, NodeGeometry } from "./parser";
+import { MeshDrawRange, MeshObjectRange, NodeGeometry, VertexAttributeData } from "./parser";
 import { MaterialType } from "./schema";
 
 export interface Mesh {
     readonly materialType: MaterialType;
     readonly vao: WebGLVertexArrayObject;
     readonly vaoPosOnly: WebGLVertexArrayObject | null;
+    readonly vaoTriplets: WebGLVertexArrayObject | null;
     readonly highlightVB: WebGLBuffer | null;
     readonly numVertices: number;
+    readonly numTriplets: number;
     readonly drawParams: DrawParams;
     readonly drawRanges: readonly MeshDrawRange[];
     readonly objectRanges: readonly MeshObjectRange[];
@@ -26,23 +28,27 @@ export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry
     for (const subMesh of geometry.subMeshes) {
         // if (subMesh.materialType == MaterialType.transparent)
         //     continue;
-        const { vertexAttributes, vertexBuffers, indices, numVertices, drawRanges, objectRanges, materialType } = subMesh;
+        const { vertexAttributes, vertexBuffers, indices, numVertices, numTriplets, drawRanges, objectRanges, materialType } = subMesh;
         const buffers = vertexBuffers.map(vb => {
             return glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vb });
         })
         const ib = typeof indices != "number" ? glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
-        const { position, normal, material, objectId, texCoord, color, deviation } = vertexAttributes;
-        const attributes = [position, normal, material, objectId, texCoord, color, deviation].
-            map(a => (a ? { ...a, buffer: buffers[a.buffer] } as VertexAttribute : null));
+        const { triplets, position, normal, material, objectId, texCoord, color, deviation } = vertexAttributes;
+        function convertAttrib(a: VertexAttributeData | null) {
+            return a ? { ...a, buffer: buffers[a.buffer] } as VertexAttribute : null;
+        }
+        const attributes = [position, normal, material, objectId, texCoord, color, deviation].map(convertAttrib);
+        const tripletAttributes = triplets ? triplets.map(convertAttrib) : null;
 
         // add extra highlight vertex buffer and attribute
         const highlightVB = glBuffer(gl, { kind: "ARRAY_BUFFER", size: subMesh.numVertices });
         attributes.push({ kind: "UNSIGNED_INT", buffer: highlightVB, componentType: "UNSIGNED_BYTE" });
 
         const vao = glVertexArray(gl, { attributes, indices: ib });
-        const vaoPosOnly = position.buffer == 1 ? glVertexArray(gl, { attributes: [attributes[0]], indices: ib }) : null;
+        const vaoPosOnly = position.buffer != 0 ? glVertexArray(gl, { attributes: [attributes[0]], indices: ib }) : null;
+        const vaoTriplets = tripletAttributes ? glVertexArray(gl, { attributes: tripletAttributes }) : null;
         for (const buffer of buffers) {
             gl.deleteBuffer(buffer);
         }
@@ -55,12 +61,12 @@ export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry
             { kind: "arrays", mode: subMesh.primitiveType, count };
         const baseColorTextureIndex = subMesh.baseColorTexture as number;
         const baseColorTexture = textures[baseColorTextureIndex] ?? null;
-        yield { vao, vaoPosOnly, highlightVB, drawParams, drawRanges, numVertices, objectRanges, materialType, baseColorTexture } as const satisfies Mesh;
+        yield { vao, vaoPosOnly, vaoTriplets, highlightVB, drawParams, drawRanges, numVertices, numTriplets, objectRanges, materialType, baseColorTexture } as const satisfies Mesh;
     }
 }
 
 // this functon returns all the objectIDs from highlight groups in ascending order, along with their respective highlight index.
-// brute force iteration is slower than using maps or lookup arrays, but requires far less memory.
+// brute force iteration is slower than using maps or lookup arrays, but requires less memory.
 function traverseObjectIds(groups: readonly RenderStateHighlightGroup[]) {
     const iterators = groups.map(g => g.objectIds[Symbol.iterator]());
     return mergeSorted(iterators);

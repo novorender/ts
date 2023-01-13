@@ -27,7 +27,7 @@ bool clip(vec3 point) {
 }
 
 void main() {
-    if(varyings.linearDepth < cube.clipDepth || clip(varyings.posVS))
+    if(varyings.linearDepth < camera.near || clip(varyings.posVS))
         discard;
     fragColor = vec4(gl_FrontFacing ? varyings.color : vec3(.25), 1);
     fragNormal = normalize(varyings.normal).xy;

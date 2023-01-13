@@ -3,16 +3,19 @@ import { RenderModuleContext, RenderModule } from "..";
 import { createSceneRootNode } from "core3d/scene";
 import { NodeState, OctreeContext, OctreeNode, Visibility } from "./node";
 import { Downloader } from "./download";
-import { createUniformsProxy, glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glUpdateTexture, TextureParams2DUncompressed, UniformTypes } from "webgl2";
+import { createUniformsProxy, glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glTransformFeedback, glUpdateTexture, glVertexArray, TextureParams2DUncompressed, UniformTypes } from "webgl2";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
 import { ReadonlyVec3, vec3 } from "gl-matrix";
 import { NodeLoader, NodeLoaderOptions } from "./loader";
+import { computeGradientColors, gradientRange } from "./gradient";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
+import line_vs from "./line.vert";
+import line_fs from "./line.frag";
+import intersect_vs from "./intersect.vert";
 import vertexShaderDebug from "./shader_debug.vert";
 import fragmentShaderDebug from "./shader_debug.frag";
-import { computeGradientColors, gradientRange } from "./gradient";
 
 export class OctreeModule implements RenderModule {
     readonly sceneUniforms = {
@@ -25,6 +28,7 @@ export class OctreeModule implements RenderModule {
         deviationMode: "uint",
         deviationRange: "vec2",
         elevationRange: "vec2",
+        nearOutlineColor: "vec3",
     } as const satisfies Record<string, UniformTypes>;
 
     readonly meshUniforms = {
@@ -49,6 +53,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly downloader = new Downloader(new URL((document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url));
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
     readonly debug = false;
+    private readonly maxLines = 1024 * 1024; // TODO: find a proper size!
+
     localSpaceTranslation = vec3.create() as ReadonlyVec3;
     localSpaceChanged = false;
     url: string | undefined;
@@ -67,7 +73,16 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const uniformBufferBlocks = ["Camera", "Scene", "Node", "Mesh"];
         const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags });
         const programZ = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags: [...flags, "POS_ONLY"] });
+        const programIntersect = glProgram(gl, { vertexShader: intersect_vs, commonChunk, uniformBufferBlocks: ["Camera", "Scene", "Node"], transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
+        const programLine = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks: ["Camera", "Scene"] });
         const programDebug = this.debug ? glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, commonChunk, uniformBufferBlocks }) : null;
+        const transformFeedback = gl.createTransformFeedback()!;
+        const vb_line = glBuffer(gl, { kind: "ARRAY_BUFFER", size: this.maxLines * 2 * 8, usage: "STATIC_DRAW" });
+        const vao_line = glVertexArray(gl, {
+            attributes: [
+                { kind: "FLOAT_VEC2", buffer: vb_line, stride: 8, offset: 0 }, // position
+            ],
+        });
         const sceneUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.sceneUniforms.buffer.byteLength });
         meshUniforms.values.mode = 0;
         const meshUniforms0 = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: meshUniforms.buffer });
@@ -78,7 +93,11 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const materialTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null });
         const highlightTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image: null });
         const gradientsTexture = glTexture(gl, data.gradientImageParams);
-        this.resources = { program, programZ, programDebug, sceneUniforms, meshUniforms0, meshUniforms1, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture } as const;
+        this.resources = {
+            program, programZ, programIntersect, programLine, programDebug,
+            transformFeedback, vb_line, vao_line,
+            sceneUniforms, meshUniforms0, meshUniforms1, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture
+        } as const;
     }
 
     update(state: DerivedRenderState) {
@@ -86,7 +105,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         const { renderContext, resources, sceneUniforms, projectedSizeSplitThreshold, data } = this;
         const { gl } = renderContext;
-        const { scene, localSpaceTranslation, highlights, points, terrain } = state;
+        const { scene, localSpaceTranslation, highlights, points, terrain, outlines } = state;
         const { values } = sceneUniforms;
 
         if (values.iblMipCount != renderContext.iblTextures.numMipMaps) {
@@ -145,6 +164,11 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 this.rootNode = undefined;
             }
             this.url = url;
+        }
+
+        if (renderContext.hasStateChanged({ outlines })) {
+            const { values } = sceneUniforms;
+            values.nearOutlineColor = outlines.nearClipping.color;
         }
 
         if (renderContext.hasStateChanged({ localSpaceTranslation })) {
@@ -260,7 +284,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
     }
 
-    render() {
+    render(state: DerivedRenderState) {
         const { resources, renderContext, rootNode, debug } = this;
         const { usePrepass, samplerSingle, samplerMip } = renderContext;
         const { program, programDebug, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
@@ -268,6 +292,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
             nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
+
             const { diffuse, specular } = iblTextures;
             glState(gl, {
                 program: program,
@@ -300,6 +325,21 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
+
+            if (state.outlines.nearClipping.enable) {
+                // render clipping outlines
+                glState(gl, {
+                    uniformBuffers: [cameraUniforms, sceneUniforms, null],
+                    depthTest: false,
+                    depthWriteMask: false,
+                    drawBuffers: ["COLOR_ATTACHMENT0"],
+                });
+                for (const node of nodes) {
+                    if (node.visibility != Visibility.none && node.intersectsPlane(state.viewFrustum.near)) {
+                        this.renderNodeClippingOutline(node);
+                    }
+                }
+            }
 
             if (debug) {
                 glState(gl, {
@@ -383,6 +423,41 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             }
         }
     }
+
+    renderNodeClippingOutline(node: OctreeNode) {
+        const { gl } = this.renderContext;
+        const { resources } = this;
+        const { programIntersect, programLine, transformFeedback, vb_line, vao_line } = resources;
+        const { renderedChildMask } = node;
+        if (renderedChildMask && node.uniforms) {
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, node.uniforms);
+            for (const mesh of node.meshes) {
+                if (mesh.numTriplets) {
+                    for (const drawRange of mesh.drawRanges) {
+                        if ((1 << drawRange.childIndex) & renderedChildMask) {
+                            const count = drawRange.count / 3;
+                            const first = drawRange.first / 3;
+                            console.assert(count * 2 <= this.maxLines);
+                            // find triangle intersections
+                            glState(gl, {
+                                program: programIntersect,
+                                vertexArrayObject: mesh.vaoTriplets,
+                            });
+                            glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line], count, first });
+
+                            // draw lines
+                            glState(gl, {
+                                program: programLine,
+                                vertexArrayObject: vao_line,
+                            });
+                            glDraw(gl, { kind: "arrays", mode: "LINES", count: count * 2, first: 0 });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 
     renderNodeDebug(node: OctreeNode) {
         const { renderContext } = this;

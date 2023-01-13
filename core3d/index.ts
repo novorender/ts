@@ -46,7 +46,7 @@ export async function run(canvas: HTMLCanvasElement) {
     let sceneId = "";
     let initPos: ReadonlyVec3 | undefined;
     // sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
-    // sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
     // sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim
     // sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
     // initPos = [298995.87220525084, 48.56500795571233, -6699553.125910083];
@@ -68,7 +68,7 @@ export async function run(canvas: HTMLCanvasElement) {
     ];
 
     // const testCube = createTestCube();
-    const testSphere = createTestSphere(1, 0);
+    // const testSphere = createTestSphere(1, 5);
 
     const controller = new OrbitController({ kind: "orbit" }, canvas);
     // const controller = new OrbitController({ kind: "orbit", pivotPoint: [298995.87220525084, 48.56500795571233, -6699553.125910083] }, canvas);
@@ -76,15 +76,17 @@ export async function run(canvas: HTMLCanvasElement) {
     state = modifyRenderState(state, {
         scene,
         background: { url: backgroundUrl, blur: 0.25 },
+        camera: { near: 10, far: 10000 },
         // camera: { near: 1, far: 10000, position: [298995.87220525084, 48.56500795571233, -6699553.125910083] },
-        grid: { enabled: true, origin: center },
-        // cube: { enabled: true, clipDepth: 1 },
+        // grid: { enabled: true, origin: center },
+        // cube: { enabled: true },
         // clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
+        outlines: { nearClipping: { enable: true } },
         // tonemapping: { mode: TonemappingMode.normal },
-        dynamic: {
-            // objects: gltfObjects,
-            objects: [testSphere],
-        }
+        // dynamic: {
+        //     objects: gltfObjects,
+        //     // objects: [testCube],
+        // }
     });
 
     controller.autoFitToScene(state, center);

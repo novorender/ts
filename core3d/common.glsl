@@ -7,6 +7,7 @@ struct CameraUniforms {
     mat3 localViewMatrixNormal;
     mat3 viewLocalMatrixNormal;
     vec2 viewSize;
+    float near; // near clipping plane distance
 };
 struct IBLTextures {
     samplerCube specular;
@@ -52,7 +53,7 @@ struct CubeVaryings {
 };
 struct CubeUniforms {
     mat4 modelLocalMatrix;
-    float clipDepth;
+    vec3 nearOutlineColor;
 };
 
 // grid
@@ -150,6 +151,8 @@ struct SceneUniforms {
     vec2 deviationRange;
     // terrain elevation
     vec2 elevationRange;
+    // outlines
+    vec3 nearOutlineColor;
 };
 struct NodeUniforms {
     mat4 modelLocalMatrix;
