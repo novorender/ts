@@ -398,7 +398,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     continue;
                 gl.bindVertexArray(prepass ? mesh.vaoPosOnly : mesh.vao);
                 gl.depthMask(writeZ);
-                const mode = mesh.materialType == MaterialType.elevation ? 3 : mesh.drawParams.mode == "POINTS" ? 1 : 0;
+                const mode = mesh.materialType == MaterialType.elevation ? 2 : mesh.drawParams.mode == "POINTS" ? 1 : 0;
                 if (meshState.mode != mode) {
                     meshState.mode = mode;
                     // TODO: use regular uniform instead.

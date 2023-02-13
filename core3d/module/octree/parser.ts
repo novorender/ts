@@ -476,7 +476,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
         const [beginTexture, endTexture] = groupMeshes[0].textureRange;
         let baseColorTexture: number | undefined;
         if (endTexture > beginTexture) {
-            console.assert(beginTexture + 3 == endTexture);
+            console.assert(beginTexture + 2 == endTexture);
             const textureRes = 0; // TODO: Adjust from device profile/resolution
             baseColorTexture = beginTexture + textureRes;
         }
