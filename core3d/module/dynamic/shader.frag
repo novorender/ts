@@ -220,7 +220,7 @@ void main() {
 
 #endif
 
-    // only write to pick buffers for opaque triangles
+    // only write to pick buffers for opaque triangles (for devices without OES_draw_buffers_indexed support)
     if(fragColor.a >= 0.99) {
         fragNormal = (camera.localViewMatrixNormal * normal).xy;
         fragLinearDepth = varyings.linearDepth;

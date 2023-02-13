@@ -86,6 +86,7 @@ export class NodeLoader {
         const url = new URL(node.path, node.context.downloader.baseUrl).toString();
         const { byteSize } = data;
         const loadMsg: LoadMessage = { kind: "load", id, version, url, byteSize, separatePositionsBuffer: false };
+        console.assert(byteSize != 0);
         const abortMsg: AbortMessage = { kind: "abort", id };
         const abort = () => { this.send(abortMsg); }
         node.download = { abort };

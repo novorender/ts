@@ -40,24 +40,15 @@ const float vertexDeviation = 0.;
 const uint vertexHighlight = 0U;
 #endif
 
-// TODO: Move gradient stuff into common chunk
-const float numGradients = 2.;
-const float deviationV = 0. / numGradients + .5 / numGradients;
-const float elevationV = 1. / numGradients + .5 / numGradients;
-
-vec4 getGradientColor(float position, float v, vec2 range) {
-    float u = (range[0] >= range[1]) ? 0. : (position - range[0]) / (range[1] - range[0]);
-    return texture(textures.gradients, vec2(u, v));
-}
-
 void main() {
-    vec4 posVS = camera.localViewMatrix * node.modelLocalMatrix * vertexPosition;
+    vec4 posLS = node.modelLocalMatrix * vertexPosition;
+    vec4 posVS = camera.localViewMatrix * posLS;
     gl_Position = camera.viewClipMatrix * posVS;
     vec4 color = vertexMaterial == 0xffU ? vec4(0) : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
 
     if(mesh.mode == meshModePoints) {
         if(scene.deviationMode != 0U) {
-            vec4 gradientColor = getGradientColor(vertexDeviation, deviationV, scene.deviationRange);
+            vec4 gradientColor = getGradientColor(textures.gradients, vertexDeviation, deviationV, scene.deviationRange);
             if(scene.deviationMode == 1U) {
                 if(gradientColor.a < 0.1)
                     return;
@@ -87,6 +78,7 @@ void main() {
     varyings.normalVS = camera.localViewMatrixNormal * vertexNormal;
     varyings.texCoord0 = vertexTexCoord0;
     varyings.linearDepth = -posVS.z;
+    varyings.elevation = posLS.y;
 #if defined(IOS_WORKAROUND)
     varyings.color = color;
     varyings.objectId = vec2(vertexObjectId & 0xffffU, vertexObjectId >> 16U) + 0.5;

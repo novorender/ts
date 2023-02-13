@@ -18,7 +18,7 @@
 - [x] **gltf/glb objects**
 - [x] clipping volumes
 - [x] clipping box rendering (using volumes)
-- [x] clipping outlines (only on cube, for now...)
+- [x] clipping outlines (not for dynamic objects, for now...)
 - [x] point clouds (with variable sized point discs)
 - [x] tonemapping (and debug shading)
 - [x] default ibl (instead of sun light)

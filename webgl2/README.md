@@ -4,6 +4,10 @@ This module provides a set of utility functions for the [webgl2 api](https://dev
 The main goal is to avoid common pitfalls and plain annoying boiler-plate aspects of the opengl API while retaining most of its functionality.
 An important sub-goal is to make good use ot typescript to maintain a productive editing experience, helping the developer discover the available functions and valid sets of parameters.
 
+Inspirations: 
+- https://github.com/regl-project/regl
+- https://github.com/greggman/twgl.js
+
 The module encourages more modern styles of GPU api, using immutable batch updates rather than piecemeal mutations and binding.
 Furthermore, some functionality is deliberately ignored where better options are available.
 For example, uniform buffers should be used instead of setting uniforms piecemeal and Vertex Array Objects should be used instead of binding vertex attributes one at a time.

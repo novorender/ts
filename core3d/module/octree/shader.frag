@@ -43,6 +43,8 @@ void main() {
     vec4 rgba;
     if(mesh.mode == meshModePoints) {
         rgba = baseColor;
+    } else if(mesh.mode == meshModeTerrain) {
+        rgba = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange);
     } else if(baseColor == vec4(0)) {
         rgba = texture(textures.base_color, varyings.texCoord0);
     } else {
@@ -76,6 +78,16 @@ void main() {
         rgba = colorTransform * rgba + colorTranslation;
     }
 
+    vec3 normalVS = varyings.normalVS;
+    if(dot(normalVS, normalVS) < .1) {
+        // compute geometric/flat normal from derivatives
+        vec3 axisX = dFdx(varyings.positionVS);
+        vec3 axisY = dFdy(varyings.positionVS);
+        normalVS = normalize(cross(axisX, axisY));
+    } else {
+        normalVS = normalize(normalVS);
+    }
+
     // we put discards here (late) to avoid problems with derivative functions
     if(mesh.mode == meshModePoints && distance(gl_FragCoord.xy, varyings.screenPos) > varyings.radius)
         discard;
@@ -87,7 +99,7 @@ void main() {
         discard;
 
     fragColor = rgba;
-    fragNormal = normalize(varyings.normalVS).xy;
+    fragNormal = normalVS.xy;
     fragLinearDepth = varyings.linearDepth;
     fragInfo = uvec2(objectId, 0);
 }

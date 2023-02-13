@@ -60,7 +60,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     url: string | undefined;
     rootNode: OctreeNode | undefined;
     version: string = "";
-    readonly projectedSizeSplitThreshold = 1 / 0.5; // / (settings.quality.detail.value * deviceProfile.detailBias); // baseline node size split threshold = 50% of view height
+    readonly projectedSizeSplitThreshold = 1; // / (settings.quality.detail.value * deviceProfile.detailBias); // baseline node size split threshold = 50% of view height
 
     constructor(readonly renderContext: RenderContext, readonly data: OctreeModule) {
         this.sceneUniforms = createUniformsProxy(data.sceneUniforms);
@@ -88,6 +88,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const meshUniforms0 = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: meshUniforms.buffer });
         meshUniforms.values.mode = 1;
         const meshUniforms1 = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: meshUniforms.buffer });
+        meshUniforms.values.mode = 2;
+        const meshUniforms2 = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: meshUniforms.buffer });
         const samplerNearest = glSampler(gl, { minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         const defaultBaseColorTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array([255, 255, 255, 255]) });
         const materialTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null });
@@ -96,7 +98,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         this.resources = {
             program, programZ, programIntersect, programLine, programDebug,
             transformFeedback, vb_line, vao_line,
-            sceneUniforms, meshUniforms0, meshUniforms1, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture
+            sceneUniforms, meshUniforms0, meshUniforms1, meshUniforms2, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture
         } as const;
     }
 
@@ -396,10 +398,11 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     continue;
                 gl.bindVertexArray(prepass ? mesh.vaoPosOnly : mesh.vao);
                 gl.depthMask(writeZ);
-                const mode = mesh.drawParams.mode == "POINTS" ? 1 : 0;
+                const mode = mesh.materialType == MaterialType.elevation ? 3 : mesh.drawParams.mode == "POINTS" ? 1 : 0;
                 if (meshState.mode != mode) {
                     meshState.mode = mode;
-                    gl.bindBufferBase(gl.UNIFORM_BUFFER, 3, mode == 0 ? resources.meshUniforms0 : resources.meshUniforms1);
+                    // TODO: use regular uniform instead.
+                    gl.bindBufferBase(gl.UNIFORM_BUFFER, 3, mode == 0 ? resources.meshUniforms0 : mode == 1 ? resources.meshUniforms1 : resources.meshUniforms2);
                 }
                 const doubleSided = mesh.materialType != MaterialType.opaque;
                 if (meshState.doubleSided != doubleSided) {

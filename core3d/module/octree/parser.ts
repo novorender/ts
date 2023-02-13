@@ -275,8 +275,7 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
             const vertexRange = getRange(subMesh.vertices, i);
             const indexRange = getRange(subMesh.indices, i);
             const textureRange = getRange(subMesh.textures, i);
-            if (materialType != MaterialType.elevation) // filter by material type (for now)
-                yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, vertexRange, indexRange, textureRange };
+            yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, vertexRange, indexRange, textureRange };
         }
     }
 }
@@ -370,9 +369,8 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
             const idxCnt = sm.indexRange[1] - sm.indexRange[0];
             numVertices += vtxCnt;
             numIndices += idxCnt;
-            numTriplets += (idxCnt > 0 ? idxCnt : vtxCnt) / 3;
+            numTriplets += Math.round((idxCnt > 0 ? idxCnt : vtxCnt) / 3);
         }
-        console.assert(Number.isInteger(numTriplets));
         const vertexBuffer = new ArrayBuffer(numVertices * vertexStride);
         const tripletBuffer = primitiveType >= PrimitiveType.triangles ? new Int16Array(new ArrayBuffer(numTriplets * 3 * tripletStride)) : undefined;
         const positionBuffer = separatePositionBuffer ? new ArrayBuffer(numVertices * positionStride) : undefined;
@@ -472,7 +470,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
         }
         console.assert(vertexOffset == numVertices);
         console.assert(indexOffset == numIndices);
-        console.assert(tripletOffset == tripletBuffer?.length ?? 0);
+        console.assert(tripletOffset == (tripletBuffer?.length ?? 0));
         const indices = indexBuffer ?? numVertices;
 
         const [beginTexture, endTexture] = groupMeshes[0].textureRange;

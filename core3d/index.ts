@@ -45,18 +45,34 @@ export async function run(canvas: HTMLCanvasElement) {
     let prevState = state;
     let sceneId = "";
     let initPos: ReadonlyVec3 | undefined;
-    // sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos
-    sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
-    // sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim
+    // sceneId = "933dae7aaad34a35897b59d4ec09c6d7"; // condos_old
+    sceneId = "18f56c98c1e748feb8369a6d32fde9ef"; // condos_new
+    // sceneId = "0f762c06a61f4f1c8d3b7cf1b091515e"; // hospital
+    // sceneId = "66e8682f73d72066c5daa9f60856d3ce"; // bim_old
+    // sceneId = "637dc835036d4bb399b168d386a4b5fa"; // bim_new
     // sceneId = "a8bcb9521ef04db6822d1d93382f9b71"; // banenor
     // initPos = [298995.87220525084, 48.56500795571233, -6699553.125910083];
     // sceneId = "6ecdecf66a164c4dbd4dd2c40f1236a7"; // tunnel
     // initPos = [94483.4765625, 73.49801635742188, -1839260.25];
+    // sceneId = "d13f81cc86fe46e89985b0f39e6407e2"; // untextured terrain
     const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     const backgroundUrl = new URL("/assets/env/lake/", scriptUrl).toString();
-    const sceneUrl = new URL(`/assets/octrees/${sceneId}_/`, scriptUrl).toString();
+    const sceneUrl = new URL(`/assets/octrees/${sceneId}/`, scriptUrl).toString();
     const scene = sceneId ? await downloadScene(sceneUrl) : undefined;
     const center = initPos ?? scene?.config.boundingSphere.center ?? vec3.create();
+
+    // const terrain = {
+    //     elevationGradient: {
+    //         knots: [
+    //             { position: -150, color: [1, 0, 0] },
+    //             { position: -100, color: [0, 1, 0] },
+    //             { position: -50, color: [0, 0, 1] },
+    //             { position: -50, color: [0, 0, 0] },
+    //             { position: 500, color: [1, 1, 1] },
+    //         ],
+    //     },
+    //     asBackground: false,
+    // } as const;
 
     // const gltfObjects = await loadGLTF(new URL("/assets/gltf/logo.glb", scriptUrl));
     // const gltfObjects = await loadGLTF(new URL("/assets/gltf/boxtextured.glb", scriptUrl));
@@ -71,17 +87,17 @@ export async function run(canvas: HTMLCanvasElement) {
     // const testSphere = createTestSphere(1, 5);
 
     const controller = new OrbitController({ kind: "orbit" }, canvas);
-    // const controller = new OrbitController({ kind: "orbit", pivotPoint: [298995.87220525084, 48.56500795571233, -6699553.125910083] }, canvas);
 
     state = modifyRenderState(state, {
         scene,
         background: { url: backgroundUrl, blur: 0.25 },
-        camera: { near: 10, far: 10000 },
+        camera: { near: 1, far: 1000 },
+        // terrain,
         // camera: { near: 1, far: 10000, position: [298995.87220525084, 48.56500795571233, -6699553.125910083] },
         // grid: { enabled: true, origin: center },
         // cube: { enabled: true },
         // clipping: { enabled: true, draw: true, mode: ClippingMode.intersection, planes },
-        outlines: { nearClipping: { enable: true } },
+        // outlines: { nearClipping: { enable: true, } },
         // tonemapping: { mode: TonemappingMode.normal },
         // dynamic: {
         //     objects: gltfObjects,

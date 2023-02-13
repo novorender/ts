@@ -105,8 +105,6 @@ struct InstanceUniforms {
 struct DynamicTextures {
     sampler2D lut_ggx;
     IBLTextures ibl;
-    // samplerCube ibl_diffuse;
-    // samplerCube ibl_specular;
     sampler2D base_color;
     sampler2D metallic_roughness;
     sampler2D normal;
@@ -125,7 +123,7 @@ struct OctreeVaryings {
     vec2 screenPos;
     float radius;
     float deviation;
-    float intensity;
+    float elevation;
 #ifdef IOS_WORKAROUND
     vec4 color;
     vec2 objectId; // older (<A15) IOS and Ipads crash if we use flat/uint here, so we use two floats instead
@@ -164,6 +162,7 @@ struct NodeUniforms {
 };
 const uint meshModeTriangles = 0U;
 const uint meshModePoints = 1U;
+const uint meshModeTerrain = 2U;
 struct MeshUniforms {
     uint mode; // MeshMode
 };
@@ -226,4 +225,14 @@ vec3 linearTosRGB(vec3 color) {
 // sRGB to linear approximation (http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html)
 vec3 sRGBToLinear(vec3 srgbIn) {
     return vec3(pow(srgbIn.xyz, vec3(GAMMA)));
+}
+
+// gradients
+const float numGradients = 2.;
+const float deviationV = 0. / numGradients + .5 / numGradients;
+const float elevationV = 1. / numGradients + .5 / numGradients;
+
+vec4 getGradientColor(sampler2D gradientTexture, float position, float v, vec2 range) {
+    float u = (range[0] >= range[1]) ? 0. : (position - range[0]) / (range[1] - range[0]);
+    return texture(gradientTexture, vec2(u, v));
 }
