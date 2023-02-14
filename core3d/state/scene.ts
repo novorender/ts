@@ -48,6 +48,7 @@ export interface OctreeSceneConfig {
     readonly kind: "octree";
     readonly id: string;
     readonly version: string;
+    readonly center: ReadonlyVec3;
     readonly offset: ReadonlyVec3;
     readonly scale: number;
     readonly boundingSphere: BoundingSphere; // bounding sphere in model space
