@@ -4,6 +4,7 @@ import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, Un
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat3, mat4, vec3 } from "gl-matrix";
+import { BufferFlags } from "@novorender/core3d/buffers";
 
 // TODO: Create (programatically) and render cube
 // TODO: Create (from gltf)
@@ -311,7 +312,7 @@ class MaterialAsset {
             program,
             cullEnable: data.doubleSided ? false : true,
             ...(data.alphaMode == "BLEND" ? blend : {}),
-            drawBuffers: data.alphaMode == "BLEND" ? ["COLOR_ATTACHMENT0"] : ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
+            drawBuffers: context.drawBuffers(data.alphaMode == "BLEND" ? BufferFlags.color : BufferFlags.all), // for devices without OES_draw_buffers_indexed support
         };
         const uniformsDesc = {
             baseColorFactor: "vec4",

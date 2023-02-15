@@ -33,6 +33,7 @@ export interface Matrices {
 export interface RenderStateOutput {
     readonly width: number;
     readonly height: number;
+    readonly renderPickBuffers: boolean;
 }
 
 export interface RenderStateBackground {

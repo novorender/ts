@@ -13,9 +13,8 @@ layout(std140) uniform Cube {
 in CubeVaryings varyings;
 
 layout(location = 0) out vec4 fragColor;
-layout(location = 1) out vec2 fragNormal;
-layout(location = 2) out float fragLinearDepth;
-layout(location = 3) out uvec2 fragInfo;
+layout(location = 1) out float fragLinearDepth;
+layout(location = 2) out uvec2 fragInfo;
 
 bool clip(vec3 point) {
     float s = clipping.mode == modeIntersection ? -1. : 1.;
@@ -30,7 +29,6 @@ void main() {
     if(varyings.linearDepth < camera.near || clip(varyings.posVS))
         discard;
     fragColor = vec4(gl_FrontFacing ? varyings.color : vec3(.25), 1);
-    fragNormal = normalize(varyings.normal).xy;
     fragLinearDepth = varyings.linearDepth;
-    fragInfo = uvec2(cubeId, 0);
+    fragInfo = uvec2(cubeId, packNormal(normalize(varyings.normal).xy));
 }

@@ -83,7 +83,7 @@ class ClippingModuleContext implements RenderModuleContext {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],
-                drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
+                drawBuffers: context.drawBuffers(),
                 depthTest: true,
                 // depthWriteMask: true,
                 blendEnable: true,

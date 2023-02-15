@@ -46,7 +46,7 @@ void main() {
             break;
         }
         case tonemapModeNormal: {
-            vec2 xy = texture(textures.normal, varyings.uv).xy;
+            vec2 xy = unpackNormal(texture(textures.info, varyings.uv).y);
             if(any(isnan(xy))) {
                 color.rgb = vec3(0);
             } else {
@@ -80,7 +80,7 @@ void main() {
             break;
         }
         case tonemapModeDeviation: {
-            float deviation = unpackHalf2x16(texture(textures.info, varyings.uv).y).x;
+            float deviation = unpackDeviation(texture(textures.info, varyings.uv).y);
             color.rgb = deviation > 0. ? vec3(0, deviation / tonemapMaxDeviation, 0) : vec3(-deviation / tonemapMaxDeviation, 0, 0);
             break;
         }

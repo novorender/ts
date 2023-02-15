@@ -1,5 +1,20 @@
 import { glBuffer, glFrameBuffer, glTexture, glInvalidateFrameBuffer, glReadPixels, glDelete } from "webgl2";
 
+export const enum BufferFlags {
+    color = 0x01,
+    linearDepth = 0x02,
+    info = 0x04,
+    depth = 0x08,
+    all = color | linearDepth | info | depth,
+};
+
+/*
+info buffer layout
+  object_id: u32
+  normal: 2 x i8
+  deviation: f16
+*/
+
 export class RenderBuffers {
     readBuffersNeedUpdate = true;
     readonly resources;
@@ -10,46 +25,45 @@ export class RenderBuffers {
     } | undefined;
 
     constructor(readonly gl: WebGL2RenderingContext, readonly width: number, readonly height: number) {
-        const color = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "RGBA16F", type: "HALF_FLOAT", image: null });
-        const depth = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "DEPTH_COMPONENT32F", type: "FLOAT", image: null });
-        const normal = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "RG16F", type: "HALF_FLOAT", image: null }); // normalized byte instead?
+        // const color = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "RGBA16F", type: "HALF_FLOAT", image: null });
+        const color = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "R11F_G11F_B10F", type: "HALF_FLOAT", image: null });
         const linearDepth = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "R32F", type: "FLOAT", image: null });
         const info = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "RG32UI", type: "UNSIGNED_INT", image: null });
+        const depth = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "DEPTH_COMPONENT32F", type: "FLOAT", image: null });
         const frameBuffer = glFrameBuffer(gl, {
             color: [
                 { kind: "DRAW_FRAMEBUFFER", texture: color },
-                { kind: "DRAW_FRAMEBUFFER", texture: normal },
                 { kind: "DRAW_FRAMEBUFFER", texture: linearDepth },
                 { kind: "DRAW_FRAMEBUFFER", texture: info },
             ],
             depth: { kind: "DRAW_FRAMEBUFFER", texture: depth },
         });
-        const readNormal = glBuffer(gl, { kind: "PIXEL_PACK_BUFFER", size: width * height * 4, usage: "STREAM_READ" });
         const readLinearDepth = glBuffer(gl, { kind: "PIXEL_PACK_BUFFER", size: width * height * 4, usage: "STREAM_READ" });
         const readInfo = glBuffer(gl, { kind: "PIXEL_PACK_BUFFER", size: width * height * 8, usage: "STREAM_READ" });
-        this.resources = { color, depth, normal, linearDepth, info, frameBuffer, readNormal, readLinearDepth, readInfo } as const;
+        this.resources = { color, depth, linearDepth, info, frameBuffer, readLinearDepth, readInfo } as const;
         this.pick = {
-            normals: new Uint16Array(width * height * 2),
             depths: new Float32Array(width * height * 1),
             infos: new Uint32Array(width * height * 2),
         } as const;
     }
 
-    invalidate() {
+    invalidate(buffers: BufferFlags) {
         const { gl, resources } = this;
-        // invalidate color and depth buffers only (we may need pick buffers for picking)
-        glInvalidateFrameBuffer(gl, { kind: "DRAW_FRAMEBUFFER", frameBuffer: resources.frameBuffer, color: [true, false, false, false], depth: true });
+        var color = (buffers & BufferFlags.color) != 0;
+        var linearDepth = (buffers & BufferFlags.linearDepth) != 0;
+        var info = (buffers & BufferFlags.info) != 0;
+        var depth = (buffers & BufferFlags.depth) != 0;
+        glInvalidateFrameBuffer(gl, { kind: "DRAW_FRAMEBUFFER", frameBuffer: resources.frameBuffer, color: [color, linearDepth, info], depth });
     }
 
     // copy framebuffer into read buffers
     private read() {
         const { gl, width, height, resources } = this;
-        const { frameBuffer, readLinearDepth, readNormal, readInfo } = resources;
+        const { frameBuffer, readLinearDepth, readInfo } = resources;
         glReadPixels(gl, {
             width, height, frameBuffer, buffers: [
-                { attachment: "COLOR_ATTACHMENT1", buffer: readNormal, format: "RG", type: "HALF_FLOAT" },
-                { attachment: "COLOR_ATTACHMENT2", buffer: readLinearDepth, format: "RED", type: "FLOAT" },
-                { attachment: "COLOR_ATTACHMENT3", buffer: readInfo, format: "RG_INTEGER", type: "UNSIGNED_INT" },
+                { attachment: "COLOR_ATTACHMENT1", buffer: readLinearDepth, format: "RED", type: "FLOAT" },
+                { attachment: "COLOR_ATTACHMENT2", buffer: readInfo, format: "RG_INTEGER", type: "UNSIGNED_INT" },
             ]
         });
     }
@@ -93,8 +107,6 @@ export class RenderBuffers {
             } else if (status != gl.TIMEOUT_EXPIRED) {
                 // we must copy read buffers into typed arrays in one go, or get annoying gl pipeline stalled warning on chrome
                 // this means we allocate more memory, but this also makes subsequent picks faster.
-                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readNormal);
-                gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, pick.normals);
                 gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readLinearDepth);
                 gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, pick.depths);
                 gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readInfo);

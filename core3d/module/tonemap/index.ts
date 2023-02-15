@@ -24,7 +24,7 @@ class TonemapModuleContext implements RenderModuleContext {
         const { gl, commonChunk } = context;
         this.uniforms = createUniformsProxy(data.uniforms);
         const uniformBufferBlocks = ["Tonemapping"];
-        const textureNames = ["color", "normal", "depth", "info", "zbuffer"] as const;
+        const textureNames = ["color", "depth", "info", "zbuffer"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
         const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
         const sampler = glSampler(gl, { minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
@@ -58,7 +58,6 @@ class TonemapModuleContext implements RenderModuleContext {
             uniformBuffers: [uniforms],
             textures: [
                 { kind: "TEXTURE_2D", texture: resources.color, sampler },
-                { kind: "TEXTURE_2D", texture: resources.normal, sampler },
                 { kind: "TEXTURE_2D", texture: resources.linearDepth, sampler },
                 { kind: "TEXTURE_2D", texture: resources.info, sampler },
                 { kind: "TEXTURE_2D", texture: resources.depth, sampler },

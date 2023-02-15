@@ -9,9 +9,8 @@ layout(std140) uniform Clipping {
 in ClippingVaryings varyings;
 
 layout(location = 0) out vec4 fragColor;
-layout(location = 1) out vec2 fragNormal;
-layout(location = 2) out float fragLinearDepth;
-layout(location = 3) out uvec2 fragInfo;
+layout(location = 1) out float fragLinearDepth;
+layout(location = 2) out uvec2 fragInfo;
 
 void main() {
     vec3 dir = normalize(varyings.dirVS);
@@ -52,7 +51,6 @@ void main() {
     if(rgba.a == 0.)
         discard;
     fragColor = rgba;
-    fragNormal = clipping.planes[idx[i]].xy;
     fragLinearDepth = -posVS.z;
-    fragInfo = uvec2(objectId, 0);
+    fragInfo = uvec2(objectId, packNormal(clipping.planes[idx[i]].xy));
 }

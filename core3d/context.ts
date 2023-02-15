@@ -1,8 +1,8 @@
 import { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, CoordSpace, createDefaultModules } from "./";
-import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformsProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed } from "webgl2";
+import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformsProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
-import { RenderBuffers } from "./buffers";
+import { BufferFlags, RenderBuffers } from "./buffers";
 import { WasmInstance } from "./wasm";
 import { mat3, mat4, ReadonlyVec3, vec3, vec4 } from "gl-matrix";
 import commonShaderCore from "./common.glsl";
@@ -37,6 +37,7 @@ export class RenderContext {
     // shared mutable state
     prevState: DerivedRenderState | undefined;
     changed = true; // flag to force a re-render when internal render module state has changed, e.g. on download complete.
+    drawBuffersMask: BufferFlags = BufferFlags.color; // reflects output.renderPickBuffers
     buffers: RenderBuffers = undefined!; // output render buffers. will be set on first render as part of resize.
     iblTextures: { // these are changed by the background module, once download is complete
         readonly diffuse: WebGLTexture; // irradiance cubemap
@@ -44,6 +45,15 @@ export class RenderContext {
         readonly numMipMaps: number; // # of radiance/specular mip map levels.
     };
     clippingUniforms: WebGLBuffer | undefined;
+
+    drawBuffers(buffers: BufferFlags = (BufferFlags.all)): readonly (ColorAttachment | "NONE")[] {
+        const activeBuffers = buffers & this.drawBuffersMask;
+        return [
+            activeBuffers & BufferFlags.color ? "COLOR_ATTACHMENT0" : "NONE",
+            activeBuffers & BufferFlags.linearDepth ? "COLOR_ATTACHMENT1" : "NONE",
+            activeBuffers & BufferFlags.info ? "COLOR_ATTACHMENT2" : "NONE",
+        ] as const;
+    }
 
     constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TexImageSource, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
         // init gl context
@@ -194,16 +204,19 @@ export class RenderContext {
 
         // handle resizes
         let resized = false;
-        if (state.output !== prevState?.output) {
-            const { width, height } = state.output;
+        const { output } = state;
+        if (this.hasStateChanged({ output })) {
+            const { width, height, renderPickBuffers } = output;
             console.assert(Number.isInteger(width) && Number.isInteger(height));
             canvas.width = width;
             canvas.height = height;
             resized = true;
             this.changed = true;
+            this.drawBuffersMask = renderPickBuffers ? BufferFlags.all : BufferFlags.color;
             this.buffers?.dispose();
             this.buffers = new RenderBuffers(gl, width, height);
         }
+        this.buffers.invalidate(this.drawBuffersMask);
         this.buffers.readBuffersNeedUpdate = true;
 
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
@@ -261,7 +274,7 @@ export class RenderContext {
                 glState(gl, {
                     viewport: { width, height },
                     frameBuffer: this.buffers.resources.frameBuffer,
-                    drawBuffers: ["COLOR_ATTACHMENT0"],
+                    drawBuffers: this.drawBuffers(BufferFlags.color),
                 })
                 module.render(derivedState);
                 // reset gl state
@@ -269,7 +282,8 @@ export class RenderContext {
             }
         }
 
-        this.buffers.invalidate();
+        // invalidate color and depth buffers only (we may need pick buffers for picking)
+        this.buffers.invalidate(BufferFlags.color | BufferFlags.depth);
         this.prevState = derivedState;
 
         const endTime = performance.now();
@@ -306,7 +320,7 @@ export class RenderContext {
         const px = Math.round(x / cssWidth * width);
         const py = Math.round((1 - (y + 0.5) / cssHeight) * height);
         console.assert(px >= 0 && py >= 0 && px < width && py < height);
-        const { normals, depths, infos } = await buffers.pickBuffers();
+        const { depths, infos } = await buffers.pickBuffers();
 
         // fetch sample rectangle from read buffers
         const r = Math.ceil(sampleDiscRadius);
@@ -330,12 +344,12 @@ export class RenderContext {
                 const buffOffs = ix + iy * width;
                 const objectId = infos[buffOffs * 2];
                 if (objectId != 0xffffffff) {
-                    const nx = wasm.float32(normals[buffOffs * 2 + 0]);
-                    const ny = wasm.float32(normals[buffOffs * 2 + 1]);
                     const depth = depths[buffOffs];
-                    const [deviation16, intensity16] = new Uint16Array(infos.buffer, buffOffs * 8, 2);
+                    const [deviation16] = new Uint16Array(infos.buffer, buffOffs * 8 + 6, 1);
+                    const [nx8, ny8] = new Int8Array(infos.buffer, buffOffs * 8 + 4, 2);
+                    const nx = nx8 / 127;
+                    const ny = ny8 / 127;
                     const deviation = wasm.float32(deviation16);
-                    const intensity = wasm.float32(intensity16);
 
                     // compute clip space x,y coords
                     const xCS = ((ix + 0.5) / width) * 2 - 1;
@@ -352,7 +366,7 @@ export class RenderContext {
                     const normal = vec3.transformMat3(vec3.create(), normalVS, viewWorldMatrixNormal);
                     vec3.normalize(normal, normal);
 
-                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, deviation, intensity } as const;
+                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, deviation } as const;
                     samples.push(sample);
                 }
             }
@@ -370,5 +384,4 @@ export interface PickSample {
     readonly normal: ReadonlyVec3;
     readonly objectId: number;
     readonly deviation: number;
-    readonly intensity: number;
 };

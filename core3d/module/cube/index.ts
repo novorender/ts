@@ -7,6 +7,7 @@ import fragmentShader from "./shader.frag";
 import line_vs from "./line.vert";
 import line_fs from "./line.frag";
 import intersect_vs from "./intersect.vert";
+import { BufferFlags } from "@novorender/core3d/buffers";
 
 export class CubeModule implements RenderModule {
     readonly uniforms = {
@@ -111,7 +112,7 @@ class CubeModuleContext implements RenderModuleContext {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, clippingUniforms, uniforms],
-                drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
+                drawBuffers: context.drawBuffers(),
                 depthTest: true,
                 cullEnable: false,
                 vertexArrayObject: vao,
@@ -130,7 +131,7 @@ class CubeModuleContext implements RenderModuleContext {
                 // render intersection lines
                 glState(gl, {
                     program: program_line,
-                    drawBuffers: ["COLOR_ATTACHMENT0"],
+                    drawBuffers: context.drawBuffers(BufferFlags.color),
                     depthTest: true,
                     vertexArrayObject: vao_line,
                 });

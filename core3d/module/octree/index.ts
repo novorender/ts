@@ -16,6 +16,7 @@ import line_fs from "./line.frag";
 import intersect_vs from "./intersect.vert";
 import vertexShaderDebug from "./shader_debug.vert";
 import fragmentShaderDebug from "./shader_debug.frag";
+import { BufferFlags } from "@novorender/core3d/buffers";
 
 export class OctreeModule implements RenderModule {
     readonly sceneUniforms = {
@@ -311,8 +312,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
                     { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
                 ],
-                drawBuffers: ["COLOR_ATTACHMENT0", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
-                // drawBuffers: ["COLOR_ATTACHMENT0"],
+                drawBuffers: renderContext.drawBuffers(BufferFlags.all),
+                // drawBuffers: renderContext.drawBuffers(BufferFlags.color),
             });
             gl.activeTexture(gl.TEXTURE0);
             // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
@@ -334,7 +335,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     uniformBuffers: [cameraUniforms, sceneUniforms, null],
                     depthTest: false,
                     depthWriteMask: false,
-                    drawBuffers: ["COLOR_ATTACHMENT0"],
+                    drawBuffers: renderContext.drawBuffers(BufferFlags.color),
                 });
                 for (const node of nodes) {
                     if (node.visibility != Visibility.none && node.intersectsPlane(state.viewFrustum.near)) {
@@ -355,7 +356,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     blendSrcRGB: "CONSTANT_ALPHA",
                     blendDstRGB: "ONE_MINUS_CONSTANT_ALPHA",
                     blendColor: [0, 0, 0, .25],
-                    drawBuffers: ["COLOR_ATTACHMENT0"],
+                    drawBuffers: renderContext.drawBuffers(BufferFlags.color),
                 });
                 for (const node of nodes) {
                     this.renderNodeDebug(node);

@@ -1,10 +1,9 @@
-import { mat4, ReadonlyMat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
-import { createUniformsProxy, glDraw, DrawParams, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glState, glBuffer, glUpdateBuffer } from "webgl2";
+import { mat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
+import { createUniformsProxy, glBuffer, glUpdateBuffer } from "webgl2";
 import { CoordSpace, DerivedRenderState, RenderContext, RenderStateHighlightGroup } from "core3d";
-import { AbortableDownload, Downloader } from "./download";
+import { Downloader } from "./download";
 import { createMeshes, deleteMesh, Mesh, meshPrimitiveCount, updateMeshHighlightGroups } from "./mesh";
-import { NodeData, parseNode } from "./parser";
-import { MaterialType } from "./schema";
+import { NodeData } from "./parser";
 import { NodeLoader } from "./loader";
 
 export const enum Visibility {

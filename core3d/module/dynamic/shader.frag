@@ -15,9 +15,8 @@ uniform DynamicTextures textures;
 in DynamicVaryings varyings;
 
 layout(location = 0) out vec4 fragColor;
-layout(location = 1) out vec2 fragNormal;
-layout(location = 2) out float fragLinearDepth;
-layout(location = 3) out uvec2 fragInfo;
+layout(location = 1) out float fragLinearDepth;
+layout(location = 2) out uvec2 fragInfo;
 
 float clampedDot(vec3 x, vec3 y) {
     return clamp(dot(x, y), 0.0, 1.0);
@@ -222,8 +221,7 @@ void main() {
 
     // only write to pick buffers for opaque triangles (for devices without OES_draw_buffers_indexed support)
     if(fragColor.a >= 0.99) {
-        fragNormal = (camera.localViewMatrixNormal * normal).xy;
         fragLinearDepth = varyings.linearDepth;
-        fragInfo = uvec2(instance.objectId, 0);
+        fragInfo = uvec2(instance.objectId, packNormal((camera.localViewMatrixNormal * normal).xy));
     }
 }

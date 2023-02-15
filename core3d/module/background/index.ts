@@ -4,6 +4,7 @@ import { RenderModuleContext, RenderModule } from "..";
 import { createUniformsProxy, glClear, glProgram, glTexture, glDraw, glState, TextureParams, glBuffer, glDelete, UniformTypes, TextureParamsCubeUncompressed, TextureParamsCubeUncompressedMipMapped } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
+import { BufferFlags } from "@novorender/core3d/buffers";
 
 export class BackgroundModule implements RenderModule {
     private abortController: AbortController | undefined;
@@ -109,37 +110,42 @@ class BackgroundModuleContext implements RenderModuleContext {
     render(state: DerivedRenderState) {
         const { context, resources, skybox } = this;
         const { program, uniforms } = resources;
-        const { gl, cameraUniforms, samplerSingle, samplerMip } = context;
+        const { gl, cameraUniforms, samplerSingle, samplerMip, drawBuffersMask } = context;
 
         glState(gl, {
-            drawBuffers: ["NONE", "COLOR_ATTACHMENT1", "COLOR_ATTACHMENT2", "COLOR_ATTACHMENT3"],
+            drawBuffers: context.drawBuffers(BufferFlags.linearDepth | BufferFlags.info),
         });
         if (!context.usePrepass) {
             glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
         }
-        glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.NaN, Number.NaN, 0, 0] });
-        glClear(gl, { kind: "COLOR", drawBuffer: 2, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
-        glClear(gl, { kind: "COLOR", drawBuffer: 3, type: "Uint", color: [0xffffffff, 0xffffffff, 0, 0] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
+        if (drawBuffersMask & BufferFlags.linearDepth) {
+            glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
+        }
+        if (drawBuffersMask & BufferFlags.info) {
+            glClear(gl, { kind: "COLOR", drawBuffer: 2, type: "Uint", color: [0xffffffff, 0x0000ffff, 0, 0] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
+        }
+
         glState(gl, {
-            drawBuffers: ["COLOR_ATTACHMENT0"],
+            drawBuffers: context.drawBuffers(BufferFlags.color),
         });
 
-        if (state.background.color) {
-            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
-        } else {
-            const { specular } = context.iblTextures;
-            // const { textureUniformLocations } = this;
-            glState(gl, {
-                program,
-                uniformBuffers: [cameraUniforms, uniforms],
-                textures: [
-                    { kind: "TEXTURE_CUBE_MAP", texture: skybox, sampler: samplerSingle },
-                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
-                ],
-                depthTest: false,
-                depthWriteMask: false,
-            });
-            glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
+        if (drawBuffersMask & BufferFlags.color) {
+            if (state.background.color) {
+                glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
+            } else {
+                const { specular } = context.iblTextures;
+                glState(gl, {
+                    program,
+                    uniformBuffers: [cameraUniforms, uniforms],
+                    textures: [
+                        { kind: "TEXTURE_CUBE_MAP", texture: skybox, sampler: samplerSingle },
+                        { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
+                    ],
+                    depthTest: false,
+                    depthWriteMask: false,
+                });
+                glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
+            }
         }
     }
 

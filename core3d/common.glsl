@@ -201,7 +201,6 @@ struct TonemappingUniforms {
 };
 struct TonemappingTextures {
     sampler2D color;
-    sampler2D normal;
     sampler2D depth;
     usampler2D info;
     sampler2D zbuffer;
@@ -235,4 +234,30 @@ const float elevationV = 1. / numGradients + .5 / numGradients;
 vec4 getGradientColor(sampler2D gradientTexture, float position, float v, vec2 range) {
     float u = (range[0] >= range[1]) ? 0. : (position - range[0]) / (range[1] - range[0]);
     return texture(gradientTexture, vec2(u, v));
+}
+
+// packing
+uint packNormal(vec2 normal) {
+    uvec2 nu = uvec2(clamp(normal, -1., 1.) * 127.);
+    uint n = nu.x & 0xffU | (nu.y & 0xffU) << 8;
+    return n;
+}
+
+uint packNormalAndDeviation(vec2 normal, float deviation) {
+    uvec2 nu = uvec2(clamp(normal, -1., 1.) * 127.);
+    uint n = nu.x & 0xffU | (nu.y & 0xffU) << 8;
+    uint d = packHalf2x16(vec2(0, deviation));
+    return n | d;
+}
+
+vec2 unpackNormal(uint normalAndDeviation) {
+    uint xui = normalAndDeviation >> 0U & 0xffU;
+    uint yui = normalAndDeviation >> 8U & 0xffU;
+    float nx = float(xui & 0x7fU) / 127. * ((xui & 0x80U) == 0U ? 1. : -1.);
+    float ny = float(yui & 0x7fU) / 127. * ((yui & 0x80U) == 0U ? 1. : -1.);
+    return vec2(nx, ny);
+}
+
+float unpackDeviation(uint normalAndDeviation) {
+    return unpackHalf2x16(normalAndDeviation).y;
 }

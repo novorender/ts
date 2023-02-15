@@ -22,9 +22,8 @@ flat in OctreeVaryingsFlat varyingsFlat;
 #endif
 
 layout(location = 0) out vec4 fragColor;
-layout(location = 1) out vec2 fragNormal;
-layout(location = 2) out float fragLinearDepth;
-layout(location = 3) out uvec2 fragInfo;
+layout(location = 1) out float fragLinearDepth;
+layout(location = 2) out uvec2 fragInfo;
 
 void main() {
     vec4 baseColor;
@@ -99,7 +98,6 @@ void main() {
         discard;
 
     fragColor = rgba;
-    fragNormal = normalVS.xy;
     fragLinearDepth = varyings.linearDepth;
-    fragInfo = uvec2(objectId, 0);
+    fragInfo = uvec2(objectId, packNormal(normalVS.xy));
 }
