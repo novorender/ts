@@ -96,5 +96,5 @@ void main() {
 
     fragColor = rgba;
     fragLinearDepth = varyings.linearDepth;
-    fragInfo = uvec2(objectId, packNormal(normalVS.xy));
+    fragInfo = uvec2(objectId, packNormalAndDeviation(normalVS.xy, varyings.deviation));
 }
