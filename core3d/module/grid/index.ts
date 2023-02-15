@@ -62,13 +62,17 @@ class GridModuleContext implements RenderModuleContext {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],
-                depthTest: true,
-                depthWriteMask: false,
-                blendEnable: true,
-                blendSrcRGB: "SRC_ALPHA",
-                blendDstRGB: "ONE_MINUS_SRC_ALPHA",
-                blendSrcAlpha: "ZERO",
-                blendDstAlpha: "ONE",
+                depth: {
+                    test: true,
+                    writeMask: false,
+                },
+                blend: {
+                    enable: true,
+                    srcRGB: "SRC_ALPHA",
+                    dstRGB: "ONE_MINUS_SRC_ALPHA",
+                    srcAlpha: "ZERO",
+                    dstAlpha: "ONE",
+                },
             });
             glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
         }

@@ -107,8 +107,10 @@ class DynamicModuleContext implements RenderModuleContext {
 
         glState(gl, {
             uniformBuffers: [cameraUniforms],
-            depthTest: true,
-            depthWriteMask: true,
+            depth: {
+                test: true,
+                writeMask: true,
+            },
         });
 
         const { instances, geometries, materials } = this;
@@ -302,16 +304,16 @@ class MaterialAsset {
         const { gl } = context;
         this.kind = data.kind;
         const blend = {
-            blendEnable: true,
-            blendSrcRGB: "SRC_ALPHA",
-            blendDstRGB: "ONE_MINUS_SRC_ALPHA",
-            blendSrcAlpha: "ZERO",
-            blendDstAlpha: "ONE",
-        } as const satisfies StateParams;
+            enable: true,
+            srcRGB: "SRC_ALPHA",
+            dstRGB: "ONE_MINUS_SRC_ALPHA",
+            srcAlpha: "ZERO",
+            dstAlpha: "ONE",
+        } as const satisfies StateParams["blend"];
         this.stateParams = {
             program,
-            cullEnable: data.doubleSided ? false : true,
-            ...(data.alphaMode == "BLEND" ? blend : {}),
+            cull: { enable: data.doubleSided ? false : true },
+            blend: (data.alphaMode == "BLEND" ? blend : undefined),
             drawBuffers: context.drawBuffers(data.alphaMode == "BLEND" ? BufferFlags.color : BufferFlags.all), // for devices without OES_draw_buffers_indexed support
         };
         const uniformsDesc = {

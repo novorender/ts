@@ -113,8 +113,8 @@ class CubeModuleContext implements RenderModuleContext {
                 program,
                 uniformBuffers: [cameraUniforms, clippingUniforms, uniforms],
                 drawBuffers: context.drawBuffers(),
-                depthTest: true,
-                cullEnable: false,
+                depth: { test: true, },
+                cull: { enable: false },
                 vertexArrayObject: vao,
             });
             glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
@@ -132,7 +132,7 @@ class CubeModuleContext implements RenderModuleContext {
                 glState(gl, {
                     program: program_line,
                     drawBuffers: context.drawBuffers(BufferFlags.color),
-                    depthTest: true,
+                    depth: { test: true, },
                     vertexArrayObject: vao_line,
                 });
                 glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });

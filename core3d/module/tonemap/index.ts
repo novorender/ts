@@ -64,8 +64,10 @@ class TonemapModuleContext implements RenderModuleContext {
             ],
             frameBuffer: null,
             drawBuffers: ["BACK"],
-            depthTest: false,
-            depthWriteMask: false,
+            depth: {
+                test: false,
+                writeMask: false,
+            },
         });
 
         glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });

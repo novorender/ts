@@ -7,8 +7,9 @@ export function glState(gl: WebGL2RenderingContext, params: StateParams | null) 
         params = glDefaultState(limits);
     }
 
-    function setFlag(cap: FilteredKeys<WebGL2RenderingContext, number>, key: keyof StateParams) {
-        const value = params![key];
+    const { blend, cull, depth, polygon, sample, scissor, stencil, frameBuffer, vertexArrayObject, drawBuffers, attributeDefaults, textures, uniforms, uniformBuffers } = params;
+
+    function setFlag(cap: FilteredKeys<WebGL2RenderingContext, number>, value: boolean | undefined) {
         if (value !== undefined) {
             if (value) {
                 gl.enable(gl[cap]);
@@ -18,66 +19,81 @@ export function glState(gl: WebGL2RenderingContext, params: StateParams | null) 
         }
     }
 
-    function set(setter: (this: WebGLRenderingContext, ...values: any) => void, ...keys: readonly (keyof typeof defaultConstants)[]) {
-        if (keys.some(key => params![key] !== undefined)) {
-            const values = keys.map(key => {
-                const v = params![key] ?? defaultConstants[key];
+    function set<T>(setter: (this: WebGLRenderingContext, ...values: any) => void, values: T, defaultValues: any, ...keys: readonly (keyof T)[]) {
+        if (keys.some(key => values![key] !== undefined)) {
+            const args = keys.map(key => {
+                const v = values![key] ?? defaultValues[key];
                 return typeof v == "string" ? gl[v as keyof WebGL2RenderingContext] : v;
             });
-            (<Function>setter).apply(gl, values);
+            (<Function>setter).apply(gl, args);
         }
     }
 
-    const { drawBuffersIndexed } = glExtensions(gl);
-    if (drawBuffersIndexed) {
-        // only change settings for drawbuffer 0.
-        if (params.blendEnable) {
-            drawBuffersIndexed.enableiOES(gl.BLEND, 0);
+    setFlag("DITHER", params.ditherEnable);
+    setFlag("RASTERIZER_DISCARD", params.rasterizerDiscard);
+    set((rgba: readonly [boolean, boolean, boolean, boolean]) => { gl.colorMask(...rgba); }, params, "colorMask");
+    set(rect => gl.viewport(rect.x ?? 0, rect.y ?? 0, rect.width, rect.height), params, defaultConstants, "viewport");
+
+    if (blend) {
+        const defaultValues = defaultConstants.blend;
+        const { drawBuffersIndexed } = glExtensions(gl);
+        if (drawBuffersIndexed) {
+            // only change settings for drawbuffer 0.
+            if (blend.enable) {
+                drawBuffersIndexed.enableiOES(gl.BLEND, 0);
+            } else {
+                drawBuffersIndexed.disableiOES(gl.BLEND, 0);
+            }
+            set((modeRGB, modeAlpha) => drawBuffersIndexed.blendEquationSeparateiOES(0, modeRGB, modeAlpha), blend, defaultValues, "equationRGB", "equationAlpha");
+            set((srcRGB, dstRGB, srcAlpha, dstAlpha) => drawBuffersIndexed.blendFuncSeparateiOES(0, srcRGB, dstRGB, srcAlpha, dstAlpha), blend, defaultValues, "srcRGB", "dstRGB", "srcAlpha", "dstAlpha");
         } else {
-            drawBuffersIndexed.disableiOES(gl.BLEND, 0);
+            setFlag("BLEND", blend.enable);
+            set(gl.blendEquationSeparate, blend, defaultValues, "equationRGB", "equationAlpha");
+            set(gl.blendFuncSeparate, blend, defaultValues, "srcRGB", "dstRGB", "srcAlpha", "dstAlpha");
         }
-        set((modeRGB, modeAlpha) => drawBuffersIndexed.blendEquationSeparateiOES(0, modeRGB, modeAlpha), "blendEquationRGB", "blendEquationAlpha");
-        set((srcRGB, dstRGB, srcAlpha, dstAlpha) => drawBuffersIndexed.blendFuncSeparateiOES(0, srcRGB, dstRGB, srcAlpha, dstAlpha), "blendSrcRGB", "blendDstRGB", "blendSrcAlpha", "blendDstAlpha");
-    } else {
-        setFlag("BLEND", "blendEnable");
-        set(gl.blendEquationSeparate, "blendEquationRGB", "blendEquationAlpha");
-        set(gl.blendFuncSeparate, "blendSrcRGB", "blendDstRGB", "blendSrcAlpha", "blendDstAlpha");
+        set((rgba: readonly [number, number, number, number]) => { gl.blendColor(...rgba); }, blend, defaultValues, "color");
     }
-    set((rgba: readonly [number, number, number, number]) => { gl.blendColor(...rgba); }, "blendColor");
 
+    if (cull) {
+        const defaultValues = defaultConstants.cull;
+        setFlag("CULL_FACE", cull.enable);
+        set(gl.cullFace, cull, defaultValues, "mode");
+        set(gl.frontFace, cull, defaultValues, "frontFace");
+    }
 
-    setFlag("CULL_FACE", "cullEnable");
-    set(gl.cullFace, "cullMode");
-    set(gl.frontFace, "cullFrontFace");
+    if (depth) {
+        const defaultValues = defaultConstants.depth;
+        setFlag("DEPTH_TEST", depth.test);
+        set(gl.depthFunc, depth, defaultValues, "func");
+        set(gl.depthMask, depth, defaultValues, "writeMask");
+        set((range: readonly [number, number]) => gl.depthRange(...range), depth, defaultValues, "range");
+    }
 
-    setFlag("DEPTH_TEST", "depthTest");
-    set(gl.depthFunc, "depthFunc");
-    set(gl.depthMask, "depthWriteMask");
-    set((range: readonly [number, number]) => gl.depthRange(...range), "depthRange");
+    if (polygon) {
+        const defaultValues = defaultConstants.polygon;
+        setFlag("POLYGON_OFFSET_FILL", polygon.offsetFill);
+        set(gl.polygonOffset, polygon, defaultValues, "offsetFactor", "offsetUnits");
+    }
 
-    setFlag("DITHER", "ditherEnable");
+    if (sample) {
+        const defaultValues = defaultConstants.sample;
+        setFlag("SAMPLE_ALPHA_TO_COVERAGE", sample.alphaToCoverage);
+        setFlag("SAMPLE_COVERAGE", sample.coverage);
+        set(gl.sampleCoverage, sample, defaultValues, "coverageValue", "coverageInvert");
+    }
 
-    set((rgba: readonly [boolean, boolean, boolean, boolean]) => { gl.colorMask(...rgba); }, "colorMask");
+    if (scissor) {
+        const defaultValues = defaultConstants.scissor;
+        setFlag("SCISSOR_TEST", scissor.test);
+        set(rect => gl.scissor(rect.x ?? 0, rect.y ?? 0, rect.width, rect.height), scissor, defaultValues, "box");
+    }
 
-    setFlag("POLYGON_OFFSET_FILL", "polygonOffsetFill");
-    set(gl.polygonOffset, "polygonOffsetFactor", "polygonOffsetUnits");
-
-    setFlag("SAMPLE_ALPHA_TO_COVERAGE", "sampleAlphaToCoverage");
-    setFlag("SAMPLE_COVERAGE", "sampleCoverage");
-    set(gl.sampleCoverage, "sampleCoverageValue", "sampleCoverageInvert");
-
-    setFlag("STENCIL_TEST", "stencilTest");
-    set((func, ref, mask) => gl.stencilFuncSeparate(gl.FRONT, func, ref, mask), "stencilFunc", "stencilRef", "stencilValueMask");
-    set((func, ref, mask) => gl.stencilFuncSeparate(gl.BACK, func, ref, mask), "stencilBackFunc", "stencilBackRef", "stencilBackValueMask");
-
-    set(rect => gl.viewport(rect.x ?? 0, rect.y ?? 0, rect.width, rect.height), "viewport");
-
-    setFlag("SCISSOR_TEST", "scissorTest");
-    set(rect => gl.scissor(rect.x ?? 0, rect.y ?? 0, rect.width, rect.height), "scissorBox");
-
-    setFlag("RASTERIZER_DISCARD", "rasterizerDiscard");
-
-    const { frameBuffer, vertexArrayObject, drawBuffers, attributeDefaults, textures, uniforms, uniformBuffers } = params;
+    if (stencil) {
+        const defaultValues = defaultConstants.stencil;
+        setFlag("STENCIL_TEST", stencil.test);
+        set((func, ref, mask) => gl.stencilFuncSeparate(gl.FRONT, func, ref, mask), stencil, defaultValues, "func", "ref", "valueMask");
+        set((func, ref, mask) => gl.stencilFuncSeparate(gl.BACK, func, ref, mask), stencil, defaultValues, "backFunc", "backRef", "backValueMask");
+    }
 
     if (vertexArrayObject !== undefined) {
         gl.bindVertexArray(vertexArrayObject);
@@ -88,7 +104,7 @@ export function glState(gl: WebGL2RenderingContext, params: StateParams | null) 
     }
 
     if (drawBuffers) {
-        gl.drawBuffers(drawBuffers.map(b => gl[b]));
+        gl.drawBuffers(drawBuffers.map(b => gl[b!]));
     }
 
     const { program } = params;
@@ -166,62 +182,72 @@ export function glDefaultState(limits: LimitsGL): State {
     } as const;
 }
 
-export type StateParams = Partial<State>;
+type ScopedParamsKeys = "blend" | "cull" | "depth" | "polygon" | "sample" | "stencil" | "scissor";
+export type StateParams = Partial<Omit<State, ScopedParamsKeys>> & { readonly [P in ScopedParamsKeys]?: Partial<State[P]> };
 
 export interface State {
     // blend state (except constant color) only applies to COLOR_ATTACHMENT0 if OES_draw_buffers_indexed is supported.
-    readonly blendEnable: boolean; // BLEND
-    readonly blendColor: RGBA; // BLEND_COLOR
-    readonly blendDstAlpha: BlendFunction; // BLEND_DST_ALPHA
-    readonly blendDstRGB: BlendFunction; // BLEND_DST_RGB
-    readonly blendEquationAlpha: BlendEquation; // BLEND_EQUATION_ALPHA
-    readonly blendEquationRGB: BlendEquation; // BLEND_EQUATION_RGB
-    readonly blendSrcAlpha: BlendFunction; // BLEND_EQUATION_ALPHA
-    readonly blendSrcRGB: BlendFunction; // BLEND_SRC_RGB
+    readonly blend: {
+        readonly enable: boolean; // BLEND
+        readonly color: RGBA; // BLEND_COLOR
+        readonly dstAlpha: BlendFunction; // BLEND_DST_ALPHA
+        readonly dstRGB: BlendFunction; // BLEND_DST_RGB
+        readonly equationAlpha: BlendEquation; // BLEND_EQUATION_ALPHA
+        readonly equationRGB: BlendEquation; // BLEND_EQUATION_RGB
+        readonly srcAlpha: BlendFunction; // BLEND_EQUATION_ALPHA
+        readonly srcRGB: BlendFunction; // BLEND_SRC_RGB
+    };
 
-    readonly cullEnable: boolean; // CULL_FACE
-    readonly cullMode: CullMode; // CULL_FACE_MODE
-    readonly cullFrontFace: Winding; // FRONT_FACE
+    readonly cull: {
+        readonly enable: boolean; // CULL_FACE
+        readonly mode: CullMode; // CULL_FACE_MODE
+        readonly frontFace: Winding; // FRONT_FACE
+    };
 
-    readonly depthTest: boolean; // DEPTH_TEST
-    readonly depthFunc: DepthFunc; // DEPTH_FUNC
-    readonly depthWriteMask: boolean; // DEPTH_WRITEMASK
-    readonly depthRange: readonly [near: number, far: number]; // DEPTH_RANGE
+    readonly depth: {
+        readonly test: boolean; // DEPTH_TEST
+        readonly func: DepthFunc; // DEPTH_FUNC
+        readonly writeMask: boolean; // DEPTH_WRITEMASK
+        readonly range: readonly [near: number, far: number]; // DEPTH_RANGE
+    };
+
+    readonly polygon: {
+        readonly offsetFill: boolean; // POLYGON_OFFSET_FILL
+        readonly offsetFactor: number; // POLYGON_OFFSET_FACTOR
+        readonly offsetUnits: number; // POLYGON_OFFSET_UNITS
+    };
+
+    readonly sample: {
+        readonly alphaToCoverage: boolean; // SAMPLE_ALPHA_TO_COVERAGE
+        readonly coverage: boolean; // SAMPLE_COVERAGE
+        readonly coverageValue: number; // SAMPLE_COVERAGE_VALUE
+        readonly coverageInvert: boolean; // SAMPLE_COVERAGE_INVERT
+    };
+
+    readonly stencil: {
+        readonly test: boolean; // STENCIL_TEST
+        readonly func: DepthFunc; // STENCIL_FUNC
+        readonly valueMask: number; // STENCIL_VALUE_MASK
+        readonly ref: number; // STENCIL_REF
+        readonly backFunc: DepthFunc; // STENCIL_BACK_FUNC
+        readonly backValueMask: number; // STENCIL_BACK_VALUE_MASK
+        readonly backRef: number; // STENCIL_BACK_REF
+    };
+
+    readonly scissor: {
+        readonly test: boolean; // SCISSOR_TEST
+        readonly box: Rect;
+    }
 
     readonly ditherEnable: boolean; // DITHER
-
     readonly colorMask: readonly [red: boolean, green: boolean, blue: boolean, alpha: boolean];
-
-    readonly polygonOffsetFill: boolean; // POLYGON_OFFSET_FILL
-    readonly polygonOffsetFactor: number; // POLYGON_OFFSET_FACTOR
-    readonly polygonOffsetUnits: number; // POLYGON_OFFSET_UNITS
-
-    readonly sampleAlphaToCoverage: boolean; // SAMPLE_ALPHA_TO_COVERAGE
-    readonly sampleCoverage: boolean; // SAMPLE_COVERAGE
-    readonly sampleCoverageValue: number; // SAMPLE_COVERAGE_VALUE
-    readonly sampleCoverageInvert: boolean; // SAMPLE_COVERAGE_INVERT
-
-    readonly stencilTest: boolean; // STENCIL_TEST
-    readonly stencilFunc: DepthFunc; // STENCIL_FUNC
-    readonly stencilValueMask: number; // STENCIL_VALUE_MASK
-    readonly stencilRef: number; // STENCIL_REF
-    readonly stencilBackFunc: DepthFunc; // STENCIL_BACK_FUNC
-    readonly stencilBackValueMask: number; // STENCIL_BACK_VALUE_MASK
-    readonly stencilBackRef: number; // STENCIL_BACK_REF
     readonly viewport: Rect;
-
-    readonly scissorTest: boolean; // SCISSOR_TEST
-    readonly scissorBox: Rect;
-
     readonly rasterizerDiscard: boolean; // RASTERIZER_DISCARD
-
     readonly frameBuffer: WebGLFramebuffer | null;
     readonly vertexArrayObject: WebGLVertexArrayObject | null;
-
     readonly program: WebGLProgram | null;
     readonly uniforms: readonly UniformBinding[];
     readonly uniformBuffers: readonly UniformBufferBinding[]; // max length: MAX_UNIFORM_BUFFER_BINDINGS
-
     readonly drawBuffers: readonly (ColorAttachment | "BACK" | "NONE")[];
     readonly attributeDefaults: readonly (AttributeDefault | null)[];
     readonly textures: readonly (TextureBinding | null)[];
@@ -311,44 +337,57 @@ function isUniformBufferBindingRange(params: UniformBufferBindingRange | WebGLBu
 }
 
 const defaultConstants = {
-    blendEnable: false, // BLEND
-    blendColor: [0, 0, 0, 0], // BLEND_COLOR
-    blendDstAlpha: "ZERO", // BLEND_DST_ALPHA
-    blendDstRGB: "ZERO", // BLEND_DST_RGB
-    blendEquationAlpha: "FUNC_ADD", // BLEND_EQUATION_ALPHA
-    blendEquationRGB: "FUNC_ADD", // BLEND_EQUATION_RGB
-    blendSrcAlpha: "ONE", // BLEND_EQUATION_ALPHA
-    blendSrcRGB: "ONE", // BLEND_SRC_RGB
+    blend: {
+        enable: false, // BLEND
+        color: [0, 0, 0, 0], // BLEND_COLOR
+        dstAlpha: "ZERO", // BLEND_DST_ALPHA
+        dstRGB: "ZERO", // BLEND_DST_RGB
+        equationAlpha: "FUNC_ADD", // BLEND_EQUATION_ALPHA
+        equationRGB: "FUNC_ADD", // BLEND_EQUATION_RGB
+        srcAlpha: "ONE", // BLEND_EQUATION_ALPHA
+        srcRGB: "ONE", // BLEND_SRC_RGB
+    },
 
-    cullEnable: false, // CULL_FACE
-    cullMode: "BACK", // CULL_FACE_MODE
-    cullFrontFace: "CCW", // FRONT_FACE
+    cull: {
+        enable: false, // CULL_FACE
+        mode: "BACK", // CULL_FACE_MODE
+        frontFace: "CCW", // FRONT_FACE
+    },
 
-    depthTest: false, // DEPTH_TEST
-    depthFunc: "LESS", // DEPTH_FUNC
-    depthWriteMask: true, // DEPTH_WRITEMASK
-    depthRange: [0, 1], // DEPTH_RANGE
+    depth: {
+        test: false, // DEPTH_TEST
+        func: "LESS", // DEPTH_FUNC
+        writeMask: true, // DEPTH_WRITEMASK
+        range: [0, 1], // DEPTH_RANGE
+    },
 
     ditherEnable: true, // DITHER
 
     colorMask: [true, true, true, true],
 
-    polygonOffsetFill: false, // POLYGON_OFFSET_FILL
-    polygonOffsetFactor: 0, // POLYGON_OFFSET_FACTOR
-    polygonOffsetUnits: 0, // POLYGON_OFFSET_UNITS
+    polygon: {
+        offsetFill: false, // POLYGON_OFFSET_FILL
+        offsetFactor: 0, // POLYGON_OFFSET_FACTOR
+        offsetUnits: 0, // POLYGON_OFFSET_UNITS
+    },
 
-    sampleAlphaToCoverage: false, // SAMPLE_ALPHA_TO_COVERAGE
-    sampleCoverage: false, // SAMPLE_COVERAGE
-    sampleCoverageValue: 1, // SAMPLE_COVERAGE_VALUE
-    sampleCoverageInvert: false, // SAMPLE_COVERAGE_INVERT
+    sample: {
+        alphaToCoverage: false, // SAMPLE_ALPHA_TO_COVERAGE
+        coverage: false, // SAMPLE_COVERAGE
+        coverageValue: 1, // SAMPLE_COVERAGE_VALUE
+        coverageInvert: false, // SAMPLE_COVERAGE_INVERT
+    },
 
-    stencilTest: false, // STENCIL_TEST
-    stencilFunc: "ALWAYS", // STENCIL_FUNC
-    stencilValueMask: 0x7FFFFFFF, // STENCIL_VALUE_MASK
-    stencilRef: 0, // STENCIL_REF
-    stencilBackFunc: "ALWAYS", // STENCIL_BACK_FUNC
-    stencilBackValueMask: 0x7FFFFFFF, // STENCIL_BACK_VALUE_MASK
-    stencilBackRef: 0, // STENCIL_BACK_REF
+    stencil: {
+        test: false, // STENCIL_TEST
+        func: "ALWAYS", // STENCIL_FUNC
+        valueMask: 0x7FFFFFFF, // STENCIL_VALUE_MASK
+        ref: 0, // STENCIL_REF
+        backFunc: "ALWAYS", // STENCIL_BACK_FUNC
+        backValueMask: 0x7FFFFFFF, // STENCIL_BACK_VALUE_MASK
+        backRef: 0, // STENCIL_BACK_REF
+    },
+
     viewport: { // VIEWPORT
         x: 0,
         y: 0,
@@ -356,13 +395,15 @@ const defaultConstants = {
         height: 0,
     } as Rect,
 
-    scissorTest: false, // SCISSOR_TEST
-    scissorBox: { // SCISSOR_BOX
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-    } as Rect,
+    scissor: {
+        test: false, // SCISSOR_TEST
+        box: { // SCISSOR_BOX
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+        } as Rect,
+    },
 
     rasterizerDiscard: false, // RASTERIZER_DISCARD
 

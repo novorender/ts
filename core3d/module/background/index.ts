@@ -141,8 +141,10 @@ class BackgroundModuleContext implements RenderModuleContext {
                         { kind: "TEXTURE_CUBE_MAP", texture: skybox, sampler: samplerSingle },
                         { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
                     ],
-                    depthTest: false,
-                    depthWriteMask: false,
+                    depth: {
+                        test: false,
+                        writeMask: false,
+                    },
                 });
                 glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
             }

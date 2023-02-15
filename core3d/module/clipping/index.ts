@@ -84,13 +84,17 @@ class ClippingModuleContext implements RenderModuleContext {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],
                 drawBuffers: context.drawBuffers(),
-                depthTest: true,
-                // depthWriteMask: true,
-                blendEnable: true,
-                blendSrcRGB: "SRC_ALPHA",
-                blendDstRGB: "ONE_MINUS_SRC_ALPHA",
-                blendSrcAlpha: "ZERO",
-                blendDstAlpha: "ONE",
+                depth: {
+                    test: true,
+                    // writeMask: true,
+                },
+                blend: {
+                    enable: true,
+                    srcRGB: "SRC_ALPHA",
+                    dstRGB: "ONE_MINUS_SRC_ALPHA",
+                    srcAlpha: "ZERO",
+                    dstAlpha: "ONE",
+                },
             });
             glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
         }

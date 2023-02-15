@@ -268,7 +268,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
             glState(gl, {
                 program: programZ,
-                depthTest: true,
+                depth: { test: true },
             });
             gl.activeTexture(gl.TEXTURE0);
             const meshState: MeshState = {};
@@ -292,10 +292,12 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             glState(gl, {
                 program: program,
                 uniformBuffers: [cameraUniforms, sceneUniforms, null],
-                cullEnable: true,
-                depthTest: true,
-                depthFunc: usePrepass ? "LEQUAL" : "LESS",
-                depthWriteMask: true,
+                cull: { enable: true, },
+                depth: {
+                    test: true,
+                    writeMask: true,
+                    func: usePrepass ? "LEQUAL" : "LESS",
+                },
                 textures: [
                     { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // basecolor - will be overridden by nodes that have textures, e.g. terrain nodes.
                     { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerSingle },
@@ -325,8 +327,10 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 // render clipping outlines
                 glState(gl, {
                     uniformBuffers: [cameraUniforms, sceneUniforms, null],
-                    depthTest: false,
-                    depthWriteMask: false,
+                    depth: {
+                        test: false,
+                        writeMask: false
+                    },
                     drawBuffers: renderContext.drawBuffers(BufferFlags.color),
                 });
                 for (const node of nodes) {
@@ -340,14 +344,18 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 glState(gl, {
                     program: programDebug,
                     uniformBuffers: [cameraUniforms, sceneUniforms],
-                    depthFunc: "GREATER",
-                    depthTest: true,
-                    depthWriteMask: false,
-                    cullEnable: true,
-                    blendEnable: true,
-                    blendSrcRGB: "CONSTANT_ALPHA",
-                    blendDstRGB: "ONE_MINUS_CONSTANT_ALPHA",
-                    blendColor: [0, 0, 0, .25],
+                    depth: {
+                        test: true,
+                        writeMask: false,
+                        func: "GREATER",
+                    },
+                    cull: { enable: true, },
+                    blend: {
+                        enable: true,
+                        srcRGB: "CONSTANT_ALPHA",
+                        dstRGB: "ONE_MINUS_CONSTANT_ALPHA",
+                        color: [0, 0, 0, .25],
+                    },
                     drawBuffers: renderContext.drawBuffers(BufferFlags.color),
                 });
                 for (const node of nodes) {
@@ -356,8 +364,10 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
                 glState(gl, {
                     program: programDebug,
-                    depthFunc: "LESS",
-                    blendColor: [0, 0, 0, .75],
+                    depth: { func: "LESS", },
+                    blend: {
+                        color: [0, 0, 0, .75],
+                    },
                 });
                 for (const node of nodes) {
                     this.renderNodeDebug(node);
@@ -365,13 +375,17 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
                 glState(gl, {
                     program: null,
-                    depthTest: false,
-                    depthWriteMask: true,
-                    cullEnable: false,
-                    blendEnable: false,
-                    blendSrcRGB: "ONE",
-                    blendDstRGB: "ZERO",
-                    blendColor: [0, 0, 0, 0],
+                    depth: {
+                        test: false,
+                        writeMask: true,
+                    },
+                    cull: { enable: false, },
+                    blend: {
+                        enable: false,
+                        srcRGB: "ONE",
+                        dstRGB: "ZERO",
+                        color: [0, 0, 0, 0],
+                    }
                 });
             }
         }

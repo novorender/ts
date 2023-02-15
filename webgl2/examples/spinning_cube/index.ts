@@ -25,9 +25,8 @@ export async function spinning_cube(gl: WebGL2RenderingContext) {
             viewport: { width, height },
             uniformBuffers: [uniformBuffer],
             program,
-            cullEnable: true,
-            depthTest: true,
-            // uniforms: [{ kind: "Matrix4f", location: proj, value: [...viewProjMtx] }],
+            cull: { enable: true, },
+            depth: { test: true },
             vertexArrayObject: vao,
         });
 

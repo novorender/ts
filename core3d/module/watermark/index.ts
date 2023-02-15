@@ -89,14 +89,16 @@ class WatermarkModuleContext implements RenderModuleContext {
         glState(gl, {
             program,
             uniformBuffers: [uniforms],
-            depthWriteMask: false,
-            cullEnable: true,
+            depth: { writeMask: false, },
+            cull: { enable: true },
             vertexArrayObject: vao,
-            blendEnable: true,
-            blendSrcRGB: "SRC_ALPHA",
-            blendSrcAlpha: "ONE",
-            blendDstRGB: "ONE",
-            blendDstAlpha: "ONE",
+            blend: {
+                enable: true,
+                srcRGB: "SRC_ALPHA",
+                srcAlpha: "ONE",
+                dstRGB: "ONE",
+                dstAlpha: "ONE",
+            },
         });
         glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: data.numIndices });
     }
