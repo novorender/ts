@@ -77,7 +77,7 @@ export function glState(gl: WebGL2RenderingContext, params: StateParams | null) 
 
     setFlag("RASTERIZER_DISCARD", "rasterizerDiscard");
 
-    const { frameBuffer, vertexArrayObject, drawBuffers, attributeDefaults, textures, uniformBuffers } = params;
+    const { frameBuffer, vertexArrayObject, drawBuffers, attributeDefaults, textures, uniforms, uniformBuffers } = params;
 
     if (vertexArrayObject !== undefined) {
         gl.bindVertexArray(vertexArrayObject);
@@ -118,6 +118,27 @@ export function glState(gl: WebGL2RenderingContext, params: StateParams | null) 
             gl.uniform1i(binding?.uniform ?? null, i);
         }
         gl.activeTexture(texture0);
+    }
+
+    if (uniforms) {
+        function isMatrix(binding: UniformBinding): binding is UniformBindingMatrix {
+            return binding.kind.startsWith("Matrix");
+        }
+        function isScalar(binding: UniformBinding): binding is UniformBindingScalar {
+            return binding.kind.startsWith("1");
+        }
+        for (const binding of uniforms) {
+            if (isMatrix(binding)) {
+                const methodName = `uniform${binding.kind}v` as const;
+                gl[methodName](binding.location, binding.transpose ?? false, binding.value);
+            } else if (isScalar(binding)) {
+                const methodName = `uniform${binding.kind}` as const;
+                gl[methodName](binding.location, binding.value);
+            } else {
+                const methodName = `uniform${binding.kind}v` as const;
+                gl[methodName](binding.location, binding.value);
+            }
+        }
     }
 
     if (uniformBuffers) {
@@ -198,6 +219,7 @@ export interface State {
     readonly vertexArrayObject: WebGLVertexArrayObject | null;
 
     readonly program: WebGLProgram | null;
+    readonly uniforms: readonly UniformBinding[];
     readonly uniformBuffers: readonly UniformBufferBinding[]; // max length: MAX_UNIFORM_BUFFER_BINDINGS
 
     readonly drawBuffers: readonly (ColorAttachment | "BACK" | "NONE")[];
@@ -348,5 +370,6 @@ const defaultConstants = {
     vertexArrayObject: null,
 
     program: null,
+    uniforms: [],
     uniformBuffers: [], // max length: MAX_UNIFORM_BUFFER_BINDINGS
 } as const;

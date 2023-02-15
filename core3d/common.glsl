@@ -163,9 +163,6 @@ struct NodeUniforms {
 const uint meshModeTriangles = 0U;
 const uint meshModePoints = 1U;
 const uint meshModeTerrain = 2U;
-struct MeshUniforms {
-    uint mode; // MeshMode
-};
 const struct OctreeTextures {
     sampler2D base_color;
     IBLTextures ibl;

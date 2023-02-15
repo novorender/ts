@@ -10,11 +10,8 @@ layout(std140) uniform Node {
     NodeUniforms node;
 };
 
-layout(std140) uniform Mesh {
-    MeshUniforms mesh;
-};
-
 uniform OctreeTextures textures;
+uniform uint meshMode;
 
 out OctreeVaryings varyings;
 #ifndef IOS_WORKAROUND
@@ -46,7 +43,7 @@ void main() {
     gl_Position = camera.viewClipMatrix * posVS;
     vec4 color = vertexMaterial == 0xffU ? vec4(0) : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
 
-    if(mesh.mode == meshModePoints) {
+    if(meshMode == meshModePoints) {
         if(scene.deviationMode != 0U) {
             vec4 gradientColor = getGradientColor(textures.gradients, vertexDeviation, deviationV, scene.deviationRange);
             if(scene.deviationMode == 1U) {

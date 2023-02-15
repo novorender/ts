@@ -10,11 +10,8 @@ layout(std140) uniform Node {
     NodeUniforms node;
 };
 
-layout(std140) uniform Mesh {
-    MeshUniforms mesh;
-};
-
 uniform OctreeTextures textures;
+uniform uint meshMode;
 
 in OctreeVaryings varyings;
 #ifndef IOS_WORKAROUND
@@ -40,9 +37,9 @@ void main() {
 #endif
 
     vec4 rgba;
-    if(mesh.mode == meshModePoints) {
+    if(meshMode == meshModePoints) {
         rgba = baseColor;
-    } else if(mesh.mode == meshModeTerrain) {
+    } else if(meshMode == meshModeTerrain) {
         rgba = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange);
     } else if(baseColor == vec4(0)) {
         rgba = texture(textures.base_color, varyings.texCoord0);
@@ -88,7 +85,7 @@ void main() {
     }
 
     // we put discards here (late) to avoid problems with derivative functions
-    if(mesh.mode == meshModePoints && distance(gl_FragCoord.xy, varyings.screenPos) > varyings.radius)
+    if(meshMode == meshModePoints && distance(gl_FragCoord.xy, varyings.screenPos) > varyings.radius)
         discard;
 
     if(rgba.a == 0.)

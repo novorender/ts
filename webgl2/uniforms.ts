@@ -42,7 +42,8 @@ export interface UniformInfo {
     readonly offset: number; // -1 if not in block
 }
 
-export function glUniformLocations<T extends readonly string[]>(gl: WebGL2RenderingContext, program: WebGLProgram, names: T, prefix?: string) {
+// TODO: use const type parameter when typescript 5 is released
+export function glUniformLocations</*const*/ T extends readonly string[]>(gl: WebGL2RenderingContext, program: WebGLProgram, names: T, prefix?: string) {
     const locations: any = {};
     for (const name of names) {
         locations[name] = gl.getUniformLocation(program, `${prefix ?? ""}${name}`);
