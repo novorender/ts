@@ -1,0 +1,60 @@
+{
+  "kind": "octree",
+  "version": "1.7",
+  "id": "18f56c98c1e748feb8369a6d32fde9ef",
+  "center": [
+    728.3107965895182,
+    5.230540511799996,
+    -232.71788539462838
+  ],
+  "offset": [
+    728.2906875610352,
+    6.52912044525144,
+    -231.34277153015137
+  ],
+  "scale": 16.735061645507812,
+  "aabb": {
+    "min": [
+      711.5556259155273,
+      -3.3801593780518107,
+      -244.92106533050543
+    ],
+    "max": [
+      745.025749206543,
+      16.43840026855464,
+      -217.76447772979742
+    ]
+  },
+  "boundingSphere": {
+    "center": [
+      728.692492812428,
+      5.860184565302798,
+      -231.1074726066119
+    ],
+    "radius": 22.62253142001558
+  },
+  "rootByteSize": 377600,
+  "numObjects": 2688,
+  "numMaterials": 52,
+  "maxTriangles": 32767,
+  "maxDepth": 4,
+  "materialProperties": {
+    "diffuse": {
+      "red": "/L9QYWL3AHER9/fA4ruQiODAf3i/nwDK3r/VZ66GAABt0tLveK4A52IKiLn0evffuW1/vw==",
+      "green": "/79QS2b3gFAR9/fAsbuKY7LAf3i/bQCa0L+kaa6GAIBWn5/3eK4A42ILY7n0UvfAuVZ/vw==",
+      "blue": "/79QPnbvwEYR9/fAgLt/N37Af3i/PP86i79nba6GAMBSX1/3eK4Aw2ILN6L0Ne+GolJ/vw=="
+    },
+    "specular": null,
+    "shininess": null,
+    "emissive": {
+      "red": "AAAAAAAAAAAAAAAAAAAAAAAAAAC/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "green": null,
+      "blue": "/wBQS2b3gFAR9/fAsbuKY7LAf3i/bQCa0L+kaa6GAIBWn5/3eK4A42ILY7n0UvfAuVZ/vw=="
+    },
+    "opacity": "W///////P////////////////////z///z//////TD//////////////////////////AA==",
+    "doubleSided": "AQEAAQEBAAEBAAEAAQAAAQABAAEAAQEBAAABAQEBAQEAAQAAAAABAQAAAAABAQABAQEBAA==",
+    "metalness": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "roughness": "/////////////////////////////////////////////////////////////////////w=="
+  },
+  "variants": []
+}
