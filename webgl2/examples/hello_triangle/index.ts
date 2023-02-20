@@ -1,4 +1,4 @@
-import { glClear, glBuffer, glProgram, glVertexArray, glDraw, glState } from "@novorender/webgl2";
+import { glClear, glBuffer, glProgram, glVertexArray, glDraw, glState } from "@novorender/ts/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 

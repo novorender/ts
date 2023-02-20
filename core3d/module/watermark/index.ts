@@ -1,6 +1,6 @@
-import type { DerivedRenderState, RenderContext } from "core3d";
+import type { DerivedRenderState, RenderContext } from "@novorender/ts/core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, UniformTypes } from "webgl2";
+import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, UniformTypes } from "@novorender/ts/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import logoBinary from "./logo.bin";

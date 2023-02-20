@@ -1,10 +1,10 @@
-import { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "core3d";
+import { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "@novorender/ts/core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes, glVertexArray, VertexArrayParams, VertexAttribute, DrawParamsElements, DrawParamsArrays, StateParams, glTexture, glSampler } from "webgl2";
+import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes, glVertexArray, VertexArrayParams, VertexAttribute, DrawParamsElements, DrawParamsArrays, StateParams, glTexture, glSampler } from "@novorender/ts/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat3, mat4, vec3 } from "gl-matrix";
-import { BufferFlags } from "@novorender/core3d/buffers";
+import { BufferFlags } from "@novorender/ts/core3d/buffers";
 
 // TODO: Create (programatically) and render cube
 // TODO: Create (from gltf)

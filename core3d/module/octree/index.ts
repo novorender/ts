@@ -1,9 +1,9 @@
-import { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "core3d";
+import { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "@novorender/ts/core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { createSceneRootNode } from "core3d/scene";
+import { createSceneRootNode } from "@novorender/ts/core3d/scene";
 import { NodeState, OctreeContext, OctreeNode, Visibility } from "./node";
 import { Downloader } from "./download";
-import { glUBOProxy, glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glTransformFeedback, glUniformLocations, glUpdateTexture, glVertexArray, TextureParams2DUncompressed, UniformTypes } from "webgl2";
+import { glUBOProxy, glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glTransformFeedback, glUniformLocations, glUpdateTexture, glVertexArray, TextureParams2DUncompressed, UniformTypes } from "@novorender/ts/webgl2";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
 import { ReadonlyVec3, vec3 } from "gl-matrix";
@@ -16,7 +16,7 @@ import line_fs from "./line.frag";
 import intersect_vs from "./intersect.vert";
 import vertexShaderDebug from "./shader_debug.vert";
 import fragmentShaderDebug from "./shader_debug.frag";
-import { BufferFlags } from "@novorender/core3d/buffers";
+import { BufferFlags } from "@novorender/ts/core3d/buffers";
 
 export class OctreeModule implements RenderModule {
     readonly sceneUniforms = {

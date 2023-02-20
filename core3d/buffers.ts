@@ -1,4 +1,4 @@
-import { glBuffer, glFrameBuffer, glTexture, glInvalidateFrameBuffer, glReadPixels, glDelete } from "webgl2";
+import { glBuffer, glFrameBuffer, glTexture, glInvalidateFrameBuffer, glReadPixels, glDelete } from "@novorender/ts/webgl2";
 
 export const enum BufferFlags {
     color = 0x01,

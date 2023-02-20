@@ -1,10 +1,10 @@
-import type { DerivedRenderState, RenderContext } from "core3d";
-import { KTX } from "core3d/ktx";
+import type { DerivedRenderState, RenderContext } from "@novorender/ts/core3d";
+import { KTX } from "@novorender/ts/core3d/ktx";
 import { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glClear, glProgram, glTexture, glDraw, glState, TextureParams, glBuffer, glDelete, UniformTypes, TextureParamsCubeUncompressed, TextureParamsCubeUncompressedMipMapped } from "webgl2";
+import { glUBOProxy, glClear, glProgram, glTexture, glDraw, glState, TextureParams, glBuffer, glDelete, UniformTypes, TextureParamsCubeUncompressed, TextureParamsCubeUncompressedMipMapped } from "@novorender/ts/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { BufferFlags } from "@novorender/core3d/buffers";
+import { BufferFlags } from "@novorender/ts/core3d/buffers";
 
 export class BackgroundModule implements RenderModule {
     private abortController: AbortController | undefined;

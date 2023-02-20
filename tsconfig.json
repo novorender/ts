@@ -25,9 +25,9 @@
         "module": "ESNext", /* Specify what module code is generated. */
         "rootDir": "./", /* Specify the root folder within your source files. */
         "moduleResolution": "node", /* Specify how TypeScript looks up a file from a given module specifier. */
-        "baseUrl": "./", /* Specify the base directory to resolve non-relative module names. */
+        // "baseUrl": "./", /* Specify the base directory to resolve non-relative module names. */
         "paths": { /* A series of entries which re-map imports to lookup locations relative to the 'baseUrl'. */
-            "@novorender/*": [
+            "@novorender/ts/*": [
                 "./*"
             ],
         },
