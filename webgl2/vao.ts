@@ -11,16 +11,16 @@ export function glVertexArray(gl: WebGL2RenderingContext, params: VertexArrayPar
             const { size, isInteger, defaultComponentType } = shaderTypeInfo[attribParams.kind];
             const componentType = attribParams.componentType ?? defaultComponentType;
             const divisor = attribParams.divisor ?? 0;
-            const stride = attribParams.stride ?? 0;
-            const offset = attribParams.offset ?? 0;
+            const byteStride = attribParams.byteStride ?? 0;
+            const byteOffset = attribParams.byteOffset ?? 0;
             const componentCount = attribParams.componentCount ?? (isMatrix(size) ? size[0] : size);
             const normalized = attribParams.normalized ?? false;
             gl.bindBuffer(gl.ARRAY_BUFFER, attribParams.buffer);
             gl.enableVertexAttribArray(i);
             if (isInteger) {
-                gl.vertexAttribIPointer(i, componentCount, gl[componentType], stride, offset);
+                gl.vertexAttribIPointer(i, componentCount, gl[componentType], byteStride, byteOffset);
             } else {
-                gl.vertexAttribPointer(i, componentCount, gl[componentType], normalized, stride, offset);
+                gl.vertexAttribPointer(i, componentCount, gl[componentType], normalized, byteStride, byteOffset);
             }
             gl.vertexAttribDivisor(i, divisor);
         } else {
@@ -58,8 +58,8 @@ export type ShaderAttributeType = ShaderTypeFloat | ShaderTypeInt | ShaderTypeUi
 interface VertexAttributeCommon {
     readonly buffer: WebGLBuffer;
     readonly componentCount?: 1 | 2 | 3 | 4; // default: same as shader type
-    readonly stride?: number; // default: 0
-    readonly offset?: number; // default: 0
+    readonly byteStride?: number; // default: 0
+    readonly byteOffset?: number; // default: 0
     readonly divisor?: number; // default: 0
 }
 

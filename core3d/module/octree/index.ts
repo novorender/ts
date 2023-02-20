@@ -3,7 +3,7 @@ import { RenderModuleContext, RenderModule } from "..";
 import { createSceneRootNode } from "core3d/scene";
 import { NodeState, OctreeContext, OctreeNode, Visibility } from "./node";
 import { Downloader } from "./download";
-import { createUniformsProxy, glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glTransformFeedback, glUniformLocations, glUpdateTexture, glVertexArray, TextureParams2DUncompressed, UniformTypes } from "webgl2";
+import { glUBOProxy, glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glTransformFeedback, glUniformLocations, glUpdateTexture, glVertexArray, TextureParams2DUncompressed, UniformTypes } from "webgl2";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
 import { ReadonlyVec3, vec3 } from "gl-matrix";
@@ -61,7 +61,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly projectedSizeSplitThreshold = 1; // / (settings.quality.detail.value * deviceProfile.detailBias); // baseline node size split threshold = 50% of view height
 
     constructor(readonly renderContext: RenderContext, readonly data: OctreeModule) {
-        this.sceneUniforms = createUniformsProxy(data.sceneUniforms);
+        this.sceneUniforms = glUBOProxy(data.sceneUniforms);
         this.loader = new NodeLoader(data.nodeLoaderOptions);
         const { gl, commonChunk } = renderContext;
         const flags: string[] = ["IOS_WORKAROUND"]; // without this flag, complex scenes crash after a few frames on older IOS and iPad devices.
@@ -76,13 +76,13 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const transformFeedback = gl.createTransformFeedback()!;
         const uniformLocations = glUniformLocations(gl, program, ["meshMode"] as const);
         this.meshModeLocation = uniformLocations.meshMode;
-        const vb_line = glBuffer(gl, { kind: "ARRAY_BUFFER", size: this.maxLines * 2 * 8, usage: "STATIC_DRAW" });
+        const vb_line = glBuffer(gl, { kind: "ARRAY_BUFFER", byteSize: this.maxLines * 2 * 8, usage: "STATIC_DRAW" });
         const vao_line = glVertexArray(gl, {
             attributes: [
-                { kind: "FLOAT_VEC2", buffer: vb_line, stride: 8, offset: 0 }, // position
+                { kind: "FLOAT_VEC2", buffer: vb_line, byteStride: 8, byteOffset: 0 }, // position
             ],
         });
-        const sceneUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.sceneUniforms.buffer.byteLength });
+        const sceneUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.sceneUniforms.buffer.byteLength });
         const samplerNearest = glSampler(gl, { minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         const defaultBaseColorTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array([255, 255, 255, 255]) });
         const materialTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null });

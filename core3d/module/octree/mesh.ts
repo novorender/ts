@@ -43,7 +43,7 @@ export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry
         const tripletAttributes = triplets ? triplets.map(convertAttrib) : null;
 
         // add extra highlight vertex buffer and attribute
-        const highlightVB = glBuffer(gl, { kind: "ARRAY_BUFFER", size: subMesh.numVertices });
+        const highlightVB = glBuffer(gl, { kind: "ARRAY_BUFFER", byteSize: subMesh.numVertices });
         attributes.push({ kind: "UNSIGNED_INT", buffer: highlightVB, componentType: "UNSIGNED_BYTE" });
 
         const vao = glVertexArray(gl, { attributes, indices: ib });
@@ -120,8 +120,8 @@ export function getMultiDrawParams(mesh: Mesh, childMask: number): DrawParamsArr
             mode,
             drawCount,
             indexType,
-            offsetsList,
-            countsList
+            byteOffsets: offsetsList,
+            counts: countsList
         };
     } else {
         return {
@@ -129,7 +129,7 @@ export function getMultiDrawParams(mesh: Mesh, childMask: number): DrawParamsArr
             mode,
             drawCount,
             firstsList: offsetsList,
-            countsList
+            counts: countsList
         };
     }
 }

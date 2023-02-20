@@ -1,6 +1,6 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, glTransformFeedback, UniformTypes } from "webgl2";
+import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, glTransformFeedback, UniformTypes } from "webgl2";
 import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
@@ -25,7 +25,7 @@ class CubeModuleContext implements RenderModuleContext {
     readonly resources;
 
     constructor(readonly context: RenderContext, readonly data: CubeModule) {
-        this.uniforms = createUniformsProxy(data.uniforms);
+        this.uniforms = glUBOProxy(data.uniforms);
         const { gl, commonChunk } = context;
         const vertices = createVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
         const pos = createVertices((pos) => (pos));
@@ -51,9 +51,9 @@ class CubeModuleContext implements RenderModuleContext {
         const ib = glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
         const vao = glVertexArray(gl, {
             attributes: [
-                { kind: "FLOAT_VEC3", buffer: vb, stride: 36, offset: 0 }, // position
-                { kind: "FLOAT_VEC3", buffer: vb, stride: 36, offset: 12 }, // normal
-                { kind: "FLOAT_VEC3", buffer: vb, stride: 36, offset: 24 }, // color
+                { kind: "FLOAT_VEC3", buffer: vb, byteStride: 36, byteOffset: 0 }, // position
+                { kind: "FLOAT_VEC3", buffer: vb, byteStride: 36, byteOffset: 12 }, // normal
+                { kind: "FLOAT_VEC3", buffer: vb, byteStride: 36, byteOffset: 24 }, // color
             ],
             indices: ib
         });
@@ -63,19 +63,19 @@ class CubeModuleContext implements RenderModuleContext {
         const vb_tri = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: triplets });
         const vao_tri = glVertexArray(gl, {
             attributes: [
-                { kind: "FLOAT_VEC3", buffer: vb_tri, stride: 36, offset: 0 }, // position 0
-                { kind: "FLOAT_VEC3", buffer: vb_tri, stride: 36, offset: 12 }, // position 1
-                { kind: "FLOAT_VEC3", buffer: vb_tri, stride: 36, offset: 24 }, // position 2
+                { kind: "FLOAT_VEC3", buffer: vb_tri, byteStride: 36, byteOffset: 0 }, // position 0
+                { kind: "FLOAT_VEC3", buffer: vb_tri, byteStride: 36, byteOffset: 12 }, // position 1
+                { kind: "FLOAT_VEC3", buffer: vb_tri, byteStride: 36, byteOffset: 24 }, // position 2
             ],
         });
         gl.deleteBuffer(vb_tri);
 
         const transformFeedback = gl.createTransformFeedback()!;
 
-        const vb_line = glBuffer(gl, { kind: "ARRAY_BUFFER", size: 12 * 2 * 8, usage: "STATIC_DRAW" });
+        const vb_line = glBuffer(gl, { kind: "ARRAY_BUFFER", byteSize: 12 * 2 * 8, usage: "STATIC_DRAW" });
         const vao_line = glVertexArray(gl, {
             attributes: [
-                { kind: "FLOAT_VEC2", buffer: vb_line, stride: 8, offset: 0 }, // position
+                { kind: "FLOAT_VEC2", buffer: vb_line, byteStride: 8, byteOffset: 0 }, // position
             ],
         });
         this.resources = { program, program_transform, program_line, uniforms, vao, transformFeedback, vao_tri, vao_line, vb_line } as const;

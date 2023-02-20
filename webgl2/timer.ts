@@ -1,6 +1,6 @@
 import { EXT_disjoint_timer_query_webgl2_ext, glExtensions } from "./extensions";
 
-export function createTimer(gl: WebGL2RenderingContext): Timer {
+export function glCreateTimer(gl: WebGL2RenderingContext): Timer {
     const { disjointTimerQuery } = glExtensions(gl);
     if (disjointTimerQuery) {
         // Clear the disjoint state before starting to work with queries to increase the chances that the results will be valid.
@@ -19,6 +19,7 @@ export function createTimer(gl: WebGL2RenderingContext): Timer {
 export type Timer = CPUTimer | GPUTimer | GPUTimerTS;
 
 class CPUTimer {
+    readonly kind = "cpu";
     readonly promise: Promise<number>;
     readonly creationTime;
     #begin = 0;
@@ -50,6 +51,7 @@ class CPUTimer {
 }
 
 class GPUTimer {
+    readonly kind = "gpu_time_elapsed";
     readonly promise: Promise<number>;
     private readonly query;
     readonly #creationTime;
@@ -98,13 +100,13 @@ class GPUTimer {
 
 
 class GPUTimerTS {
+    readonly kind = "gpu_timestamp";
     readonly promise: Promise<number>;
     private readonly startQuery;
     private readonly endQuery;
     readonly #creationTime;
     #resolve: ((value: number | PromiseLike<number>) => void) = undefined!;
     #reject: ((reason?: any) => void) = undefined!;
-
 
     constructor(readonly gl: WebGL2RenderingContext, readonly ext: EXT_disjoint_timer_query_webgl2_ext) {
         this.#creationTime = performance.now();

@@ -1,5 +1,5 @@
 import { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, CoordSpace, createDefaultModules } from "./";
-import { glBuffer, glExtensions, glState, glUpdateBuffer, createUniformsProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment } from "webgl2";
+import { glBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
@@ -97,7 +97,7 @@ export class RenderContext {
         });
 
         // camera uniforms
-        this.cameraUniformsData = createUniformsProxy({
+        this.cameraUniformsData = glUBOProxy({
             clipViewMatrix: "mat4",
             viewClipMatrix: "mat4",
             localViewMatrix: "mat4",
@@ -107,7 +107,7 @@ export class RenderContext {
             windowSize: "vec2",
             near: "float",
         });
-        this.cameraUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.cameraUniformsData.buffer.byteLength });
+        this.cameraUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.cameraUniformsData.buffer.byteLength });
     }
 
     private deleteIblTextures() {
@@ -148,7 +148,7 @@ export class RenderContext {
     updateUniformBuffer(uniformBuffer: WebGLBuffer, proxy: UniformsProxy) {
         if (!proxy.dirtyRange.isEmpty) {
             const { begin, end } = proxy.dirtyRange;
-            glUpdateBuffer(this.gl, { kind: "UNIFORM_BUFFER", srcData: proxy.buffer, targetBuffer: uniformBuffer, srcOffset: begin, targetOffset: begin, size: end - begin });
+            glUpdateBuffer(this.gl, { kind: "UNIFORM_BUFFER", srcData: proxy.buffer, targetBuffer: uniformBuffer, srcElementOffset: begin, dstByteOffset: begin, byteSize: end - begin });
             proxy.dirtyRange.clear();
         }
     }
@@ -185,7 +185,6 @@ export class RenderContext {
         }
         return changed;
     }
-
 
     protected contextLost() {
         for (const module of this.moduleContexts) {

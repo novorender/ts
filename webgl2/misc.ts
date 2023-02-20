@@ -22,13 +22,9 @@ export function glErrorMessage(status: number) {
 
 export function glAttributesInfo(gl: WebGL2RenderingContext, program: WebGLProgram) {
     const numAttributes = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
-    const attributes: any[] = [];
+    const attributes: WebGLActiveInfo[] = [];
     for (let i = 0; i < numAttributes; ++i) {
-        const attrib: any = {};
-        const { name, size, type } = gl.getActiveAttrib(program, i)!;
-        attrib.name = name;
-        attrib.size = size;
-        attrib.type = type;
+        const attrib = gl.getActiveAttrib(program, i)!;
         attributes.push(attrib);
     }
     return attributes;

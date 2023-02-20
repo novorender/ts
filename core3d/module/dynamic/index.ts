@@ -1,6 +1,6 @@
 import { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes, glVertexArray, VertexArrayParams, VertexAttribute, DrawParamsElements, DrawParamsArrays, StateParams, glTexture, glSampler } from "webgl2";
+import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes, glVertexArray, VertexArrayParams, VertexAttribute, DrawParamsElements, DrawParamsArrays, StateParams, glTexture, glSampler } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat3, mat4, vec3 } from "gl-matrix";
@@ -258,7 +258,7 @@ class InstanceAsset {
             modelLocalMatrixNormal: "mat3",
             objectId: "uint",
         } as const satisfies Record<string, UniformTypes>;
-        this.uniforms = createUniformsProxy(uniformsDesc);
+        this.uniforms = glUBOProxy(uniformsDesc);
         const { values } = this.uniforms;
         values.objectId = data.objectId ?? 0xffffffff;
         const { gl } = context;
@@ -331,7 +331,7 @@ class MaterialAsset {
             emissiveUVSet: "int",
             radianceMipCount: "uint",
         } as const satisfies Record<string, UniformTypes>;
-        const uniformsProxy = this.uniforms = createUniformsProxy(uniformsDesc);
+        const uniformsProxy = this.uniforms = glUBOProxy(uniformsDesc);
         let tex = this.textures;
         let samp = this.samplers;
         const { values } = uniformsProxy;

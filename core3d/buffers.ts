@@ -38,8 +38,8 @@ export class RenderBuffers {
             ],
             depth: { kind: "DRAW_FRAMEBUFFER", texture: depth },
         });
-        const readLinearDepth = glBuffer(gl, { kind: "PIXEL_PACK_BUFFER", size: width * height * 4, usage: "STREAM_READ" });
-        const readInfo = glBuffer(gl, { kind: "PIXEL_PACK_BUFFER", size: width * height * 8, usage: "STREAM_READ" });
+        const readLinearDepth = glBuffer(gl, { kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 4, usage: "STREAM_READ" });
+        const readInfo = glBuffer(gl, { kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 8, usage: "STREAM_READ" });
         this.resources = { color, depth, linearDepth, info, frameBuffer, readLinearDepth, readInfo } as const;
         this.pick = {
             depths: new Float32Array(width * height * 1),

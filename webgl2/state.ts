@@ -163,8 +163,8 @@ export function glState(gl: WebGL2RenderingContext, params: StateParams | null) 
             if (uniformBindingParams === undefined)
                 continue;
             if (isUniformBufferBindingRange(uniformBindingParams)) {
-                const { buffer, offset, size } = uniformBindingParams;
-                gl.bindBufferRange(gl.UNIFORM_BUFFER, idx, buffer, offset, size);
+                const { buffer, byteOffset, byteSize } = uniformBindingParams;
+                gl.bindBufferRange(gl.UNIFORM_BUFFER, idx, buffer, byteOffset, byteSize);
             } else {
                 gl.bindBufferBase(gl.UNIFORM_BUFFER, idx, uniformBindingParams);
             }
@@ -317,8 +317,8 @@ export type UniformBinding = UniformBindingScalar | UniformBindingVector | Unifo
 
 export interface UniformBufferBindingRange {
     readonly buffer: WebGLBuffer;
-    readonly offset: number;
-    readonly size: number;
+    readonly byteOffset: number;
+    readonly byteSize: number;
 }
 
 export type UniformBufferBinding = UniformBufferBindingRange | WebGLBuffer | null | undefined; // if undefined, the buffer binding will not be changed
@@ -333,7 +333,7 @@ export interface TextureBinding {
 type FilteredKeys<T, U> = { [P in keyof T]: T[P] extends U ? P : never }[keyof T];
 
 function isUniformBufferBindingRange(params: UniformBufferBindingRange | WebGLBuffer | null): params is UniformBufferBindingRange {
-    return params != null && "offset" in params && "size" in params;
+    return params != null && "byteOffset" in params && "byteSize" in params;
 }
 
 const defaultConstants = {

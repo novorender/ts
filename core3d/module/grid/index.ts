@@ -1,7 +1,7 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import { CoordSpace } from "core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes } from "webgl2";
+import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat4, vec3 } from "gl-matrix";
@@ -27,7 +27,7 @@ class GridModuleContext implements RenderModuleContext {
     readonly resources;
 
     constructor(readonly context: RenderContext, readonly data: GridModule) {
-        this.uniforms = createUniformsProxy(data.uniforms);
+        this.uniforms = glUBOProxy(data.uniforms);
         const { gl, commonChunk } = context;
         const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Camera", "Grid"] });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });

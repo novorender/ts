@@ -1,5 +1,147 @@
 import { glExtensions } from "./extensions";
 
+export type ShaderExtensionName = "GL_ANGLE_multi_draw";
+
+export function* glShaderExtensions(gl: WebGL2RenderingContext): IterableIterator<ShaderExtension> {
+    if (glExtensions(gl).multiDraw) {
+        yield {
+            name: "GL_ANGLE_multi_draw",
+            behaviour: "require",
+        } as const satisfies ShaderExtension;
+    }
+}
+
+function defaultHeaderParams(gl: WebGL2RenderingContext): HeaderParams {
+    return {
+        version: "300 es",
+        extensions: [...glShaderExtensions(gl)],
+        defaultPrecisions: {
+            float: "high",
+            int: "high",
+            sampler2D: "high",
+            samplerCube: "high",
+            sampler3D: "high",
+            samplerCubeShadow: "high",
+            sampler2DShadow: "high",
+            sampler2DArray: "high",
+            sampler2DArrayShadow: "high",
+            isampler2D: "high",
+            isampler3D: "high",
+            isamplerCube: "high",
+            isampler2DArray: "high",
+            usampler2D: "high",
+            usampler3D: "high",
+            usamplerCube: "high",
+            usampler2DArray: "high",
+        },
+        defines: [],
+        commonChunk: "",
+    } as const satisfies HeaderParams;
+}
+
+function formatHeader(params: HeaderParams): string {
+    const version = `#version ${params.version}\n`;
+    const extensions = params.extensions.map(ext => `#extension ${ext.name} : ${ext.behaviour}\n`).join("");
+    const precisions = Object.entries(params.defaultPrecisions).map((name, precision) => `precision ${precision} ${name};\n`).join("");
+    const defines = params.defines.map(def => `#define ${def.name} ${def.value}\n`)?.join("");
+    const common = params.commonChunk;
+    const header = version + extensions + precisions + defines + common;
+    return header;
+}
+
+export function glCompile(gl: WebGL2RenderingContext, params: ShaderParams): WebGLShader {
+    const header = params.header ? typeof params.header == "string" ? params.header : formatHeader(params.header) : "";
+    const source = header + params.shader ?? "void main() {}";
+    const shader = gl.createShader(gl[params.kind])!;
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    return shader;
+}
+
+export function glLinkAsync(gl: WebGL2RenderingContext, params: LinkParams) {
+    const { attributes, transformFeedback, vertex, fragment } = params;
+    const program = gl.createProgram()!;
+
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+
+    if (attributes) {
+        let i = 0;
+        for (const name of attributes) {
+            gl.bindAttribLocation(program, i++, name);
+        }
+    }
+
+    if (transformFeedback) {
+        const { varyings, bufferMode } = transformFeedback;
+        gl.transformFeedbackVaryings(program, varyings, gl[bufferMode]);
+    }
+
+    gl.linkProgram(program);
+    // gl.validateProgram(program);
+
+    let resolveFunc: (value: WebGLProgram) => void = undefined!;
+    let rejectFunc: (reason?: any) => void = undefined!;
+    const promise = new Promise<WebGLProgram>((resolve, reject) => {
+        resolveFunc = resolve;
+        rejectFunc = reject;
+    });
+
+    const ext = glExtensions(gl).parallelShaderCompile;
+    let done = false;
+    function poll() {
+        if (done)
+            return;
+        if (ext) {
+            const complete = gl.getProgramParameter(program, ext?.COMPLETION_STATUS_KHR) == true;
+            if (!complete)
+                return;
+        }
+        const success = gl.getProgramParameter(program, ext?.COMPLETION_STATUS_KHR ?? gl.LINK_STATUS);
+        if (success == true || gl.isContextLost()) {
+            gl.detachShader(program, vertex);
+            gl.detachShader(program, fragment);
+            gl.deleteShader(vertex);
+            gl.deleteShader(fragment);
+            resolveFunc(program);
+        } else {
+            // get detailed errors from shaders
+            rejectFunc("Failed to create shader program!")
+        }
+        done = true;
+    }
+    return { poll, promise } as const;
+}
+
+export interface LinkParams {
+    readonly vertex: WebGLShader;
+    readonly fragment: WebGLShader;
+    // pre-link
+    readonly attributes?: readonly string[]; // The names of the vertex attributes to be bound using gl.bindAttribLocation().
+    readonly uniformBufferBlocks?: readonly string[]; // The names of the shader uniform blocks, which will be bound to the index in which the name appears in this array using gl.uniformBlockBinding().
+    // post-link
+    readonly textureUniforms?: readonly string[]; // Texture uniforms will be bound to the index in which they appear in the name array.
+    readonly transformFeedback?: {
+        readonly bufferMode: "INTERLEAVED_ATTRIBS" | "SEPARATE_ATTRIBS";
+        readonly varyings: readonly string[];
+    }
+
+}
+
+export interface VertexShaderParams {
+    readonly kind: "VERTEX_SHADER";
+    readonly header?: string | HeaderParams;
+    readonly shader: string;
+}
+
+export interface FragmentShaderParams {
+    readonly kind: "FRAGMENT_SHADER";
+    readonly header?: string | HeaderParams;
+    readonly shader?: string;
+}
+
+export type ShaderParams = VertexShaderParams | FragmentShaderParams;
+
 export function glProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
     const { flags, transformFeedback, uniformBufferBlocks, textureUniforms, headerChunk, commonChunk } = params;
     const extensions: string[] = [];
@@ -64,7 +206,7 @@ export function glProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
     return program;
 }
 
-function compileShader(gl: WebGLRenderingContext, type: "VERTEX_SHADER" | "FRAGMENT_SHADER", source: string): WebGLShader {
+function compileShader(gl: WebGL2RenderingContext, type: "VERTEX_SHADER" | "FRAGMENT_SHADER", source: string): WebGLShader {
     const shader = gl.createShader(gl[type])!;
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
@@ -74,6 +216,67 @@ function compileShader(gl: WebGLRenderingContext, type: "VERTEX_SHADER" | "FRAGM
         throw new Error(`: Failed to compile glsl ${typeName} shader!\r\n${errorMsg}`);
     }
     return shader;
+}
+
+export interface ShaderExtension {
+    readonly name: ShaderExtensionName | string;
+    readonly behaviour: "enable" | "require" | "warn" | "disable";
+}
+
+export interface ShaderDefine {
+    readonly name: string;
+    readonly value?: string;
+}
+
+export type ShaderPrecision = "high" | "medium" | "low";
+
+export interface ShaderDefaultPrecisions {
+    readonly float: ShaderPrecision; // no default value in frag shader
+    readonly int: ShaderPrecision; // high in vert shader, medium in frag shader.
+
+    // lowp by default
+    readonly sampler2D: ShaderPrecision;
+    readonly samplerCube: ShaderPrecision;
+
+    // no default value
+    readonly sampler3D: ShaderPrecision;
+    readonly samplerCubeShadow: ShaderPrecision;
+    readonly sampler2DShadow: ShaderPrecision;
+    readonly sampler2DArray: ShaderPrecision;
+    readonly sampler2DArrayShadow: ShaderPrecision;
+    readonly isampler2D: ShaderPrecision;
+    readonly isampler3D: ShaderPrecision;
+    readonly isamplerCube: ShaderPrecision;
+    readonly isampler2DArray: ShaderPrecision;
+    readonly usampler2D: ShaderPrecision;
+    readonly usampler3D: ShaderPrecision;
+    readonly usamplerCube: ShaderPrecision;
+    readonly usampler2DArray: ShaderPrecision;
+}
+
+export interface HeaderParams {
+    readonly version?: "300 es";
+    readonly extensions: readonly ShaderExtension[];
+    readonly defaultPrecisions: Partial<ShaderDefaultPrecisions>;
+    readonly defines: readonly ShaderDefine[]; // Preprocessor #define statements.
+    readonly commonChunk: string; // this string is injected before the shader code prior to compilation
+}
+
+export interface PrecompileParams {
+    readonly header?: string | HeaderParams; // this string is injected before the shader code prior to compilation
+}
+
+export interface PrelinkParams {
+    readonly attributes?: readonly string[]; // The names of the vertex attributes to be bound using gl.bindAttribLocation().
+    readonly uniformBufferBlocks?: readonly string[]; // The names of the shader uniform blocks, which will be bound to the index in which the name appears in this array using gl.uniformBlockBinding().
+}
+
+export interface PostlinkParams {
+    readonly textureUniforms?: readonly string[]; // Texture uniforms will be bound to the index in which they appear in the name array.
+    readonly transformFeedback?: {
+        readonly bufferMode: "INTERLEAVED_ATTRIBS" | "SEPARATE_ATTRIBS";
+        readonly varyings: readonly string[];
+    }
 }
 
 export interface ProgramParams {

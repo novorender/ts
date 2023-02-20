@@ -10,8 +10,9 @@ export function glExtensions(gl: WebGL2RenderingContext, refresh = false) {
 function getWebGL2Extensions(gl: WebGL2RenderingContext) {
     return {
         colorBufferFloat: gl.getExtension("EXT_color_buffer_float") as WEBGL_color_buffer_float | null, // also includes half floats
+        parallelShaderCompile: gl.getExtension("KHR_parallel_shader_compile") as KHR_parallel_shader_compile | null,
         loseContext: gl.getExtension("WEBGL_lose_context") as WEBGL_lose_context | null,
-        multiDraw: gl.getExtension("WEBGL_MULTI_DRAW") as WebGL_multi_draw_ext | null,
+        multiDraw: gl.getExtension("WEBGL_MULTI_DRAW") as WEBGL_multi_draw | null,
         drawBuffersIndexed: gl.getExtension("OES_draw_buffers_indexed") as OES_draw_buffers_indexed_ext | null,
         disjointTimerQuery: gl.getExtension('EXT_disjoint_timer_query_webgl2') as EXT_disjoint_timer_query_webgl2_ext,
     } as const;
@@ -22,18 +23,6 @@ const glExtensionsMap = new WeakMap<WebGL2RenderingContext, ExtensionsGL>();
 export type ExtensionsGL = ReturnType<typeof getWebGL2Extensions>;
 
 // temporary types until extensions become part of standard ts lib
-export interface WebGL_multi_draw_ext {
-    multiDrawArraysWEBGL(mode: number,
-        firstsList: Int32Array, firstsOffset: number,
-        countsList: Int32Array, countsOffset: number,
-        drawCount: number): void;
-    multiDrawElementsWEBGL(mode: number,
-        offsetsList: Int32Array, offsetsOffset: number,
-        type: number,
-        countsList: Int32Array, countsOffset: number,
-        drawCount: number): void;
-}
-
 export interface OES_draw_buffers_indexed_ext {
     enableiOES(target: number, index: number): void;
     disableiOES(target: number, index: number): void;

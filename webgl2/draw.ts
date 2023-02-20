@@ -5,15 +5,15 @@ export function glDraw(gl: WebGL2RenderingContext, params: DrawParams) {
     if (isMultiDraw(params)) {
         const { multiDraw } = glExtensions(gl);
         if (multiDraw) {
-            const { drawCount, countsList, countsOffset } = params;
+            const { drawCount, counts, countsOffset } = params;
             switch (params.kind) {
                 case "arrays_multidraw":
                     const { firstsList, firstsOffset } = params;
-                    multiDraw.multiDrawArraysWEBGL(gl[mode], firstsList, firstsOffset ?? 0, countsList, countsOffset ?? 0, drawCount);
+                    multiDraw.multiDrawArraysWEBGL(gl[mode], firstsList, firstsOffset ?? 0, counts, countsOffset ?? 0, drawCount);
                     break;
                 case "elements_multidraw":
-                    const { offsetsList, offsetsOffset, indexType } = params;
-                    multiDraw.multiDrawElementsWEBGL(gl[mode], countsList, countsOffset ?? 0, gl[indexType], offsetsList, offsetsOffset ?? 0, drawCount);
+                    const { byteOffsets, byteOffsetsOffset, indexType } = params;
+                    multiDraw.multiDrawElementsWEBGL(gl[mode], counts, countsOffset ?? 0, gl[indexType], byteOffsets, byteOffsetsOffset ?? 0, drawCount);
                     break;
             }
         } else {
@@ -23,16 +23,16 @@ export function glDraw(gl: WebGL2RenderingContext, params: DrawParams) {
         const { count } = params;
         if (isInstanced(params)) {
             if (isElements(params)) {
-                gl.drawElementsInstanced(gl[mode], count, gl[params.indexType], params.offset ?? 0, params.instanceCount);
+                gl.drawElementsInstanced(gl[mode], count, gl[params.indexType], params.byteOffset ?? 0, params.instanceCount);
             } else {
                 gl.drawArraysInstanced(gl[mode], params.first ?? 0, count, params.instanceCount);
             }
         } else {
             if (isElements(params)) {
                 if (isRange(params)) {
-                    gl.drawRangeElements(gl[mode], params.minIndex, params.maxIndex, count, gl[params.indexType], params.offset ?? 0);
+                    gl.drawRangeElements(gl[mode], params.minIndex, params.maxIndex, count, gl[params.indexType], params.byteOffset ?? 0);
                 } else {
-                    gl.drawElements(gl[mode], count, gl[params.indexType], params.offset ?? 0);
+                    gl.drawElements(gl[mode], count, gl[params.indexType], params.byteOffset ?? 0);
                 }
             } else {
                 gl.drawArrays(gl[mode], params.first ?? 0, count);
@@ -81,7 +81,7 @@ export interface DrawParamsArraysMultiDraw extends DrawParamsBase {
     readonly drawCount: number;
     readonly firstsList: Int32Array;
     readonly firstsOffset?: number; // default: 0
-    readonly countsList: Int32Array;
+    readonly counts: Int32Array;
     readonly countsOffset?: number; // default: 0
 }
 
@@ -93,7 +93,7 @@ export interface DrawParamsElements extends DrawParamsBase {
     /** Type of indices */
     readonly indexType: "UNSIGNED_BYTE" | "UNSIGNED_SHORT" | "UNSIGNED_INT";
     /** Byte offset in the element array buffer. Must be a valid multiple of the size of the given type. */
-    readonly offset?: number; // default: 0
+    readonly byteOffset?: number; // default: 0
 }
 
 export interface DrawParamsElementsRange extends DrawParamsBase {
@@ -104,7 +104,7 @@ export interface DrawParamsElementsRange extends DrawParamsBase {
     /** Type of indices */
     readonly indexType: "UNSIGNED_BYTE" | "UNSIGNED_SHORT" | "UNSIGNED_INT";
     /** Byte offset in the element array buffer. Must be a valid multiple of the size of the given type. */
-    readonly offset?: number; // default: 0
+    readonly byteOffset?: number; // default: 0
     /** The minimum array index contained in buffer range. */
     readonly minIndex: number; // start vertex index
     /** The maximum array index contained in buffer range. */
@@ -116,9 +116,9 @@ export interface DrawParamsElementsMultiDraw extends DrawParamsBase {
     readonly kind: "elements_multidraw",
     readonly drawCount: number;
     readonly indexType: "UNSIGNED_BYTE" | "UNSIGNED_SHORT" | "UNSIGNED_INT";
-    readonly offsetsList: Int32Array;
-    readonly offsetsOffset?: number; // default: 0
-    readonly countsList: Int32Array;
+    readonly byteOffsets: Int32Array;
+    readonly byteOffsetsOffset?: number; // default: 0
+    readonly counts: Int32Array;
     readonly countsOffset?: number; // default: 0
 }
 
@@ -136,6 +136,6 @@ export interface DrawParamsElementsInstanced extends DrawParamsBase {
     readonly count: number;
     readonly instanceCount: number;
     readonly indexType: "UNSIGNED_BYTE" | "UNSIGNED_SHORT" | "UNSIGNED_INT";
-    readonly offset?: number; // default: 0
+    readonly byteOffset?: number; // default: 0
 }
 

@@ -1,5 +1,5 @@
 import { mat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
-import { createUniformsProxy, glBuffer, glUpdateBuffer } from "webgl2";
+import { glUBOProxy, glBuffer, glUpdateBuffer } from "webgl2";
 import { CoordSpace, DerivedRenderState, RenderContext, RenderStateHighlightGroup } from "core3d";
 import { Downloader } from "./download";
 import { createMeshes, deleteMesh, Mesh, meshPrimitiveCount, updateMeshHighlightGroups } from "./mesh";
@@ -71,7 +71,7 @@ export class OctreeNode {
 
         const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         this.size = Math.pow(2, data.tolerance) * toleranceScale;
-        this.uniformsData = createUniformsProxy({
+        this.uniformsData = glUBOProxy({
             modelLocalMatrix: "mat4",
             tolerance: "float",
             debugColor: "vec4",
@@ -285,7 +285,7 @@ export class OctreeNode {
                 }
                 this.state = NodeState.ready;
                 meshes.push(...createMeshes(gl, geometry));
-                this.uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniformsData.buffer.byteLength });
+                this.uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
                 glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
                 const groups = renderContext.prevState?.highlights.groups;
                 if (groups && groups.length) {

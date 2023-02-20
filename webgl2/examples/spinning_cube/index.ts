@@ -5,14 +5,14 @@ import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
 
 export async function spinning_cube(gl: WebGL2RenderingContext) {
     const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Uniforms"] });
-    const uniformBuffer = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: 4 * 4 * 4 })
+    const uniformBuffer = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: 4 * 4 * 4 })
     // const proj = renderer.gl.getUniformLocation(program, "proj");
     const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: createVertices() });
     const ib = glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: createIndices() });
     const vao = glVertexArray(gl, {
         attributes: [
-            { kind: "FLOAT_VEC3", buffer: vb, stride: 24, }, // position
-            { kind: "FLOAT_VEC3", buffer: vb, stride: 24, offset: 12 } // color
+            { kind: "FLOAT_VEC3", buffer: vb, byteStride: 24, }, // position
+            { kind: "FLOAT_VEC3", buffer: vb, byteStride: 24, byteOffset: 12 } // color
         ],
         indices: ib
     });

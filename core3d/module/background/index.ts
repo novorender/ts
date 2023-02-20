@@ -1,7 +1,7 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import { KTX } from "core3d/ktx";
 import { RenderModuleContext, RenderModule } from "..";
-import { createUniformsProxy, glClear, glProgram, glTexture, glDraw, glState, TextureParams, glBuffer, glDelete, UniformTypes, TextureParamsCubeUncompressed, TextureParamsCubeUncompressedMipMapped } from "webgl2";
+import { glUBOProxy, glClear, glProgram, glTexture, glDraw, glState, TextureParams, glBuffer, glDelete, UniformTypes, TextureParamsCubeUncompressed, TextureParamsCubeUncompressedMipMapped } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { BufferFlags } from "@novorender/core3d/buffers";
@@ -65,11 +65,11 @@ class BackgroundModuleContext implements RenderModuleContext {
 
     constructor(readonly context: RenderContext, readonly data: BackgroundModule) {
         const { gl, commonChunk } = context;
-        this.uniforms = createUniformsProxy(data.uniforms);
+        this.uniforms = glUBOProxy(data.uniforms);
         const uniformBufferBlocks = ["Camera", "Background"];
         const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
         const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniforms.buffer.byteLength });
+        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
         this.skybox = glTexture(gl, context.defaultIBLTextureParams);
         this.resources = { program, uniforms } as const;
     }

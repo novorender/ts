@@ -1,6 +1,6 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { createUniformsProxy, glProgram, glSampler, glDraw, glState, glDelete, glBuffer, UniformTypes } from "webgl2";
+import { glUBOProxy, glProgram, glSampler, glDraw, glState, glDelete, glBuffer, UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
@@ -22,13 +22,13 @@ class TonemapModuleContext implements RenderModuleContext {
 
     constructor(readonly context: RenderContext, readonly data: TonemapModule) {
         const { gl, commonChunk } = context;
-        this.uniforms = createUniformsProxy(data.uniforms);
+        this.uniforms = glUBOProxy(data.uniforms);
         const uniformBufferBlocks = ["Tonemapping"];
         const textureNames = ["color", "depth", "info", "zbuffer"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
         const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
         const sampler = glSampler(gl, { minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", size: this.uniforms.buffer.byteLength });
+        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
         this.resources = { program, sampler, uniforms } as const;
     }
 

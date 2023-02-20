@@ -53,8 +53,8 @@ export interface VertexAttributeData {
     readonly buffer: number; // index into buffer array
     readonly componentCount: 1 | 2 | 3 | 4;
     readonly normalized: boolean;
-    readonly stride: number;
-    readonly offset?: number;
+    readonly byteStride: number;
+    readonly byteOffset?: number;
 };
 
 export interface VertexAttributes {
@@ -496,17 +496,17 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
         }
         const posBufferIndex = positionBuffer ? tripletBuffer ? 2 : 1 : 0;
         const vertexAttributes = {
-            position: { kind: "FLOAT_VEC4", buffer: posBufferIndex, componentCount: 3, componentType: "SHORT", normalized: true, offset: attribOffsets["position"], stride: separatePositionBuffer ? 0 : stride },
-            normal: (attributes & OptionalVertexAttribute.normal) != 0 ? { kind: "FLOAT_VEC3", buffer, componentCount: 3, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["normal"], stride } : null,
-            material: hasMaterials ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, offset: attribOffsets["materialIndex"], stride } : null,
-            objectId: hasObjectIds ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, offset: attribOffsets["objectId"], stride } : null,
-            texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, offset: attribOffsets["texCoord"], stride } : null,
-            color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, offset: attribOffsets["color"], stride } : null,
-            deviation: (attributes & OptionalVertexAttribute.deviation) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "HALF_FLOAT", normalized: false, offset: attribOffsets["deviation"], stride } : null,
+            position: { kind: "FLOAT_VEC4", buffer: posBufferIndex, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: attribOffsets["position"], byteStride: separatePositionBuffer ? 0 : stride },
+            normal: (attributes & OptionalVertexAttribute.normal) != 0 ? { kind: "FLOAT_VEC3", buffer, componentCount: 3, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["normal"], byteStride: stride } : null,
+            material: hasMaterials ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, byteOffset: attribOffsets["materialIndex"], byteStride: stride } : null,
+            objectId: hasObjectIds ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, byteOffset: attribOffsets["objectId"], byteStride: stride } : null,
+            texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["texCoord"], byteStride: stride } : null,
+            color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["color"], byteStride: stride } : null,
+            deviation: (attributes & OptionalVertexAttribute.deviation) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["deviation"], byteStride: stride } : null,
             triplets: tripletBuffer ? [
-                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, offset: 0, stride: 18 },
-                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, offset: 6, stride: 18 },
-                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, offset: 12, stride: 18 }
+                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 0, byteStride: 18 },
+                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 6, byteStride: 18 },
+                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 12, byteStride: 18 }
             ] : null,
         } as const satisfies VertexAttributes;
 

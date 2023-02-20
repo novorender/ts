@@ -1,6 +1,6 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { createUniformsProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, UniformTypes } from "webgl2";
+import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import logoBinary from "./logo.bin";
@@ -33,7 +33,7 @@ class WatermarkModuleContext implements RenderModuleContext {
     readonly resources;
 
     constructor(readonly context: RenderContext, readonly data: WatermarkModule) {
-        this.uniforms = createUniformsProxy(data.uniforms);
+        this.uniforms = glUBOProxy(data.uniforms);
         const { gl, commonChunk } = context;
         const { vertices, indices } = data.geometry();
 
@@ -44,7 +44,7 @@ class WatermarkModuleContext implements RenderModuleContext {
         const ib = glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
         const vao = glVertexArray(gl, {
             attributes: [
-                { kind: "FLOAT_VEC3", buffer: vb, stride: 12, offset: 0 }, // position
+                { kind: "FLOAT_VEC3", buffer: vb, byteStride: 12, byteOffset: 0 }, // position
             ],
             indices: ib
         });

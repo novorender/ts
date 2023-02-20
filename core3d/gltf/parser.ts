@@ -214,8 +214,8 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
                     componentType: attributeCompontentTypes[componentType],
                     componentCount: attributeComponentCounts[type],
                     normalized: accessor.normalized ?? false,
-                    stride: bufferView.byteStride ?? 0,
-                    offset: accessor.byteOffset ?? 0,
+                    byteStride: bufferView.byteStride ?? 0,
+                    byteOffset: accessor.byteOffset ?? 0,
                 } as const satisfies RenderStateDynamicVertexAttribute;
                 Reflect.set(attributes, name, attrib);
             };

@@ -20,9 +20,9 @@ export function createTestCube(): RenderStateDynamicObject {
     const indices = createCubeIndices();
 
     const attributes = {
-        position: { kind: "FLOAT_VEC3", buffer: vertices, stride: 36, offset: 0 },
-        normal: { kind: "FLOAT_VEC3", buffer: vertices, stride: 36, offset: 12 },
-        color0: { kind: "FLOAT_VEC3", buffer: vertices, stride: 36, offset: 24 },
+        position: { kind: "FLOAT_VEC3", buffer: vertices, byteStride: 36, byteOffset: 0 },
+        normal: { kind: "FLOAT_VEC3", buffer: vertices, byteStride: 36, byteOffset: 12 },
+        color0: { kind: "FLOAT_VEC3", buffer: vertices, byteStride: 36, byteOffset: 24 },
     } as const satisfies RenderStateDynamicVertexAttributes;
 
     const geometry: RenderStateDynamicGeometry = {

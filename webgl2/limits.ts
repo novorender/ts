@@ -9,7 +9,7 @@ export function glLimits(gl: WebGL2RenderingContext) {
 
 const glLimitsMap = new WeakMap<WebGL2RenderingContext, LimitsGL>();
 
-export function getWebGL2Limits(gl: WebGL2RenderingContext) {
+function getWebGL2Limits(gl: WebGL2RenderingContext) {
     const names = [
         "MAX_TEXTURE_SIZE",
         "MAX_VIEWPORT_DIMS",

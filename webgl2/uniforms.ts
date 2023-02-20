@@ -52,7 +52,7 @@ export function glUniformLocations</*const*/ T extends readonly string[]>(gl: We
 }
 
 // apply std140 layout rules (https://registry.khronos.org/OpenGL/specs/gl/glspec45.core.pdf#page=159)
-export function createUniformsProxy<T extends Record<string, UniformTypes>>(values: T) {
+export function glUBOProxy<T extends Record<string, UniformTypes>>(values: T) {
     type Keys = Extract<keyof T, string>;
     const offsetsMap: Record<string, readonly number[]> = {};
     let offset = 0;
