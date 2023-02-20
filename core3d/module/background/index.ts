@@ -21,10 +21,7 @@ export class BackgroundModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     async withContext(context: RenderContext) {
-        const uniformBufferBlocks = ["Camera", "Background"];
-        const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
-        const program = await context.makeProgramAsync({ vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms });
-        return new BackgroundModuleContext(context, this, program);
+        return new BackgroundModuleContext(context, this);
     }
 
     // TODO: Move into worker?
@@ -66,12 +63,12 @@ class BackgroundModuleContext implements RenderModuleContext {
     readonly resources;
     skybox: WebGLTexture;
 
-    constructor(readonly context: RenderContext, readonly data: BackgroundModule, program: WebGLProgram) {
+    constructor(readonly context: RenderContext, readonly data: BackgroundModule) {
         const { gl, commonChunk } = context;
         this.uniforms = glUBOProxy(data.uniforms);
-        // const uniformBufferBlocks = ["Camera", "Background"];
-        // const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
-        // const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
+        const uniformBufferBlocks = ["Camera", "Background"];
+        const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
+        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
         this.skybox = glTexture(gl, context.defaultIBLTextureParams);
         this.resources = { program, uniforms } as const;

@@ -16,6 +16,54 @@ export * from "./context";
 export * from "./module";
 export * from "./highlight";
 
+
+export async function init(canvas: HTMLCanvasElement, setRenderContext: (context: RenderContext) => void) {
+    const options: WebGLContextAttributes = {
+        alpha: true,
+        antialias: false,
+        depth: false,
+        desynchronized: false,
+        failIfMajorPerformanceCaveat: true,
+        powerPreference: "high-performance",
+        premultipliedAlpha: true,
+        preserveDrawingBuffer: false,
+        stencil: false,
+    };
+
+    const wasm = await wasmInstance();
+    const blob = new Blob([lut_ggx_png], { type: "image/png" });
+    const lut_ggx = await createImageBitmap(blob);
+    let context: RenderContext | undefined;
+
+    canvas.addEventListener("webglcontextlost", function (event: WebGLContextEvent) {
+        event.preventDefault();
+        console.info("WebGL Context lost!");
+        if (context) {
+            context["contextLost"]();
+            context = undefined;
+        }
+        // trigger a reset of canvas on safari.
+        canvas.width = 300;
+        canvas.height = 150;
+        if (animId !== undefined)
+            cancelAnimationFrame(animId);
+        animId = undefined;
+    } as (event: Event) => void, false);
+
+    canvas.addEventListener("webglcontextrestored", function (event: WebGLContextEvent) {
+        console.info("WebGL Context restored!");
+        createContext();
+    } as (event: Event) => void, false);
+
+
+    let animId: number | undefined;
+    function createContext() {
+        context = new RenderContext(canvas, wasm, lut_ggx, options);
+        setRenderContext(context)
+    }
+    createContext();
+}
+
 function nextFrame() {
     return new Promise<number>((resolve) => {
         requestAnimationFrame(resolve);
