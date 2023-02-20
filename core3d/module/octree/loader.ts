@@ -1,9 +1,9 @@
 ///@ts-ignore
 import createWorker from "./loader.worker.js"; // uses esbuild-plugin-inline-worker to inline worker code.
-import type { RenderStateScene } from "@novorender/ts/core3d/state";
+import type { RenderStateScene } from "@novorender/core3d/state";
 import { AbortAllMessage, AbortMessage, CloseMessage, FilteredMessage, FilterMessage, LoaderHandler, LoadMessage, MessageRequest, MessageResponse, NodePayload } from "./loader_handler";
 import { OctreeNode } from "./node.js";
-import { filterSortedExclude, filterSortedInclude } from "@novorender/ts/core3d/iterate.js";
+import { filterSortedExclude, filterSortedInclude } from "@novorender/core3d/iterate.js";
 
 interface PayloadPromiseMethods { readonly resolve: (value: NodePayload | undefined) => void, readonly reject: (reason: string) => void };
 

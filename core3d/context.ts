@@ -1,5 +1,5 @@
 import { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, CoordSpace, createDefaultModules } from "./";
-import { glBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, glCheckProgram, glProgramAsync, ShaderHeaderParams } from "@novorender/ts/webgl2";
+import { glBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, glCheckProgram, glProgramAsync, ShaderHeaderParams } from "@novorender/webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";

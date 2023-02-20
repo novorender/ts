@@ -1,9 +1,9 @@
 import { ReadonlyVec3, vec3 } from "gl-matrix";
-import { AABB, BoundingSphere } from "@novorender/ts/core3d/state";
+import { AABB, BoundingSphere } from "@novorender/core3d/state";
 import { Double3, Float3, MaterialType, OptionalVertexAttribute, PrimitiveType, readSchema, Schema, SubMeshProjection, TextureSemantic } from "./schema";
 import { BufferReader, Float16Array } from "./util";
-import type { ComponentType, ShaderAttributeType, TextureParams, TextureParams2DArrayUncompressed, TextureParams2DUncompressed } from "@novorender/ts/webgl2";
-import { KTX } from "@novorender/ts/core3d/ktx";
+import type { ComponentType, ShaderAttributeType, TextureParams, TextureParams2DArrayUncompressed, TextureParams2DUncompressed } from "@novorender/webgl2";
+import { KTX } from "@novorender/core3d/ktx";
 // import { Public, Render } from "types";
 // import { MeshDrawRange } from "../context";
 

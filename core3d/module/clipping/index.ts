@@ -1,7 +1,7 @@
-import type { DerivedRenderState, RenderContext } from "@novorender/ts/core3d";
-import { CoordSpace } from "@novorender/ts/core3d";
+import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
+import { CoordSpace } from "@novorender/core3d";
 import { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, glUniformsInfo, UniformTypes } from "@novorender/ts/webgl2";
+import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, glUniformsInfo, UniformTypes } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat4, vec3, vec4 } from "gl-matrix";

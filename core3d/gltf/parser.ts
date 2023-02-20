@@ -1,6 +1,6 @@
 import { vec3, mat4, quat, ReadonlyMat4 } from "gl-matrix";
-import type { MagFilterString, MinFilterString, TextureParams2DUncompressed, WrapString } from "@novorender/ts/webgl2";
-import { GL } from "@novorender/ts/webgl2/constants";
+import type { MagFilterString, MinFilterString, TextureParams2DUncompressed, WrapString } from "@novorender/webgl2";
+import { GL } from "@novorender/webgl2/constants";
 import { RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterialGGX, RenderStateDynamicMaterialUnlit, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicNormalTextureReference, RenderStateDynamicObject, RenderStateDynamicOcclusionTextureReference, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicTextureReference, RenderStateDynamicVertexAttribute, RenderStateDynamicVertexAttributes, RGB, RGBA } from "../state";
 import * as GLTF from "./types";
 

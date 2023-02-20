@@ -1,6 +1,6 @@
-import { glBuffer, glVertexArray, DrawParams, VertexAttribute, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glTexture, glUpdateBuffer } from "@novorender/ts/webgl2";
-import type { RenderStateHighlightGroup } from "@novorender/ts/core3d";
-import { mergeSorted } from "@novorender/ts/core3d/iterate";
+import { glBuffer, glVertexArray, DrawParams, VertexAttribute, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glTexture, glUpdateBuffer } from "@novorender/webgl2";
+import type { RenderStateHighlightGroup } from "@novorender/core3d";
+import { mergeSorted } from "@novorender/core3d/iterate";
 import { MeshDrawRange, MeshObjectRange, NodeGeometry, VertexAttributeData } from "./parser";
 import { MaterialType } from "./schema";
 

@@ -1,5 +1,5 @@
 import { ReadonlyMat3, ReadonlyMat4 } from "gl-matrix";
-import { DrawMode, MagFilterString, MinFilterString, RGBA, TextureParams2DUncompressed, VertexAttribute, WrapString } from "@novorender/ts/webgl2";
+import { DrawMode, MagFilterString, MinFilterString, RGBA, TextureParams2DUncompressed, VertexAttribute, WrapString } from "@novorender/webgl2";
 import { RGB } from "./types";
 
 export interface RenderStateDynamicImage {

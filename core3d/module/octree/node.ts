@@ -1,6 +1,6 @@
 import { mat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
-import { glUBOProxy, glBuffer, glUpdateBuffer } from "@novorender/ts/webgl2";
-import { CoordSpace, DerivedRenderState, RenderContext, RenderStateHighlightGroup } from "@novorender/ts/core3d";
+import { glUBOProxy, glBuffer, glUpdateBuffer } from "@novorender/webgl2";
+import { CoordSpace, DerivedRenderState, RenderContext, RenderStateHighlightGroup } from "@novorender/core3d";
 import { Downloader } from "./download";
 import { createMeshes, deleteMesh, Mesh, meshPrimitiveCount, updateMeshHighlightGroups } from "./mesh";
 import { NodeData } from "./parser";
