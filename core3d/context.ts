@@ -272,12 +272,12 @@ export class RenderContext {
         }
     }
 
-    protected poll() {
+    public poll() {
         this.buffers?.pollPickFence();
         this.pollAsyncPrograms();
     }
 
-    protected render(state: RenderState) {
+    public render(state: RenderState) {
         const beginTime = performance.now();
         const { gl, canvas, prevState } = this;
         this.changed = false;
