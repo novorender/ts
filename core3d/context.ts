@@ -1,5 +1,5 @@
 import { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, CoordSpace, createDefaultModules } from "./";
-import { glBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment } from "webgl2";
+import { glBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, glCheckProgram, ShaderParams, glCompile, VertexShaderParams, FragmentShaderParams, glProgramAsync, ShaderHeaderParams } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
@@ -18,6 +18,7 @@ export class RenderContext {
     private readonly moduleContexts: (RenderModuleContext | undefined)[];
     private cameraUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
+    private readonly asyncPrograms: AsyncProgramInfo[] = [];
     readonly gl: WebGL2RenderingContext;
     readonly commonChunk: string;
     readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
@@ -95,6 +96,12 @@ export class RenderContext {
                 this.moduleContexts[i] = m;
             });
         });
+
+        // link all programs here (this is supposedly faster than mixing compiles and links)
+        for (const { program } of this.asyncPrograms) {
+            gl.linkProgram(program);
+        }
+        gl.useProgram(null);
 
         // camera uniforms
         this.cameraUniformsData = glUBOProxy({
@@ -186,6 +193,79 @@ export class RenderContext {
         return changed;
     }
 
+    makeProgramAsync(params: AsyncProgramParams) {
+        const { gl, commonChunk } = this;
+        const header = { commonChunk, ...params.header } as const; // inject common shader code here, if not defined in params.
+        const programAsync = glProgramAsync(gl, { ...params, header });
+        const { program } = programAsync;
+
+        // do pre-link bindings here
+        const { attributes, transformFeedback, uniformBufferBlocks, textureUniforms } = params;
+        if (attributes) {
+            let i = 0;
+            for (const name of attributes) {
+                gl.bindAttribLocation(program, i++, name);
+            }
+        }
+        if (transformFeedback) {
+            const { varyings, bufferMode } = transformFeedback;
+            gl.transformFeedbackVaryings(program, varyings, gl[bufferMode]);
+        }
+
+        return new Promise<WebGLProgram>((resolve, reject) => {
+            // do post-link bindings here
+            function postLink() {
+                gl.useProgram(program);
+
+                if (uniformBufferBlocks) {
+                    let idx = 0;
+                    for (const name of uniformBufferBlocks) {
+                        if (name) {
+                            const blockIndex = gl.getUniformBlockIndex(program, name);
+                            if (blockIndex != gl.INVALID_INDEX) {
+                                gl.uniformBlockBinding(program, blockIndex, idx);
+                            } else {
+                                console.warn(`Shader has no uniform block named: ${name}!`);
+                            }
+                        }
+                        idx++;
+                    }
+                }
+
+                if (textureUniforms) {
+                    let i = 0;
+                    for (const name of textureUniforms) {
+                        const location = gl.getUniformLocation(program, name);
+                        gl.uniform1i(location, i++);
+                    }
+                }
+
+                gl.useProgram(null);
+                resolve(program);
+            }
+            this.asyncPrograms.push({ ...programAsync, resolve: postLink, reject });
+        });
+    }
+
+    private pollAsyncPrograms() {
+        const { gl, asyncPrograms } = this;
+        const ext = glExtensions(gl).parallelShaderCompile;
+        for (let i = 0; i < asyncPrograms.length; i++) {
+            const { program, resolve, reject } = asyncPrograms[i];
+            if (ext) {
+                if (!gl.getProgramParameter(program, ext.COMPLETION_STATUS_KHR))
+                    continue;
+            }
+            const [info] = asyncPrograms.splice(i--, 1);
+            const error = glCheckProgram(gl, info);
+            if (error) {
+                reject(error);
+            } else {
+                resolve();
+            }
+        }
+    }
+
     protected contextLost() {
         for (const module of this.moduleContexts) {
             module?.contextLost();
@@ -194,6 +274,7 @@ export class RenderContext {
 
     protected poll() {
         this.buffers?.pollPickFence();
+        this.pollAsyncPrograms();
     }
 
     protected render(state: RenderState) {
@@ -384,3 +465,28 @@ export interface PickSample {
     readonly objectId: number;
     readonly deviation: number;
 };
+
+export interface AsyncProgramParams {
+    readonly header?: Partial<ShaderHeaderParams>;
+    readonly vertexShader: string;
+    readonly fragmentShader: string;
+    // pre-link bindings
+    readonly attributes?: readonly string[]; // The names of the vertex attributes to be bound using gl.bindAttribLocation().
+    readonly uniformBufferBlocks?: readonly string[]; // The names of the shader uniform blocks, which will be bound to the index in which the name appears in this array using gl.uniformBlockBinding().
+    // post-link bindings
+    readonly textureUniforms?: readonly string[]; // Texture uniforms will be bound to the index in which they appear in the name array.
+    readonly transformFeedback?: {
+        readonly bufferMode: "INTERLEAVED_ATTRIBS" | "SEPARATE_ATTRIBS";
+        readonly varyings: readonly string[];
+    };
+}
+
+interface AsyncProgramInfo {
+    readonly program: WebGLProgram;
+    readonly vertex: WebGLShader;
+    readonly fragment: WebGLShader;
+    readonly resolve: () => void;
+    readonly reject: (reason: any) => void;
+}
+
+
