@@ -153,7 +153,9 @@ export async function run(canvas: HTMLCanvasElement) {
         // }
     });
 
-    controller.autoFitToScene(state, center);
+    if (state.scene) {
+        controller.autoFitToScene(state.scene, state.camera, center);
+    }
 
     function resize() {
         // const scale = devicePixelRatio / 2;
@@ -240,7 +242,10 @@ export async function run(canvas: HTMLCanvasElement) {
     for (; ;) {
         const renderTime = await nextFrame();
         resize();
-        state = controller.updateRenderState(state);
+        const changes = controller.renderStateChanges(state);
+        if (changes) {
+            state = modifyRenderState(state, changes);
+        }
         if (context && !context.isContextLost()) {
             context["poll"]();
             if (prevState !== state || context.changed) {
