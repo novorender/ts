@@ -75,7 +75,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const programLine = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Scene"] });
         const programDebug = this.debug ? glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, commonChunk, uniformBufferBlocks }) : null;
         const transformFeedback = gl.createTransformFeedback()!;
-        const uniformLocations = glUniformLocations(gl, program, ["meshMode"] as const);
+        const uniformLocations = glUniformLocations(gl, program, ["meshMode"]);
         this.meshModeLocation = uniformLocations.meshMode;
         const vb_line = glBuffer(gl, { kind: "ARRAY_BUFFER", byteSize: this.maxLines * 2 * 8, usage: "STATIC_DRAW" });
         const vao_line = glVertexArray(gl, {

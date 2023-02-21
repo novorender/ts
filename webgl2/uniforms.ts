@@ -42,8 +42,7 @@ export interface UniformInfo {
     readonly offset: number; // -1 if not in block
 }
 
-// TODO: use const type parameter when typescript 5 is released
-export function glUniformLocations</*const*/ T extends readonly string[]>(gl: WebGL2RenderingContext, program: WebGLProgram, names: T, prefix?: string) {
+export function glUniformLocations<const T extends readonly string[]>(gl: WebGL2RenderingContext, program: WebGLProgram, names: T, prefix?: string) {
     const locations: any = {};
     for (const name of names) {
         locations[name] = gl.getUniformLocation(program, `${prefix ?? ""}${name}`);
@@ -52,7 +51,7 @@ export function glUniformLocations</*const*/ T extends readonly string[]>(gl: We
 }
 
 // apply std140 layout rules (https://registry.khronos.org/OpenGL/specs/gl/glspec45.core.pdf#page=159)
-export function glUBOProxy<T extends Record<string, UniformTypes>>(values: T) {
+export function glUBOProxy<const T extends Record<string, UniformTypes>>(values: T) {
     type Keys = Extract<keyof T, string>;
     const offsetsMap: Record<string, readonly number[]> = {};
     let offset = 0;
