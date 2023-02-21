@@ -277,7 +277,7 @@ export class RenderContext {
         this.pollAsyncPrograms();
     }
 
-    public render(state: RenderState) {
+    public async render(state: RenderState) {
         const beginTime = performance.now();
         const { gl, canvas, prevState } = this;
         this.changed = false;
@@ -330,6 +330,9 @@ export class RenderContext {
             module?.update(derivedState);
         }
 
+        const timer = glCreateTimer(gl);
+        timer.begin();
+
         // apply module render z-buffer pre-pass
         const { width, height } = canvas;
         if (this.usePrepass) {
@@ -361,13 +364,18 @@ export class RenderContext {
                 glState(gl, null);
             }
         }
+        timer.end();
 
         // invalidate color and depth buffers only (we may need pick buffers for picking)
         this.buffers.invalidate(BufferFlags.color | BufferFlags.depth);
         this.prevState = derivedState;
 
+        const gpuDrawTime = await timer.promise;
         const endTime = performance.now();
-        // console.log(endTime - beginTime);
+        return {
+            cpuTime: { draw: endTime - beginTime },
+            gpuTime: { draw: gpuDrawTime }
+        }
     }
 
     private updateCameraUniforms(state: DerivedRenderState) {
