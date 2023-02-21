@@ -2,16 +2,16 @@ layout(std140) uniform Camera {
     CameraUniforms camera;
 };
 
+layout(std140) uniform Clipping {
+    ClippingUniforms clipping;
+};
+
 layout(std140) uniform Scene {
     SceneUniforms scene;
 };
 
 layout(std140) uniform Node {
     NodeUniforms node;
-};
-
-layout(std140) uniform Mesh {
-    MeshUniforms mesh;
 };
 
 uniform OctreeTextures textures;

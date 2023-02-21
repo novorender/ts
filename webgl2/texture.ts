@@ -12,7 +12,9 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
 
     const { internalFormat, format, type, arrayType } = getFormatInfo(gl, params.internalFormat, "type" in params ? params.type : undefined);
 
-    function textureImage(imgTarget: typeof gl[TextureImageTargetString], data: BufferSource | null, level: number, sizeX: number, sizeY: number, sizeZ = 0) {
+    type ImageTarget = typeof gl[TextureImageTargetString];
+
+    function textureImage(imgTarget: ImageTarget, data: BufferSource | null, level: number, sizeX: number, sizeY: number, sizeZ = 0) {
         if (!data)
             return;
         const source = data;
@@ -50,7 +52,7 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
             if (cubeImages) {
                 let side = gl.TEXTURE_CUBE_MAP_POSITIVE_X;
                 for (let img of image) {
-                    textureImage(side++, img, level, width / n, height / n);
+                    textureImage((side++) as ImageTarget, img, level, width / n, height / n);
                 }
             }
         } else {
@@ -124,6 +126,8 @@ export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGL
 
     const { internalFormat, format, type, arrayType } = getFormatInfo(gl, params.internalFormat, "type" in params ? params.type : undefined);
 
+    type ImageTarget = typeof gl[TextureImageTargetString];
+
     function textureImage(imgTarget: typeof gl[TextureImageTargetString], data: BufferSource | null, level: number, sizeX: number, sizeY: number, sizeZ = 0) {
         if (!data)
             return;
@@ -162,7 +166,7 @@ export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGL
             if (cubeImages) {
                 let side = gl.TEXTURE_CUBE_MAP_POSITIVE_X;
                 for (let img of image) {
-                    textureImage(side++, img, level, width / n, height / n);
+                    textureImage((side++) as ImageTarget, img, level, width / n, height / n);
                 }
             }
         } else {

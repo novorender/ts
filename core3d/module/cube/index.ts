@@ -42,9 +42,10 @@ class CubeModuleContext implements RenderModuleContext {
         }
 
         // create static GPU resources here
-        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
-        const program_line = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Cube"] });
-        const program_transform = glProgram(gl, { vertexShader: intersect_vs, commonChunk, uniformBufferBlocks: ["Camera", "Cube"], transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
+        const uniformBufferBlocks = ["Camera", "Clipping", "Cube"];
+        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks });
+        const program_line = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks });
+        const program_transform = glProgram(gl, { vertexShader: intersect_vs, commonChunk, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
         const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
 
         const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vertices });
@@ -123,7 +124,6 @@ class CubeModuleContext implements RenderModuleContext {
                 // transform vertex triplets into intersection lines
                 glState(gl, {
                     program: program_transform,
-                    uniformBuffers: [cameraUniforms, uniforms],
                     vertexArrayObject: vao_tri,
                 });
                 glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line], count: 12 });
@@ -132,7 +132,7 @@ class CubeModuleContext implements RenderModuleContext {
                 glState(gl, {
                     program: program_line,
                     drawBuffers: context.drawBuffers(BufferFlags.color),
-                    depth: { test: true, },
+                    depth: { test: false, },
                     vertexArrayObject: vao_line,
                 });
                 glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });
