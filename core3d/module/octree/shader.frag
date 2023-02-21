@@ -2,6 +2,10 @@ layout(std140) uniform Camera {
     CameraUniforms camera;
 };
 
+layout(std140) uniform Clipping {
+    ClippingUniforms clipping;
+};
+
 layout(std140) uniform Scene {
     SceneUniforms scene;
 };
@@ -23,6 +27,9 @@ layout(location = 1) out float fragLinearDepth;
 layout(location = 2) out uvec2 fragInfo;
 
 void main() {
+    if(varyings.linearDepth < camera.near || clip(varyings.positionVS, clipping))
+        discard;
+
     vec4 baseColor;
     uint objectId;
     uint highlight;

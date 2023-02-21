@@ -42,6 +42,7 @@ export class OctreeModule implements RenderModule {
 }
 
 const enum Gradient { size = 1024 };
+const enum UBO { camera, clipping, scene, node };
 
 class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly sceneUniforms;
@@ -67,11 +68,11 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const flags: string[] = ["IOS_WORKAROUND"]; // without this flag, complex scenes crash after a few frames on older IOS and iPad devices.
         const textureNames = ["base_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
-        const uniformBufferBlocks = ["Camera", "Scene", "Node"/*, "Mesh"*/];
+        const uniformBufferBlocks = ["Camera", "Clipping", "Scene", "Node"];
         const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags });
         const programZ = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags: [...flags, "POS_ONLY"] });
-        const programIntersect = glProgram(gl, { vertexShader: intersect_vs, commonChunk, uniformBufferBlocks: ["Camera", "Scene", "Node"], transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
-        const programLine = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks: ["Camera", "Scene"] });
+        const programIntersect = glProgram(gl, { vertexShader: intersect_vs, commonChunk, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
+        const programLine = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Scene"] });
         const programDebug = this.debug ? glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, commonChunk, uniformBufferBlocks }) : null;
         const transformFeedback = gl.createTransformFeedback()!;
         const uniformLocations = glUniformLocations(gl, program, ["meshMode"] as const);
@@ -283,7 +284,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { resources, renderContext, rootNode, debug } = this;
         const { usePrepass, samplerSingle, samplerMip } = renderContext;
         const { program, programDebug, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
-        const { gl, iblTextures, cameraUniforms } = renderContext;
+        const { gl, iblTextures, cameraUniforms, clippingUniforms } = renderContext;
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
             nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
@@ -291,7 +292,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const { diffuse, specular } = iblTextures;
             glState(gl, {
                 program: program,
-                uniformBuffers: [cameraUniforms, sceneUniforms, null],
+                uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
                 cull: { enable: true, },
                 depth: {
                     test: true,
@@ -326,7 +327,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             if (state.outlines.nearClipping.enable) {
                 // render clipping outlines
                 glState(gl, {
-                    uniformBuffers: [cameraUniforms, sceneUniforms, null],
+                    uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
                     depth: {
                         test: false,
                         writeMask: false
@@ -343,7 +344,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             if (debug) {
                 glState(gl, {
                     program: programDebug,
-                    uniformBuffers: [cameraUniforms, sceneUniforms],
+                    uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
                     depth: {
                         test: true,
                         writeMask: false,
@@ -397,7 +398,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { data, renderedChildMask } = node;
         const { values } = node.uniformsData;
         if (renderedChildMask && node.uniforms) {
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, node.uniforms);
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms);
             for (const mesh of node.meshes) {
                 const { materialType } = mesh;
                 const isTransparent = materialType == MaterialType.transparent;
@@ -408,8 +409,6 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const mode = mesh.materialType == MaterialType.elevation ? 2 : mesh.drawParams.mode == "POINTS" ? 1 : 0;
                 if (meshState.mode != mode) {
                     meshState.mode = mode;
-                    // TODO: use regular uniform instead.
-                    // gl.bindBufferBase(gl.UNIFORM_BUFFER, 3, mode == 0 ? resources.meshUniforms0 : mode == 1 ? resources.meshUniforms1 : resources.meshUniforms2);
                     gl.uniform1ui(meshModeLocation, mode);
                 }
                 const doubleSided = mesh.materialType != MaterialType.opaque;
@@ -441,7 +440,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { programIntersect, programLine, transformFeedback, vb_line, vao_line } = resources;
         const { renderedChildMask } = node;
         if (renderedChildMask && node.uniforms) {
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, node.uniforms);
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms);
             for (const mesh of node.meshes) {
                 if (mesh.numTriplets) {
                     for (const drawRange of mesh.drawRanges) {
@@ -469,13 +468,12 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
     }
 
-
     renderNodeDebug(node: OctreeNode) {
         const { renderContext } = this;
         const { gl } = renderContext;
 
         if (node.renderedChildMask && node.uniforms) {
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, node.uniforms ?? null);
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms ?? null);
             glDraw(gl, { kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
         }
     }
