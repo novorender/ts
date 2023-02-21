@@ -1,5 +1,5 @@
 import { glMatrix, mat3, quat, ReadonlyVec3, vec2, vec3 } from "gl-matrix";
-import { modifyRenderState, RenderState } from "./state";
+import { modifyRenderState, RenderState, RenderStateCamera, RenderStateChanges, RenderStateScene } from "./state";
 
 function clamp(v: number, min: number, max: number) {
     if (v < min) {
@@ -243,17 +243,17 @@ abstract class BaseController {
     protected pan(deltaX: number, deltaY: number, rot: mat3): void { }
     protected orbit(deltaX: number, deltaY: number, rot: mat3, invert?: boolean): void { }
     protected zoom(delta: number, x: number, y: number): void { }
-    abstract autoFitToScene(state: RenderState): void;
+    abstract autoFitToScene(scene: RenderStateScene, camera: RenderStateCamera): void;
     abstract update(): void;
 
-    updateRenderState(state: RenderState): RenderState {
+    renderStateChanges(state: RenderState): RenderStateChanges | undefined {
         const { camera } = state;
         this.update();
         const { position, rotation } = this;
         if (!vec3.exactEquals(camera.position, position) || !quat.exactEquals(camera.rotation, rotation)) {
-            state = modifyRenderState(state, { camera: { position: vec3.clone(position), rotation: quat.clone(rotation) } });
+            return { camera: { position: vec3.clone(position), rotation: quat.clone(rotation) } };
         }
-        return state;
+        return undefined;
     }
 }
 
@@ -364,11 +364,17 @@ export class OrbitController extends BaseController {
         this.clampDistance();
     }
 
-    override autoFitToScene(state: RenderState, centerPos?: ReadonlyVec3): void {
-        const { camera, scene } = state;
-        if (!scene) {
-            return;
-        }
+    setPosition(position: ReadonlyVec3) {
+        const { pivotPoint } = this;
+        this.distance = vec3.distance(position, pivotPoint);
+        const [x, y, z] = vec3.sub(vec3.create(), position, pivotPoint);
+        const pitch = Math.atan2(y, vec2.len(vec2.fromValues(x, z)));
+        const yaw = Math.atan2(x, z);
+        this.yaw = yaw * 180 / Math.PI;
+        this.pitch = pitch * 180 / Math.PI;
+    }
+
+    override autoFitToScene(scene: RenderStateScene, camera: RenderStateCamera, centerPos?: ReadonlyVec3): void {
         const { pivotPoint } = this;
         const { center, radius } = scene.config.boundingSphere;
         vec3.copy(pivotPoint, centerPos ?? center);
