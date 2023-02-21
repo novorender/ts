@@ -267,5 +267,6 @@
         "    return unpackHalf2x16(normalAndDeviation).y;",
         "}",
         ""
-    ]
+    ],
+    "typescript.tsdk": "node_modules\\typescript\\lib"
 }

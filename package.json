@@ -21,7 +21,7 @@
         "esbuild": "^0.15.14",
         "esbuild-plugin-inline-worker": "^0.1.1",
         "ip": "^1.1.8",
-        "typescript": "^4.9.3"
+        "typescript": "^5.0.0-beta"
     },
     "dependencies": {
         "gl-matrix": "^3.4.3",
