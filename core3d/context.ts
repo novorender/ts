@@ -1,5 +1,5 @@
 import { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, CoordSpace, createDefaultModules } from "./";
-import { glBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, glCheckProgram, glProgramAsync, ShaderHeaderParams } from "@novorender/webgl2";
+import { glBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, glCheckProgram, glProgramAsync, ShaderHeaderParams, glCreateTimer, Timer } from "@novorender/webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
@@ -22,6 +22,7 @@ export class RenderContext {
     readonly gl: WebGL2RenderingContext;
     readonly commonChunk: string;
     readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
+    private gpuTimers: Timer[] = [];
 
     // copy from last rendered state
     private isOrtho = false;
@@ -272,9 +273,20 @@ export class RenderContext {
         }
     }
 
+    private pollTimers() {
+        const { gpuTimers } = this;
+        for (let i = 0; i < gpuTimers.length; ++i) {
+            const timer = gpuTimers[i];
+            if (timer.poll()) {
+                gpuTimers.splice(i--, 1);
+            }
+        }
+    }
+
     public poll() {
         this.buffers?.pollPickFence();
         this.pollAsyncPrograms();
+        this.pollTimers();
     }
 
     public async render(state: RenderState) {
@@ -331,7 +343,10 @@ export class RenderContext {
         }
 
         const timer = glCreateTimer(gl);
-        timer.begin();
+        if (timer) {
+            this.gpuTimers.push(timer);
+        }
+        timer?.begin();
 
         // apply module render z-buffer pre-pass
         const { width, height } = canvas;
@@ -364,18 +379,18 @@ export class RenderContext {
                 glState(gl, null);
             }
         }
-        timer.end();
+        timer?.end();
 
         // invalidate color and depth buffers only (we may need pick buffers for picking)
         this.buffers.invalidate(BufferFlags.color | BufferFlags.depth);
         this.prevState = derivedState;
-
-        const gpuDrawTime = await timer.promise;
         const endTime = performance.now();
+
+        const gpuDrawTime = await timer?.promise;
         return {
             cpuTime: { draw: endTime - beginTime },
             gpuTime: { draw: gpuDrawTime }
-        }
+        } as const;
     }
 
     private updateCameraUniforms(state: DerivedRenderState) {
@@ -497,4 +512,4 @@ interface AsyncProgramInfo {
     readonly reject: (reason: any) => void;
 }
 
-
+export type RenderStatistics = Awaited<ReturnType<RenderContext["render"]>>;

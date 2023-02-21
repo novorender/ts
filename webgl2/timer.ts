@@ -1,6 +1,6 @@
 import { EXT_disjoint_timer_query_webgl2_ext, glExtensions } from "./extensions";
 
-export function glCreateTimer(gl: WebGL2RenderingContext): Timer {
+export function glCreateTimer(gl: WebGL2RenderingContext, cpuFallback = true): Timer | undefined {
     const { disjointTimerQuery } = glExtensions(gl);
     if (disjointTimerQuery) {
         // Clear the disjoint state before starting to work with queries to increase the chances that the results will be valid.
@@ -10,7 +10,7 @@ export function glCreateTimer(gl: WebGL2RenderingContext): Timer {
             return new GPUTimerTS(gl, disjointTimerQuery);
         else
             return new GPUTimer(gl, disjointTimerQuery);
-    } else {
+    } else if (cpuFallback) {
         // console.log("using cpu timer.")
         return new CPUTimer(gl);
     }
