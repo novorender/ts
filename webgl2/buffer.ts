@@ -1,3 +1,5 @@
+import { glStats } from "./stats";
+
 export function glBuffer(gl: WebGL2RenderingContext, params: BufferParams): WebGLBuffer {
     const target = gl[params.kind];
     const usage = gl[params.usage ?? "STATIC_DRAW"];
@@ -9,6 +11,10 @@ export function glBuffer(gl: WebGL2RenderingContext, params: BufferParams): WebG
         gl.bufferData(target, params.srcData, usage);
     }
     gl.bindBuffer(target, null);
+    const stats = glStats(gl);
+    if (stats) {
+        stats.bufferBytes += glBufferBytes(params);
+    }
     return buffer;
 }
 
@@ -21,6 +27,10 @@ export function glUpdateBuffer(gl: WebGL2RenderingContext, params: UpdateParams)
     gl.bindBuffer(target, params.targetBuffer);
     gl.bufferSubData(target, targetOffset, srcData, srcOffset, params.byteSize);
     gl.bindBuffer(target, null);
+}
+
+export function glBufferBytes(params: BufferParams) {
+    return "byteSize" in params ? params.byteSize : params.srcData.byteLength;
 }
 
 export type BufferParams = BufferParamsSize | BufferParamsData;

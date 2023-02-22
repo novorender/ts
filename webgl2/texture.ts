@@ -1,5 +1,6 @@
 import { GL } from "./constants.js";
 import { getBufferViewType } from "./misc.js";
+import { glStats } from "./stats.js";
 
 export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
     const texture = gl.createTexture()!;
@@ -112,6 +113,11 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
         }
     }
     gl.bindTexture(target, null);
+
+    const stats = glStats(gl);
+    if (stats) {
+        stats.textureBytes += glTextureBytes(params);
+    }
     return texture;
 }
 
@@ -219,6 +225,31 @@ export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGL
     gl.bindTexture(target, null);
 }
 
+export function glTextureBytes(params: TextureParams) {
+    const width = params.width ?? params.image.width;
+    const height = params.height ?? params.image.height;
+    const depth = "depth" in params ? params.depth : 1;
+    const faces = params.kind == "TEXTURE_CUBE_MAP" ? 6 : 1;
+    const topLeveltexels = width * height * depth * faces;
+    let totalTexels = 0;
+    let levels = 1;
+    if ("mipMaps" in params) {
+        // mip mapped
+        const { mipMaps } = params;
+        const isNumber = typeof mipMaps == "number";
+        levels = isNumber ? mipMaps : mipMaps.length;
+    }
+    if ("generateMipMaps" in params && params.generateMipMaps && isPowerOf2(width) && isPowerOf2(height)) {
+        levels = Math.min(Math.log2(width), Math.log2(height));
+    }
+    for (let level = 0; level < levels; level++) {
+        totalTexels += topLeveltexels >> level;
+    }
+    const bytesPerTexel = Math.ceil(internalFormatTexelBytes[params.internalFormat]);
+    return Math.ceil(totalTexels * bytesPerTexel);
+
+}
+
 function isPowerOf2(value: number) {
     return (value & (value - 1)) == 0;
 }
@@ -242,7 +273,7 @@ function getFormatInfo(gl: WebGL2RenderingContext, internalFormatString: Uncompr
         const internalFormat = gl[internalFormatString] as keyof typeof internalFormat2FormatLookup;
         const format = internalFormat2FormatLookup[internalFormat];
         const type = gl[typeString!];
-        const arrayType = getBufferViewType(type);
+        const arrayType = getBufferViewType(typeString!);
         return { internalFormat, format, type, arrayType };
     }
 }
@@ -526,6 +557,133 @@ const internalFormat2FormatLookup = {
     [GL.DEPTH_COMPONENT32F]: GL.DEPTH_COMPONENT,
     [GL.DEPTH24_STENCIL8]: GL.DEPTH_STENCIL,
     [GL.DEPTH32F_STENCIL8]: GL.DEPTH_STENCIL,
+} as const;
+
+const internalFormatTexelBytes = {
+    "RGB": 3,
+    "RGBA": 4,
+    "LUMINANCE_ALPHA": 2,
+    "LUMINANCE": 1,
+    "ALPHA": 1,
+    "R8": 1,
+    "R8_SNORM": 1,
+    "RG8": 2,
+    "RG8_SNORM": 2,
+    "RGB8": 3,
+    "RGB8_SNORM": 3,
+    "RGB565": 2,
+    "RGBA4": 2,
+    "RGB5_A1": 2,
+    "RGBA8": 4,
+    "RGBA8_SNORM": 4,
+    "RGB10_A2": 4,
+    "RGB10_A2UI": 4,
+    "SRGB8": 3,
+    "SRGB8_ALPHA8": 4,
+    "R16F": 2,
+    "RG16F": 4,
+    "RGB16F": 6,
+    "RGBA16F": 8,
+    "R32F": 4,
+    "RG32F": 8,
+    "RGB32F": 16,
+    "RGBA32F": 32,
+    "R11F_G11F_B10F": 4,
+    "RGB9_E5": 4,
+    "R8I": 1,
+    "R8UI": 1,
+    "R16I": 2,
+    "R16UI": 2,
+    "R32I": 4,
+    "R32UI": 4,
+    "RG8I": 2,
+    "RG8UI": 2,
+    "RG16I": 4,
+    "RG16UI": 4,
+    "RG32I": 8,
+    "RG32UI": 8,
+    "RGB8I": 3,
+    "RGB8UI": 4,
+    "RGB16I": 6,
+    "RGB16UI": 6,
+    "RGB32I": 12,
+    "RGB32UI": 12,
+    "RGBA8I": 4,
+    "RGBA8UI": 4,
+    "RGBA16I": 8,
+    "RGBA16UI": 8,
+    "RGBA32I": 16,
+    "RGBA32UI": 16,
+    "DEPTH_COMPONENT16": 2,
+    "DEPTH_COMPONENT24": 3,
+    "DEPTH_COMPONENT32F": 4,
+    "DEPTH24_STENCIL8": 4,
+    "DEPTH32F_STENCIL8": 5,
+    // WEBGL_compressed_texture_s3tc
+    "COMPRESSED_RGB_S3TC_DXT1_EXT": .5,
+    "COMPRESSED_RGBA_S3TC_DXT1_EXT": .5,
+    "COMPRESSED_RGBA_S3TC_DXT3_EXT": 1,
+    "COMPRESSED_RGBA_S3TC_DXT5_EXT": 1,
+    // WEBGL_compressed_texture_s3tc_srgb
+    "COMPRESSED_SRGB_S3TC_DXT1_EXT": .5,
+    "COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT": .5,
+    "COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT": 1,
+    "COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT": 1,
+    // WEBGL_compressed_texture_etc
+    "COMPRESSED_R11_EAC": .5,
+    "COMPRESSED_SIGNED_R11_EAC": .5,
+    "COMPRESSED_RG11_EAC": 1,
+    "COMPRESSED_SIGNED_RG11_EAC": 1,
+    "COMPRESSED_RGB8_ETC2": .5,
+    "COMPRESSED_RGBA8_ETC2_EAC": 1,
+    "COMPRESSED_SRGB8_ETC2": .5,
+    "COMPRESSED_SRGB8_ALPHA8_ETC2_EAC": 1,
+    "COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2": .5,
+    "COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2": .5,
+    // WEBGL_compressed_texture_pvrtc
+    "COMPRESSED_RGB_PVRTC_4BPPV1_IMG": .5,
+    "COMPRESSED_RGBA_PVRTC_4BPPV1_IMG": .5,
+    "COMPRESSED_RGB_PVRTC_2BPPV1_IMG": .25,
+    "COMPRESSED_RGBA_PVRTC_2BPPV1_IMG": .25,
+    // WEBGL_compressed_texture_etc1    
+    "COMPRESSED_RGB_ETC1_WEBGL": .5,
+    // WEBGL_compressed_texture_astc    
+    "COMPRESSED_RGBA_ASTC_4x4_KHR": 16 / (4 * 4),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR": 16 / (4 * 4),
+    "COMPRESSED_RGBA_ASTC_5x4_KHR": 16 / (5 * 4),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR": 16 / (5 * 4),
+    "COMPRESSED_RGBA_ASTC_5x5_KHR": 16 / (5 * 5),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR": 16 / (5 * 5),
+    "COMPRESSED_RGBA_ASTC_6x5_KHR": 16 / (6 * 5),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR": 16 / (6 * 5),
+    "COMPRESSED_RGBA_ASTC_6x6_KHR": 16 / (6 * 6),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR": 16 / (6 * 6),
+    "COMPRESSED_RGBA_ASTC_8x5_KHR": 16 / (8 * 5),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR": 16 / (8 * 5),
+    "COMPRESSED_RGBA_ASTC_8x6_KHR": 16 / (8 * 6),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR": 16 / (8 * 6),
+    "COMPRESSED_RGBA_ASTC_8x8_KHR": 16 / (8 * 8),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR": 16 / (8 * 8),
+    "COMPRESSED_RGBA_ASTC_10x5_KHR": 16 / (10 * 5),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR": 16 / (10 * 5),
+    "COMPRESSED_RGBA_ASTC_10x6_KHR": 16 / (10 * 6),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR": 16 / (10 * 6),
+    "COMPRESSED_RGBA_ASTC_10x10_KHR": 16 / (10 * 10),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR": 16 / (10 * 10),
+    "COMPRESSED_RGBA_ASTC_12x10_KHR": 16 / (12 * 10),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR": 16 / (12 * 10),
+    "COMPRESSED_RGBA_ASTC_12x12_KHR": 16 / (12 * 12),
+    "COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR": 16 / (12 * 12),
+    // EXT_texture_compression_bptc    
+    "COMPRESSED_RGBA_BPTC_UNORM_EXT": 1,
+    "COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT": 1,
+    "COMPRESSED_RGB_BPTC_SIGNED_FLOAT_EXT": 1,
+    "COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_EXT": 1,
+    // EXT_texture_compression_rgtc    
+    "COMPRESSED_RED_RGTC1_EXT": .5,
+    "COMPRESSED_SIGNED_RED_RGTC1_EXT": .5,
+    "COMPRESSED_RED_GREEN_RGTC2_EXT": 1,
+    "COMPRESSED_SIGNED_RED_GREEN_RGTC2_EXT": 1,
 } as const;
 
 // we could read these from extensions instead...

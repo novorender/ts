@@ -1,7 +1,10 @@
 import { glExtensions } from "./extensions";
+import { glStats } from "./stats";
 
 export function glDraw(gl: WebGL2RenderingContext, params: DrawParams) {
+    let numPrimitives = 0;
     const mode = params.mode ?? "TRIANGLES";
+    const primitiveType = gl[mode];
     if (isMultiDraw(params)) {
         const { multiDraw } = glExtensions(gl);
         if (multiDraw) {
@@ -9,12 +12,16 @@ export function glDraw(gl: WebGL2RenderingContext, params: DrawParams) {
             switch (params.kind) {
                 case "arrays_multidraw":
                     const { firstsList, firstsOffset } = params;
-                    multiDraw.multiDrawArraysWEBGL(gl[mode], firstsList, firstsOffset ?? 0, counts, countsOffset ?? 0, drawCount);
+                    multiDraw.multiDrawArraysWEBGL(primitiveType, firstsList, firstsOffset ?? 0, counts, countsOffset ?? 0, drawCount);
                     break;
                 case "elements_multidraw":
                     const { byteOffsets, byteOffsetsOffset, indexType } = params;
-                    multiDraw.multiDrawElementsWEBGL(gl[mode], counts, countsOffset ?? 0, gl[indexType], byteOffsets, byteOffsetsOffset ?? 0, drawCount);
+                    multiDraw.multiDrawElementsWEBGL(primitiveType, counts, countsOffset ?? 0, gl[indexType], byteOffsets, byteOffsetsOffset ?? 0, drawCount);
                     break;
+            }
+            const offs = countsOffset ?? 0;
+            for (let i = 0; i < drawCount; i++) {
+                numPrimitives += calcNumPrimitives(counts[i + offs], mode);
             }
         } else {
             console.warn("no multi_draw gl extension!");
@@ -22,22 +29,53 @@ export function glDraw(gl: WebGL2RenderingContext, params: DrawParams) {
     } else {
         const { count } = params;
         if (isInstanced(params)) {
+            const { instanceCount } = params;
+            numPrimitives = calcNumPrimitives(count, mode) * instanceCount;
             if (isElements(params)) {
-                gl.drawElementsInstanced(gl[mode], count, gl[params.indexType], params.byteOffset ?? 0, params.instanceCount);
+                gl.drawElementsInstanced(primitiveType, count, gl[params.indexType], params.byteOffset ?? 0, instanceCount);
             } else {
-                gl.drawArraysInstanced(gl[mode], params.first ?? 0, count, params.instanceCount);
+                gl.drawArraysInstanced(primitiveType, params.first ?? 0, count, instanceCount);
             }
         } else {
+            numPrimitives = calcNumPrimitives(count, mode);
             if (isElements(params)) {
                 if (isRange(params)) {
-                    gl.drawRangeElements(gl[mode], params.minIndex, params.maxIndex, count, gl[params.indexType], params.byteOffset ?? 0);
+                    gl.drawRangeElements(primitiveType, params.minIndex, params.maxIndex, count, gl[params.indexType], params.byteOffset ?? 0);
                 } else {
-                    gl.drawElements(gl[mode], count, gl[params.indexType], params.byteOffset ?? 0);
+                    gl.drawElements(primitiveType, count, gl[params.indexType], params.byteOffset ?? 0);
                 }
             } else {
-                gl.drawArrays(gl[mode], params.first ?? 0, count);
+                gl.drawArrays(primitiveType, params.first ?? 0, count);
             }
         }
+    }
+
+    const stats = glStats(gl);
+    if (stats) {
+        stats.drawCalls++;
+        if (primitiveType >= gl.TRIANGLES) {
+            stats.renderedTriangles += numPrimitives;
+        } else if (primitiveType >= gl.LINES) {
+            stats.renderedLines += numPrimitives;
+        } else {
+            stats.renderedPoints += numPrimitives;
+        }
+    }
+}
+
+function calcNumPrimitives(vertexCount: number, primitiveType: string) {
+    switch (primitiveType) {
+        case "TRIANGLES":
+            return vertexCount / 3;
+        case "TRIANGLE_STRIP":
+        case "TRIANGLE_FAN":
+            return vertexCount - 2;
+        case "LINES":
+            return vertexCount / 2;
+        case "LINE_STRIP":
+            return vertexCount - 1;
+        default:
+            return vertexCount;
     }
 }
 

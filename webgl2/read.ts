@@ -1,5 +1,3 @@
-import { getPixelFormatChannels, getBufferViewType } from "./misc.js";
-
 export function glReadPixels(gl: WebGL2RenderingContext, params: ReadPixelsParams) {
     const x = params.x ?? 0;
     const y = params.y ?? 0;

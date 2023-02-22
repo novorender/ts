@@ -1,6 +1,6 @@
 import { EXT_disjoint_timer_query_webgl2_ext, glExtensions } from "./extensions";
 
-export function glCreateTimer(gl: WebGL2RenderingContext, cpuFallback = true): Timer | undefined {
+export function glCreateTimer(gl: WebGL2RenderingContext, cpuFallback = false): Timer {
     const { disjointTimerQuery } = glExtensions(gl);
     if (disjointTimerQuery) {
         // Clear the disjoint state before starting to work with queries to increase the chances that the results will be valid.
@@ -10,63 +10,88 @@ export function glCreateTimer(gl: WebGL2RenderingContext, cpuFallback = true): T
             return new GPUTimerTS(gl, disjointTimerQuery);
         else
             return new GPUTimer(gl, disjointTimerQuery);
-    } else if (cpuFallback) {
-        // console.log("using cpu timer.")
-        return new CPUTimer(gl);
+    } else {
+        if (cpuFallback) {
+            return new CPUTimer(gl);
+        } else {
+            return new NullTimer(gl);
+        }
     }
 }
 
-export type Timer = CPUTimer | GPUTimer | GPUTimerTS;
+export type Timer = NullTimer | CPUTimer | GPUTimer | GPUTimerTS;
 
-class CPUTimer {
-    readonly kind = "cpu";
-    readonly promise: Promise<number>;
+class NullTimer {
+    readonly kind = "null";
+    readonly promise: Promise<number | undefined>;
     readonly creationTime;
-    #begin = 0;
-    #end = 0;
-    #resolve: ((value: number | PromiseLike<number>) => void) = undefined!;
 
     constructor(readonly gl: WebGL2RenderingContext) {
         this.creationTime = performance.now();
-        this.promise = new Promise<number>(resolve => { this.#resolve = resolve; });
+        this.promise = Promise.resolve(undefined);
+    }
+
+    dispose() { }
+    begin() { }
+    end() { }
+    poll() {
+        return true;
+    }
+}
+
+class CPUTimer {
+    readonly kind = "cpu";
+    readonly promise: Promise<number | undefined>;
+    readonly creationTime;
+    private beginTime = 0;
+    private endTime = 0;
+    private resolve: ((value: number | PromiseLike<number> | undefined) => void) | undefined;
+
+    constructor(readonly gl: WebGL2RenderingContext) {
+        this.creationTime = performance.now();
+        this.promise = new Promise<number | undefined>(resolve => { this.resolve = resolve; });
     }
 
     dispose() {
+        this.resolve?.(undefined);
+        this.resolve = undefined;
     }
 
     begin() {
         this.gl.getError(); // flush gpu pipeline
-        this.#begin = performance.now();
+        this.beginTime = performance.now();
     }
 
     end() {
         this.gl.getError(); // flush gpu pipeline
-        this.#end = performance.now();
+        this.endTime = performance.now();
     }
 
     poll() {
-        this.#resolve(this.#end - this.#begin) // in milliseconds 
+        this.resolve?.(this.endTime - this.beginTime) // in milliseconds 
+        this.resolve = undefined;
         return true;
     }
 }
 
 class GPUTimer {
     readonly kind = "gpu_time_elapsed";
-    readonly promise: Promise<number>;
+    readonly promise: Promise<number | undefined>;
+    readonly creationTime;
     private readonly query;
-    readonly #creationTime;
-    #resolve: ((value: number | PromiseLike<number>) => void) = undefined!;
-    #reject: ((reason?: any) => void) = undefined!;
+    private resolve: ((value: number | PromiseLike<number> | undefined) => void) | undefined;
 
     constructor(readonly gl: WebGL2RenderingContext, readonly ext: EXT_disjoint_timer_query_webgl2_ext) {
-        this.#creationTime = performance.now();
+        this.creationTime = performance.now();
         this.query = gl.createQuery()!;
-        this.promise = new Promise<number>((resolve, reject) => { this.#resolve = resolve; this.#reject = reject; });
+        this.promise = new Promise<number | undefined>(resolve => { this.resolve = resolve; });
     }
 
     dispose() {
-        const { gl, query } = this;
+        const { gl, query, resolve } = this;
         gl.deleteQuery(query);
+        resolve?.(undefined);
+        this.resolve = undefined;
     }
 
     begin() {
@@ -80,18 +105,20 @@ class GPUTimer {
     }
 
     poll() {
-        const { gl, ext, query } = this;
+        const { gl, ext, query, resolve } = this;
         let disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
         if (!disjoint) {
             const available = gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE);
             if (available) {
                 const timeElapsed = gl.getQueryParameter(query, gl.QUERY_RESULT) as number; // in nanoseconds
-                this.#resolve(timeElapsed / 1000000); // in milliseconds
+                resolve?.(timeElapsed / 1000000); // in milliseconds
+                this.resolve = undefined;
+                return true;
             }
-            return true;
         }
-        if (performance.now() > this.#creationTime + 1000) {
-            this.#reject("timed out!");
+        if (performance.now() > this.creationTime + 1000) {
+            resolve?.(undefined);
+            this.resolve = undefined;
             return true;
         }
         return false;
@@ -101,24 +128,25 @@ class GPUTimer {
 
 class GPUTimerTS {
     readonly kind = "gpu_timestamp";
-    readonly promise: Promise<number>;
+    readonly promise: Promise<number | undefined>;
+    readonly creationTime;
     private readonly startQuery;
     private readonly endQuery;
-    readonly #creationTime;
-    #resolve: ((value: number | PromiseLike<number>) => void) = undefined!;
-    #reject: ((reason?: any) => void) = undefined!;
+    private resolve: ((value: number | PromiseLike<number> | undefined) => void) | undefined;
 
     constructor(readonly gl: WebGL2RenderingContext, readonly ext: EXT_disjoint_timer_query_webgl2_ext) {
-        this.#creationTime = performance.now();
+        this.creationTime = performance.now();
         this.startQuery = gl.createQuery()!;
         this.endQuery = gl.createQuery()!;
-        this.promise = new Promise<number>((resolve, reject) => { this.#resolve = resolve; this.#reject = reject; });
+        this.promise = new Promise<number | undefined>((resolve, reject) => { this.resolve = resolve; });
     }
 
     dispose() {
-        const { gl, startQuery, endQuery } = this;
+        const { gl, startQuery, endQuery, resolve } = this;
         gl.deleteQuery(startQuery);
         gl.deleteQuery(endQuery);
+        resolve?.(undefined);
+        this.resolve = undefined;
     }
 
     begin() {
@@ -132,7 +160,7 @@ class GPUTimerTS {
     }
 
     poll() {
-        const { gl, ext, startQuery, endQuery } = this;
+        const { gl, ext, startQuery, endQuery, resolve } = this;
         let disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
         if (!disjoint) {
             const available = gl.getQueryParameter(endQuery, gl.QUERY_RESULT_AVAILABLE);
@@ -140,12 +168,14 @@ class GPUTimerTS {
                 const timeStart = gl.getQueryParameter(startQuery, gl.QUERY_RESULT);
                 const timeEnd = gl.getQueryParameter(endQuery, gl.QUERY_RESULT);
                 const timeElapsed = timeEnd - timeStart; // in nanoseconds
-                this.#resolve(timeElapsed / 1000000); // in milliseconds
+                resolve?.(timeElapsed / 1000000); // in milliseconds
+                this.resolve = undefined;
                 return true;
             }
         }
-        if (performance.now() > this.#creationTime + 1000) {
-            this.#reject("timed out!");
+        if (performance.now() > this.creationTime + 1000) {
+            resolve?.(undefined);
+            this.resolve = undefined;
             return true;
         }
         return false;

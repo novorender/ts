@@ -48,50 +48,50 @@ export function resizeCanvasToDisplaySize(canvas: HTMLCanvasElement, scale: numb
     return needResize;
 }
 
-export function getPixelFormatChannels(format: number) {
+export function getPixelFormatChannels(format: string) {
     switch (format) {
-        case GL.ALPHA:
-        case GL.RED:
-        case GL.RED_INTEGER:
+        case "ALPHA":
+        case "RED":
+        case "RED_INTEGER":
             return 1;
-        case GL.RG:
-        case GL.RG_INTEGER:
+        case "RG":
+        case "RG_INTEGER":
             return 2;
-        case GL.RGB:
-        case GL.RGB_INTEGER:
+        case "RGB":
+        case "RGB_INTEGER":
             return 3;
-        case GL.RGBA:
-        case GL.RGBA_INTEGER:
+        case "RGBA":
+        case "RGBA_INTEGER":
             return 4;
     }
     throw new Error(`Unknown pixel format: ${format}!`);
 }
 
-export function getBufferViewType(type: number) {
+export function getBufferViewType(type: string) {
     switch (type) {
-        case GL.BYTE:
+        case "BYTE":
             return Int8Array;
-        case GL.UNSIGNED_BYTE:
+        case "UNSIGNED_BYTE":
             return Uint8Array;
-        case GL.SHORT:
+        case "SHORT":
             return Int16Array;
-        case GL.UNSIGNED_SHORT_5_6_5:
-        case GL.UNSIGNED_SHORT_4_4_4_4:
-        case GL.UNSIGNED_SHORT_5_5_5_1:
-        case GL.HALF_FLOAT:
-        case GL.HALF_FLOAT_OES:
+        case "UNSIGNED_SHORT_5_6_5":
+        case "UNSIGNED_SHORT_4_4_4_4":
+        case "UNSIGNED_SHORT_5_5_5_1":
+        case "HALF_FLOAT":
+        case "HALF_FLOAT_OES":
             return Uint16Array;
-        case GL.UNSIGNED_INT:
-        case GL.UNSIGNED_INT_24_8_WEBGL:
-        case GL.UNSIGNED_INT_5_9_9_9_REV:
-        case GL.UNSIGNED_INT_2_10_10_10_REV:
-        case GL.UNSIGNED_INT_10F_11F_11F_REV:
+        case "UNSIGNED_INT":
+        case "UNSIGNED_INT_24_8_WEBGL":
+        case "UNSIGNED_INT_5_9_9_9_REV":
+        case "UNSIGNED_INT_2_10_10_10_REV":
+        case "UNSIGNED_INT_10F_11F_11F_REV":
             return Uint32Array;
-        case GL.INT:
+        case "INT":
             return Int32Array;
-        case GL.FLOAT:
+        case "FLOAT":
             return Float32Array;
-        // case GL.FLOAT_32_UNSIGNED_INT_24_8_REV:
+        // case "FLOAT_32_UNSIGNED_INT_24_8_REV":
         //     return null;
     }
     throw new Error(`Unknown buffer type: ${type}!`);

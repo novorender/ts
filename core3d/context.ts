@@ -1,5 +1,5 @@
 import { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, CoordSpace, createDefaultModules } from "./";
-import { glBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, glCheckProgram, glProgramAsync, ShaderHeaderParams, glCreateTimer, Timer } from "@novorender/webgl2";
+import { glBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, glCheckProgram, glProgramAsync, ShaderHeaderParams, glCreateTimer, Timer, glStats, GLStatistics } from "@novorender/webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
@@ -18,11 +18,17 @@ export class RenderContext {
     private readonly moduleContexts: (RenderModuleContext | undefined)[];
     private cameraUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
+    private readonly statistics: GLStatistics;
     private readonly asyncPrograms: AsyncProgramInfo[] = [];
     readonly gl: WebGL2RenderingContext;
     readonly commonChunk: string;
     readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
-    private gpuTimers: Timer[] = [];
+    private activeTimers = new Set<Timer>();
+    private currentFrameTime = 0;
+    private prevFrame: {
+        readonly time: number;
+        readonly resolve: (interval: number) => void;
+    } | undefined;
 
     // copy from last rendered state
     private isOrtho = false;
@@ -63,6 +69,7 @@ export class RenderContext {
         if (!gl)
             throw new Error("Unable to create WebGL 2 context!");
         this.gl = gl;
+        this.statistics = glStats(gl, true);
         const extensions = glExtensions(gl, true);
         console.assert(extensions.loseContext != null, extensions.multiDraw != null, extensions.colorBufferFloat != null);
         this.commonChunk = commonShaderCore;
@@ -126,16 +133,21 @@ export class RenderContext {
     }
 
     dispose() {
-        const { gl, cameraUniforms, buffers, moduleContexts, lut_ggx, samplerSingle, samplerMip } = this;
+        const { gl, cameraUniforms, buffers, moduleContexts, lut_ggx, samplerSingle, samplerMip, activeTimers } = this;
         this.deleteIblTextures();
         gl.deleteTexture(lut_ggx);
         gl.deleteSampler(samplerSingle);
         gl.deleteSampler(samplerMip);
         gl.deleteBuffer(cameraUniforms);
         buffers?.dispose();
+        for (const timer of activeTimers) {
+            timer.dispose();
+        }
+        activeTimers.clear();
         for (const module of moduleContexts) {
             module?.dispose();
         }
+        moduleContexts.length = 0;
     }
 
     // use a pre-pass to fill in z-buffer for improved fill rate at the expense of triangle rate (useful when doing heavy shading, but unclear how efficient this is on tiled GPUs.)
@@ -273,26 +285,57 @@ export class RenderContext {
         }
     }
 
-    private pollTimers() {
-        const { gpuTimers } = this;
-        for (let i = 0; i < gpuTimers.length; ++i) {
-            const timer = gpuTimers[i];
-            if (timer.poll()) {
-                gpuTimers.splice(i--, 1);
-            }
-        }
-    }
-
     public poll() {
         this.buffers?.pollPickFence();
         this.pollAsyncPrograms();
         this.pollTimers();
     }
 
+    private beginTimer(): Timer {
+        const timer = glCreateTimer(this.gl, false);
+        this.activeTimers.add(timer);
+        timer.begin();
+        return timer;
+    }
+
+    private pollTimers() {
+        const { activeTimers } = this;
+        for (const timer of [...activeTimers]) {
+            if (timer.poll()) {
+                activeTimers.delete(timer);
+                timer.dispose();
+            }
+        }
+    }
+
+    public static nextFrame(context: RenderContext | undefined): Promise<number> {
+        return new Promise<number>((resolve) => {
+            requestAnimationFrame((time) => {
+                if (context) {
+                    const { prevFrame } = context;
+                    if (prevFrame) {
+                        prevFrame.resolve(time - prevFrame.time);
+                        context.prevFrame = undefined;
+                    }
+                    context.currentFrameTime = time;
+                }
+                resolve(time);
+            });
+        });
+    }
+
     public async render(state: RenderState) {
         const beginTime = performance.now();
         const { gl, canvas, prevState } = this;
         this.changed = false;
+
+        const { statistics } = this;
+        // reset primitive counters
+        statistics.renderedPoints = 0;
+        statistics.renderedLines = 0;
+        statistics.renderedTriangles = 0;
+
+        const drawTimer = this.beginTimer();
 
         // handle resizes
         let resized = false;
@@ -342,12 +385,6 @@ export class RenderContext {
             module?.update(derivedState);
         }
 
-        const timer = glCreateTimer(gl);
-        if (timer) {
-            this.gpuTimers.push(timer);
-        }
-        timer?.begin();
-
         // apply module render z-buffer pre-pass
         const { width, height } = canvas;
         if (this.usePrepass) {
@@ -379,17 +416,31 @@ export class RenderContext {
                 glState(gl, null);
             }
         }
-        timer?.end();
+
+        drawTimer.end();
 
         // invalidate color and depth buffers only (we may need pick buffers for picking)
         this.buffers.invalidate(BufferFlags.color | BufferFlags.depth);
         this.prevState = derivedState;
         const endTime = performance.now();
 
-        const gpuDrawTime = await timer?.promise;
+        const intervalPromise = new Promise<number>((resolve) => {
+            this.prevFrame = { time: this.currentFrameTime, resolve };
+        });
+
+        const stats = { ...statistics };
+
+        const [gpuDrawTime, frameInterval] = await Promise.all([drawTimer.promise, intervalPromise]);
+
         return {
-            cpuTime: { draw: endTime - beginTime },
-            gpuTime: { draw: gpuDrawTime }
+            cpuTime: {
+                draw: endTime - beginTime,
+            },
+            gpuTime: {
+                draw: gpuDrawTime,
+            },
+            frameInterval,
+            ...stats
         } as const;
     }
 

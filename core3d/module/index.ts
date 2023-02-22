@@ -17,7 +17,7 @@ export interface RenderModule {
 // contains module's GPU resources
 export interface RenderModuleContext {
     update(state: DerivedRenderState): void;
-    prepass?: (state: DerivedRenderState) => void;
+    readonly prepass?: (state: DerivedRenderState) => void;
     render(state: DerivedRenderState): void;
     contextLost(): void;
     dispose(): void;
