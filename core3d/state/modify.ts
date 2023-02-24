@@ -14,7 +14,7 @@ export function modifyRenderState(state: RenderState, changes: RenderStateChange
     return newState;
 }
 
-function mergeRecursive(original: any, changes: any) {
+export function mergeRecursive(original: any, changes: any) {
     const clone = { ...original };
     for (const key in changes) {
         const originalValue = original ? original[key] : undefined;
