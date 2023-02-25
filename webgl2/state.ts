@@ -1,5 +1,5 @@
 import { glExtensions } from "./extensions";
-import { glLimits, LimitsGL } from "./limits";
+import { glLimits, type LimitsGL } from "./limits";
 
 export function glState(gl: WebGL2RenderingContext, params: StateParams | null) {
     if (!params) {

@@ -1,15 +1,20 @@
-import { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, CoordSpace, createDefaultModules } from "./";
-import { glBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, UniformsProxy, glTexture, glSampler, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, glCheckProgram, glProgramAsync, ShaderHeaderParams, glCreateTimer, Timer, glStats, GLStatistics } from "@novorender/webgl2";
+import { CoordSpace, createDefaultModules } from "./";
+import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState } from "./";
+import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateProgramAsync, glCreateTimer, } from "@novorender/webgl2";
+import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "@novorender/webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
-import { WasmInstance } from "./wasm";
-import { mat3, mat4, ReadonlyVec3, vec3, vec4 } from "gl-matrix";
+import type { WasmInstance } from "./wasm";
+import type { ReadonlyVec3 } from "gl-matrix";
+import { mat3, mat4, vec3, vec4 } from "gl-matrix";
 import commonShaderCore from "./common.glsl";
+import { ResourceBin } from "./resource";
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
 }
+
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
@@ -17,14 +22,23 @@ export class RenderContext {
     private readonly modules: readonly RenderModule[];
     private readonly moduleContexts: (RenderModuleContext | undefined)[];
     private cameraUniformsData;
+    private clippingUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
-    private readonly statistics: GLStatistics;
     private readonly asyncPrograms: AsyncProgramInfo[] = [];
     readonly gl: WebGL2RenderingContext;
     readonly commonChunk: string;
     readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
+    private readonly resourceBins = new Set<ResourceBin>();
+    private readonly defaultResourceBin;
+    private readonly iblResourceBin;
     private activeTimers = new Set<Timer>();
     private currentFrameTime = 0;
+    private statistics = {
+        points: 0,
+        lines: 0,
+        triangles: 0,
+        drawCalls: 0,
+    };
     private prevFrame: {
         readonly time: number;
         readonly resolve: (interval: number) => void;
@@ -38,6 +52,7 @@ export class RenderContext {
 
     // constant gl resources
     readonly cameraUniforms: WebGLBuffer;
+    readonly clippingUniforms: WebGLBuffer;
     readonly lut_ggx: WebGLTexture;
     readonly samplerMip: WebGLSampler; // use to read diffuse texture
     readonly samplerSingle: WebGLSampler; // use to read the other textures
@@ -51,8 +66,8 @@ export class RenderContext {
         readonly diffuse: WebGLTexture; // irradiance cubemap
         readonly specular: WebGLTexture; // radiance cubemap
         readonly numMipMaps: number; // # of radiance/specular mip map levels.
+        readonly default: boolean;
     };
-    clippingUniforms: WebGLBuffer | undefined;
 
     drawBuffers(buffers: BufferFlags = (BufferFlags.all)): readonly (ColorAttachment | "NONE")[] {
         const activeBuffers = buffers & this.drawBuffersMask;
@@ -69,16 +84,18 @@ export class RenderContext {
         if (!gl)
             throw new Error("Unable to create WebGL 2 context!");
         this.gl = gl;
-        this.statistics = glStats(gl, true);
         const extensions = glExtensions(gl, true);
+        const defaultBin = this.defaultResourceBin = this.resourceBin("context");
+        const iblBin = this.iblResourceBin = this.resourceBin("ibl");
         console.assert(extensions.loseContext != null, extensions.multiDraw != null, extensions.colorBufferFloat != null);
         this.commonChunk = commonShaderCore;
 
         // ggx lookup texture and ibl samplers
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-        this.lut_ggx = glTexture(gl, { kind: "TEXTURE_2D", internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: lut_ggx });
-        this.samplerSingle = glSampler(gl, { minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
-        this.samplerMip = glSampler(gl, { minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        const lutParams = { kind: "TEXTURE_2D", internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: lut_ggx } as const;
+        this.lut_ggx = defaultBin.createTexture(lutParams);
+        this.samplerSingle = defaultBin.createSampler({ minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        this.samplerMip = defaultBin.createSampler({ minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
 
         // create default ibl textures
         const top = new Uint8Array([192, 192, 192, 255]);
@@ -87,9 +104,10 @@ export class RenderContext {
         const image = [side, side, top, bottom, side, side] as const;
         const textureParams = this.defaultIBLTextureParams = { kind: "TEXTURE_CUBE_MAP", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: image } as const;
         this.iblTextures = {
-            diffuse: glTexture(gl, textureParams),
-            specular: glTexture(gl, textureParams),
+            diffuse: iblBin.createTexture(textureParams),
+            specular: iblBin.createTexture(textureParams),
             numMipMaps: 1,
+            default: true,
         };
 
         // initialize modules
@@ -122,24 +140,25 @@ export class RenderContext {
             windowSize: "vec2",
             near: "float",
         });
-        this.cameraUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.cameraUniformsData.buffer.byteLength });
-    }
+        this.cameraUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.cameraUniformsData.buffer.byteLength });
 
-    private deleteIblTextures() {
-        const { gl, iblTextures } = this;
-        const { diffuse, specular } = iblTextures;
-        gl.deleteTexture(diffuse);
-        gl.deleteTexture(specular);
+        // clipping uniforms
+        this.clippingUniformsData = glUBOProxy({
+            "planes.0": "vec4",
+            "planes.1": "vec4",
+            "planes.2": "vec4",
+            "planes.3": "vec4",
+            "planes.4": "vec4",
+            "planes.5": "vec4",
+            numPlanes: "uint",
+            mode: "uint",
+        });
+        this.clippingUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.clippingUniformsData.buffer.byteLength });
     }
 
     dispose() {
-        const { gl, cameraUniforms, buffers, moduleContexts, lut_ggx, samplerSingle, samplerMip, activeTimers } = this;
-        this.deleteIblTextures();
-        gl.deleteTexture(lut_ggx);
-        gl.deleteSampler(samplerSingle);
-        gl.deleteSampler(samplerMip);
-        gl.deleteBuffer(cameraUniforms);
-        buffers?.dispose();
+        const { buffers, moduleContexts, activeTimers, defaultResourceBin, iblResourceBin } = this;
+        this.poll(); // finish async stuff
         for (const timer of activeTimers) {
             timer.dispose();
         }
@@ -148,6 +167,10 @@ export class RenderContext {
             module?.dispose();
         }
         moduleContexts.length = 0;
+        buffers?.dispose();
+        iblResourceBin.dispose();
+        defaultResourceBin.dispose();
+        console.assert(this.resourceBins.size == 0);
     }
 
     // use a pre-pass to fill in z-buffer for improved fill rate at the expense of triangle rate (useful when doing heavy shading, but unclear how efficient this is on tiled GPUs.)
@@ -174,20 +197,22 @@ export class RenderContext {
     }
 
     updateIBLTextures(params: { readonly diffuse: TextureParamsCubeUncompressed, readonly specular: TextureParamsCubeUncompressedMipMapped } | null) {
-        const { gl } = this;
-        this.deleteIblTextures();
+        const { iblResourceBin } = this;
+        iblResourceBin.deleteAll();
         if (params) {
             const { diffuse, specular } = params;
             this.iblTextures = {
-                diffuse: glTexture(gl, diffuse),
-                specular: glTexture(gl, specular),
+                diffuse: iblResourceBin.createTexture(diffuse),
+                specular: iblResourceBin.createTexture(specular),
                 numMipMaps: typeof specular.mipMaps == "number" ? specular.mipMaps : specular.mipMaps.length,
+                default: false,
             };
         } else {
             this.iblTextures = {
-                diffuse: glTexture(gl, this.defaultIBLTextureParams),
-                specular: glTexture(gl, this.defaultIBLTextureParams),
+                diffuse: iblResourceBin.createTexture(this.defaultIBLTextureParams),
+                specular: iblResourceBin.createTexture(this.defaultIBLTextureParams),
                 numMipMaps: 1,
+                default: false,
             };
         }
     }
@@ -206,10 +231,14 @@ export class RenderContext {
         return changed;
     }
 
+    resourceBin(name: string) {
+        return ResourceBin["create"](this.gl, name, this.resourceBins);
+    }
+
     makeProgramAsync(params: AsyncProgramParams) {
         const { gl, commonChunk } = this;
         const header = { commonChunk, ...params.header } as const; // inject common shader code here, if not defined in params.
-        const programAsync = glProgramAsync(gl, { ...params, header });
+        const programAsync = glCreateProgramAsync(gl, { ...params, header });
         const { program } = programAsync;
 
         // do pre-link bindings here
@@ -258,6 +287,22 @@ export class RenderContext {
             }
             this.asyncPrograms.push({ ...programAsync, resolve: postLink, reject });
         });
+    }
+
+    private resetRenderStatistics() {
+        const { statistics } = this;
+        statistics.points = 0;
+        statistics.lines = 0;
+        statistics.triangles = 0;
+        statistics.drawCalls = 0;
+    }
+
+    protected addRenderStatistics(stats: DrawStatistics, drawCalls = 1) {
+        const { statistics } = this;
+        statistics.points += stats.points;
+        statistics.lines += stats.lines;
+        statistics.triangles += stats.triangles;
+        statistics.drawCalls += drawCalls;
     }
 
     private pollAsyncPrograms() {
@@ -329,11 +374,7 @@ export class RenderContext {
         const { gl, canvas, prevState } = this;
         this.changed = false;
 
-        const { statistics } = this;
-        // reset primitive counters
-        statistics.renderedPoints = 0;
-        statistics.renderedLines = 0;
-        statistics.renderedTriangles = 0;
+        this.resetRenderStatistics();
 
         const drawTimer = this.beginTimer();
 
@@ -349,7 +390,7 @@ export class RenderContext {
             this.changed = true;
             this.drawBuffersMask = renderPickBuffers ? BufferFlags.all : BufferFlags.color;
             this.buffers?.dispose();
-            this.buffers = new RenderBuffers(gl, width, height);
+            this.buffers = new RenderBuffers(gl, width, height, this.resourceBin("FrameBuffers"));
         }
         this.buffers.invalidate(this.drawBuffersMask);
         this.buffers.readBuffersNeedUpdate = true;
@@ -372,7 +413,7 @@ export class RenderContext {
             derivedState.viewFrustum = createViewFrustum(state, derivedState.matrices);
         }
         this.updateCameraUniforms(derivedState);
-        this.updateUniformBuffer(this.cameraUniforms, this.cameraUniformsData);
+        this.updateClippingUniforms(derivedState);
 
         // update internal state
         this.isOrtho = derivedState.camera.kind == "orthographic";
@@ -428,7 +469,17 @@ export class RenderContext {
             this.prevFrame = { time: this.currentFrameTime, resolve };
         });
 
-        const stats = { ...statistics };
+        const stats = { ...this.statistics, bufferBytes: 0, textureBytes: 0 };
+        for (const bin of this.resourceBins) {
+            for (const { kind, byteSize } of bin.resourceInfo) {
+                if (kind == "Buffer") {
+                    stats.bufferBytes += byteSize!;
+                }
+                if (kind == "Texture") {
+                    stats.textureBytes += byteSize!;
+                }
+            }
+        }
 
         const [gpuDrawTime, frameInterval] = await Promise.all([drawTimer.promise, intervalPromise]);
 
@@ -445,7 +496,7 @@ export class RenderContext {
     }
 
     private updateCameraUniforms(state: DerivedRenderState) {
-        const { gl, cameraUniformsData, localSpaceTranslation } = this;
+        const { cameraUniformsData, localSpaceTranslation } = this;
         const { output, camera, matrices } = state;
         const { values } = cameraUniformsData;
         const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
@@ -461,6 +512,35 @@ export class RenderContext {
         values.viewLocalMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
         values.windowSize = [output.width, output.height];
         values.near = camera.near;
+        this.updateUniformBuffer(this.cameraUniforms, this.cameraUniformsData);
+    }
+
+    private updateClippingUniforms(state: DerivedRenderState) {
+        const { clipping, matrices } = state;
+        if (this.hasStateChanged({ clipping, matrices })) {
+            const { clippingUniforms, clippingUniformsData } = this;
+            const { values } = clippingUniformsData;
+            const { enabled, mode, planes } = clipping;
+            // transform clipping planes into view space
+            const normal = vec3.create();
+            const position = vec3.create();
+            const matrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
+            const matrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
+            mat4.getTranslation(position, matrix);
+            for (let i = 0; i < planes.length; i++) {
+                const { normalOffset } = planes[i];
+                const [x, y, z, offset] = normalOffset;
+                vec3.set(normal, x, y, z);
+                vec3.transformMat3(normal, normal, matrixNormal);
+                const distance = offset + vec3.dot(position, normal);
+                const plane = vec4.fromValues(normal[0], normal[1], normal[2], -distance);
+                const idx = i as 0 | 1 | 2 | 3 | 4 | 5;
+                values[`planes.${idx}` as const] = plane;
+            }
+            values["numPlanes"] = enabled ? planes.length : 0;
+            values["mode"] = mode;
+            this.updateUniformBuffer(clippingUniforms, clippingUniformsData);
+        }
     }
 
     protected async pick(x: number, y: number, sampleDiscRadius = 0): Promise<PickSample[]> {

@@ -22,7 +22,7 @@ export function glCompile(gl: WebGL2RenderingContext, params: ShaderParams): Web
 
 // remember to call gl.LinkProgram(program) on the returned program
 // call glCheckProgram() to check for completely and verify status
-export function glProgramAsync(gl: WebGL2RenderingContext, params: ProgramAsyncParams) {
+export function glCreateProgramAsync(gl: WebGL2RenderingContext, params: ProgramAsyncParams) {
     const { header } = params;
     const headerCode = formatHeader(gl, header);
     const vertex = glCompile(gl, { kind: "VERTEX_SHADER", shader: headerCode + params.vertexShader });
@@ -33,7 +33,7 @@ export function glProgramAsync(gl: WebGL2RenderingContext, params: ProgramAsyncP
     return { program, vertex, fragment } as const;
 }
 
-export function glCheckProgram(gl: WebGL2RenderingContext, params: ReturnType<typeof glProgramAsync>) {
+export function glCheckProgram(gl: WebGL2RenderingContext, params: ReturnType<typeof glCreateProgramAsync>) {
     const { program, vertex, fragment } = params;
     if (gl.getProgramParameter(program, gl.LINK_STATUS) || gl.isContextLost()) {
         console.assert(gl.getProgramParameter(program, gl.ATTACHED_SHADERS) == 2); // make sure not to call this function again after it returns true!
@@ -47,7 +47,7 @@ export function glCheckProgram(gl: WebGL2RenderingContext, params: ReturnType<ty
     }
 }
 
-export function glProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
+export function glCreateProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
     const { flags, transformFeedback, uniformBufferBlocks, textureUniforms, headerChunk, commonChunk } = params;
     const extensions: string[] = [];
     if (glExtensions(gl).multiDraw) {
@@ -83,6 +83,8 @@ export function glProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
     if (!gl.getProgramParameter(program, gl.LINK_STATUS) && !gl.isContextLost())
         throw new Error(`Failed to compile link shaders!\r\n${gl.getProgramInfoLog(program)}`);
 
+    gl.useProgram(program);
+
     if (uniformBufferBlocks) {
         let idx = 0;
         for (const name of uniformBufferBlocks) {
@@ -99,15 +101,14 @@ export function glProgram(gl: WebGL2RenderingContext, params: ProgramParams) {
     }
 
     if (textureUniforms) {
-        gl.useProgram(program);
         let i = 0;
         for (const name of textureUniforms) {
             const location = gl.getUniformLocation(program, name);
             gl.uniform1i(location, i++);
         }
-        gl.useProgram(null);
     }
 
+    gl.useProgram(null);
     return program;
 }
 
@@ -167,7 +168,6 @@ function formatHeader(gl: WebGL2RenderingContext, params: string | Partial<Shade
     const header = version + extensions + precisions + flags + defines + common;
     return header;
 }
-
 
 export interface ProgramAsyncParams {
     readonly header?: string | Partial<ShaderHeaderParams>;

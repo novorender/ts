@@ -13,7 +13,6 @@ export * from "./read";
 export * from "./renderBuffer";
 export * from "./sampler";
 export * from "./state";
-export * from "./stats";
 export * from "./texture";
 export * from "./timer";
 export * from "./transformFeedback";

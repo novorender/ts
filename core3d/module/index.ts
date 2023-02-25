@@ -1,4 +1,4 @@
-import { DerivedRenderState } from "../state";
+import type { DerivedRenderState } from "../state";
 import { RenderContext } from "../context";
 import { BackgroundModule } from "./background";
 import { GridModule } from "./grid";

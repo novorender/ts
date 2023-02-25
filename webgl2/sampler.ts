@@ -4,7 +4,7 @@ export type MagFilterString = "NEAREST" | "LINEAR";
 export type CompareFuncString = "NEVER" | "LESS" | "EQUAL" | "LEQUAL" | "GREATER" | "NOTEQUAL" | "GEQUAL" | "ALWAYS";
 export type CompareModeString = "COMPARE_REF_TO_TEXTURE" | "NONE";
 
-export function glSampler(gl: WebGL2RenderingContext, params: SamplerParams): WebGLSampler {
+export function glCreateSampler(gl: WebGL2RenderingContext, params: SamplerParams): WebGLSampler {
     const sampler = gl.createSampler()!;
     gl.bindSampler(0, sampler);
     const { minificationFilter, magnificationFilter, minLOD, maxLOD, wrap, compareFunction, compareMode } = params;

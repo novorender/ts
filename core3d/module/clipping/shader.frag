@@ -6,6 +6,10 @@ layout(std140) uniform Clipping {
     ClippingUniforms clipping;
 };
 
+layout(std140) uniform Colors {
+    ClippingColors visualization;
+};
+
 in ClippingVaryings varyings;
 
 layout(location = 0) out vec4 fragColor;
@@ -46,7 +50,7 @@ void main() {
     vec4 posCS = camera.viewClipMatrix * posVS;
     float ndcDepth = (posCS.z / posCS.w);
     gl_FragDepth = (gl_DepthRange.diff * ndcDepth + gl_DepthRange.near + gl_DepthRange.far) / 2.;
-    vec4 rgba = clipping.colors[idx[i]];
+    vec4 rgba = visualization.colors[idx[i]];
     uint objectId = clippingId + idx[i];
     if(rgba.a == 0.)
         discard;

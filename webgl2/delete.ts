@@ -1,6 +1,12 @@
 export function glDelete(gl: WebGL2RenderingContext, params: DeleteParams) {
-    const resources = Array.isArray(params) ? params : Object.values(params);
+    if (params === null)
+        return;
+    const isGLResource = params.constructor.name.startsWith("WebGL");
+    const resources: WebGLResource[] = Array.isArray(params) ? params : isGLResource ? [params] : Object.values(params);
+
     for (const resource of resources) {
+        if (resource === null) // ignore nulls
+            continue;
         if (resource instanceof WebGLBuffer) {
             gl.deleteBuffer(resource);
         } else if (resource instanceof WebGLFramebuffer) {
@@ -23,14 +29,12 @@ export function glDelete(gl: WebGL2RenderingContext, params: DeleteParams) {
             gl.deleteTexture(resource);
         } else if (resource instanceof WebGLVertexArrayObject) {
             gl.deleteVertexArray(resource);
-        } else if (resource === null) {
-            // ignore
         } else {
             throw new Error(`Unknown WebGL resource: ${resource}!`);
         }
     }
 }
 
-export type DeleteParams = readonly WebGLResource[] | WebGLResourceContainer;
-export type WebGLResource = WebGLBuffer | WebGLFramebuffer | WebGLProgram | WebGLQuery | WebGLRenderbuffer | WebGLSampler | WebGLShader | WebGLSync | WebGLTransformFeedback | WebGLTexture | WebGLVertexArrayObject;
+export type WebGLResource = WebGLBuffer | WebGLFramebuffer | WebGLProgram | WebGLQuery | WebGLRenderbuffer | WebGLSampler | WebGLShader | WebGLSync | WebGLTransformFeedback | WebGLTexture | WebGLTransformFeedback | WebGLVertexArrayObject;
+export type DeleteParams = WebGLResource | readonly WebGLResource[] | WebGLResourceContainer | null;
 export type WebGLResourceContainer = { readonly [key: string]: WebGLResource | null };

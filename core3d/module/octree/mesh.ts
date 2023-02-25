@@ -1,8 +1,9 @@
-import { glBuffer, glVertexArray, DrawParams, VertexAttribute, DrawParamsArraysMultiDraw, DrawParamsElementsMultiDraw, glTexture, glUpdateBuffer } from "@novorender/webgl2";
+import { glUpdateBuffer, type DrawParams, type VertexAttribute, type DrawParamsArraysMultiDraw, type DrawParamsElementsMultiDraw } from "@novorender/webgl2";
 import type { RenderStateHighlightGroup } from "@novorender/core3d";
 import { mergeSorted } from "@novorender/core3d/iterate";
-import { MeshDrawRange, MeshObjectRange, NodeGeometry, VertexAttributeData } from "./parser";
+import type { MeshDrawRange, MeshObjectRange, NodeGeometry, VertexAttributeData } from "./parser";
 import { MaterialType } from "./schema";
+import { ResourceBin } from "@novorender/core3d/resource";
 
 export interface Mesh {
     readonly materialType: MaterialType;
@@ -18,10 +19,10 @@ export interface Mesh {
     readonly baseColorTexture: WebGLTexture | null;
 }
 
-export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry) {
+export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) {
     const textures = geometry.textures.map(ti => {
         if (ti) {
-            return glTexture(gl, ti.params);
+            return resourceBin.createTexture(ti.params);
         }
     });
 
@@ -30,9 +31,9 @@ export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry
         //     continue;
         const { vertexAttributes, vertexBuffers, indices, numVertices, numTriplets, drawRanges, objectRanges, materialType } = subMesh;
         const buffers = vertexBuffers.map(vb => {
-            return glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vb });
+            return resourceBin.createBuffer({ kind: "ARRAY_BUFFER", srcData: vb });
         })
-        const ib = typeof indices != "number" ? glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
+        const ib = typeof indices != "number" ? resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
         const { triplets, position, normal, material, objectId, texCoord, color, deviation } = vertexAttributes;
@@ -43,17 +44,15 @@ export function* createMeshes(gl: WebGL2RenderingContext, geometry: NodeGeometry
         const tripletAttributes = triplets ? triplets.map(convertAttrib) : null;
 
         // add extra highlight vertex buffer and attribute
-        const highlightVB = glBuffer(gl, { kind: "ARRAY_BUFFER", byteSize: subMesh.numVertices });
+        const highlightVB = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: subMesh.numVertices });
         attributes.push({ kind: "UNSIGNED_INT", buffer: highlightVB, componentType: "UNSIGNED_BYTE" });
 
-        const vao = glVertexArray(gl, { attributes, indices: ib });
-        const vaoPosOnly = position.buffer != 0 ? glVertexArray(gl, { attributes: [attributes[0]], indices: ib }) : null;
-        const vaoTriplets = tripletAttributes ? glVertexArray(gl, { attributes: tripletAttributes }) : null;
-        for (const buffer of buffers) {
-            gl.deleteBuffer(buffer);
-        }
+        const vao = resourceBin.createVertexArray({ attributes, indices: ib });
+        const vaoPosOnly = position.buffer != 0 ? resourceBin.createVertexArray({ attributes: [attributes[0]], indices: ib }) : null;
+        const vaoTriplets = tripletAttributes ? resourceBin.createVertexArray({ attributes: tripletAttributes }) : null;
+        resourceBin.subordinate(vao, ...buffers);
         if (ib) {
-            gl.deleteBuffer(ib);
+            resourceBin.subordinate(vao, ib);
         }
 
         const drawParams: DrawParams = ib ?
@@ -94,9 +93,9 @@ export function updateMeshHighlightGroups(gl: WebGL2RenderingContext, mesh: Mesh
     }
 }
 
-export function deleteMesh(gl: WebGL2RenderingContext, mesh: Mesh) {
-    gl.deleteVertexArray(mesh.vao);
-    gl.deleteVertexArray(mesh.vaoPosOnly);
+export function deleteMesh(resourceBin: ResourceBin, mesh: Mesh) {
+    const { vao, vaoPosOnly, vaoTriplets, highlightVB, baseColorTexture } = mesh;
+    resourceBin.delete(vao, vaoPosOnly, vaoTriplets, highlightVB, baseColorTexture);
 }
 
 export function getMultiDrawParams(mesh: Mesh, childMask: number): DrawParamsArraysMultiDraw | DrawParamsElementsMultiDraw | undefined {

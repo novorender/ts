@@ -1,5 +1,5 @@
 
-import { RenderState, RenderStateChanges, RenderStateClipping, RenderStateOutput } from ".";
+import type { RenderState, RenderStateChanges, RenderStateClipping, RenderStateOutput } from ".";
 
 // this function will create a copy where unchanged properties have same identity (=== operator yields true)
 // use this to quickly check for changes.

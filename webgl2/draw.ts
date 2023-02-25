@@ -1,7 +1,6 @@
 import { glExtensions } from "./extensions";
-import { glStats } from "./stats";
 
-export function glDraw(gl: WebGL2RenderingContext, params: DrawParams) {
+export function glDraw(gl: WebGL2RenderingContext, params: DrawParams): DrawStatistics {
     let numPrimitives = 0;
     const mode = params.mode ?? "TRIANGLES";
     const primitiveType = gl[mode];
@@ -50,16 +49,12 @@ export function glDraw(gl: WebGL2RenderingContext, params: DrawParams) {
         }
     }
 
-    const stats = glStats(gl);
-    if (stats) {
-        stats.drawCalls++;
-        if (primitiveType >= gl.TRIANGLES) {
-            stats.renderedTriangles += numPrimitives;
-        } else if (primitiveType >= gl.LINES) {
-            stats.renderedLines += numPrimitives;
-        } else {
-            stats.renderedPoints += numPrimitives;
-        }
+    if (primitiveType >= gl.TRIANGLES) {
+        return { points: 0, lines: 0, triangles: numPrimitives };
+    } else if (primitiveType >= gl.LINES) {
+        return { points: 0, lines: numPrimitives, triangles: 0 };
+    } else {
+        return { points: numPrimitives, lines: 0, triangles: 0 };
     }
 }
 
@@ -94,6 +89,11 @@ function isRange(params: DrawParams): params is DrawParamsElementsRange {
 function isMultiDraw(params: DrawParams): params is DrawParamsArraysMultiDraw | DrawParamsElementsMultiDraw {
     return "drawCount" in params && params.drawCount != undefined;
 }
+
+export type DrawStatistics =
+    { readonly points: number; readonly lines: 0; readonly triangles: 0 } |
+    { readonly points: 0; readonly lines: number; readonly triangles: 0 } |
+    { readonly points: 0; readonly lines: 0; readonly triangles: number };
 
 export type DrawParams =
     DrawParamsArrays | DrawParamsArraysMultiDraw | DrawParamsArraysInstanced |

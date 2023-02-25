@@ -1,14 +1,12 @@
 import { RenderContext } from "./context";
-import { ClippingMode, RenderStateClippingPlane, defaultRenderState, modifyRenderState, TonemappingMode, ObjectIdFilter } from "./state";
+import { defaultRenderState, modifyRenderState, type ObjectIdFilter, type RenderStateClippingPlane } from "./state";
 import { OrbitController } from "./controller";
 import { downloadScene } from "./scene";
 import { glExtensions } from "@novorender/webgl2";
 import { wasmInstance } from "./wasm";
-import lut_ggx_png from "./lut_ggx.png";
-import { ReadonlyVec3, vec3 } from "gl-matrix";
-import { createTestCube, createTestSphere } from "./geometry";
-import { loadGLTF } from "./gltf";
+import { vec3, type ReadonlyVec3 } from "gl-matrix";
 import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight } from "./highlight";
+import lut_ggx_png from "./lut_ggx.png";
 
 
 export * from "./state";

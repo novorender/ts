@@ -1,7 +1,8 @@
 ///@ts-ignore
 import createWorker from "./loader.worker.js"; // uses esbuild-plugin-inline-worker to inline worker code.
 import type { RenderStateScene } from "@novorender/core3d/state";
-import { AbortAllMessage, AbortMessage, CloseMessage, FilteredMessage, FilterMessage, LoaderHandler, LoadMessage, MessageRequest, MessageResponse, NodePayload } from "./loader_handler";
+import type { AbortAllMessage, AbortMessage, CloseMessage, FilteredMessage, FilterMessage, LoadMessage, MessageRequest, MessageResponse, NodePayload } from "./loader_handler";
+import { LoaderHandler } from "./loader_handler";
 import { OctreeNode } from "./node.js";
 import { filterSortedExclude, filterSortedInclude } from "@novorender/core3d/iterate.js";
 

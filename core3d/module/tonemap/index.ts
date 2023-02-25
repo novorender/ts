@@ -1,8 +1,9 @@
 import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
-import { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glProgram, glSampler, glDraw, glState, glDelete, glBuffer, UniformTypes } from "@novorender/webgl2";
+import type { RenderModuleContext, RenderModule } from "..";
+import { glUBOProxy, glDraw, glState, type UniformTypes } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
+import { ResourceBin } from "@novorender/core3d/resource";
 
 export class TonemapModule implements RenderModule {
     readonly uniforms = {
@@ -12,7 +13,7 @@ export class TonemapModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
-        return new TonemapModuleContext(context, this);
+        return new TonemapModuleContext(context, this, context.resourceBin("Tonemap"));
     }
 }
 
@@ -20,15 +21,15 @@ class TonemapModuleContext implements RenderModuleContext {
     readonly uniforms;
     readonly resources;
 
-    constructor(readonly context: RenderContext, readonly data: TonemapModule) {
+    constructor(readonly context: RenderContext, readonly data: TonemapModule, readonly resourceBin: ResourceBin) {
         const { gl, commonChunk } = context;
         this.uniforms = glUBOProxy(data.uniforms);
         const uniformBufferBlocks = ["Tonemapping"];
         const textureNames = ["color", "depth", "info", "zbuffer"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
-        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
-        const sampler = glSampler(gl, { minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
+        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
+        const sampler = resourceBin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
         this.resources = { program, sampler, uniforms } as const;
     }
 
@@ -70,16 +71,15 @@ class TonemapModuleContext implements RenderModuleContext {
             },
         });
 
-        glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
+        const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
+        context["addRenderStatistics"](stats);
     }
 
     contextLost() {
     }
 
     dispose() {
-        const { context, resources } = this;
-        const { gl } = context;
         this.contextLost();
-        glDelete(gl, resources);
+        this.resourceBin.dispose();
     }
 }

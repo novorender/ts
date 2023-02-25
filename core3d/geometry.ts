@@ -1,5 +1,5 @@
-import { mat4, ReadonlyVec2, ReadonlyVec3, vec2, vec3 } from "gl-matrix";
-import { RenderStateDynamicGeometry, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicVertexAttributes } from "./state";
+import { mat4, type ReadonlyVec2, type ReadonlyVec3, vec2, vec3 } from "gl-matrix";
+import type { RenderStateDynamicGeometry, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicVertexAttributes } from "./state";
 
 const defaultMaterial: RenderStateDynamicMaterial = {
     kind: "unlit",

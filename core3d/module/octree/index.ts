@@ -1,13 +1,13 @@
-import { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "@novorender/core3d";
-import { RenderModuleContext, RenderModule } from "..";
+import type { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "@novorender/core3d";
+import type { RenderModuleContext, RenderModule } from "..";
 import { createSceneRootNode } from "@novorender/core3d/scene";
-import { NodeState, OctreeContext, OctreeNode, Visibility } from "./node";
+import { NodeState, type OctreeContext, OctreeNode, Visibility } from "./node";
 import { Downloader } from "./download";
-import { glUBOProxy, glBuffer, glDelete, glDraw, glProgram, glSampler, glState, glTexture, glTransformFeedback, glUniformLocations, glUpdateTexture, glVertexArray, TextureParams2DUncompressed, UniformTypes } from "@novorender/webgl2";
+import { glUBOProxy, glDelete, glDraw, glState, glTransformFeedback, glUniformLocations, glUpdateTexture, type TextureParams2DUncompressed, type UniformTypes } from "@novorender/webgl2";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
-import { ReadonlyVec3, vec3 } from "gl-matrix";
-import { NodeLoader, NodeLoaderOptions } from "./loader";
+import { type ReadonlyVec3, vec3 } from "gl-matrix";
+import { NodeLoader, type NodeLoaderOptions } from "./loader";
 import { computeGradientColors, gradientRange } from "./gradient";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
@@ -17,6 +17,7 @@ import intersect_vs from "./intersect.vert";
 import vertexShaderDebug from "./shader_debug.vert";
 import fragmentShaderDebug from "./shader_debug.frag";
 import { BufferFlags } from "@novorender/core3d/buffers";
+import { ResourceBin } from "@novorender/core3d/resource";
 
 export class OctreeModule implements RenderModule {
     readonly sceneUniforms = {
@@ -37,7 +38,7 @@ export class OctreeModule implements RenderModule {
     readonly maxHighlights = 8;
 
     withContext(context: RenderContext) {
-        return new OctreeModuleContext(context, this);
+        return new OctreeModuleContext(context, this, context.resourceBin("Octree"));
     }
 }
 
@@ -61,34 +62,34 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     version: string = "";
     readonly projectedSizeSplitThreshold = 1; // / (settings.quality.detail.value * deviceProfile.detailBias); // baseline node size split threshold = 50% of view height
 
-    constructor(readonly renderContext: RenderContext, readonly data: OctreeModule) {
+    constructor(readonly renderContext: RenderContext, readonly data: OctreeModule, readonly resourceBin: ResourceBin) {
         this.sceneUniforms = glUBOProxy(data.sceneUniforms);
         this.loader = new NodeLoader(data.nodeLoaderOptions);
-        const { gl, commonChunk } = renderContext;
+        const { commonChunk } = renderContext;
         const flags: string[] = ["IOS_WORKAROUND"]; // without this flag, complex scenes crash after a few frames on older IOS and iPad devices.
         const textureNames = ["base_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
         const uniformBufferBlocks = ["Camera", "Clipping", "Scene", "Node"];
-        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags });
-        const programZ = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags: [...flags, "POS_ONLY"] });
-        const programIntersect = glProgram(gl, { vertexShader: intersect_vs, commonChunk, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
-        const programLine = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Scene"] });
-        const programDebug = this.debug ? glProgram(gl, { vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, commonChunk, uniformBufferBlocks }) : null;
-        const transformFeedback = gl.createTransformFeedback()!;
-        const uniformLocations = glUniformLocations(gl, program, ["meshMode"]);
+        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags });
+        const programZ = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags: [...flags, "POS_ONLY"] });
+        const programIntersect = resourceBin.createProgram({ vertexShader: intersect_vs, commonChunk, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
+        const programLine = resourceBin.createProgram({ vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Scene"] });
+        const programDebug = this.debug ? resourceBin.createProgram({ vertexShader: vertexShaderDebug, fragmentShader: fragmentShaderDebug, commonChunk, uniformBufferBlocks }) : null;
+        const transformFeedback = resourceBin.createTransformFeedback()!;
+        const uniformLocations = glUniformLocations(renderContext.gl, program, ["meshMode"]);
         this.meshModeLocation = uniformLocations.meshMode;
-        const vb_line = glBuffer(gl, { kind: "ARRAY_BUFFER", byteSize: this.maxLines * 2 * 8, usage: "STATIC_DRAW" });
-        const vao_line = glVertexArray(gl, {
+        const vb_line = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: this.maxLines * 2 * 8, usage: "STATIC_DRAW" });
+        const vao_line = resourceBin.createVertexArray({
             attributes: [
                 { kind: "FLOAT_VEC2", buffer: vb_line, byteStride: 8, byteOffset: 0 }, // position
             ],
         });
-        const sceneUniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.sceneUniforms.buffer.byteLength });
-        const samplerNearest = glSampler(gl, { minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
-        const defaultBaseColorTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array([255, 255, 255, 255]) });
-        const materialTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null });
-        const highlightTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image: null });
-        const gradientsTexture = glTexture(gl, data.gradientImageParams);
+        const sceneUniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.sceneUniforms.buffer.byteLength });
+        const samplerNearest = resourceBin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        const defaultBaseColorTexture = resourceBin.createTexture({ kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array([255, 255, 255, 255]) });
+        const materialTexture = resourceBin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null });
+        const highlightTexture = resourceBin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image: null });
+        const gradientsTexture = resourceBin.createTexture(data.gradientImageParams);
         this.resources = {
             program, programZ, programIntersect, programLine, programDebug,
             transformFeedback, vb_line, vao_line,
@@ -422,12 +423,14 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
                 gl.bindTexture(gl.TEXTURE_2D, mesh.baseColorTexture ?? resources.defaultBaseColorTexture);
                 if (renderedChildMask == data.childMask) {
-                    glDraw(gl, mesh.drawParams);
+                    const stats = glDraw(gl, mesh.drawParams);
+                    this.renderContext["addRenderStatistics"](stats);
                 } else {
                     // determine which portions of the parent node must be rendered based on what children currently don't render themselves
                     const multiDrawParams = getMultiDrawParams(mesh, renderedChildMask);
                     if (multiDrawParams) {
-                        glDraw(gl, multiDrawParams);
+                        const stats = glDraw(gl, multiDrawParams);
+                        this.renderContext["addRenderStatistics"](stats);
                     }
                 }
             }
@@ -460,7 +463,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                                 program: programLine,
                                 vertexArrayObject: vao_line,
                             });
-                            glDraw(gl, { kind: "arrays", mode: "LINES", count: count * 2, first: 0 });
+                            const stats = glDraw(gl, { kind: "arrays", mode: "LINES", count: count * 2, first: 0 });
+                            this.renderContext["addRenderStatistics"](stats);
                         }
                     }
                 }
@@ -474,7 +478,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         if (node.renderedChildMask && node.uniforms) {
             gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms ?? null);
-            glDraw(gl, { kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
+            const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
+            renderContext["addRenderStatistics"](stats);
         }
     }
 
@@ -482,12 +487,12 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { loader, downloader, rootNode } = this;
         downloader.abort();
         loader.abortAll();
-        rootNode?.dispose(); // TODO: consider retaining submesh js data
+        rootNode?.dispose(); // consider retaining submesh js data
     }
 
     dispose() {
         this.contextLost();
-        glDelete(this.renderContext.gl, this.resources);
+        this.resourceBin.dispose();
         this.rootNode = undefined;
     }
 
