@@ -11,7 +11,16 @@ export function matricesFromRenderState(state: { output: RenderStateOutput; came
     const aspectRatio = width / height;
     const fovY = camera.fov * Math.PI / 180;
     const viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
-    const viewClip = mat4.perspective(mat4.create(), fovY, aspectRatio, camera.near, camera.far);
+    const viewClip = mat4.create();
+    if (camera.kind == "orthographic") {
+        const aspect = output.width / output.height;
+        const halfHeight = camera.fov / 2;
+        const halfWidth = halfHeight * aspect;
+        mat4.ortho(viewClip, -halfWidth, halfWidth, -halfHeight, halfHeight, camera.near, camera.far);
+    }
+    else {
+        mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
+    }
     return new MatricesImpl(viewWorld, viewClip);
 }
 
