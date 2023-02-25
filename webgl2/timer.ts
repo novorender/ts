@@ -1,4 +1,4 @@
-import { EXT_disjoint_timer_query_webgl2_ext, glExtensions } from "./extensions";
+import { type EXT_disjoint_timer_query_webgl2_ext, glExtensions } from "./extensions";
 
 export function glCreateTimer(gl: WebGL2RenderingContext, cpuFallback = false): Timer {
     const { disjointTimerQuery } = glExtensions(gl);
