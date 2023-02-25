@@ -1,5 +1,5 @@
 import { glMatrix, mat4, vec3, vec4 } from "gl-matrix";
-import { RenderState, CoordSpace, Matrices, ViewFrustum } from "./state";
+import { type RenderState, CoordSpace, type Matrices, type ViewFrustum } from "./state";
 
 export function createViewFrustum(state: RenderState, matrices: Matrices): ViewFrustum {
     const { camera, output } = state;
