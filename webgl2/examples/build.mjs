@@ -1,4 +1,4 @@
-import { serve, buildSync } from "esbuild";
+import { context } from "esbuild";
 import ip from "ip";
 
 const serveOptions = {
@@ -25,8 +25,8 @@ const buildOptions = {
     },
 }
 
-// buildSync(buildOptions);
-const server = await serve(serveOptions, buildOptions);
+const ctx = await context(buildOptions);
+const server = await ctx.serve(serveOptions);
 console.log(`http://${ip.address()}:${server.port}/`);
 await server.wait;
 

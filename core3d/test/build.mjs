@@ -1,4 +1,4 @@
-import { serve, buildSync } from "esbuild";
+import { context } from "esbuild";
 import inlineWorkerPlugin from 'esbuild-plugin-inline-worker';
 import ip from "ip";
 
@@ -30,8 +30,7 @@ const buildOptions = {
     plugins: [inlineWorkerPlugin()],
 }
 
-// buildSync(buildOptions);
-const server = await serve(serveOptions, buildOptions);
+const ctx = await context(buildOptions);
+const server = await ctx.serve(serveOptions);
 console.log(`http://${ip.address()}:${server.port}/`);
 await server.wait;
-
