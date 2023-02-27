@@ -15,22 +15,30 @@ export class ClippingModule implements RenderModule {
         "colors.5": "vec4",
     } as const satisfies Record<string, UniformTypes>;
 
-    withContext(context: RenderContext) {
-        return new ClippingModuleContext(context, this, context.resourceBin("Clipping"));
+    async withContext(context: RenderContext) {
+        const uniforms = this.createUniforms();
+        const resources = await this.createResources(context, uniforms);
+        return new ClippingModuleContext(context, this, uniforms, resources);
+    }
+
+    createUniforms() {
+        return glUBOProxy(this.uniforms);
+    }
+
+    async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const bin = context.resourceBin("Clipping");
+        const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
+        const uniformBufferBlocks = ["Camera", "Clipping", "Colors"];
+        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks });
+        return { bin, uniforms, program };
     }
 }
 
-class ClippingModuleContext implements RenderModuleContext {
-    readonly uniforms;
-    readonly resources;
+type Uniforms = ReturnType<ClippingModule["createUniforms"]>;
+type Resources = Awaited<ReturnType<ClippingModule["createResources"]>>;
 
-    constructor(readonly context: RenderContext, readonly data: ClippingModule, readonly resourceBin: ResourceBin) {
-        this.uniforms = glUBOProxy(data.uniforms);
-        const { commonChunk } = context;
-        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Camera", "Clipping", "Colors"] });
-        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
-        this.resources = { program, uniforms } as const;
-    }
+class ClippingModuleContext implements RenderModuleContext {
+    constructor(readonly context: RenderContext, readonly data: ClippingModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
@@ -80,6 +88,6 @@ class ClippingModuleContext implements RenderModuleContext {
 
     dispose() {
         this.contextLost();
-        this.resourceBin.dispose();
+        this.resources.bin.dispose();
     }
 }

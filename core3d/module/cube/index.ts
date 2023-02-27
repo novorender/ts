@@ -2,13 +2,8 @@ import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState, glTransformFeedback, type UniformTypes } from "@novorender/webgl2";
 import { mat4, vec3, type ReadonlyVec3 } from "gl-matrix";
-import vertexShader from "./shader.vert";
-import fragmentShader from "./shader.frag";
-import line_vs from "./line.vert";
-import line_fs from "./line.frag";
-import intersect_vs from "./intersect.vert";
 import { BufferFlags } from "@novorender/core3d/buffers";
-import { ResourceBin } from "@novorender/core3d/resource";
+import { shaders } from "./shaders";
 
 export class CubeModule implements RenderModule {
     readonly uniforms = {
@@ -16,18 +11,17 @@ export class CubeModule implements RenderModule {
         nearOutlineColor: "vec3",
     } as const satisfies Record<string, UniformTypes>;
 
-    withContext(context: RenderContext) {
-        return new CubeModuleContext(context, this, context.resourceBin("Cube"));
+    async withContext(context: RenderContext) {
+        const uniforms = this.createUniforms();
+        const resources = await this.createResources(context, uniforms);
+        return new CubeModuleContext(context, this, uniforms, resources);
     }
-}
 
-class CubeModuleContext implements RenderModuleContext {
-    readonly uniforms;
-    readonly resources;
+    createUniforms() {
+        return glUBOProxy(this.uniforms);
+    }
 
-    constructor(readonly context: RenderContext, readonly data: CubeModule, readonly resourceBin: ResourceBin) {
-        this.uniforms = glUBOProxy(data.uniforms);
-        const { commonChunk } = context;
+    async createResources(context: RenderContext, uniformsProxy: Uniforms) {
         const vertices = createVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
         const pos = createVertices((pos) => (pos));
         const indices = createIndices();
@@ -42,45 +36,55 @@ class CubeModuleContext implements RenderModuleContext {
             triplets.set(pc, i * 3 + 6);
         }
 
-        // create static GPU resources here
-        const uniformBufferBlocks = ["Camera", "Clipping", "Cube"];
-        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks });
-        const program_line = resourceBin.createProgram({ vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks });
-        const program_transform = resourceBin.createProgram({ vertexShader: intersect_vs, commonChunk, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
-        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
+        const bin = context.resourceBin("Cube");
+        const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
+        const transformFeedback = bin.createTransformFeedback();
 
-        const vb = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", srcData: vertices });
-        const ib = resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
-        const vao = resourceBin.createVertexArray({
+        const vb_render = bin.createBuffer({ kind: "ARRAY_BUFFER", srcData: vertices });
+        const ib_render = bin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
+        const vao_render = bin.createVertexArray({
             attributes: [
-                { kind: "FLOAT_VEC3", buffer: vb, byteStride: 36, byteOffset: 0 }, // position
-                { kind: "FLOAT_VEC3", buffer: vb, byteStride: 36, byteOffset: 12 }, // normal
-                { kind: "FLOAT_VEC3", buffer: vb, byteStride: 36, byteOffset: 24 }, // color
+                { kind: "FLOAT_VEC3", buffer: vb_render, byteStride: 36, byteOffset: 0 }, // position
+                { kind: "FLOAT_VEC3", buffer: vb_render, byteStride: 36, byteOffset: 12 }, // normal
+                { kind: "FLOAT_VEC3", buffer: vb_render, byteStride: 36, byteOffset: 24 }, // color
             ],
-            indices: ib
+            indices: ib_render
         });
-        resourceBin.subordinate(vao, vb, ib);
+        bin.subordinate(vao_render, vb_render, ib_render);
 
-        const vb_tri = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", srcData: triplets });
-        const vao_tri = resourceBin.createVertexArray({
+        const vb_triplets = bin.createBuffer({ kind: "ARRAY_BUFFER", srcData: triplets });
+        const vao_triplets = bin.createVertexArray({
             attributes: [
-                { kind: "FLOAT_VEC3", buffer: vb_tri, byteStride: 36, byteOffset: 0 }, // position 0
-                { kind: "FLOAT_VEC3", buffer: vb_tri, byteStride: 36, byteOffset: 12 }, // position 1
-                { kind: "FLOAT_VEC3", buffer: vb_tri, byteStride: 36, byteOffset: 24 }, // position 2
+                { kind: "FLOAT_VEC3", buffer: vb_triplets, byteStride: 36, byteOffset: 0 }, // position 0
+                { kind: "FLOAT_VEC3", buffer: vb_triplets, byteStride: 36, byteOffset: 12 }, // position 1
+                { kind: "FLOAT_VEC3", buffer: vb_triplets, byteStride: 36, byteOffset: 24 }, // position 2
             ],
         });
-        resourceBin.subordinate(vao, vb_tri);
+        bin.subordinate(vao_triplets, vb_triplets);
 
-        const transformFeedback = resourceBin.createTransformFeedback();
-
-        const vb_line = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: 12 * 2 * 8, usage: "STATIC_DRAW" });
-        const vao_line = resourceBin.createVertexArray({
+        const vb_line = bin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: 12 * 2 * 8, usage: "STATIC_DRAW" });
+        const vao_line = bin.createVertexArray({
             attributes: [
                 { kind: "FLOAT_VEC2", buffer: vb_line, byteStride: 8, byteOffset: 0 }, // position
             ],
         });
-        this.resources = { program, program_transform, program_line, uniforms, vao, transformFeedback, vao_tri, vao_line, vb_line } as const;
+
+        const uniformBufferBlocks = ["Camera", "Clipping", "Cube"];
+        const [render, line, intersect] = await Promise.all([
+            context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks }),
+            context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks }),
+            context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
+        ]);
+        const programs = { render, line, intersect };
+        return { bin, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line, programs } as const;
     }
+}
+
+type Uniforms = ReturnType<CubeModule["createUniforms"]>;
+type Resources = Awaited<ReturnType<CubeModule["createResources"]>>;
+
+class CubeModuleContext implements RenderModuleContext {
+    constructor(readonly context: RenderContext, readonly data: CubeModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
@@ -105,18 +109,18 @@ class CubeModuleContext implements RenderModuleContext {
 
     render(state: DerivedRenderState) {
         const { context, resources } = this;
-        const { program, program_line, program_transform, uniforms, vao, transformFeedback, vao_tri, vao_line, vb_line } = resources;
+        const { programs, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line } = resources;
         const { gl, cameraUniforms, clippingUniforms } = context;
 
         if (state.cube.enabled) {
             // render normal cube
             glState(gl, {
-                program,
+                program: programs.render,
                 uniformBuffers: [cameraUniforms, clippingUniforms, uniforms],
                 drawBuffers: context.drawBuffers(),
                 depth: { test: true, },
                 cull: { enable: false },
-                vertexArrayObject: vao,
+                vertexArrayObject: vao_render,
             });
             const stats = glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
             context["addRenderStatistics"](stats);
@@ -124,14 +128,14 @@ class CubeModuleContext implements RenderModuleContext {
             if (state.outlines.nearClipping.enable) {
                 // transform vertex triplets into intersection lines
                 glState(gl, {
-                    program: program_transform,
-                    vertexArrayObject: vao_tri,
+                    program: programs.intersect,
+                    vertexArrayObject: vao_triplets,
                 });
                 glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line], count: 12 });
 
                 // render intersection lines
                 glState(gl, {
-                    program: program_line,
+                    program: programs.line,
                     drawBuffers: context.drawBuffers(BufferFlags.color),
                     depth: { test: false, },
                     vertexArrayObject: vao_line,
@@ -147,7 +151,7 @@ class CubeModuleContext implements RenderModuleContext {
 
     dispose() {
         this.contextLost();
-        this.resourceBin.dispose();
+        this.resources.bin.dispose();
     }
 }
 
@@ -176,7 +180,7 @@ function createVertices(pack: (position: ReadonlyVec3, normal: ReadonlyVec3, col
         ...face([1, 0, 0], [0, 0, -1], [1, 0, 1]), // bottom (0, -1, 0)
         ...face([1, 0, 0], [0, 1, 0], [0, 0, 1]), // front (0, 0, 1)
         ...face([-1, 0, 0], [0, 1, 0], [1, 1, 0]), // back (0, 0, -1)
-    ])
+    ]);
 }
 
 function createIndices() {
