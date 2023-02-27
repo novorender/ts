@@ -1,11 +1,10 @@
 import { glLimits } from "./limits";
+import type { ResourceBin } from "../core3d/resource";
 
-export function glFrameBuffer(gl: WebGL2RenderingContext, params: FrameBufferParams): WebGLFramebuffer {
-
+export function glCreateFrameBuffer(gl: WebGL2RenderingContext, params: FrameBufferParams): WebGLFramebuffer {
     const frameBuffer = gl.createFramebuffer()!;
     const limits = glLimits(gl);
     console.assert(params.color.length <= limits.MAX_COLOR_ATTACHMENTS);
-
     gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
 
     function bind(binding: FrameBufferBinding, attachment: number) {

@@ -1,15 +1,15 @@
-import { glClear, glBuffer, glProgram, glVertexArray, glDraw, glState, glUpdateBuffer } from "@novorender/webgl2";
+import { glClear, glCreateBuffer, glCreateProgram, glCreateVertexArray, glDraw, glState, glUpdateBuffer } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
+import { mat4, type ReadonlyVec3, vec3 } from "gl-matrix";
 
 export async function spinning_cube(gl: WebGL2RenderingContext) {
-    const program = glProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Uniforms"] });
-    const uniformBuffer = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: 4 * 4 * 4 })
+    const program = glCreateProgram(gl, { vertexShader, fragmentShader, uniformBufferBlocks: ["Uniforms"] });
+    const uniformBuffer = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: 4 * 4 * 4 })
     // const proj = renderer.gl.getUniformLocation(program, "proj");
-    const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: createVertices() });
-    const ib = glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: createIndices() });
-    const vao = glVertexArray(gl, {
+    const vb = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: createVertices() });
+    const ib = glCreateBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: createIndices() });
+    const vao = glCreateVertexArray(gl, {
         attributes: [
             { kind: "FLOAT_VEC3", buffer: vb, byteStride: 24, }, // position
             { kind: "FLOAT_VEC3", buffer: vb, byteStride: 24, byteOffset: 12 } // color

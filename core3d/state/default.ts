@@ -1,5 +1,5 @@
 import { quat, vec3 } from "gl-matrix";
-import { RenderState, TonemappingMode } from ".";
+import { type RenderState, TonemappingMode } from ".";
 
 export function defaultRenderState(): RenderState {
     const state: RenderState = {

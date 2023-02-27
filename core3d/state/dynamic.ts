@@ -1,6 +1,6 @@
-import { ReadonlyMat3, ReadonlyMat4 } from "gl-matrix";
-import { DrawMode, MagFilterString, MinFilterString, RGBA, TextureParams2DUncompressed, VertexAttribute, WrapString } from "@novorender/webgl2";
-import { RGB } from "./types";
+import type { ReadonlyMat3, ReadonlyMat4 } from "gl-matrix";
+import type { DrawMode, MagFilterString, MinFilterString, RGBA, TextureParams2DUncompressed, VertexAttribute, WrapString } from "@novorender/webgl2";
+import type { RGB } from "./types";
 
 export interface RenderStateDynamicImage {
     readonly params: TextureParams2DUncompressed; // TODO: Add support for compressed textures

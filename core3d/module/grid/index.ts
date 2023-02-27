@@ -1,10 +1,10 @@
 import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
-import { CoordSpace } from "@novorender/core3d";
-import { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes } from "@novorender/webgl2";
+import type { RenderModuleContext, RenderModule } from "..";
+import { glUBOProxy, glDraw, glState, type UniformTypes } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat4, vec3 } from "gl-matrix";
+import { type ResourceBin } from "@novorender/core3d/resource";
 
 export class GridModule implements RenderModule {
     readonly uniforms = {
@@ -18,7 +18,7 @@ export class GridModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
-        return new GridModuleContext(context, this);
+        return new GridModuleContext(context, this, context.resourceBin("Grid"));
     }
 }
 
@@ -26,11 +26,11 @@ class GridModuleContext implements RenderModuleContext {
     readonly uniforms;
     readonly resources;
 
-    constructor(readonly context: RenderContext, readonly data: GridModule) {
+    constructor(readonly context: RenderContext, readonly data: GridModule, readonly resourceBin: ResourceBin) {
         this.uniforms = glUBOProxy(data.uniforms);
         const { gl, commonChunk } = context;
-        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Camera", "Grid"] });
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
+        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Camera", "Grid"] });
+        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
         this.resources = { program, uniforms } as const;
     }
 
@@ -74,7 +74,8 @@ class GridModuleContext implements RenderModuleContext {
                     dstAlpha: "ONE",
                 },
             });
-            glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
+            const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
+            context["addRenderStatistics"](stats);
         }
     }
 
@@ -82,9 +83,7 @@ class GridModuleContext implements RenderModuleContext {
     }
 
     dispose() {
-        const { context, resources } = this;
-        const { gl } = context;
         this.contextLost();
-        glDelete(gl, resources);
+        this.resourceBin.dispose();
     }
 }

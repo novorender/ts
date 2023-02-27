@@ -1,9 +1,11 @@
 import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
-import { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, UniformTypes } from "@novorender/webgl2";
+import type { RenderModuleContext, RenderModule } from "..";
+import { glUBOProxy, glDraw, glState } from "@novorender/webgl2";
+import type { UniformTypes } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import logoBinary from "./logo.bin";
+import { ResourceBin } from "@novorender/core3d/resource";
 
 export class WatermarkModule implements RenderModule {
     readonly uniforms = {
@@ -12,7 +14,7 @@ export class WatermarkModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
-        return new WatermarkModuleContext(context, this);
+        return new WatermarkModuleContext(context, this, context.resourceBin("Watermark"));
     }
 
     // these magic numbers are the byte offsets and lengths from gltf bufferViews
@@ -32,30 +34,29 @@ class WatermarkModuleContext implements RenderModuleContext {
     readonly uniforms;
     readonly resources;
 
-    constructor(readonly context: RenderContext, readonly data: WatermarkModule) {
+    constructor(readonly context: RenderContext, readonly data: WatermarkModule, readonly resourceBin: ResourceBin) {
         this.uniforms = glUBOProxy(data.uniforms);
         const { gl, commonChunk } = context;
         const { vertices, indices } = data.geometry();
 
         // create static GPU resources here
-        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Watermark"] });
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
-        const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vertices });
-        const ib = glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
-        const vao = glVertexArray(gl, {
+        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Watermark"] });
+        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
+        const vb = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", srcData: vertices });
+        const ib = resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
+        const vao = resourceBin.createVertexArray({
             attributes: [
                 { kind: "FLOAT_VEC3", buffer: vb, byteStride: 12, byteOffset: 0 }, // position
             ],
             indices: ib
         });
-        gl.deleteBuffer(vb);
-        gl.deleteBuffer(ib);
+        resourceBin.subordinate(vao, vb, ib);
         this.resources = { program, uniforms, vao } as const;
     }
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
-        const { output } = state;
+        const { output } = state; 6
         if (context.hasStateChanged({ output })) {
             const { values } = this.uniforms;
             const padding = 1; // % of logo height
@@ -100,16 +101,15 @@ class WatermarkModuleContext implements RenderModuleContext {
                 dstAlpha: "ONE",
             },
         });
-        glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: data.numIndices });
+        const stats = glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: data.numIndices });
+        context["addRenderStatistics"](stats);
     }
 
     contextLost(): void {
     }
 
     dispose() {
-        const { context, resources } = this;
-        const { gl } = context;
         this.contextLost();
-        glDelete(gl, resources);
+        this.resourceBin.dispose();
     }
 }

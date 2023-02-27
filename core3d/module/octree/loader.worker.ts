@@ -1,4 +1,4 @@
-import { LoaderHandler, MessageResponse } from "./loader_handler";
+import { LoaderHandler, type MessageResponse } from "./loader_handler";
 import type { MessageRequest } from "./loader_handler";
 
 const handler = new LoaderHandler((msg: MessageResponse, transfer?: Transferable[]) => {

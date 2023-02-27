@@ -1,6 +1,6 @@
 import { glLimits } from "./limits";
 
-export function glRenderBuffer(gl: WebGL2RenderingContext, params: RenderBufferParams): WebGLRenderbuffer {
+export function glCreateRenderbuffer(gl: WebGL2RenderingContext, params: RenderbufferParams): WebGLRenderbuffer {
     const limits = glLimits(gl);
     const buffer = gl.createRenderbuffer()!;
     const { internalFormat, width, height } = params;
@@ -22,7 +22,7 @@ export type RenderBufferFormat =
     "RGBA8" | "SRGB8_ALPHA8" | "RGBA4" | "RGB565" | "RGB5_A1" | "RGB10_A2" | "RGBA8UI" | "RGBA8I" | "RGB10_A2UI" | "RGBA16UI" | "RGBA16I" | "RGBA32I" | "RGBA32UI" |
     "DEPTH_COMPONENT16" | "DEPTH_COMPONENT24" | "DEPTH_COMPONENT32F" | "DEPTH_STENCIL" | "DEPTH24_STENCIL8" | "DEPTH32F_STENCIL8" | "STENCIL_INDEX8";
 
-export interface RenderBufferParams {
+export interface RenderbufferParams {
     readonly internalFormat: RenderBufferFormat;
     readonly width: number;
     readonly height: number;

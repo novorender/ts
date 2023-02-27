@@ -1,13 +1,12 @@
-import { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "@novorender/core3d";
-import { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, UniformTypes, glVertexArray, VertexArrayParams, VertexAttribute, DrawParamsElements, DrawParamsArrays, StateParams, glTexture, glSampler } from "@novorender/webgl2";
+import type { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "@novorender/core3d";
+import type { RenderModuleContext, RenderModule } from "..";
+import { glUBOProxy, glDraw, glState, type UniformTypes, type VertexArrayParams, type VertexAttribute, type DrawParamsElements, type DrawParamsArrays, type StateParams } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat3, mat4, vec3 } from "gl-matrix";
 import { BufferFlags } from "@novorender/core3d/buffers";
+import { ResourceBin } from "@novorender/core3d/resource";
 
-// TODO: Create (programatically) and render cube
-// TODO: Create (from gltf)
 export class DynamicModule implements RenderModule {
     readonly materialUniforms = {
         baseColor: "vec4",
@@ -18,7 +17,7 @@ export class DynamicModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
-        return new DynamicModuleContext(context, this);
+        return new DynamicModuleContext(context, this, context.resourceBin("Dynamic"));
     }
 }
 
@@ -34,22 +33,21 @@ class DynamicModuleContext implements RenderModuleContext {
     readonly defaultTexture: WebGLTexture;
     readonly defaultSampler: WebGLSampler;
 
-    constructor(readonly context: RenderContext, readonly data: DynamicModule) {
-        const { gl, commonChunk } = context;
+    constructor(readonly context: RenderContext, readonly data: DynamicModule, readonly resourceBin: ResourceBin) {
+        const { commonChunk } = context;
         const uniformBufferBlocks = ["Camera", "Material", "Instance"];
         const textureNames = ["lut_ggx", "ibl.diffuse", "ibl.specular", "base_color", "metallic_roughness", "normal", "emissive", "occlusion"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
-        const unlit = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
-        const ggx = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags: ["PBR_METALLIC_ROUGHNESS"] });
+        const unlit = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
+        const ggx = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags: ["PBR_METALLIC_ROUGHNESS"] });
         this.programs = { unlit, ggx } as const;
-        this.defaultSampler = glSampler(gl, { magnificationFilter: "LINEAR", minificationFilter: "LINEAR_MIPMAP_LINEAR", wrap: ["REPEAT", "REPEAT"] });
-        this.defaultTexture = glTexture(gl, { kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array(4) }); // used to avoid warnings on android
+        this.defaultSampler = resourceBin.createSampler({ magnificationFilter: "LINEAR", minificationFilter: "LINEAR_MIPMAP_LINEAR", wrap: ["REPEAT", "REPEAT"] });
+        this.defaultTexture = resourceBin.createTexture({ kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array(4) }); // used to avoid warnings on android
         this.iblTextures = context.iblTextures;
     }
 
     update(state: DerivedRenderState) {
-        const { context, programs } = this;
-        const { gl } = context;
+        const { context, programs, resourceBin } = this;
         const { dynamic, localSpaceTranslation } = state;
         if (context.hasStateChanged({ dynamic })) {
             // synchronizing assets by reference is slower than array indexing, but it makes the render state safer and simpler to modify.
@@ -81,12 +79,12 @@ class DynamicModuleContext implements RenderModuleContext {
             const indexBuffers = new Set<BufferSource>(geometries.map(g => typeof g.indices == "number" ? undefined : g.indices).filter(b => b) as BufferSource[]);
             const numVertexBuffers = vertexBuffers.size;
             const buffers = [...vertexBuffers, ...indexBuffers];
-            syncAssets(gl, buffers, this.buffers, (data, idx) => new BufferAsset(gl, idx < numVertexBuffers ? "ARRAY_BUFFER" : "ELEMENT_ARRAY_BUFFER", data));
-            syncAssets(gl, images, this.images, data => new TextureAsset(gl, data));
-            syncAssets(gl, samplers, this.samplers, data => new SamplerAsset(gl, data));
-            syncAssets(gl, geometries, this.geometries, data => new GeometryAsset(gl, data, this.buffers));
-            syncAssets(gl, instances, this.instances, data => new InstanceAsset(context, data, state));
-            syncAssets(gl, materials, this.materials, data => new MaterialAsset(context, data, this.images, this.samplers, this.defaultTexture, this.defaultSampler, programs[data.kind]));
+            syncAssets(resourceBin, buffers, this.buffers, (data, idx) => new BufferAsset(resourceBin, idx < numVertexBuffers ? "ARRAY_BUFFER" : "ELEMENT_ARRAY_BUFFER", data));
+            syncAssets(resourceBin, images, this.images, data => new TextureAsset(resourceBin, data));
+            syncAssets(resourceBin, samplers, this.samplers, data => new SamplerAsset(resourceBin, data));
+            syncAssets(resourceBin, geometries, this.geometries, data => new GeometryAsset(resourceBin, data, this.buffers));
+            syncAssets(resourceBin, instances, this.instances, data => new InstanceAsset(resourceBin, context, data, state));
+            syncAssets(resourceBin, materials, this.materials, data => new MaterialAsset(resourceBin, context, data, this.images, this.samplers, this.defaultTexture, this.defaultSampler, programs[data.kind]));
         }
         if (context.hasStateChanged({ localSpaceTranslation })) {
             for (const instance of this.instances.values()) {
@@ -96,7 +94,7 @@ class DynamicModuleContext implements RenderModuleContext {
         if (context.iblTextures != this.iblTextures) {
             this.iblTextures = context.iblTextures;
             for (const material of this.materials.values()) {
-                material.update(context, state, this.defaultTexture);
+                material.update(context, this.defaultTexture);
             }
         }
     }
@@ -148,7 +146,8 @@ class DynamicModuleContext implements RenderModuleContext {
                 gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, instance.uniformsBuffer);
             }
             gl.bindVertexArray(geometry.resources.vao);
-            glDraw(gl, geometry.drawParams);
+            const stats = glDraw(gl, geometry.drawParams);
+            context["addRenderStatistics"](stats);
         }
     }
 
@@ -156,14 +155,15 @@ class DynamicModuleContext implements RenderModuleContext {
     }
 
     dispose() {
-        const { context, programs, buffers, geometries, materials, instances } = this;
-        const { gl } = context;
+        const { resourceBin, programs, buffers, geometries, materials, instances, defaultSampler, defaultTexture } = this;
         this.contextLost();
-        glDelete(gl, programs);
         const assets = [...buffers.values(), ...geometries.values(), ...materials.values(), ...instances.values()];
         for (const asset of assets) {
-            asset.dispose(gl);
+            asset.dispose(resourceBin);
         }
+        resourceBin.delete(programs.ggx, programs.unlit, defaultSampler, defaultTexture);
+        console.assert(resourceBin.size == 0);
+        resourceBin.dispose();
         buffers.clear();
         geometries.clear();
         materials.clear();
@@ -171,7 +171,7 @@ class DynamicModuleContext implements RenderModuleContext {
     }
 }
 
-function syncAssets<TK, TV extends { index: number, dispose(gl: WebGL2RenderingContext): void }>(gl: WebGL2RenderingContext, uniqueResources: Iterable<TK>, map: Map<TK, TV>, create: (resource: TK, index: number) => TV) {
+function syncAssets<TK, TV extends { index: number, dispose(bin: ResourceBin): void }>(bin: ResourceBin, uniqueResources: Iterable<TK>, map: Map<TK, TV>, create: (resource: TK, index: number) => TV) {
     // delete unreferenced resources
     const unreferenced = new Map<TK, TV>(map);
     for (const resource of uniqueResources) {
@@ -179,7 +179,7 @@ function syncAssets<TK, TV extends { index: number, dispose(gl: WebGL2RenderingC
     }
     for (const [resource, asset] of unreferenced) {
         map.delete(resource);
-        asset.dispose(gl);
+        asset.dispose(bin);
     }
 
     // index and create new resources
@@ -198,12 +198,12 @@ class BufferAsset {
     index = 0;
     readonly buffer: WebGLBuffer;
 
-    constructor(gl: WebGL2RenderingContext, kind: "ARRAY_BUFFER" | "ELEMENT_ARRAY_BUFFER", srcData: BufferSource) {
-        this.buffer = glBuffer(gl, { kind, srcData });
+    constructor(bin: ResourceBin, kind: "ARRAY_BUFFER" | "ELEMENT_ARRAY_BUFFER", srcData: BufferSource) {
+        this.buffer = bin.createBuffer({ kind, srcData });
     }
 
-    dispose(gl: WebGL2RenderingContext) {
-        gl.deleteBuffer(this.buffer);
+    dispose(bin: ResourceBin) {
+        bin.delete(this.buffer);
     }
 }
 
@@ -212,7 +212,7 @@ class GeometryAsset {
     readonly drawParams: DrawParamsElements | DrawParamsArrays;
     readonly resources;
 
-    constructor(gl: WebGL2RenderingContext, data: RenderStateDynamicGeometry, buffers: Map<BufferSource, BufferAsset>) {
+    constructor(bin: ResourceBin, data: RenderStateDynamicGeometry, buffers: Map<BufferSource, BufferAsset>) {
         const hasIndexBuffer = typeof data.indices != "number";
         const indexType = !hasIndexBuffer ? undefined : data.indices instanceof Uint32Array ? "UNSIGNED_INT" : data.indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_BYTE";
         const mode = data.primitiveType;
@@ -234,14 +234,14 @@ class GeometryAsset {
                 convAttr(texCoord0),
                 convAttr(texCoord1),
             ],
-            indices: typeof data.indices == "number" ? undefined : glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: data.indices }),
+            indices: typeof data.indices == "number" ? undefined : bin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: data.indices }),
         }
-        const vao = glVertexArray(gl, params);
+        const vao = bin.createVertexArray(params);
         this.resources = { vao } as const;
     }
 
-    dispose(gl: WebGL2RenderingContext) {
-        glDelete(gl, this.resources);
+    dispose(bin: ResourceBin) {
+        bin.delete(this.resources.vao);
     }
 }
 
@@ -251,7 +251,7 @@ class InstanceAsset {
     private readonly uniforms;
     readonly uniformsBuffer;
 
-    constructor(context: RenderContext, data: RenderStateDynamicInstance, state: DerivedRenderState) {
+    constructor(bin: ResourceBin, context: RenderContext, data: RenderStateDynamicInstance, state: DerivedRenderState) {
         this.modelWorldMatrix = data.transform;
         const uniformsDesc = {
             modelLocalMatrix: "mat4",
@@ -261,8 +261,7 @@ class InstanceAsset {
         this.uniforms = glUBOProxy(uniformsDesc);
         const { values } = this.uniforms;
         values.objectId = data.objectId ?? 0xffffffff;
-        const { gl } = context;
-        this.uniformsBuffer = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
+        this.uniformsBuffer = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
         this.update(context, state);
     }
 
@@ -276,8 +275,8 @@ class InstanceAsset {
         context.updateUniformBuffer(uniformsBuffer, uniforms);
     }
 
-    dispose(gl: WebGL2RenderingContext) {
-        gl.deleteBuffer(this.uniformsBuffer);
+    dispose(bin: ResourceBin) {
+        bin.delete(this.uniformsBuffer);
     }
 }
 
@@ -293,6 +292,7 @@ class MaterialAsset {
     readonly samplers = {} as { [P in TextureNames]?: WebGLSampler };
 
     constructor(
+        bin: ResourceBin,
         context: RenderContext,
         data: RenderStateDynamicMaterial,
         textures: Map<RenderStateDynamicImage, TextureAsset>,
@@ -301,7 +301,6 @@ class MaterialAsset {
         defaultSamper: WebGLSampler,
         program: DynamicModuleContext["programs"]["ggx"],
     ) {
-        const { gl } = context;
         this.kind = data.kind;
         const blend = {
             enable: true,
@@ -382,33 +381,32 @@ class MaterialAsset {
             values.occlusionStrength = 0;
             values.emissiveUVSet = -1;
         }
-        this.uniformsBuffer = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
+        this.uniformsBuffer = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
+        this.update(context, defaultTexture)
     }
 
-    update(context: RenderContext, state: DerivedRenderState, defaultTexture: WebGLTexture) {
+    update(context: RenderContext, defaultTexture: WebGLTexture) {
         const { iblTextures, lut_ggx, samplerSingle, samplerMip } = context;
-        if (iblTextures) {
-            const { uniforms, uniformsBuffer, textures, samplers } = this;
-            const { diffuse, specular, numMipMaps } = iblTextures;
-            type Mutable<T> = { -readonly [P in keyof T]: T[P] };
-            const mutableState = this.stateParams as Mutable<StateParams>;
-            mutableState.textures = [
-                { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerSingle },
-                { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerSingle },
-                { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
-                { kind: "TEXTURE_2D", texture: textures.baseColor ?? defaultTexture, sampler: samplers.baseColor ?? null },
-                { kind: "TEXTURE_2D", texture: textures.metallicRoughness ?? defaultTexture, sampler: samplers.metallicRoughness ?? null },
-                { kind: "TEXTURE_2D", texture: textures.normal ?? defaultTexture, sampler: samplers.normal ?? null },
-                { kind: "TEXTURE_2D", texture: textures.emissive ?? defaultTexture, sampler: samplers.emissive ?? null },
-                { kind: "TEXTURE_2D", texture: textures.occlusion ?? defaultTexture, sampler: samplers.occlusion ?? null },
-            ] as const;
-            uniforms.values.radianceMipCount = numMipMaps;
-            context.updateUniformBuffer(uniformsBuffer, uniforms);
-        }
+        const { uniforms, uniformsBuffer, textures, samplers } = this;
+        const { diffuse, specular, numMipMaps } = iblTextures;
+        type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+        const mutableState = this.stateParams as Mutable<StateParams>;
+        mutableState.textures = [
+            { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerSingle },
+            { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerSingle },
+            { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
+            { kind: "TEXTURE_2D", texture: textures.baseColor ?? defaultTexture, sampler: samplers.baseColor ?? null },
+            { kind: "TEXTURE_2D", texture: textures.metallicRoughness ?? defaultTexture, sampler: samplers.metallicRoughness ?? null },
+            { kind: "TEXTURE_2D", texture: textures.normal ?? defaultTexture, sampler: samplers.normal ?? null },
+            { kind: "TEXTURE_2D", texture: textures.emissive ?? defaultTexture, sampler: samplers.emissive ?? null },
+            { kind: "TEXTURE_2D", texture: textures.occlusion ?? defaultTexture, sampler: samplers.occlusion ?? null },
+        ] as const;
+        uniforms.values.radianceMipCount = numMipMaps;
+        context.updateUniformBuffer(uniformsBuffer, uniforms);
     }
 
-    dispose(gl: WebGL2RenderingContext) {
-        gl.deleteBuffer(this.uniformsBuffer);
+    dispose(bin: ResourceBin) {
+        bin.delete(this.uniformsBuffer);
     }
 }
 
@@ -416,12 +414,12 @@ class TextureAsset {
     index = 0;
     readonly texture: WebGLTexture;
 
-    constructor(gl: WebGL2RenderingContext, image: RenderStateDynamicImage) {
-        this.texture = glTexture(gl, image.params);
+    constructor(bin: ResourceBin, image: RenderStateDynamicImage) {
+        this.texture = bin.createTexture(image.params);
     }
 
-    dispose(gl: WebGL2RenderingContext) {
-        gl.deleteTexture(this.texture);
+    dispose(bin: ResourceBin) {
+        bin.delete(this.texture);
     }
 }
 
@@ -429,11 +427,11 @@ class SamplerAsset {
     index = 0;
     readonly sampler: WebGLSampler;
 
-    constructor(gl: WebGL2RenderingContext, sampler: RenderStateDynamicSampler) {
-        this.sampler = glSampler(gl, sampler);
+    constructor(bin: ResourceBin, sampler: RenderStateDynamicSampler) {
+        this.sampler = bin.createSampler(sampler);
     }
 
-    dispose(gl: WebGL2RenderingContext) {
-        gl.deleteSampler(this.sampler);
+    dispose(bin: ResourceBin) {
+        bin.delete(this.sampler);
     }
 }

@@ -1,6 +1,6 @@
 import { glLimits } from "./limits";
 
-export function glVertexArray(gl: WebGL2RenderingContext, params: VertexArrayParams): WebGLVertexArrayObject {
+export function glCreateVertexArray(gl: WebGL2RenderingContext, params: VertexArrayParams): WebGLVertexArrayObject {
     const vao = gl.createVertexArray()!;
     const { MAX_VERTEX_ATTRIBS } = glLimits(gl);
     gl.bindVertexArray(vao);

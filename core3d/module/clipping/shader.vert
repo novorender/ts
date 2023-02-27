@@ -6,6 +6,10 @@ layout(std140) uniform Clipping {
     ClippingUniforms clipping;
 };
 
+layout(std140) uniform Colors {
+    ClippingColors visualization;
+};
+
 out ClippingVaryings varyings;
 
 void main() {

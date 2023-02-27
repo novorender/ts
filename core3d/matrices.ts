@@ -1,5 +1,5 @@
-import { mat3, mat4, ReadonlyMat3, ReadonlyMat4, vec3, vec4 } from "gl-matrix";
-import { CoordSpace, Matrices, RenderStateCamera, RenderStateOutput } from "./state";
+import { mat3, mat4, type ReadonlyMat3, type ReadonlyMat4 } from "gl-matrix";
+import { CoordSpace, type Matrices, type RenderStateCamera, type RenderStateOutput } from "./state";
 
 function index(from: CoordSpace, to: CoordSpace): number {
     return from * 3 + to;
@@ -11,7 +11,16 @@ export function matricesFromRenderState(state: { output: RenderStateOutput; came
     const aspectRatio = width / height;
     const fovY = camera.fov * Math.PI / 180;
     const viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
-    const viewClip = mat4.perspective(mat4.create(), fovY, aspectRatio, camera.near, camera.far);
+    const viewClip = mat4.create();
+    if (camera.kind == "orthographic") {
+        const aspect = output.width / output.height;
+        const halfHeight = camera.fov / 2;
+        const halfWidth = halfHeight * aspect;
+        mat4.ortho(viewClip, -halfWidth, halfWidth, -halfHeight, halfHeight, camera.near, camera.far);
+    }
+    else {
+        mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
+    }
     return new MatricesImpl(viewWorld, viewClip);
 }
 

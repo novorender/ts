@@ -1,4 +1,5 @@
-import { glBuffer, glFrameBuffer, glTexture, glInvalidateFrameBuffer, glReadPixels, glDelete } from "@novorender/webgl2";
+import { glInvalidateFrameBuffer, glReadPixels } from "@novorender/webgl2";
+import { ResourceBin } from "./resource";
 
 export const enum BufferFlags {
     color = 0x01,
@@ -24,13 +25,13 @@ export class RenderBuffers {
         readonly promises: { readonly resolve: () => void, readonly reject: (reason: string) => void }[],
     } | undefined;
 
-    constructor(readonly gl: WebGL2RenderingContext, readonly width: number, readonly height: number) {
+    constructor(readonly gl: WebGL2RenderingContext, readonly width: number, readonly height: number, readonly resourceBin: ResourceBin) {
         // const color = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "RGBA16F", type: "HALF_FLOAT", image: null });
-        const color = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "R11F_G11F_B10F", type: "HALF_FLOAT", image: null });
-        const linearDepth = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "R32F", type: "FLOAT", image: null });
-        const info = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "RG32UI", type: "UNSIGNED_INT", image: null });
-        const depth = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "DEPTH_COMPONENT32F", type: "FLOAT", image: null });
-        const frameBuffer = glFrameBuffer(gl, {
+        const color = resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "R11F_G11F_B10F", type: "HALF_FLOAT", image: null });
+        const linearDepth = resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "R32F", type: "FLOAT", image: null });
+        const info = resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "RG32UI", type: "UNSIGNED_INT", image: null });
+        const depth = resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "DEPTH_COMPONENT32F", type: "FLOAT", image: null });
+        const frameBuffer = resourceBin.createFrameBuffer({
             color: [
                 { kind: "DRAW_FRAMEBUFFER", texture: color },
                 { kind: "DRAW_FRAMEBUFFER", texture: linearDepth },
@@ -38,8 +39,8 @@ export class RenderBuffers {
             ],
             depth: { kind: "DRAW_FRAMEBUFFER", texture: depth },
         });
-        const readLinearDepth = glBuffer(gl, { kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 4, usage: "STREAM_READ" });
-        const readInfo = glBuffer(gl, { kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 8, usage: "STREAM_READ" });
+        const readLinearDepth = resourceBin.createBuffer({ kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 4, usage: "STREAM_READ" });
+        const readInfo = resourceBin.createBuffer({ kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 8, usage: "STREAM_READ" });
         this.resources = { color, depth, linearDepth, info, frameBuffer, readLinearDepth, readInfo } as const;
         this.pick = {
             depths: new Float32Array(width * height * 1),
@@ -89,9 +90,8 @@ export class RenderBuffers {
     }
 
     dispose() {
-        const { gl, resources } = this;
         this.deletePickFence();
-        glDelete(gl, resources);
+        this.resourceBin.dispose();
     }
 
     pollPickFence() {

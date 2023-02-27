@@ -1,11 +1,9 @@
-import { ReadonlyVec3, vec3 } from "gl-matrix";
-import { AABB, BoundingSphere } from "@novorender/core3d/state";
-import { Double3, Float3, MaterialType, OptionalVertexAttribute, PrimitiveType, readSchema, Schema, SubMeshProjection, TextureSemantic } from "./schema";
+import { type ReadonlyVec3, vec3 } from "gl-matrix";
+import type { AABB, BoundingSphere } from "@novorender/core3d/state";
+import { type Double3, type Float3, MaterialType, OptionalVertexAttribute, PrimitiveType, readSchema, type Schema, type SubMeshProjection, TextureSemantic } from "./schema";
 import { BufferReader, Float16Array } from "./util";
-import type { ComponentType, ShaderAttributeType, TextureParams, TextureParams2DArrayUncompressed, TextureParams2DUncompressed } from "@novorender/webgl2";
-import { KTX } from "@novorender/core3d/ktx";
-// import { Public, Render } from "types";
-// import { MeshDrawRange } from "../context";
+import type { ComponentType, ShaderAttributeType, TextureParams } from "@novorender/webgl2";
+import { parseKTX } from "@novorender/core3d/ktx";
 
 export interface MeshDrawRange {
     readonly childIndex: number;
@@ -532,7 +530,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
             textureInfo.transform.e22[i],
         ] as const;
         const ktx = schema.texturePixels.subarray(begin, end);
-        const params = KTX.parseKTX(ktx);
+        const params = parseKTX(ktx);
         textures[i] = { semantic, transform, params };
     }
 

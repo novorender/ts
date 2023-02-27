@@ -1,4 +1,4 @@
-import { ReadonlyVec3, ReadonlyMat4 } from "gl-matrix";
+import type { ReadonlyVec3, ReadonlyMat4 } from "gl-matrix";
 
 export interface RenderStateScene {
     readonly url: string;

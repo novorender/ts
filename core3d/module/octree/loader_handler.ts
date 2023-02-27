@@ -1,5 +1,5 @@
 import { AbortableDownload, Downloader } from "./download";
-import { parseNode, NodeData, NodeGeometry } from "./parser";
+import { parseNode, type NodeData, type NodeGeometry } from "./parser";
 
 // request messages (main->worker)
 

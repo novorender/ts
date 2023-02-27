@@ -1,10 +1,11 @@
-import { mat4, ReadonlyVec3, ReadonlyVec4, vec3, vec4 } from "gl-matrix";
-import { glUBOProxy, glBuffer, glUpdateBuffer } from "@novorender/webgl2";
-import { CoordSpace, DerivedRenderState, RenderContext, RenderStateHighlightGroup } from "@novorender/core3d";
+import { mat4, type ReadonlyVec3, type ReadonlyVec4, vec3, vec4 } from "gl-matrix";
+import { glUBOProxy, glUpdateBuffer } from "@novorender/webgl2";
+import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup } from "@novorender/core3d";
 import { Downloader } from "./download";
-import { createMeshes, deleteMesh, Mesh, meshPrimitiveCount, updateMeshHighlightGroups } from "./mesh";
-import { NodeData } from "./parser";
+import { createMeshes, deleteMesh, type Mesh, meshPrimitiveCount, updateMeshHighlightGroups } from "./mesh";
+import { type NodeData } from "./parser";
 import { NodeLoader } from "./loader";
+import { ResourceBin } from "@novorender/core3d/resource";
 
 export const enum Visibility {
     undefined,
@@ -32,6 +33,7 @@ export interface OctreeContext {
 
 export class OctreeNode {
     readonly id: string;
+    readonly resourceBin: ResourceBin
     readonly center: ReadonlyVec3;
     readonly radius: number;
     readonly size: number;
@@ -53,6 +55,7 @@ export class OctreeNode {
         const { sphere, box } = data.bounds;
         const { center, radius } = sphere;
         this.id = data.id;
+        this.resourceBin = context.renderContext.resourceBin("Node");
         this.center = center;
         this.radius = radius;
         this.center4 = vec4.fromValues(center[0], center[1], center[2], 1);
@@ -82,15 +85,18 @@ export class OctreeNode {
     }
 
     dispose() {
-        const { context, meshes, uniforms, children } = this;
-        const { renderContext } = context;
-        const { gl } = renderContext;
+        const { meshes, uniforms, children, resourceBin } = this;
         for (const mesh of meshes) {
-            deleteMesh(gl, mesh);
+            deleteMesh(resourceBin, mesh);
         }
         if (uniforms) {
-            gl.deleteBuffer(uniforms);
+            resourceBin.delete(uniforms);
             this.uniforms = undefined;
+        }
+        console.assert(resourceBin.size == 0);
+        resourceBin.dispose();
+        for (const child of children) {
+            child.dispose();
         }
         meshes.length = 0;
         children.length = 0;
@@ -272,7 +278,7 @@ export class OctreeNode {
 
     async downloadGeometry() {
         try {
-            const { context, children, meshes } = this;
+            const { context, children, meshes, resourceBin } = this;
             const { renderContext, loader, version } = context;
             const { gl } = renderContext;
             this.state = NodeState.downloading;
@@ -284,8 +290,8 @@ export class OctreeNode {
                     children.push(child);
                 }
                 this.state = NodeState.ready;
-                meshes.push(...createMeshes(gl, geometry));
-                this.uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
+                meshes.push(...createMeshes(resourceBin, geometry));
+                this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
                 glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
                 const groups = renderContext.prevState?.highlights.groups;
                 if (groups && groups.length) {

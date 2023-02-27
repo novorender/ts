@@ -1,5 +1,5 @@
 
-import { RenderState, RenderStateChanges, RenderStateClipping, RenderStateOutput } from ".";
+import type { RenderState, RenderStateChanges, RenderStateClipping, RenderStateOutput } from ".";
 
 // this function will create a copy where unchanged properties have same identity (=== operator yields true)
 // use this to quickly check for changes.
@@ -14,7 +14,7 @@ export function modifyRenderState(state: RenderState, changes: RenderStateChange
     return newState;
 }
 
-function mergeRecursive(original: any, changes: any) {
+export function mergeRecursive(original: any, changes: any) {
     const clone = { ...original };
     for (const key in changes) {
         const originalValue = original ? original[key] : undefined;

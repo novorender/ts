@@ -1,13 +1,14 @@
 import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
-import { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glBuffer, glProgram, glDraw, glState, glDelete, glVertexArray, glTransformFeedback, UniformTypes } from "@novorender/webgl2";
-import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
+import type { RenderModuleContext, RenderModule } from "..";
+import { glUBOProxy, glDraw, glState, glTransformFeedback, type UniformTypes } from "@novorender/webgl2";
+import { mat4, vec3, type ReadonlyVec3 } from "gl-matrix";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import line_vs from "./line.vert";
 import line_fs from "./line.frag";
 import intersect_vs from "./intersect.vert";
 import { BufferFlags } from "@novorender/core3d/buffers";
+import { ResourceBin } from "@novorender/core3d/resource";
 
 export class CubeModule implements RenderModule {
     readonly uniforms = {
@@ -16,7 +17,7 @@ export class CubeModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     withContext(context: RenderContext) {
-        return new CubeModuleContext(context, this);
+        return new CubeModuleContext(context, this, context.resourceBin("Cube"));
     }
 }
 
@@ -24,9 +25,9 @@ class CubeModuleContext implements RenderModuleContext {
     readonly uniforms;
     readonly resources;
 
-    constructor(readonly context: RenderContext, readonly data: CubeModule) {
+    constructor(readonly context: RenderContext, readonly data: CubeModule, readonly resourceBin: ResourceBin) {
         this.uniforms = glUBOProxy(data.uniforms);
-        const { gl, commonChunk } = context;
+        const { commonChunk } = context;
         const vertices = createVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
         const pos = createVertices((pos) => (pos));
         const indices = createIndices();
@@ -43,14 +44,14 @@ class CubeModuleContext implements RenderModuleContext {
 
         // create static GPU resources here
         const uniformBufferBlocks = ["Camera", "Clipping", "Cube"];
-        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks });
-        const program_line = glProgram(gl, { vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks });
-        const program_transform = glProgram(gl, { vertexShader: intersect_vs, commonChunk, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
+        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks });
+        const program_line = resourceBin.createProgram({ vertexShader: line_vs, fragmentShader: line_fs, commonChunk, uniformBufferBlocks });
+        const program_transform = resourceBin.createProgram({ vertexShader: intersect_vs, commonChunk, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } });
+        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
 
-        const vb = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vertices });
-        const ib = glBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
-        const vao = glVertexArray(gl, {
+        const vb = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", srcData: vertices });
+        const ib = resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
+        const vao = resourceBin.createVertexArray({
             attributes: [
                 { kind: "FLOAT_VEC3", buffer: vb, byteStride: 36, byteOffset: 0 }, // position
                 { kind: "FLOAT_VEC3", buffer: vb, byteStride: 36, byteOffset: 12 }, // normal
@@ -58,23 +59,22 @@ class CubeModuleContext implements RenderModuleContext {
             ],
             indices: ib
         });
-        gl.deleteBuffer(vb);
-        gl.deleteBuffer(ib);
+        resourceBin.subordinate(vao, vb, ib);
 
-        const vb_tri = glBuffer(gl, { kind: "ARRAY_BUFFER", srcData: triplets });
-        const vao_tri = glVertexArray(gl, {
+        const vb_tri = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", srcData: triplets });
+        const vao_tri = resourceBin.createVertexArray({
             attributes: [
                 { kind: "FLOAT_VEC3", buffer: vb_tri, byteStride: 36, byteOffset: 0 }, // position 0
                 { kind: "FLOAT_VEC3", buffer: vb_tri, byteStride: 36, byteOffset: 12 }, // position 1
                 { kind: "FLOAT_VEC3", buffer: vb_tri, byteStride: 36, byteOffset: 24 }, // position 2
             ],
         });
-        gl.deleteBuffer(vb_tri);
+        resourceBin.subordinate(vao, vb_tri);
 
-        const transformFeedback = gl.createTransformFeedback()!;
+        const transformFeedback = resourceBin.createTransformFeedback();
 
-        const vb_line = glBuffer(gl, { kind: "ARRAY_BUFFER", byteSize: 12 * 2 * 8, usage: "STATIC_DRAW" });
-        const vao_line = glVertexArray(gl, {
+        const vb_line = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: 12 * 2 * 8, usage: "STATIC_DRAW" });
+        const vao_line = resourceBin.createVertexArray({
             attributes: [
                 { kind: "FLOAT_VEC2", buffer: vb_line, byteStride: 8, byteOffset: 0 }, // position
             ],
@@ -118,7 +118,8 @@ class CubeModuleContext implements RenderModuleContext {
                 cull: { enable: false },
                 vertexArrayObject: vao,
             });
-            glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
+            const stats = glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
+            context["addRenderStatistics"](stats);
 
             if (state.outlines.nearClipping.enable) {
                 // transform vertex triplets into intersection lines
@@ -135,7 +136,8 @@ class CubeModuleContext implements RenderModuleContext {
                     depth: { test: false, },
                     vertexArrayObject: vao_line,
                 });
-                glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });
+                const stats = glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });
+                context["addRenderStatistics"](stats);
             }
         }
     }
@@ -144,10 +146,8 @@ class CubeModuleContext implements RenderModuleContext {
     }
 
     dispose() {
-        const { context, resources } = this;
-        const { gl } = context;
         this.contextLost();
-        glDelete(gl, resources);
+        this.resourceBin.dispose();
     }
 }
 

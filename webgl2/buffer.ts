@@ -1,4 +1,5 @@
-export function glBuffer(gl: WebGL2RenderingContext, params: BufferParams): WebGLBuffer {
+
+export function glCreateBuffer(gl: WebGL2RenderingContext, params: BufferParams): WebGLBuffer {
     const target = gl[params.kind];
     const usage = gl[params.usage ?? "STATIC_DRAW"];
     const buffer = gl.createBuffer()!;

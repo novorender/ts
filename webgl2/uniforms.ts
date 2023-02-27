@@ -1,7 +1,7 @@
-import { glBuffer } from "./buffer";
+import { glCreateBuffer } from "./buffer";
 import { GL } from "./constants";
 
-export function glUniformsInfo(gl: WebGL2RenderingContext, program: WebGLProgram) {
+export function glGetUniformsInfo(gl: WebGL2RenderingContext, program: WebGLProgram) {
     const numUniforms = gl.getProgramParameter(program, GL.ACTIVE_UNIFORMS);
     const uniformData: any[] = [];
     const uniformIndices: number[] = [];

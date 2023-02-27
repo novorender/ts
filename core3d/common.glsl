@@ -37,9 +37,11 @@ struct ClippingVaryings {
 };
 struct ClippingUniforms {
     vec4 planes[6];
-    vec4 colors[6];
     uint numPlanes;
     uint mode; // 0 = intersection, 1 = union
+};
+struct ClippingColors {
+    vec4 colors[6];
 };
 bool clip(vec3 point, ClippingUniforms clipping) {
     float s = clipping.mode == clippingModeIntersection ? -1. : 1.;

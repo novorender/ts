@@ -1,10 +1,12 @@
 import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
-import { KTX } from "@novorender/core3d/ktx";
-import { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glClear, glProgram, glTexture, glDraw, glState, TextureParams, glBuffer, glDelete, UniformTypes, TextureParamsCubeUncompressed, TextureParamsCubeUncompressedMipMapped } from "@novorender/webgl2";
+import { parseKTX } from "@novorender/core3d/ktx";
+import type { RenderModuleContext, RenderModule } from "..";
+import { glUBOProxy, glClear, glDraw, glState } from "@novorender/webgl2";
+import { type TextureParams, type UniformTypes, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { BufferFlags } from "@novorender/core3d/buffers";
+import { ResourceBin } from "@novorender/core3d/resource";
 
 export class BackgroundModule implements RenderModule {
     private abortController: AbortController | undefined;
@@ -21,10 +23,9 @@ export class BackgroundModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     async withContext(context: RenderContext) {
-        return new BackgroundModuleContext(context, this);
+        return new BackgroundModuleContext(context, this, context.resourceBin("Background"));
     }
 
-    // TODO: Move into worker?
     async downloadTextures(urlDir: string) {
         if (this.abortController) {
             this.abortController.abort();
@@ -49,7 +50,7 @@ export class BackgroundModule implements RenderModule {
             const response = await fetch(url, { mode: "cors", signal });
             if (response.ok) {
                 var ktxData = await response.arrayBuffer();
-                var params = KTX.parseKTX(new Uint8Array(ktxData));
+                var params = parseKTX(new Uint8Array(ktxData));
                 return params as T;
             } else {
                 throw new Error(`HTTP Error:${response.status} ${response.status}`);
@@ -63,20 +64,19 @@ class BackgroundModuleContext implements RenderModuleContext {
     readonly resources;
     skybox: WebGLTexture;
 
-    constructor(readonly context: RenderContext, readonly data: BackgroundModule) {
+    constructor(readonly context: RenderContext, readonly data: BackgroundModule, readonly resourceBin: ResourceBin) {
         const { gl, commonChunk } = context;
         this.uniforms = glUBOProxy(data.uniforms);
         const uniformBufferBlocks = ["Camera", "Background"];
         const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
-        const program = glProgram(gl, { vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
-        const uniforms = glBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
-        this.skybox = glTexture(gl, context.defaultIBLTextureParams);
+        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
+        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
+        this.skybox = resourceBin.createTexture(context.defaultIBLTextureParams);
         this.resources = { program, uniforms } as const;
     }
 
     update(state: DerivedRenderState) {
-        const { context, resources, data, uniforms } = this;
-        const { gl } = context;
+        const { context, resources, data, uniforms, skybox, resourceBin } = this;
         const { background } = state;
 
         if (context.hasStateChanged({ background })) {
@@ -89,14 +89,16 @@ class BackgroundModuleContext implements RenderModuleContext {
                 }
             } else {
                 context.updateIBLTextures(null);
+                resourceBin.delete(skybox);
+                this.skybox = resourceBin.createTexture(context.defaultIBLTextureParams);
             }
             data.url = url;
         }
 
         if (data.textureParams) {
             context.updateIBLTextures(data.textureParams);
-            gl.deleteTexture(this.skybox);
-            this.skybox = glTexture(gl, data.textureParams.skybox);
+            resourceBin.delete(skybox);
+            this.skybox = resourceBin.createTexture(data.textureParams.skybox);
             uniforms.values.mipCount = context.iblTextures.numMipMaps;
             context.updateUniformBuffer(resources.uniforms, this.uniforms);
             data.textureParams = undefined; // we already copied the pixels into texture, so we no longer need the original.
@@ -132,6 +134,8 @@ class BackgroundModuleContext implements RenderModuleContext {
         if (drawBuffersMask & BufferFlags.color) {
             if (state.background.color) {
                 glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
+            } else if (state.camera.kind == "orthographic") {
+                glClear(gl, { kind: "COLOR", drawBuffer: 0, color: [0.33, 0.33, 0.33, 1] });
             } else {
                 const { specular } = context.iblTextures;
                 glState(gl, {
@@ -146,7 +150,8 @@ class BackgroundModuleContext implements RenderModuleContext {
                         writeMask: false,
                     },
                 });
-                glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
+                const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
+                context["addRenderStatistics"](stats);
             }
         }
     }
@@ -157,10 +162,7 @@ class BackgroundModuleContext implements RenderModuleContext {
     }
 
     dispose() {
-        const { context, resources, skybox } = this;
-        const { gl } = context;
         this.contextLost();
-        glDelete(gl, resources);
-        gl.deleteTexture(skybox);
+        this.resourceBin.dispose();
     }
 }

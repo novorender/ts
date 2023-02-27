@@ -1,7 +1,7 @@
 import { GL } from "./constants.js";
 import { getBufferViewType } from "./misc.js";
 
-export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
+export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParams) {
     const texture = gl.createTexture()!;
     const width = params.width ?? params.image.width;
     const height = params.height ?? params.image.height;
@@ -114,7 +114,6 @@ export function glTexture(gl: WebGL2RenderingContext, params: TextureParams) {
     gl.bindTexture(target, null);
     return texture;
 }
-
 
 export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGLTexture, params: TextureParams) {
     const width = params.width ?? params.image.width;
@@ -242,7 +241,7 @@ function getFormatInfo(gl: WebGL2RenderingContext, internalFormatString: Uncompr
         const internalFormat = gl[internalFormatString] as keyof typeof internalFormat2FormatLookup;
         const format = internalFormat2FormatLookup[internalFormat];
         const type = gl[typeString!];
-        const arrayType = getBufferViewType(type);
+        const arrayType = getBufferViewType(typeString!);
         return { internalFormat, format, type, arrayType };
     }
 }
@@ -252,6 +251,8 @@ export type TextureParams =
     TextureParamsCubeUncompressed | TextureParamsCubeCompressed | TextureParamsCubeUncompressedMipMapped | TextureParamsCubeCompressedMipMapped |
     TextureParams3DUncompressed | TextureParams3DCompressed | TextureParams3DUncompressedMipMapped | TextureParams3DCompressedMipMapped |
     TextureParams2DArrayUncompressed | TextureParams2DArrayCompressed | TextureParams2DArrayUncompressedMipMapped | TextureParams2DArrayCompressedMipMapped;
+
+export type TextureTargetString = TextureParams["kind"];
 
 // 2D
 export type TextureParams2DUncompressedImage = Uncompressed & Partial<Size2D> & GenMipMap & {
