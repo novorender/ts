@@ -302,8 +302,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 },
                 textures: [
                     { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // basecolor - will be overridden by nodes that have textures, e.g. terrain nodes.
-                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerSingle },
-                    { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerMip },
+                    { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerNearest },
+                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
                     { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest },
                     { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
                     { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
