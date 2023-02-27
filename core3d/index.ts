@@ -55,11 +55,12 @@ export async function init(canvas: HTMLCanvasElement, setRenderContext: (context
 
 
     let animId: number | undefined;
-    function createContext() {
+    async function createContext() {
         context = new RenderContext(canvas, wasm, lut_ggx, options);
+        await context.init();
         setRenderContext(context)
     }
-    createContext();
+    await createContext();
 }
 
 function nextFrame() {
@@ -231,10 +232,11 @@ export async function run(canvas: HTMLCanvasElement) {
 
 
     let animId: number | undefined;
-    function init() {
+    async function init() {
         context = new RenderContext(canvas, wasm, lut_ggx, options);
+        await context.init();
     }
-    init();
+    await init();
     emulateLostContext(context!.gl, canvas);
 
     for (; ;) {

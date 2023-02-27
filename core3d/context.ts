@@ -1,6 +1,6 @@
 import { CoordSpace, createDefaultModules } from "./";
 import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState } from "./";
-import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateProgramAsync, glCreateTimer, } from "@novorender/webgl2";
+import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateProgramAsync, glCreateTimer, glCompile, } from "@novorender/webgl2";
 import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "@novorender/webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
@@ -19,8 +19,7 @@ function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
     private static defaultModules: readonly RenderModule[] | undefined;
-    private readonly modules: readonly RenderModule[];
-    private readonly moduleContexts: (RenderModuleContext | undefined)[];
+    private modules: readonly RenderModuleContext[] | undefined;
     private cameraUniformsData;
     private clippingUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
@@ -78,7 +77,7 @@ export class RenderContext {
         ] as const;
     }
 
-    constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TexImageSource, options?: WebGLContextAttributes, modules?: readonly RenderModule[]) {
+    constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TexImageSource, options?: WebGLContextAttributes) {
         // init gl context
         const gl = canvas.getContext("webgl2", options);
         if (!gl)
@@ -110,25 +109,6 @@ export class RenderContext {
             default: true,
         };
 
-        // initialize modules
-        this.modules = modules ?? RenderContext.defaultModules ?? RenderContext.defaultModules ?? createDefaultModules();
-        RenderContext.defaultModules = this.modules;
-        this.moduleContexts = this.modules.map((m, i) => {
-            const module = m.withContext(this);
-            if (!isPromise(module)) {
-                return module;
-            }
-            module.then(m => {
-                this.moduleContexts[i] = m;
-            });
-        });
-
-        // link all programs here (this is supposedly faster than mixing compiles and links)
-        for (const { program } of this.asyncPrograms) {
-            gl.linkProgram(program);
-        }
-        gl.useProgram(null);
-
         // camera uniforms
         this.cameraUniformsData = glUBOProxy({
             clipViewMatrix: "mat4",
@@ -156,17 +136,61 @@ export class RenderContext {
         this.clippingUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.clippingUniformsData.buffer.byteLength });
     }
 
+    async init(modules?: readonly RenderModule[]) {
+        // initialize modules
+        if (!modules) {
+            RenderContext.defaultModules ??= createDefaultModules();
+            modules = RenderContext.defaultModules;
+        }
+        const modulePromises = modules.map((m, i) => {
+            const ret = m.withContext(this);
+            return isPromise(ret) ? ret : Promise.resolve(ret);
+        });
+        // link all programs here (this is supposedly faster than interleaving compiles and links)
+        const { gl, asyncPrograms } = this;
+        for (const { program } of this.asyncPrograms) {
+            gl.linkProgram(program);
+        }
+        gl.useProgram(null);
+
+        // wait for completion
+        const ext = glExtensions(gl).parallelShaderCompile;
+        function pollAsyncPrograms() {
+            for (let i = 0; i < asyncPrograms.length; i++) {
+                const { program, resolve, reject } = asyncPrograms[i];
+                if (ext) {
+                    if (!gl.getProgramParameter(program, ext.COMPLETION_STATUS_KHR))
+                        continue;
+                }
+                const [info] = asyncPrograms.splice(i--, 1);
+                const error = glCheckProgram(gl, info);
+                if (error) {
+                    reject(error);
+                } else {
+                    resolve();
+                }
+            }
+            if (asyncPrograms.length > 0) {
+                setTimeout(pollAsyncPrograms);
+            }
+        }
+        pollAsyncPrograms();
+        this.modules = await Promise.all(modulePromises);
+    }
+
     dispose() {
-        const { buffers, moduleContexts, activeTimers, defaultResourceBin, iblResourceBin } = this;
+        const { buffers, modules, activeTimers, defaultResourceBin, iblResourceBin } = this;
         this.poll(); // finish async stuff
         for (const timer of activeTimers) {
             timer.dispose();
         }
         activeTimers.clear();
-        for (const module of moduleContexts) {
-            module?.dispose();
+        if (modules) {
+            for (const module of modules) {
+                module?.dispose();
+            }
+            this.modules = undefined;
         }
-        moduleContexts.length = 0;
         buffers?.dispose();
         iblResourceBin.dispose();
         defaultResourceBin.dispose();
@@ -235,10 +259,13 @@ export class RenderContext {
         return ResourceBin["create"](this.gl, name, this.resourceBins);
     }
 
-    makeProgramAsync(params: AsyncProgramParams) {
+    makeProgramAsync(resourceBin: ResourceBin, params: AsyncProgramParams) {
         const { gl, commonChunk } = this;
+        const { vertexShader, fragmentShader } = params;
+        // const vertexShader = glCompile(gl, { kind: "VERTEX_SHADER", shader: params.vertexShader });
+        // const fragmentShader = glCompile(gl, { kind: "FRAGMENT_SHADER", shader: params.vertexShader });
         const header = { commonChunk, ...params.header } as const; // inject common shader code here, if not defined in params.
-        const programAsync = glCreateProgramAsync(gl, { ...params, header });
+        const programAsync = resourceBin.createProgramAsync({ header, vertexShader, fragmentShader });
         const { program } = programAsync;
 
         // do pre-link bindings here
@@ -305,34 +332,17 @@ export class RenderContext {
         statistics.drawCalls += drawCalls;
     }
 
-    private pollAsyncPrograms() {
-        const { gl, asyncPrograms } = this;
-        const ext = glExtensions(gl).parallelShaderCompile;
-        for (let i = 0; i < asyncPrograms.length; i++) {
-            const { program, resolve, reject } = asyncPrograms[i];
-            if (ext) {
-                if (!gl.getProgramParameter(program, ext.COMPLETION_STATUS_KHR))
-                    continue;
-            }
-            const [info] = asyncPrograms.splice(i--, 1);
-            const error = glCheckProgram(gl, info);
-            if (error) {
-                reject(error);
-            } else {
-                resolve();
-            }
-        }
-    }
-
     protected contextLost() {
-        for (const module of this.moduleContexts) {
-            module?.contextLost();
+        const { modules } = this;
+        if (modules) {
+            for (const module of modules) {
+                module?.contextLost();
+            }
         }
     }
 
     public poll() {
         this.buffers?.pollPickFence();
-        this.pollAsyncPrograms();
         this.pollTimers();
     }
 
@@ -370,6 +380,9 @@ export class RenderContext {
     }
 
     public async render(state: RenderState) {
+        if (!this.modules) {
+            throw new Error("Context has not been initialized!");
+        }
         const beginTime = performance.now();
         const { gl, canvas, prevState } = this;
         this.changed = false;
@@ -422,14 +435,14 @@ export class RenderContext {
         mat3.copy(this.viewWorldMatrixNormal, derivedState.matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World));
 
         // update modules from state
-        for (const module of this.moduleContexts) {
+        for (const module of this.modules) {
             module?.update(derivedState);
         }
 
         // apply module render z-buffer pre-pass
         const { width, height } = canvas;
         if (this.usePrepass) {
-            for (const module of this.moduleContexts) {
+            for (const module of this.modules) {
                 if (module && module.prepass) {
                     glState(gl, {
                         viewport: { width, height },
@@ -445,7 +458,7 @@ export class RenderContext {
         }
 
         // render modules
-        for (const module of this.moduleContexts) {
+        for (const module of this.modules) {
             if (module) {
                 glState(gl, {
                     viewport: { width, height },

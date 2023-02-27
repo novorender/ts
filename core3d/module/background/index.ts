@@ -1,7 +1,7 @@
 import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
 import { parseKTX } from "@novorender/core3d/ktx";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glClear, glDraw, glState } from "@novorender/webgl2";
+import { glUBOProxy, glClear, glDraw, glState, type ShaderHeaderParams } from "@novorender/webgl2";
 import { type TextureParams, type UniformTypes, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
@@ -23,7 +23,11 @@ export class BackgroundModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     async withContext(context: RenderContext) {
-        return new BackgroundModuleContext(context, this, context.resourceBin("Background"));
+        const resourceBin = context.resourceBin("Background");
+        const uniformBufferBlocks = ["Camera", "Background"];
+        const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
+        const program = await context.makeProgramAsync(resourceBin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms });
+        return new BackgroundModuleContext(context, this, resourceBin, program);
     }
 
     async downloadTextures(urlDir: string) {
@@ -64,12 +68,12 @@ class BackgroundModuleContext implements RenderModuleContext {
     readonly resources;
     skybox: WebGLTexture;
 
-    constructor(readonly context: RenderContext, readonly data: BackgroundModule, readonly resourceBin: ResourceBin) {
+    constructor(readonly context: RenderContext, readonly data: BackgroundModule, readonly resourceBin: ResourceBin, program: WebGLProgram) {
         const { gl, commonChunk } = context;
         this.uniforms = glUBOProxy(data.uniforms);
-        const uniformBufferBlocks = ["Camera", "Background"];
-        const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
-        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
+        // const uniformBufferBlocks = ["Camera", "Background"];
+        // const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
+        // const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
         const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
         this.skybox = resourceBin.createTexture(context.defaultIBLTextureParams);
         this.resources = { program, uniforms } as const;
