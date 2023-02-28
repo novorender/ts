@@ -556,7 +556,7 @@ export class RenderContext {
         }
     }
 
-    protected async pick(x: number, y: number, sampleDiscRadius = 0): Promise<PickSample[]> {
+    async pick(x: number, y: number, sampleDiscRadius = 0): Promise<PickSample[]> {
         if (sampleDiscRadius < 0)
             return [];
         const { canvas, wasm, buffers, width, height } = this;
