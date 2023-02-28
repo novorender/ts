@@ -262,8 +262,6 @@ export class RenderContext {
     makeProgramAsync(resourceBin: ResourceBin, params: AsyncProgramParams) {
         const { gl, commonChunk } = this;
         const { vertexShader, fragmentShader } = params;
-        // const vertexShader = glCompile(gl, { kind: "VERTEX_SHADER", shader: params.vertexShader });
-        // const fragmentShader = glCompile(gl, { kind: "FRAGMENT_SHADER", shader: params.vertexShader });
         const header = { commonChunk, ...params.header } as const; // inject common shader code here, if not defined in params.
         const programAsync = resourceBin.createProgramAsync({ header, vertexShader, fragmentShader });
         const { program } = programAsync;
@@ -636,7 +634,7 @@ export interface PickSample {
 export interface AsyncProgramParams {
     readonly header?: Partial<ShaderHeaderParams>;
     readonly vertexShader: string;
-    readonly fragmentShader: string;
+    readonly fragmentShader?: string;
     // pre-link bindings
     readonly attributes?: readonly string[]; // The names of the vertex attributes to be bound using gl.bindAttribLocation().
     readonly uniformBufferBlocks?: readonly string[]; // The names of the shader uniform blocks, which will be bound to the index in which the name appears in this array using gl.uniformBlockBinding().

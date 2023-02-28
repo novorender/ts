@@ -3,7 +3,6 @@ import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState, type UniformTypes } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { ResourceBin } from "@novorender/core3d/resource";
 
 export class TonemapModule implements RenderModule {
     readonly uniforms = {
@@ -12,26 +11,33 @@ export class TonemapModule implements RenderModule {
         maxLinearDepth: "float",
     } as const satisfies Record<string, UniformTypes>;
 
-    withContext(context: RenderContext) {
-        return new TonemapModuleContext(context, this, context.resourceBin("Tonemap"));
+    async withContext(context: RenderContext) {
+        const uniforms = this.createUniforms();
+        const resources = await this.createResources(context, uniforms);
+        return new TonemapModuleContext(context, this, uniforms, resources);
+    }
+
+    createUniforms() {
+        return glUBOProxy(this.uniforms);
+    }
+
+    async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const bin = context.resourceBin("Tonemap");
+        const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
+        const sampler = bin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        const textureNames = ["color", "depth", "info", "zbuffer"] as const;
+        const textureUniforms = textureNames.map(name => `textures.${name}`);
+        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks: ["Tonemapping"], textureUniforms })
+        return { bin, uniforms, sampler, program } as const;
     }
 }
 
-class TonemapModuleContext implements RenderModuleContext {
-    readonly uniforms;
-    readonly resources;
+type Uniforms = ReturnType<TonemapModule["createUniforms"]>;
+type Resources = Awaited<ReturnType<TonemapModule["createResources"]>>;
 
-    constructor(readonly context: RenderContext, readonly data: TonemapModule, readonly resourceBin: ResourceBin) {
-        const { gl, commonChunk } = context;
-        this.uniforms = glUBOProxy(data.uniforms);
-        const uniformBufferBlocks = ["Tonemapping"];
-        const textureNames = ["color", "depth", "info", "zbuffer"] as const;
-        const textureUniforms = textureNames.map(name => `textures.${name}`);
-        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
-        const sampler = resourceBin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
-        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
-        this.resources = { program, sampler, uniforms } as const;
-    }
+class TonemapModuleContext implements RenderModuleContext {
+
+    constructor(readonly context: RenderContext, readonly data: TonemapModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
         const { context } = this;
@@ -80,6 +86,6 @@ class TonemapModuleContext implements RenderModuleContext {
 
     dispose() {
         this.contextLost();
-        this.resourceBin.dispose();
+        this.resources.bin.dispose();
     }
 }

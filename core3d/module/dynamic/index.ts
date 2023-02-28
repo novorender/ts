@@ -16,42 +16,49 @@ export class DynamicModule implements RenderModule {
         modelViewMatrix: "mat4",
     } as const satisfies Record<string, UniformTypes>;
 
-    withContext(context: RenderContext) {
-        return new DynamicModuleContext(context, this, context.resourceBin("Dynamic"));
+    async withContext(context: RenderContext) {
+        const resources = await this.createResources(context);
+        return new DynamicModuleContext(context, this, resources);
+    }
+
+    async createResources(context: RenderContext) {
+        const bin = context.resourceBin("Dynamic");
+        const defaultSampler = bin.createSampler({ magnificationFilter: "LINEAR", minificationFilter: "LINEAR_MIPMAP_LINEAR", wrap: ["REPEAT", "REPEAT"] });
+        const defaultTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array(4) }); // used to avoid warnings on android
+        const uniformBufferBlocks = ["Camera", "Material", "Instance"];
+        const textureNames = ["lut_ggx", "ibl.diffuse", "ibl.specular", "base_color", "metallic_roughness", "normal", "emissive", "occlusion"] as const;
+        const textureUniforms = textureNames.map(name => `textures.${name}`);
+        const [unlit, ggx] = await Promise.all([
+            context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms }),
+            context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms, header: { flags: ["PBR_METALLIC_ROUGHNESS"] } }),
+        ]);
+        const programs = { unlit, ggx };
+        return { bin, defaultSampler, defaultTexture, programs };
     }
 }
 
+type Resources = Awaited<ReturnType<DynamicModule["createResources"]>>;
+
 class DynamicModuleContext implements RenderModuleContext {
     iblTextures;
-    readonly programs;
     readonly buffers = new Map<BufferSource, BufferAsset>();
     readonly geometries = new Map<RenderStateDynamicGeometry, GeometryAsset>();
     readonly instances = new Map<RenderStateDynamicInstance, InstanceAsset>();
     readonly materials = new Map<RenderStateDynamicMaterial, MaterialAsset>();
     readonly images = new Map<RenderStateDynamicImage, TextureAsset>();
     readonly samplers = new Map<RenderStateDynamicSampler, SamplerAsset>();
-    readonly defaultTexture: WebGLTexture;
-    readonly defaultSampler: WebGLSampler;
 
-    constructor(readonly context: RenderContext, readonly data: DynamicModule, readonly resourceBin: ResourceBin) {
-        const { commonChunk } = context;
-        const uniformBufferBlocks = ["Camera", "Material", "Instance"];
-        const textureNames = ["lut_ggx", "ibl.diffuse", "ibl.specular", "base_color", "metallic_roughness", "normal", "emissive", "occlusion"] as const;
-        const textureUniforms = textureNames.map(name => `textures.${name}`);
-        const unlit = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
-        const ggx = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms, flags: ["PBR_METALLIC_ROUGHNESS"] });
-        this.programs = { unlit, ggx } as const;
-        this.defaultSampler = resourceBin.createSampler({ magnificationFilter: "LINEAR", minificationFilter: "LINEAR_MIPMAP_LINEAR", wrap: ["REPEAT", "REPEAT"] });
-        this.defaultTexture = resourceBin.createTexture({ kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array(4) }); // used to avoid warnings on android
+    constructor(readonly context: RenderContext, readonly data: DynamicModule, readonly resources: Resources) {
         this.iblTextures = context.iblTextures;
     }
 
     update(state: DerivedRenderState) {
-        const { context, programs, resourceBin } = this;
+        const { context, resources } = this;
+        const { bin, defaultSampler, defaultTexture, programs } = resources;
         const { dynamic, localSpaceTranslation } = state;
         if (context.hasStateChanged({ dynamic })) {
             // synchronizing assets by reference is slower than array indexing, but it makes the render state safer and simpler to modify.
-            // performance should not be a major issue for < 1000 objects or so
+            // performance should not be a major issue for < 1000 objects or so, however.
             function* getTextures(material: RenderStateDynamicMaterial) {
                 const { baseColorTexture } = material;
                 if (baseColorTexture)
@@ -79,12 +86,12 @@ class DynamicModuleContext implements RenderModuleContext {
             const indexBuffers = new Set<BufferSource>(geometries.map(g => typeof g.indices == "number" ? undefined : g.indices).filter(b => b) as BufferSource[]);
             const numVertexBuffers = vertexBuffers.size;
             const buffers = [...vertexBuffers, ...indexBuffers];
-            syncAssets(resourceBin, buffers, this.buffers, (data, idx) => new BufferAsset(resourceBin, idx < numVertexBuffers ? "ARRAY_BUFFER" : "ELEMENT_ARRAY_BUFFER", data));
-            syncAssets(resourceBin, images, this.images, data => new TextureAsset(resourceBin, data));
-            syncAssets(resourceBin, samplers, this.samplers, data => new SamplerAsset(resourceBin, data));
-            syncAssets(resourceBin, geometries, this.geometries, data => new GeometryAsset(resourceBin, data, this.buffers));
-            syncAssets(resourceBin, instances, this.instances, data => new InstanceAsset(resourceBin, context, data, state));
-            syncAssets(resourceBin, materials, this.materials, data => new MaterialAsset(resourceBin, context, data, this.images, this.samplers, this.defaultTexture, this.defaultSampler, programs[data.kind]));
+            syncAssets(bin, buffers, this.buffers, (data, idx) => new BufferAsset(bin, idx < numVertexBuffers ? "ARRAY_BUFFER" : "ELEMENT_ARRAY_BUFFER", data));
+            syncAssets(bin, images, this.images, data => new TextureAsset(bin, data));
+            syncAssets(bin, samplers, this.samplers, data => new SamplerAsset(bin, data));
+            syncAssets(bin, geometries, this.geometries, data => new GeometryAsset(bin, data, this.buffers));
+            syncAssets(bin, instances, this.instances, data => new InstanceAsset(bin, context, data, state));
+            syncAssets(bin, materials, this.materials, data => new MaterialAsset(bin, context, data, this.images, this.samplers, defaultTexture, defaultSampler, programs[data.kind]));
         }
         if (context.hasStateChanged({ localSpaceTranslation })) {
             for (const instance of this.instances.values()) {
@@ -94,7 +101,7 @@ class DynamicModuleContext implements RenderModuleContext {
         if (context.iblTextures != this.iblTextures) {
             this.iblTextures = context.iblTextures;
             for (const material of this.materials.values()) {
-                material.update(context, this.defaultTexture);
+                material.update(context, defaultTexture);
             }
         }
     }
@@ -155,15 +162,16 @@ class DynamicModuleContext implements RenderModuleContext {
     }
 
     dispose() {
-        const { resourceBin, programs, buffers, geometries, materials, instances, defaultSampler, defaultTexture } = this;
+        const { resources, buffers, geometries, materials, instances } = this;
+        const { bin, programs, defaultSampler, defaultTexture } = resources;
         this.contextLost();
         const assets = [...buffers.values(), ...geometries.values(), ...materials.values(), ...instances.values()];
         for (const asset of assets) {
-            asset.dispose(resourceBin);
+            asset.dispose(bin);
         }
-        resourceBin.delete(programs.ggx, programs.unlit, defaultSampler, defaultTexture);
-        console.assert(resourceBin.size == 0);
-        resourceBin.dispose();
+        bin.delete(programs.ggx, programs.unlit, defaultSampler, defaultTexture);
+        console.assert(bin.size == 0);
+        bin.dispose();
         buffers.clear();
         geometries.clear();
         materials.clear();
@@ -299,7 +307,7 @@ class MaterialAsset {
         samplers: Map<RenderStateDynamicSampler, SamplerAsset>,
         defaultTexture: WebGLTexture,
         defaultSamper: WebGLSampler,
-        program: DynamicModuleContext["programs"]["ggx"],
+        program: DynamicModuleContext["resources"]["programs"]["ggx"],
     ) {
         this.kind = data.kind;
         const blend = {

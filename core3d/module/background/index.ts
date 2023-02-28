@@ -1,12 +1,11 @@
 import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
 import { parseKTX } from "@novorender/core3d/ktx";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glClear, glDraw, glState, type ShaderHeaderParams } from "@novorender/webgl2";
+import { glUBOProxy, glClear, glDraw, glState } from "@novorender/webgl2";
 import { type TextureParams, type UniformTypes, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { BufferFlags } from "@novorender/core3d/buffers";
-import { ResourceBin } from "@novorender/core3d/resource";
 
 export class BackgroundModule implements RenderModule {
     private abortController: AbortController | undefined;
@@ -23,11 +22,22 @@ export class BackgroundModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     async withContext(context: RenderContext) {
-        const resourceBin = context.resourceBin("Background");
+        const uniforms = this.createUniforms();
+        const resources = await this.createResources(context, uniforms);
+        return new BackgroundModuleContext(context, this, uniforms, resources);
+    }
+
+    createUniforms() {
+        return glUBOProxy(this.uniforms);
+    }
+
+    async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const bin = context.resourceBin("Clipping");
+        const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
         const uniformBufferBlocks = ["Camera", "Background"];
         const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
-        const program = await context.makeProgramAsync(resourceBin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms });
-        return new BackgroundModuleContext(context, this, resourceBin, program);
+        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms });
+        return { bin, uniforms, program };
     }
 
     async downloadTextures(urlDir: string) {
@@ -63,24 +73,19 @@ export class BackgroundModule implements RenderModule {
     }
 }
 
+type Uniforms = ReturnType<BackgroundModule["createUniforms"]>;
+type Resources = Awaited<ReturnType<BackgroundModule["createResources"]>>;
+
 class BackgroundModuleContext implements RenderModuleContext {
-    readonly uniforms;
-    readonly resources;
     skybox: WebGLTexture;
 
-    constructor(readonly context: RenderContext, readonly data: BackgroundModule, readonly resourceBin: ResourceBin, program: WebGLProgram) {
-        const { gl, commonChunk } = context;
-        this.uniforms = glUBOProxy(data.uniforms);
-        // const uniformBufferBlocks = ["Camera", "Background"];
-        // const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
-        // const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks, textureUniforms });
-        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniforms.buffer.byteLength });
-        this.skybox = resourceBin.createTexture(context.defaultIBLTextureParams);
-        this.resources = { program, uniforms } as const;
+    constructor(readonly context: RenderContext, readonly data: BackgroundModule, readonly uniforms: Uniforms, readonly resources: Resources) {
+        this.skybox = resources.bin.createTexture(context.defaultIBLTextureParams);
     }
 
     update(state: DerivedRenderState) {
-        const { context, resources, data, uniforms, skybox, resourceBin } = this;
+        const { context, resources, data, uniforms, skybox } = this;
+        const { bin } = resources;
         const { background } = state;
 
         if (context.hasStateChanged({ background })) {
@@ -93,16 +98,16 @@ class BackgroundModuleContext implements RenderModuleContext {
                 }
             } else {
                 context.updateIBLTextures(null);
-                resourceBin.delete(skybox);
-                this.skybox = resourceBin.createTexture(context.defaultIBLTextureParams);
+                bin.delete(skybox);
+                this.skybox = bin.createTexture(context.defaultIBLTextureParams);
             }
             data.url = url;
         }
 
         if (data.textureParams) {
             context.updateIBLTextures(data.textureParams);
-            resourceBin.delete(skybox);
-            this.skybox = resourceBin.createTexture(data.textureParams.skybox);
+            bin.delete(skybox);
+            this.skybox = bin.createTexture(data.textureParams.skybox);
             uniforms.values.mipCount = context.iblTextures.numMipMaps;
             context.updateUniformBuffer(resources.uniforms, this.uniforms);
             data.textureParams = undefined; // we already copied the pixels into texture, so we no longer need the original.
@@ -167,6 +172,6 @@ class BackgroundModuleContext implements RenderModuleContext {
 
     dispose() {
         this.contextLost();
-        this.resourceBin.dispose();
+        this.resources.bin.dispose();
     }
 }

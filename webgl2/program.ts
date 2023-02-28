@@ -13,7 +13,7 @@ export function* glShaderExtensions(gl: WebGL2RenderingContext): IterableIterato
 
 
 export function glCompile(gl: WebGL2RenderingContext, params: ShaderParams): WebGLShader {
-    const source = params.shader ?? "void main() {}";
+    const source = params.shader;
     const shader = gl.createShader(gl[params.kind])!;
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
@@ -26,7 +26,7 @@ export function glCreateProgramAsync(gl: WebGL2RenderingContext, params: Program
     const { header } = params;
     const headerCode = formatHeader(gl, header);
     const vertex = glCompile(gl, { kind: "VERTEX_SHADER", shader: headerCode + params.vertexShader });
-    const fragment = glCompile(gl, { kind: "FRAGMENT_SHADER", shader: headerCode + (params.fragmentShader ?? "") });
+    const fragment = glCompile(gl, { kind: "FRAGMENT_SHADER", shader: headerCode + (params.fragmentShader ?? "void main() {}") });
     const program = gl.createProgram()!;
     gl.attachShader(program, vertex);
     gl.attachShader(program, fragment);
@@ -182,7 +182,7 @@ export interface VertexShaderParams {
 
 export interface FragmentShaderParams {
     readonly kind: "FRAGMENT_SHADER";
-    readonly shader?: string;
+    readonly shader: string;
 }
 
 export type ShaderParams = VertexShaderParams | FragmentShaderParams;

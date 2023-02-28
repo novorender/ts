@@ -4,7 +4,6 @@ import { glUBOProxy, glDraw, glState, type UniformTypes } from "@novorender/webg
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat4, vec3 } from "gl-matrix";
-import { type ResourceBin } from "@novorender/core3d/resource";
 
 export class GridModule implements RenderModule {
     readonly uniforms = {
@@ -17,22 +16,29 @@ export class GridModule implements RenderModule {
         distance: "float",
     } as const satisfies Record<string, UniformTypes>;
 
-    withContext(context: RenderContext) {
-        return new GridModuleContext(context, this, context.resourceBin("Grid"));
+    async withContext(context: RenderContext) {
+        const uniforms = this.createUniforms();
+        const resources = await this.createResources(context, uniforms);
+        return new GridModuleContext(context, this, uniforms, resources);
+    }
+
+    createUniforms() {
+        return glUBOProxy(this.uniforms);
+    }
+
+    async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const bin = context.resourceBin("Grid");
+        const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
+        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Grid"] })
+        return { bin, uniforms, program } as const;
     }
 }
 
-class GridModuleContext implements RenderModuleContext {
-    readonly uniforms;
-    readonly resources;
+type Uniforms = ReturnType<GridModule["createUniforms"]>;
+type Resources = Awaited<ReturnType<GridModule["createResources"]>>;
 
-    constructor(readonly context: RenderContext, readonly data: GridModule, readonly resourceBin: ResourceBin) {
-        this.uniforms = glUBOProxy(data.uniforms);
-        const { gl, commonChunk } = context;
-        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Camera", "Grid"] });
-        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
-        this.resources = { program, uniforms } as const;
-    }
+class GridModuleContext implements RenderModuleContext {
+    constructor(readonly context: RenderContext, readonly data: GridModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
@@ -84,6 +90,6 @@ class GridModuleContext implements RenderModuleContext {
 
     dispose() {
         this.contextLost();
-        this.resourceBin.dispose();
+        this.resources.bin.dispose();
     }
 }

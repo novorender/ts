@@ -5,7 +5,6 @@ import type { UniformTypes } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import logoBinary from "./logo.bin";
-import { ResourceBin } from "@novorender/core3d/resource";
 
 export class WatermarkModule implements RenderModule {
     readonly uniforms = {
@@ -13,46 +12,51 @@ export class WatermarkModule implements RenderModule {
         color: "vec4",
     } as const satisfies Record<string, UniformTypes>;
 
-    withContext(context: RenderContext) {
-        return new WatermarkModuleContext(context, this, context.resourceBin("Watermark"));
+    async withContext(context: RenderContext) {
+        const uniforms = this.createUniforms();
+        const resources = await this.createResources(context, uniforms);
+        return new WatermarkModuleContext(context, this, uniforms, resources);
     }
 
-    // these magic numbers are the byte offsets and lengths from gltf bufferViews
-    readonly vertexBufferBytes = 16620;
-    readonly indexBufferBytes = 12276;
-    readonly numIndices = this.indexBufferBytes / 2;
-
-    // Logo data are comes from the binary buffer of an gltf file. It has positions and triangle indices only. Z-coordinate is used for antialiasing. Mesh has been tesselated such that each triangle lies in a single antialiasing slope, i.e. has vertices along one edge only.
-    geometry() {
-        const vertices = new Float32Array(logoBinary.buffer, 0, this.vertexBufferBytes / 4).slice();
-        const indices = new Uint16Array(logoBinary.buffer, this.vertexBufferBytes, this.numIndices).slice();
-        return { vertices, indices };
+    createUniforms() {
+        return glUBOProxy(this.uniforms);
     }
-}
 
-class WatermarkModuleContext implements RenderModuleContext {
-    readonly uniforms;
-    readonly resources;
-
-    constructor(readonly context: RenderContext, readonly data: WatermarkModule, readonly resourceBin: ResourceBin) {
-        this.uniforms = glUBOProxy(data.uniforms);
-        const { gl, commonChunk } = context;
-        const { vertices, indices } = data.geometry();
-
-        // create static GPU resources here
-        const program = resourceBin.createProgram({ vertexShader, fragmentShader, commonChunk, uniformBufferBlocks: ["Watermark"] });
-        const uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
-        const vb = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", srcData: vertices });
-        const ib = resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
-        const vao = resourceBin.createVertexArray({
+    async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const bin = context.resourceBin("Watermark");
+        const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
+        const { vertices, indices } = WatermarkModule.geometry();
+        const vb = bin.createBuffer({ kind: "ARRAY_BUFFER", srcData: vertices });
+        const ib = bin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
+        const vao = bin.createVertexArray({
             attributes: [
                 { kind: "FLOAT_VEC3", buffer: vb, byteStride: 12, byteOffset: 0 }, // position
             ],
             indices: ib
         });
-        resourceBin.subordinate(vao, vb, ib);
-        this.resources = { program, uniforms, vao } as const;
+        bin.subordinate(vao, vb, ib);
+        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks: ["Watermark"] })
+        return { bin, uniforms, vao, program } as const;
     }
+
+    // these magic numbers are the byte offsets and lengths from gltf bufferViews
+    static readonly vertexBufferBytes = 16620;
+    static readonly indexBufferBytes = 12276;
+    static readonly numIndices = this.indexBufferBytes / 2;
+
+    // Logo data are comes from the binary buffer of an gltf file. It has positions and triangle indices only. Z-coordinate is used for antialiasing. Mesh has been tesselated such that each triangle lies in a single antialiasing slope, i.e. has vertices along one edge only.
+    static geometry() {
+        const vertices = new Float32Array(logoBinary.buffer, 0, WatermarkModule.vertexBufferBytes / 4).slice();
+        const indices = new Uint16Array(logoBinary.buffer, WatermarkModule.vertexBufferBytes, WatermarkModule.numIndices).slice();
+        return { vertices, indices };
+    }
+}
+
+type Uniforms = ReturnType<WatermarkModule["createUniforms"]>;
+type Resources = Awaited<ReturnType<WatermarkModule["createResources"]>>;
+
+class WatermarkModuleContext implements RenderModuleContext {
+    constructor(readonly context: RenderContext, readonly data: WatermarkModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
@@ -101,7 +105,7 @@ class WatermarkModuleContext implements RenderModuleContext {
                 dstAlpha: "ONE",
             },
         });
-        const stats = glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: data.numIndices });
+        const stats = glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: WatermarkModule.numIndices });
         context["addRenderStatistics"](stats);
     }
 
@@ -110,6 +114,6 @@ class WatermarkModuleContext implements RenderModuleContext {
 
     dispose() {
         this.contextLost();
-        this.resourceBin.dispose();
+        this.resources.bin.dispose();
     }
 }
