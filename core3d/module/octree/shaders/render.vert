@@ -23,7 +23,7 @@ flat out OctreeVaryingsFlat varyingsFlat;
 #endif
 
 layout(location = 0) in vec4 vertexPosition;
-#ifndef POS_ONLY
+#if !defined(PREPASS)
 layout(location = 1) in vec3 vertexNormal;
 layout(location = 2) in uint vertexMaterial;
 layout(location = 3) in uint vertexObjectId;

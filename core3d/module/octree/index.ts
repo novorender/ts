@@ -9,14 +9,7 @@ import { getMultiDrawParams } from "./mesh";
 import { type ReadonlyVec3, vec3 } from "gl-matrix";
 import { NodeLoader, type NodeLoaderOptions } from "./loader";
 import { computeGradientColors, gradientRange } from "./gradient";
-// import render_vs from "./render.vert";
-// import render_fs from "./render.frag";
-// import line_vs from "./line.vert";
-// import line_fs from "./line.frag";
-// import intersect_vs from "./intersect.vert";
-// import debug_vs from "./debug.vert";
-// import debug_fs from "./debug.frag";
-import { BufferFlags } from "@novorender/core3d/buffers";
+// import { BufferFlags } from "@novorender/core3d/buffers";
 import { shaders } from "./shaders";
 
 export class OctreeModule implements RenderModule {
@@ -68,14 +61,16 @@ export class OctreeModule implements RenderModule {
         const textureNames = ["base_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
         const uniformBufferBlocks = ["Camera", "Clipping", "Scene", "Node"];
-        const [render, prepass, intersect, line, debug] = await Promise.all([
+        const [render, dither, prepass, pick, intersect, line, debug] = await Promise.all([
             context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms }),
-            context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: { flags: [...flags, "POS_ONLY"] } }),
+            context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: { flags: [...flags, "DITHER"] } }),
+            context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: { flags: [...flags, "PREPASS"] } }),
+            context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: { flags: [...flags, "PICK"] } }),
             context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
             context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Scene"] }),
             this.debug ? context.makeProgramAsync(bin, { ...shaders.debug, uniformBufferBlocks }) : Promise.resolve(null),
         ]);
-        const programs = { render, prepass, intersect, line, debug };
+        const programs = { render, dither, prepass, pick, intersect, line, debug };
         return {
             bin, programs,
             transformFeedback, vb_line, vao_line,
@@ -95,7 +90,7 @@ const enum UBO { camera, clipping, scene, node };
 
 class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly loader: NodeLoader;
-    readonly meshModeLocation: WebGLUniformLocation | null;
+    readonly meshModeLocations;
     readonly downloader = new Downloader(new URL((document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url));
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
     readonly debug: boolean;
@@ -110,7 +105,14 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     constructor(readonly renderContext: RenderContext, readonly data: OctreeModule, readonly sceneUniforms: Uniforms, readonly resources: Resources) {
         this.loader = new NodeLoader(data.nodeLoaderOptions);
         this.debug = data.debug;
-        this.meshModeLocation = glUniformLocations(renderContext.gl, resources.programs.render, ["meshMode"]).meshMode;
+        const { gl } = renderContext;
+        const { programs } = resources;
+        this.meshModeLocations = {
+            prepass: glUniformLocations(gl, programs.prepass, ["meshMode"]).meshMode,
+            render: glUniformLocations(gl, programs.render, ["meshMode"]).meshMode,
+            dither: glUniformLocations(gl, programs.dither, ["meshMode"]).meshMode,
+            pick: glUniformLocations(gl, programs.pick, ["meshMode"]).meshMode,
+        } as const;
     }
 
     update(state: DerivedRenderState) {
@@ -283,7 +285,6 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         if (rootNode) {
             let nodes = [...iterateNodes(rootNode)];
             nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
-
             glState(gl, {
                 program: programs.prepass,
                 depth: { test: true },
@@ -291,7 +292,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             gl.activeTexture(gl.TEXTURE0);
             const meshState: MeshState = {};
             for (const node of nodes) {
-                this.renderNode(node, meshState, true, true);
+                this.renderNode(node, meshState, "prepass");
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
         }
@@ -303,12 +304,12 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
         const { gl, iblTextures, cameraUniforms, clippingUniforms } = renderContext;
         if (rootNode) {
+            const program = state.effectiveSamplesMSAA > 1 ? "render" : "dither";
             let nodes = [...iterateNodes(rootNode)];
             nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
-
             const { diffuse, specular } = iblTextures;
             glState(gl, {
-                program: programs.render,
+                program: programs[program],
                 uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
                 cull: { enable: true, },
                 depth: {
@@ -324,8 +325,6 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
                     { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
                 ],
-                drawBuffers: renderContext.drawBuffers(BufferFlags.all),
-                // drawBuffers: renderContext.drawBuffers(BufferFlags.color),
             });
             gl.activeTexture(gl.TEXTURE0);
             // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
@@ -336,7 +335,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             for (const node of nodes) {
                 if (node.visibility != Visibility.none) {
                     // TODO: extract meshes and sort by type so we can keep state changes to a minimum.
-                    this.renderNode(node, meshState, false, !usePrepass);
+                    this.renderNode(node, meshState, program);
                 }
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
@@ -349,7 +348,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         test: false,
                         writeMask: false
                     },
-                    drawBuffers: renderContext.drawBuffers(BufferFlags.color),
+                    // drawBuffers: renderContext.drawBuffers(BufferFlags.color),
                 });
                 for (const node of nodes) {
                     if (node.visibility != Visibility.none && node.intersectsPlane(state.viewFrustum.near)) {
@@ -361,7 +360,6 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             if (debug) {
                 glState(gl, {
                     program: programs.debug,
-                    uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
                     depth: {
                         test: true,
                         writeMask: false,
@@ -374,7 +372,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         dstRGB: "ONE_MINUS_CONSTANT_ALPHA",
                         color: [0, 0, 0, .25],
                     },
-                    drawBuffers: renderContext.drawBuffers(BufferFlags.color),
+                    // drawBuffers: renderContext.drawBuffers(BufferFlags.color),
                 });
                 for (const node of nodes) {
                     this.renderNodeDebug(node);
@@ -390,43 +388,57 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 for (const node of nodes) {
                     this.renderNodeDebug(node);
                 }
-
-                glState(gl, {
-                    program: null,
-                    depth: {
-                        test: false,
-                        writeMask: true,
-                    },
-                    cull: { enable: false, },
-                    blend: {
-                        enable: false,
-                        srcRGB: "ONE",
-                        dstRGB: "ZERO",
-                        color: [0, 0, 0, 0],
-                    }
-                });
             }
         }
     }
 
-    renderNode(node: OctreeNode, meshState: MeshState, prepass = false, writeZ = true) {
-        const { gl } = this.renderContext;
-        const { resources, meshModeLocation } = this;
+    pick() {
+        const { resources, renderContext, rootNode } = this;
+        const { gl, cameraUniforms, clippingUniforms, samplerSingle, samplerMip, iblTextures } = renderContext;
+        const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
+        const { diffuse, specular } = iblTextures;
+
+        if (rootNode) {
+            let nodes = [...iterateNodes(rootNode)];
+            nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
+
+            glState(gl, {
+                program: programs.pick,
+                uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
+                cull: { enable: true, },
+            });
+            // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
+            gl.vertexAttribI4ui(VertexAttributeIds.material, 0xff, 0, 0, 0); // material_index
+            gl.vertexAttribI4ui(VertexAttributeIds.objectId, 0xffffffff, 0, 0, 0); // object_id
+            gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0); // highlight_index
+            gl.activeTexture(gl.TEXTURE0);
+            const meshState: MeshState = {};
+            for (const node of nodes) {
+                this.renderNode(node, meshState, "pick");
+            }
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+    }
+
+    renderNode(node: OctreeNode, meshState: MeshState, program: "prepass" | "render" | "dither" | "pick") {
+        const { renderContext } = this;
+        const { gl } = renderContext;
+        const { resources, meshModeLocations } = this;
         const { data, renderedChildMask } = node;
-        const { values } = node.uniformsData;
+        const prepass = program == "prepass";
         if (renderedChildMask && node.uniforms) {
             gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms);
+            const modeMeshModeLocation = meshModeLocations[program];
             for (const mesh of node.meshes) {
                 const { materialType } = mesh;
                 const isTransparent = materialType == MaterialType.transparent;
                 if (prepass && isTransparent)
                     continue;
                 gl.bindVertexArray(prepass ? mesh.vaoPosOnly : mesh.vao);
-                gl.depthMask(writeZ);
                 const mode = mesh.materialType == MaterialType.elevation ? MeshMode.elevation : mesh.drawParams.mode == "POINTS" ? MeshMode.points : MeshMode.triangles;
                 if (meshState.mode != mode) {
                     meshState.mode = mode;
-                    gl.uniform1ui(meshModeLocation, mode);
+                    gl.uniform1ui(modeMeshModeLocation, mode);
                 }
                 const doubleSided = mesh.materialType != MaterialType.opaque;
                 if (meshState.doubleSided != doubleSided) {
@@ -437,16 +449,18 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         gl.enable(gl.CULL_FACE);
                     }
                 }
-                gl.bindTexture(gl.TEXTURE_2D, mesh.baseColorTexture ?? resources.defaultBaseColorTexture);
+                if (program = "render" || program == "dither") {
+                    gl.bindTexture(gl.TEXTURE_2D, mesh.baseColorTexture ?? resources.defaultBaseColorTexture);
+                }
                 if (renderedChildMask == data.childMask) {
                     const stats = glDraw(gl, mesh.drawParams);
-                    this.renderContext["addRenderStatistics"](stats);
+                    renderContext["addRenderStatistics"](stats);
                 } else {
                     // determine which portions of the parent node must be rendered based on what children currently don't render themselves
                     const multiDrawParams = getMultiDrawParams(mesh, renderedChildMask);
                     if (multiDrawParams) {
                         const stats = glDraw(gl, multiDrawParams);
-                        this.renderContext["addRenderStatistics"](stats);
+                        renderContext["addRenderStatistics"](stats);
                     }
                 }
             }
@@ -480,7 +494,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                                 vertexArrayObject: vao_line,
                             });
                             const stats = glDraw(gl, { kind: "arrays", mode: "LINES", count: count * 2, first: 0 });
-                            this.renderContext["addRenderStatistics"](stats);
+                            renderContext["addRenderStatistics"](stats);
                         }
                     }
                 }

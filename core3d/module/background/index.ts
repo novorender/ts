@@ -37,7 +37,7 @@ export class BackgroundModule implements RenderModule {
         const uniformBufferBlocks = ["Camera", "Background"];
         const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
         const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms });
-        return { bin, uniforms, program };
+        return { bin, uniforms, program } as const;
     }
 
     async downloadTextures(urlDir: string) {
@@ -114,54 +114,31 @@ class BackgroundModuleContext implements RenderModuleContext {
         }
     }
 
-    prepass() {
-        glClear(this.context.gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
-    }
-
     render(state: DerivedRenderState) {
         const { context, resources, skybox } = this;
         const { program, uniforms } = resources;
-        const { gl, cameraUniforms, samplerSingle, samplerMip, drawBuffersMask } = context;
+        const { gl, cameraUniforms, samplerSingle, samplerMip } = context;
 
-        glState(gl, {
-            drawBuffers: context.drawBuffers(BufferFlags.linearDepth | BufferFlags.info),
-        });
-        if (!context.usePrepass) {
-            glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
-        }
-        if (drawBuffersMask & BufferFlags.linearDepth) {
-            glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
-        }
-        if (drawBuffersMask & BufferFlags.info) {
-            glClear(gl, { kind: "COLOR", drawBuffer: 2, type: "Uint", color: [0xffffffff, 0x0000ffff, 0, 0] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
-        }
-
-        glState(gl, {
-            drawBuffers: context.drawBuffers(BufferFlags.color),
-        });
-
-        if (drawBuffersMask & BufferFlags.color) {
-            if (state.background.color) {
-                glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
-            } else if (state.camera.kind == "orthographic") {
-                glClear(gl, { kind: "COLOR", drawBuffer: 0, color: [0.33, 0.33, 0.33, 1] });
-            } else {
-                const { specular } = context.iblTextures;
-                glState(gl, {
-                    program,
-                    uniformBuffers: [cameraUniforms, uniforms],
-                    textures: [
-                        { kind: "TEXTURE_CUBE_MAP", texture: skybox, sampler: samplerSingle },
-                        { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
-                    ],
-                    depth: {
-                        test: false,
-                        writeMask: false,
-                    },
-                });
-                const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
-                context["addRenderStatistics"](stats);
-            }
+        if (state.background.color) {
+            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
+        } else if (state.camera.kind == "orthographic") {
+            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: [0.33, 0.33, 0.33, 1] });
+        } else {
+            const { specular } = context.iblTextures;
+            glState(gl, {
+                program,
+                uniformBuffers: [cameraUniforms, uniforms],
+                textures: [
+                    { kind: "TEXTURE_CUBE_MAP", texture: skybox, sampler: samplerSingle },
+                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
+                ],
+                depth: {
+                    test: false,
+                    writeMask: false,
+                },
+            });
+            const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
+            context["addRenderStatistics"](stats);
         }
     }
 

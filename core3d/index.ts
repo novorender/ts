@@ -18,7 +18,7 @@ export * from "./highlight";
 export async function init(canvas: HTMLCanvasElement, setRenderContext: (context: RenderContext) => void) {
     const options: WebGLContextAttributes = {
         alpha: true,
-        antialias: false,
+        antialias: true,
         depth: false,
         desynchronized: false,
         failIfMajorPerformanceCaveat: true,

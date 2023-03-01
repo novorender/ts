@@ -18,6 +18,7 @@ export interface RenderModule {
 export interface RenderModuleContext {
     update(state: DerivedRenderState): void;
     readonly prepass?: (state: DerivedRenderState) => void;
+    readonly pick?: (state: DerivedRenderState) => void;
     render(state: DerivedRenderState): void;
     contextLost(): void;
     dispose(): void;

@@ -70,12 +70,13 @@ export class CubeModule implements RenderModule {
         });
 
         const uniformBufferBlocks = ["Camera", "Clipping", "Cube"];
-        const [render, line, intersect] = await Promise.all([
+        const [color, pick, line, intersect] = await Promise.all([
             context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks }),
+            context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, header: { flags: ["PICK"] } }),
             context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks }),
             context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
         ]);
-        const programs = { render, line, intersect };
+        const programs = { color, pick, line, intersect };
         return { bin, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line, programs } as const;
     }
 }
@@ -115,9 +116,9 @@ class CubeModuleContext implements RenderModuleContext {
         if (state.cube.enabled) {
             // render normal cube
             glState(gl, {
-                program: programs.render,
+                program: programs.color,
                 uniformBuffers: [cameraUniforms, clippingUniforms, uniforms],
-                drawBuffers: context.drawBuffers(),
+                // drawBuffers: context.drawBuffers(),
                 depth: { test: true, },
                 cull: { enable: false },
                 vertexArrayObject: vao_render,
@@ -136,13 +137,38 @@ class CubeModuleContext implements RenderModuleContext {
                 // render intersection lines
                 glState(gl, {
                     program: programs.line,
-                    drawBuffers: context.drawBuffers(BufferFlags.color),
+                    // drawBuffers: context.drawBuffers(BufferFlags.color),
+                    // blend: {
+                    //     enable: true,
+                    //     srcRGB: "SRC_ALPHA",
+                    //     dstRGB: "ONE_MINUS_SRC_ALPHA",
+                    //     srcAlpha: "ZERO",
+                    //     dstAlpha: "ONE",
+                    // },
                     depth: { test: false, },
                     vertexArrayObject: vao_line,
                 });
                 const stats = glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });
                 context["addRenderStatistics"](stats);
             }
+        }
+    }
+
+    pick(state: DerivedRenderState) {
+        const { context, resources } = this;
+        const { programs, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line } = resources;
+        const { gl, cameraUniforms, clippingUniforms } = context;
+
+        if (state.cube.enabled) {
+            glState(gl, {
+                program: programs.pick,
+                uniformBuffers: [cameraUniforms, clippingUniforms, uniforms],
+                depth: { test: true, },
+                cull: { enable: false },
+                vertexArrayObject: vao_render,
+            });
+            glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
+            // TODO: render pickable outlines too?
         }
     }
 

@@ -33,7 +33,7 @@ export interface Matrices {
 export interface RenderStateOutput {
     readonly width: number;
     readonly height: number;
-    readonly renderPickBuffers: boolean;
+    readonly samplesMSAA: number;
 }
 
 export interface RenderStateBackground {
@@ -231,6 +231,7 @@ export interface DerivedRenderState extends RenderState {
     readonly localSpaceTranslation: ReadonlyVec3; // local space is a variant of world space that is much closer to camera to avoid excessively (for float32) large coordinates in shader
     readonly matrices: Matrices;
     readonly viewFrustum: ViewFrustum; // in world space
+    readonly effectiveSamplesMSAA: number; // from output.SamplesMSAA, but limited to device's MAX_SAMPLES
 }
 
 export type RenderStateChanges = RecursivePartial<RenderState>;

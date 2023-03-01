@@ -33,7 +33,7 @@ export class DynamicModule implements RenderModule {
             context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms, header: { flags: ["PBR_METALLIC_ROUGHNESS"] } }),
         ]);
         const programs = { unlit, ggx };
-        return { bin, defaultSampler, defaultTexture, programs };
+        return { bin, defaultSampler, defaultTexture, programs } as const;
     }
 }
 
@@ -158,6 +158,10 @@ class DynamicModuleContext implements RenderModuleContext {
         }
     }
 
+    pick(state: DerivedRenderState) {
+        this.render(state); // TODO: make separate program for pick buffers instead of relying on drawbuffers
+    }
+
     contextLost(): void {
     }
 
@@ -169,7 +173,7 @@ class DynamicModuleContext implements RenderModuleContext {
         for (const asset of assets) {
             asset.dispose(bin);
         }
-        bin.delete(programs.ggx, programs.unlit, defaultSampler, defaultTexture);
+        bin.delete(programs.unlit, programs.ggx, defaultSampler, defaultTexture);
         console.assert(bin.size == 0);
         bin.dispose();
         buffers.clear();
@@ -233,6 +237,7 @@ class GeometryAsset {
             const { buffer } = buffers.get(a.buffer)!;
             return { ...a, buffer } as VertexAttribute;
         }
+        const indices = typeof data.indices == "number" ? undefined : bin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: data.indices });
         const params: VertexArrayParams = {
             attributes: [
                 convAttr(position),
@@ -242,9 +247,12 @@ class GeometryAsset {
                 convAttr(texCoord0),
                 convAttr(texCoord1),
             ],
-            indices: typeof data.indices == "number" ? undefined : bin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: data.indices }),
+            indices,
         }
         const vao = bin.createVertexArray(params);
+        if (indices) {
+            bin.subordinate(vao, indices);
+        }
         this.resources = { vao } as const;
     }
 
@@ -321,7 +329,7 @@ class MaterialAsset {
             program,
             cull: { enable: data.doubleSided ? false : true },
             blend: (data.alphaMode == "BLEND" ? blend : undefined),
-            drawBuffers: context.drawBuffers(data.alphaMode == "BLEND" ? BufferFlags.color : BufferFlags.all), // for devices without OES_draw_buffers_indexed support
+            // drawBuffers: context.drawBuffers(data.alphaMode == "BLEND" ? BufferFlags.color : BufferFlags.all), // for devices without OES_draw_buffers_indexed support
         };
         const uniformsDesc = {
             baseColorFactor: "vec4",

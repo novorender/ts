@@ -15,16 +15,19 @@ layout(std140) uniform Node {
 };
 
 uniform OctreeTextures textures;
-uniform uint meshMode;
+uniform uint meshMode; // TODO: Make a #define instead?
 
 in OctreeVaryings varyings;
 #ifndef IOS_WORKAROUND
 flat in OctreeVaryingsFlat varyingsFlat;
 #endif
 
+#if !defined (PICK)
 layout(location = 0) out vec4 fragColor;
+#else
 layout(location = 1) out float fragLinearDepth;
 layout(location = 2) out uvec2 fragInfo;
+#endif
 
 void main() {
     if(varyings.linearDepth < camera.near || clip(varyings.positionVS, clipping))
@@ -42,6 +45,16 @@ void main() {
     objectId = varyingsFlat.objectId;
     highlight = varyingsFlat.highlight;
 #endif
+
+    vec3 normalVS = varyings.normalVS;
+    if(dot(normalVS, normalVS) < .1) {
+        // compute geometric/flat normal from derivatives
+        vec3 axisX = dFdx(varyings.positionVS);
+        vec3 axisY = dFdy(varyings.positionVS);
+        normalVS = normalize(cross(axisX, axisY));
+    } else {
+        normalVS = normalize(normalVS);
+    }
 
     vec4 rgba;
     if(meshMode == meshModePoints) {
@@ -81,27 +94,27 @@ void main() {
         rgba = colorTransform * rgba + colorTranslation;
     }
 
-    vec3 normalVS = varyings.normalVS;
-    if(dot(normalVS, normalVS) < .1) {
-        // compute geometric/flat normal from derivatives
-        vec3 axisX = dFdx(varyings.positionVS);
-        vec3 axisY = dFdy(varyings.positionVS);
-        normalVS = normalize(cross(axisX, axisY));
-    } else {
-        normalVS = normalize(normalVS);
-    }
-
     // we put discards here (late) to avoid problems with derivative functions
     if(meshMode == meshModePoints && distance(gl_FragCoord.xy, varyings.screenPos) > varyings.radius)
         discard;
 
-    if(rgba.a == 0.)
+#if defined (PREPASS)
+    if(rgba.a < 1.)
         discard;
+#else
+    if(rgba.a <= 0.)
+        discard;
+#endif
 
+#if defined (DITHER)
     if((rgba.a - 0.5 / 16.0) < dither(gl_FragCoord.xy))
         discard;
+#endif
 
+#if !defined(PICK)
     fragColor = rgba;
+#else
     fragLinearDepth = varyings.linearDepth;
     fragInfo = uvec2(objectId, packNormalAndDeviation(normalVS.xy, varyings.deviation));
+#endif
 }

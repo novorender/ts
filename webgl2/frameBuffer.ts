@@ -94,7 +94,7 @@ export interface FrameBufferParams {
 
 export interface FrameBufferTextureBinding {
     readonly kind: "FRAMEBUFFER" | "DRAW_FRAMEBUFFER" | "READ_FRAMEBUFFER";
-    readonly texture: WebGLTexture;
+    readonly texture: WebGLTexture | null;
     readonly texTarget?: "TEXTURE_2D";
     readonly level?: number; // default: 0, mip-map level
     readonly layer?: number; // default: 0, face in cube map, z in 3d and index in 2d array
@@ -102,7 +102,7 @@ export interface FrameBufferTextureBinding {
 
 export interface FrameBufferRenderBufferBinding {
     readonly kind: "FRAMEBUFFER" | "DRAW_FRAMEBUFFER" | "READ_FRAMEBUFFER";
-    readonly renderBuffer: WebGLRenderbuffer;
+    readonly renderBuffer: WebGLRenderbuffer | null;
 }
 
 export type FrameBufferBinding = FrameBufferTextureBinding | FrameBufferRenderBufferBinding;
@@ -110,7 +110,7 @@ export type FrameBufferBinding = FrameBufferTextureBinding | FrameBufferRenderBu
 
 export interface InvalidateFrameBufferParams {
     readonly kind: "FRAMEBUFFER" | "DRAW_FRAMEBUFFER" | "READ_FRAMEBUFFER";
-    readonly frameBuffer: WebGLFramebuffer;
+    readonly frameBuffer: WebGLFramebuffer | null;
     readonly depth?: boolean;
     readonly stencil?: boolean;
     readonly color: readonly (boolean)[]; // length: [0, MAX_COLOR_ATTACHMENTS>

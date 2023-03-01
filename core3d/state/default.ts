@@ -6,7 +6,7 @@ export function defaultRenderState(): RenderState {
         output: {
             width: 512,
             height: 256,
-            renderPickBuffers: true,
+            samplesMSAA: 1,
         },
         background: {
         },

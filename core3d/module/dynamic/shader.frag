@@ -146,6 +146,8 @@ void main() {
     // vec3 l = normalize(uSunDir);   // Direction from surface point to light
     // vec3 h = normalize(l + v);     // Direction of the vector between l and v, called halfway vector
 
+    vec4 outColor;
+
 #if defined(PBR_METALLIC_ROUGHNESS)
 
     MaterialInfo materialInfo;
@@ -210,17 +212,18 @@ void main() {
         color = mix(color, color * ao, material.occlusionStrength);
     }
 
-    fragColor.rgb = color;
-    fragColor.a = baseColor.a;
+    outColor.rgb = color;
+    outColor.a = baseColor.a;
 
 #else
 
-    fragColor = material.baseColorFactor * varyings.color0;
+    outColor = material.baseColorFactor * varyings.color0;
 
 #endif
 
+    fragColor = outColor;
     // only write to pick buffers for opaque triangles (for devices without OES_draw_buffers_indexed support)
-    if(fragColor.a >= 0.99) {
+    if(outColor.a >= 0.99) {
         fragLinearDepth = varyings.linearDepth;
         fragInfo = uvec2(instance.objectId, packNormal((camera.localViewMatrixNormal * normal).xy));
     }

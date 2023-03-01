@@ -18,7 +18,7 @@ layout(location = 0) in vec4 vertexPos0;
 layout(location = 1) in vec4 vertexPos1;
 layout(location = 2) in vec4 vertexPos2;
 
-out vec4 line_vertices;
+out vec4 line_vertices; // TODO: rearrange into 4 x f16, rgba and object_id?
 
 vec2 intersectEdge(vec3 p0, vec3 p1) {
     float t = (-camera.near - p0.z) / (p1.z - p0.z);

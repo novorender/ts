@@ -1,4 +1,4 @@
-import { glInvalidateFrameBuffer, glReadPixels } from "@novorender/webgl2";
+import { glBlit, glInvalidateFrameBuffer, glReadPixels } from "@novorender/webgl2";
 import { ResourceBin } from "./resource";
 
 export const enum BufferFlags {
@@ -18,53 +18,89 @@ info buffer layout
 
 export class RenderBuffers {
     readBuffersNeedUpdate = true;
-    readonly resources;
+    readonly textures;
+    readonly renderBuffers;
+    readonly frameBuffers;
+    readonly readBuffers;
     private pick;
     private pickFence: {
         readonly sync: WebGLSync,
         readonly promises: { readonly resolve: () => void, readonly reject: (reason: string) => void }[],
     } | undefined;
 
-    constructor(readonly gl: WebGL2RenderingContext, readonly width: number, readonly height: number, readonly resourceBin: ResourceBin) {
+    constructor(readonly gl: WebGL2RenderingContext, readonly width: number, readonly height: number, readonly samples: number, readonly resourceBin: ResourceBin) {
         // const color = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "RGBA16F", type: "HALF_FLOAT", image: null });
-        const color = resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "R11F_G11F_B10F", type: "HALF_FLOAT", image: null });
-        const linearDepth = resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "R32F", type: "FLOAT", image: null });
-        const info = resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "RG32UI", type: "UNSIGNED_INT", image: null });
-        const depth = resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "DEPTH_COMPONENT32F", type: "FLOAT", image: null });
-        const frameBuffer = resourceBin.createFrameBuffer({
-            color: [
-                { kind: "DRAW_FRAMEBUFFER", texture: color },
-                { kind: "DRAW_FRAMEBUFFER", texture: linearDepth },
-                { kind: "DRAW_FRAMEBUFFER", texture: info },
-            ],
-            depth: { kind: "DRAW_FRAMEBUFFER", texture: depth },
-        });
-        const readLinearDepth = resourceBin.createBuffer({ kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 4, usage: "STREAM_READ" });
-        const readInfo = resourceBin.createBuffer({ kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 8, usage: "STREAM_READ" });
-        this.resources = { color, depth, linearDepth, info, frameBuffer, readLinearDepth, readInfo } as const;
+        const textures = this.textures = {
+            color: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "R11F_G11F_B10F", type: "HALF_FLOAT", image: null }),
+            linearDepth: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "R32F", type: "FLOAT", image: null }),
+            info: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "RG32UI", type: "UNSIGNED_INT", image: null }),
+            depth: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "DEPTH_COMPONENT32F", type: "FLOAT", image: null }),
+        } as const;
+
+        const renderBuffers = this.renderBuffers = {
+            colorMSAA: samples > 1 ? resourceBin.createRenderBuffer({ internalFormat: "R11F_G11F_B10F", width, height, samples }) : null,
+            depthMSAA: samples > 1 ? resourceBin.createRenderBuffer({ internalFormat: "DEPTH_COMPONENT32F", width, height, samples }) : null,
+        } as const;
+
+        this.frameBuffers = {
+            color: resourceBin.createFrameBuffer({
+                color: [
+                    { kind: "FRAMEBUFFER", texture: textures.color },
+                ],
+                depth: { kind: "DRAW_FRAMEBUFFER", texture: textures.depth },
+            }),
+            colorMSAA: samples > 1 ? resourceBin.createFrameBuffer({
+                color: [
+                    { kind: "DRAW_FRAMEBUFFER", renderBuffer: renderBuffers.colorMSAA },
+                ],
+                depth: { kind: "DRAW_FRAMEBUFFER", renderBuffer: renderBuffers.depthMSAA },
+            }) : null,
+            pick: resourceBin.createFrameBuffer({
+                color: [
+                    null,
+                    { kind: "DRAW_FRAMEBUFFER", texture: textures.linearDepth },
+                    { kind: "DRAW_FRAMEBUFFER", texture: textures.info },
+                ],
+                depth: { kind: "DRAW_FRAMEBUFFER", texture: textures.depth },
+            }),
+        } as const;
+
+        this.readBuffers = {
+            linearDepth: resourceBin.createBuffer({ kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 4, usage: "STREAM_READ" }),
+            info: resourceBin.createBuffer({ kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 8, usage: "STREAM_READ" }),
+        } as const;
+
         this.pick = {
             depths: new Float32Array(width * height * 1),
             infos: new Uint32Array(width * height * 2),
         } as const;
     }
 
-    invalidate(buffers: BufferFlags) {
-        const { gl, resources } = this;
+    resolveMSAA() {
+        const { gl, frameBuffers, width, height } = this;
+        const { colorMSAA, color } = frameBuffers;
+        if (colorMSAA) {
+            glBlit(gl, { source: colorMSAA, destination: color, color: true, srcX1: width, srcY1: height, dstX1: width, dstY1: height }); // TODO: check if we can/should use a frag shader to do tonemapping on MSAA instead.
+            glInvalidateFrameBuffer(gl, { kind: "FRAMEBUFFER", frameBuffer: colorMSAA, color: [true], depth: true });
+        }
+    }
+
+    invalidate(frameBuffer: keyof RenderBuffers["frameBuffers"], buffers: BufferFlags) {
+        const { gl, frameBuffers } = this;
         var color = (buffers & BufferFlags.color) != 0;
         var linearDepth = (buffers & BufferFlags.linearDepth) != 0;
         var info = (buffers & BufferFlags.info) != 0;
         var depth = (buffers & BufferFlags.depth) != 0;
-        glInvalidateFrameBuffer(gl, { kind: "DRAW_FRAMEBUFFER", frameBuffer: resources.frameBuffer, color: [color, linearDepth, info], depth });
+        glInvalidateFrameBuffer(gl, { kind: "DRAW_FRAMEBUFFER", frameBuffer: frameBuffers[frameBuffer], color: [color, linearDepth, info], depth });
     }
 
     // copy framebuffer into read buffers
     private read() {
-        const { gl, width, height, resources } = this;
-        const { frameBuffer, readLinearDepth, readInfo } = resources;
+        const { gl, width, height, frameBuffers, readBuffers } = this;
         glReadPixels(gl, {
-            width, height, frameBuffer, buffers: [
-                { attachment: "COLOR_ATTACHMENT1", buffer: readLinearDepth, format: "RED", type: "FLOAT" },
-                { attachment: "COLOR_ATTACHMENT2", buffer: readInfo, format: "RG_INTEGER", type: "UNSIGNED_INT" },
+            width, height, frameBuffer: frameBuffers.pick, buffers: [
+                { attachment: "COLOR_ATTACHMENT1", buffer: readBuffers.linearDepth, format: "RED", type: "FLOAT" },
+                { attachment: "COLOR_ATTACHMENT2", buffer: readBuffers.info, format: "RG_INTEGER", type: "UNSIGNED_INT" },
             ]
         });
     }
@@ -95,7 +131,7 @@ export class RenderBuffers {
     }
 
     pollPickFence() {
-        const { gl, pickFence, resources, pick } = this;
+        const { gl, pickFence, readBuffers, pick } = this;
         if (pickFence) {
             const { sync, promises } = pickFence;
             const status = gl.clientWaitSync(sync, gl.SYNC_FLUSH_COMMANDS_BIT, 0);
@@ -107,9 +143,9 @@ export class RenderBuffers {
             } else if (status != gl.TIMEOUT_EXPIRED) {
                 // we must copy read buffers into typed arrays in one go, or get annoying gl pipeline stalled warning on chrome
                 // this means we allocate more memory, but this also makes subsequent picks faster.
-                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readLinearDepth);
+                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, readBuffers.linearDepth);
                 gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, pick.depths);
-                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, resources.readInfo);
+                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, readBuffers.info);
                 gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, pick.infos);
                 gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
                 // resolve promises
@@ -126,4 +162,3 @@ export class RenderBuffers {
         this.pickFence = undefined;
     }
 }
-

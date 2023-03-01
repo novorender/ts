@@ -1,4 +1,4 @@
-import { glCreateBuffer, glCreateFrameBuffer, glCreateProgram, glCreateRenderbuffer, glCreateSampler, glCreateTexture, glCreateVertexArray, type WebGLResource, type BufferParams, type BufferTargetString, type FrameBufferParams, type ProgramParams, type RenderbufferParams, type SamplerParams, type TextureParams, type TextureTargetString, type VertexArrayParams, glCreateProgramAsync, type ProgramAsyncParams } from "@novorender/webgl2";
+import { glCreateBuffer, glCreateFrameBuffer, glCreateProgram, glCreateRenderbuffer, glCreateSampler, glCreateTexture, glCreateVertexArray, type WebGLResource, type BufferParams, type BufferTargetString, type FrameBufferParams, type ProgramParams, type RenderbufferParams, type SamplerParams, type TextureParams, type TextureTargetString, type VertexArrayParams, glCreateProgramAsync, type ProgramAsyncParams, glLimits } from "@novorender/webgl2";
 
 export class ResourceBin {
     private readonly resourceMap = new Map<WebGLResource, ResourceInfo[]>();
@@ -40,11 +40,13 @@ export class ResourceBin {
     }
 
     createProgramAsync(params: ProgramAsyncParams) {
-        return this.add(glCreateProgramAsync(this.gl, params), { kind: "Program" });
+        const ret = glCreateProgramAsync(this.gl, params);
+        this.add(ret.program, { kind: "Program" });
+        return ret;
     }
 
     createRenderBuffer(params: RenderbufferParams) {
-        return this.add(glCreateRenderbuffer(this.gl, params), { kind: "Renderbuffer" });
+        return this.add(glCreateRenderbuffer(this.gl, params), { kind: "Renderbuffer", byteSize: renderBufferBytes(this.gl, params) });
     }
 
     createSampler(params: SamplerParams) {
@@ -64,6 +66,7 @@ export class ResourceBin {
     }
 
     private add<T extends WebGLResource>(resource: T, info: ResourceInfo): T {
+        console.assert(resource.constructor.name.startsWith("WebGL"));
         if (!this.resourceMap.has(resource)) {
             this.resourceMap.set(resource, [info]);
         } else {
@@ -123,6 +126,13 @@ export class ResourceBin {
 
 function bufferBytes(params: BufferParams) {
     return "byteSize" in params ? params.byteSize : params.srcData.byteLength;
+}
+
+function renderBufferBytes(gl: WebGL2RenderingContext, params: RenderbufferParams) {
+    const { width, height, internalFormat } = params;
+    const samples = params.samples == "max" ? glLimits(gl).MAX_SAMPLES : params.samples ?? 1;
+    const bytesPerPixel = Math.ceil(internalFormatTexelBytes[internalFormat]); // this is an approximation as drivers may choose a different, albeit compatible format, e.g. RGBA8 instead of RGB8.
+    return width * height * bytesPerPixel * samples;
 }
 
 function textureBytes(params: TextureParams) {
@@ -195,6 +205,7 @@ const internalFormatTexelBytes = {
     "LUMINANCE_ALPHA": 2,
     "LUMINANCE": 1,
     "ALPHA": 1,
+    "STENCIL_INDEX8": 1,
     "R8": 1,
     "R8_SNORM": 1,
     "RG8": 2,

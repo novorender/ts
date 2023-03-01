@@ -55,19 +55,21 @@ class TonemapModuleContext implements RenderModuleContext {
     }
 
     render() {
-        const { context } = this;
-        const { program, sampler, uniforms } = this.resources
+        const { context, resources } = this;
+        const { program, sampler, uniforms } = resources;
         const { gl } = context;
-        const { resources } = context.buffers;
+        const { textures } = context.buffers;
+
+        context.buffers.resolveMSAA();
 
         glState(gl, {
             program,
             uniformBuffers: [uniforms],
             textures: [
-                { kind: "TEXTURE_2D", texture: resources.color, sampler },
-                { kind: "TEXTURE_2D", texture: resources.linearDepth, sampler },
-                { kind: "TEXTURE_2D", texture: resources.info, sampler },
-                { kind: "TEXTURE_2D", texture: resources.depth, sampler },
+                { kind: "TEXTURE_2D", texture: textures.color, sampler },
+                { kind: "TEXTURE_2D", texture: textures.linearDepth, sampler },
+                { kind: "TEXTURE_2D", texture: textures.info, sampler },
+                { kind: "TEXTURE_2D", texture: textures.depth, sampler },
             ],
             frameBuffer: null,
             drawBuffers: ["BACK"],

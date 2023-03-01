@@ -1,6 +1,6 @@
 import { CoordSpace, createDefaultModules } from "./";
 import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState } from "./";
-import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateProgramAsync, glCreateTimer, glCompile, } from "@novorender/webgl2";
+import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateProgramAsync, glCreateTimer, glCompile, glClear, type StateParams, glLimits, } from "@novorender/webgl2";
 import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "@novorender/webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
@@ -59,7 +59,6 @@ export class RenderContext {
     // shared mutable state
     prevState: DerivedRenderState | undefined;
     changed = true; // flag to force a re-render when internal render module state has changed, e.g. on download complete.
-    drawBuffersMask: BufferFlags = BufferFlags.color; // reflects output.renderPickBuffers
     buffers: RenderBuffers = undefined!; // output render buffers. will be set on first render as part of resize.
     iblTextures: { // these are changed by the background module, once download is complete
         readonly diffuse: WebGLTexture; // irradiance cubemap
@@ -69,7 +68,7 @@ export class RenderContext {
     };
 
     drawBuffers(buffers: BufferFlags = (BufferFlags.all)): readonly (ColorAttachment | "NONE")[] {
-        const activeBuffers = buffers & this.drawBuffersMask;
+        const activeBuffers = buffers; // & this.drawBuffersMask;
         return [
             activeBuffers & BufferFlags.color ? "COLOR_ATTACHMENT0" : "NONE",
             activeBuffers & BufferFlags.linearDepth ? "COLOR_ATTACHMENT1" : "NONE",
@@ -389,25 +388,27 @@ export class RenderContext {
 
         const drawTimer = this.beginTimer();
 
+        // const samples = 1;
+        const { MAX_SAMPLES } = glLimits(gl);
+        const effectiveSamplesMSAA = Math.max(1, Math.min(state.output.samplesMSAA, MAX_SAMPLES));
+
         // handle resizes
         let resized = false;
         const { output } = state;
         if (this.hasStateChanged({ output })) {
-            const { width, height, renderPickBuffers } = output;
+            const { width, height } = output;
             console.assert(Number.isInteger(width) && Number.isInteger(height));
             canvas.width = width;
             canvas.height = height;
             resized = true;
             this.changed = true;
-            this.drawBuffersMask = renderPickBuffers ? BufferFlags.all : BufferFlags.color;
             this.buffers?.dispose();
-            this.buffers = new RenderBuffers(gl, width, height, this.resourceBin("FrameBuffers"));
+            this.buffers = new RenderBuffers(gl, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
         }
-        this.buffers.invalidate(this.drawBuffersMask);
-        this.buffers.readBuffersNeedUpdate = true;
 
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
         const derivedState = state as Mutable<DerivedRenderState>;
+        derivedState.effectiveSamplesMSAA = effectiveSamplesMSAA;
         if (resized || state.camera !== prevState?.camera) {
             const snapDist = 1024; // make local space roughly within 1KM of camera
             const dist = Math.max(...vec3.sub(vec3.create(), state.camera.position, this.localSpaceTranslation).map(c => Math.abs(c)));
@@ -437,17 +438,26 @@ export class RenderContext {
             module?.update(derivedState);
         }
 
-        // apply module render z-buffer pre-pass
+        // pick frame buffer and clear z-buffer
         const { width, height } = canvas;
+        const { buffers } = this;
+        buffers.readBuffersNeedUpdate = true;
+        const frameBufferName = effectiveSamplesMSAA > 1 ? "colorMSAA" : "color";
+        const frameBuffer = buffers.frameBuffers[frameBufferName];
+        buffers.invalidate(frameBufferName, BufferFlags.all);
+        glState(gl, { viewport: { width, height }, frameBuffer });
+        glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
+
+        // apply module render z-buffer pre-pass
         if (this.usePrepass) {
             for (const module of this.modules) {
                 if (module && module.prepass) {
                     glState(gl, {
                         viewport: { width, height },
-                        frameBuffer: this.buffers.resources.frameBuffer,
+                        frameBuffer,
                         drawBuffers: [],
                         // colorMask: [false, false, false, false],
-                    })
+                    });
                     module.prepass(derivedState);
                     // reset gl state
                     glState(gl, null);
@@ -460,9 +470,10 @@ export class RenderContext {
             if (module) {
                 glState(gl, {
                     viewport: { width, height },
-                    frameBuffer: this.buffers.resources.frameBuffer,
+                    frameBuffer,
                     drawBuffers: this.drawBuffers(BufferFlags.color),
-                })
+                    sample: { alphaToCoverage: effectiveSamplesMSAA > 1 },
+                });
                 module.render(derivedState);
                 // reset gl state
                 glState(gl, null);
@@ -472,7 +483,8 @@ export class RenderContext {
         drawTimer.end();
 
         // invalidate color and depth buffers only (we may need pick buffers for picking)
-        this.buffers.invalidate(BufferFlags.color | BufferFlags.depth);
+        // this.buffers.invalidate("colorMSAA", BufferFlags.color | BufferFlags.depth);
+        // this.buffers.invalidate("colorResolved", BufferFlags.color | BufferFlags.depth);
         this.prevState = derivedState;
         const endTime = performance.now();
 
@@ -483,7 +495,7 @@ export class RenderContext {
         const stats = { ...this.statistics, bufferBytes: 0, textureBytes: 0 };
         for (const bin of this.resourceBins) {
             for (const { kind, byteSize } of bin.resourceInfo) {
-                if (kind == "Buffer") {
+                if (kind == "Buffer" || kind == "Renderbuffer") {
                     stats.bufferBytes += byteSize!;
                 }
                 if (kind == "Texture") {
@@ -504,6 +516,36 @@ export class RenderContext {
             frameInterval,
             ...stats
         } as const;
+    }
+
+    renderPickBuffers() {
+        if (!this.modules) {
+            throw new Error("Context has not been initialized!");
+        }
+        const { gl, width, height, buffers, prevState } = this;
+        if (!prevState) {
+            throw new Error("render() was not called!"); // we assume render() has been called first
+        }
+
+        const stateParams: StateParams = {
+            viewport: { width, height },
+            frameBuffer: buffers.frameBuffers.pick,
+            drawBuffers: this.drawBuffers(BufferFlags.linearDepth | BufferFlags.info),
+            depth: { test: true, writeMask: true },
+        };
+        glState(gl, stateParams);
+        glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 }); // we need to clear (again) since depth might be different for pick and color renders and we're also not using MSAA depth buffer.
+        glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
+        glClear(gl, { kind: "COLOR", drawBuffer: 2, type: "Uint", color: [0xffffffff, 0x0000ffff, 0, 0] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
+
+        for (const module of this.modules) {
+            if (module) {
+                glState(gl, stateParams);
+                module.pick?.(prevState);
+                // reset gl state
+                glState(gl, null);
+            }
+        }
     }
 
     private updateCameraUniforms(state: DerivedRenderState) {
