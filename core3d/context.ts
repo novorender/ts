@@ -30,6 +30,7 @@ export class RenderContext {
     private readonly resourceBins = new Set<ResourceBin>();
     private readonly defaultResourceBin;
     private readonly iblResourceBin;
+    private pickBuffersValid = false;
     private activeTimers = new Set<Timer>();
     private currentFrameTime = 0;
     private statistics = {
@@ -42,6 +43,10 @@ export class RenderContext {
         readonly time: number;
         readonly resolve: (interval: number) => void;
     } | undefined;
+
+    // use a pre-pass to fill in z-buffer for improved fill rate at the expense of triangle rate (useful when doing heavy shading, but unclear how efficient this is on tiled GPUs.)
+    //* @internal */
+    readonly usePrepass = false;
 
     // copy from last rendered state
     private isOrtho = false;
@@ -66,15 +71,6 @@ export class RenderContext {
         readonly numMipMaps: number; // # of radiance/specular mip map levels.
         readonly default: boolean;
     };
-
-    drawBuffers(buffers: BufferFlags = (BufferFlags.all)): readonly (ColorAttachment | "NONE")[] {
-        const activeBuffers = buffers; // & this.drawBuffersMask;
-        return [
-            activeBuffers & BufferFlags.color ? "COLOR_ATTACHMENT0" : "NONE",
-            activeBuffers & BufferFlags.linearDepth ? "COLOR_ATTACHMENT1" : "NONE",
-            activeBuffers & BufferFlags.info ? "COLOR_ATTACHMENT2" : "NONE",
-        ] as const;
-    }
 
     constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TexImageSource, options?: WebGLContextAttributes) {
         // init gl context
@@ -196,9 +192,6 @@ export class RenderContext {
         console.assert(this.resourceBins.size == 0);
     }
 
-    // use a pre-pass to fill in z-buffer for improved fill rate at the expense of triangle rate (useful when doing heavy shading, but unclear how efficient this is on tiled GPUs.)
-    readonly usePrepass = false;
-
     get width() {
         return this.gl.drawingBufferWidth;
     }
@@ -211,6 +204,17 @@ export class RenderContext {
         return this.gl.isContextLost();
     }
 
+    //* @internal */
+    drawBuffers(buffers: BufferFlags = (BufferFlags.all)): readonly (ColorAttachment | "NONE")[] {
+        const activeBuffers = buffers; // & this.drawBuffersMask;
+        return [
+            activeBuffers & BufferFlags.color ? "COLOR_ATTACHMENT0" : "NONE",
+            activeBuffers & BufferFlags.linearDepth ? "COLOR_ATTACHMENT1" : "NONE",
+            activeBuffers & BufferFlags.info ? "COLOR_ATTACHMENT2" : "NONE",
+        ] as const;
+    }
+
+    //* @internal */
     updateUniformBuffer(uniformBuffer: WebGLBuffer, proxy: UniformsProxy) {
         if (!proxy.dirtyRange.isEmpty) {
             const { begin, end } = proxy.dirtyRange;
@@ -219,6 +223,7 @@ export class RenderContext {
         }
     }
 
+    //* @internal */
     updateIBLTextures(params: { readonly diffuse: TextureParamsCubeUncompressed, readonly specular: TextureParamsCubeUncompressedMipMapped } | null) {
         const { iblResourceBin } = this;
         iblResourceBin.deleteAll();
@@ -240,6 +245,7 @@ export class RenderContext {
         }
     }
 
+    //* @internal */
     hasStateChanged(state: Partial<DerivedRenderState>) {
         const { prevState } = this;
         let changed = false;
@@ -254,10 +260,12 @@ export class RenderContext {
         return changed;
     }
 
+    //* @internal */
     resourceBin(name: string) {
         return ResourceBin["create"](this.gl, name, this.resourceBins);
     }
 
+    //* @internal */
     makeProgramAsync(resourceBin: ResourceBin, params: AsyncProgramParams) {
         const { gl, commonChunk } = this;
         const { vertexShader, fragmentShader } = params;
@@ -321,6 +329,7 @@ export class RenderContext {
         statistics.drawCalls = 0;
     }
 
+    //* @internal */
     protected addRenderStatistics(stats: DrawStatistics, drawCalls = 1) {
         const { statistics } = this;
         statistics.points += stats.points;
@@ -329,11 +338,30 @@ export class RenderContext {
         statistics.drawCalls += drawCalls;
     }
 
+    //* @internal */
+    async getLinearDepthBuffer() {
+        this.renderPickBuffers();
+        return (await this.buffers.pickBuffers()).depths;
+    }
+
+    //* @internal */
     protected contextLost() {
         const { modules } = this;
         if (modules) {
             for (const module of modules) {
                 module?.contextLost();
+            }
+        }
+    }
+
+    //* @internal */
+    emulateLostContext(value: "lose" | "restore") {
+        const ext = glExtensions(this.gl).loseContext;
+        if (ext) {
+            if (value == "lose") {
+                ext.loseContext();
+            } else {
+                ext.restoreContext();
             }
         }
     }
@@ -383,6 +411,7 @@ export class RenderContext {
         const beginTime = performance.now();
         const { gl, canvas, prevState } = this;
         this.changed = false;
+        this.pickBuffersValid = false;
 
         this.resetRenderStatistics();
 
@@ -483,8 +512,8 @@ export class RenderContext {
         drawTimer.end();
 
         // invalidate color and depth buffers only (we may need pick buffers for picking)
-        // this.buffers.invalidate("colorMSAA", BufferFlags.color | BufferFlags.depth);
-        // this.buffers.invalidate("colorResolved", BufferFlags.color | BufferFlags.depth);
+        this.buffers.invalidate("colorMSAA", BufferFlags.color | BufferFlags.depth);
+        this.buffers.invalidate("color", BufferFlags.color | BufferFlags.depth);
         this.prevState = derivedState;
         const endTime = performance.now();
 
@@ -518,33 +547,37 @@ export class RenderContext {
         } as const;
     }
 
+    //* @internal */
     renderPickBuffers() {
-        if (!this.modules) {
-            throw new Error("Context has not been initialized!");
-        }
-        const { gl, width, height, buffers, prevState } = this;
-        if (!prevState) {
-            throw new Error("render() was not called!"); // we assume render() has been called first
-        }
-
-        const stateParams: StateParams = {
-            viewport: { width, height },
-            frameBuffer: buffers.frameBuffers.pick,
-            drawBuffers: this.drawBuffers(BufferFlags.linearDepth | BufferFlags.info),
-            depth: { test: true, writeMask: true },
-        };
-        glState(gl, stateParams);
-        glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 }); // we need to clear (again) since depth might be different for pick and color renders and we're also not using MSAA depth buffer.
-        glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
-        glClear(gl, { kind: "COLOR", drawBuffer: 2, type: "Uint", color: [0xffffffff, 0x0000ffff, 0, 0] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
-
-        for (const module of this.modules) {
-            if (module) {
-                glState(gl, stateParams);
-                module.pick?.(prevState);
-                // reset gl state
-                glState(gl, null);
+        if (!this.pickBuffersValid) {
+            if (!this.modules) {
+                throw new Error("Context has not been initialized!");
             }
+            const { gl, width, height, buffers, prevState } = this;
+            if (!prevState) {
+                throw new Error("render() was not called!"); // we assume render() has been called first
+            }
+
+            const stateParams: StateParams = {
+                viewport: { width, height },
+                frameBuffer: buffers.frameBuffers.pick,
+                drawBuffers: this.drawBuffers(BufferFlags.linearDepth | BufferFlags.info),
+                depth: { test: true, writeMask: true },
+            };
+            glState(gl, stateParams);
+            glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 }); // we need to clear (again) since depth might be different for pick and color renders and we're also not using MSAA depth buffer.
+            glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
+            glClear(gl, { kind: "COLOR", drawBuffer: 2, type: "Uint", color: [0xffffffff, 0x0000ffff, 0, 0] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
+
+            for (const module of this.modules) {
+                if (module) {
+                    glState(gl, stateParams);
+                    module.pick?.(prevState);
+                    // reset gl state
+                    glState(gl, null);
+                }
+            }
+            this.pickBuffersValid = true;
         }
     }
 
@@ -599,6 +632,7 @@ export class RenderContext {
     async pick(x: number, y: number, sampleDiscRadius = 0): Promise<PickSample[]> {
         if (sampleDiscRadius < 0)
             return [];
+        this.renderPickBuffers();
         const { canvas, wasm, buffers, width, height } = this;
         const rect = canvas.getBoundingClientRect(); // dim in css pixels
         const cssWidth = rect.width;

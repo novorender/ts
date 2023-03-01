@@ -1,7 +1,6 @@
-import type { NodeData } from "./module/octree/parser";
 import type { OctreeSceneConfig, RenderStateScene } from ".";
-import { OctreeNode } from "./module/octree/node";
-import type { OctreeContext } from "./module/octree/node";
+import type { NodeData } from "./modules/octree/parser";
+import { OctreeNode, type OctreeContext } from "./modules/octree/node";
 
 
 export async function downloadScene(url: string, abortController?: AbortController): Promise<RenderStateScene> {
