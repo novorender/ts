@@ -14,6 +14,7 @@ export function defaultRenderState(): RenderState {
             kind: "pinhole",
             position: vec3.create(),
             rotation: quat.create(),
+            pivot: undefined,
             fov: 45,
             near: 0.1,
             far: 1000,

@@ -46,6 +46,7 @@ export interface RenderStateCamera {
     readonly kind: "pinhole" | "orthographic";
     readonly position: ReadonlyVec3;
     readonly rotation: ReadonlyQuat;
+    readonly pivot: ReadonlyVec3 | undefined;
     readonly fov: number;
     readonly near: number;
     readonly far: number;
