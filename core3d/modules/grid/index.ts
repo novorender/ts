@@ -6,6 +6,7 @@ import fragmentShader from "./shader.frag";
 import { mat4, vec3 } from "gl-matrix";
 
 export class GridModule implements RenderModule {
+    readonly kind = "grid";
     readonly uniforms = {
         origin: "vec3",
         axisX: "vec3",
@@ -38,7 +39,7 @@ type Uniforms = ReturnType<GridModule["createUniforms"]>;
 type Resources = Awaited<ReturnType<GridModule["createResources"]>>;
 
 class GridModuleContext implements RenderModuleContext {
-    constructor(readonly context: RenderContext, readonly data: GridModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
+    constructor(readonly context: RenderContext, readonly module: GridModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;

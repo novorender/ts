@@ -6,6 +6,7 @@ import fragmentShader from "./shader.frag";
 import { ResourceBin } from "@novorender/core3d/resource";
 
 export class ClippingModule implements RenderModule {
+    readonly kind = "clipping";
     readonly uniforms = {
         "colors.0": "vec4",
         "colors.1": "vec4",
@@ -38,7 +39,7 @@ type Uniforms = ReturnType<ClippingModule["createUniforms"]>;
 type Resources = Awaited<ReturnType<ClippingModule["createResources"]>>;
 
 class ClippingModuleContext implements RenderModuleContext {
-    constructor(readonly context: RenderContext, readonly data: ClippingModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
+    constructor(readonly context: RenderContext, readonly module: ClippingModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;

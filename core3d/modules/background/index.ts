@@ -8,6 +8,7 @@ import fragmentShader from "./shader.frag";
 import { BufferFlags } from "@novorender/core3d/buffers";
 
 export class BackgroundModule implements RenderModule {
+    readonly kind = "background";
     private abortController: AbortController | undefined;
     url: string | undefined;
     textureParams: {
@@ -79,12 +80,12 @@ type Resources = Awaited<ReturnType<BackgroundModule["createResources"]>>;
 class BackgroundModuleContext implements RenderModuleContext {
     skybox: WebGLTexture;
 
-    constructor(readonly context: RenderContext, readonly data: BackgroundModule, readonly uniforms: Uniforms, readonly resources: Resources) {
+    constructor(readonly context: RenderContext, readonly module: BackgroundModule, readonly uniforms: Uniforms, readonly resources: Resources) {
         this.skybox = resources.bin.createTexture(context.defaultIBLTextureParams);
     }
 
     update(state: DerivedRenderState) {
-        const { context, resources, data, uniforms, skybox } = this;
+        const { context, resources, module, uniforms, skybox } = this;
         const { bin } = resources;
         const { background } = state;
 
@@ -93,24 +94,24 @@ class BackgroundModuleContext implements RenderModuleContext {
             context.updateUniformBuffer(resources.uniforms, this.uniforms);
             const { url } = state.background;
             if (url) {
-                if (url != data.url) {
-                    data.downloadTextures(url).then(() => { context.changed = true; });
+                if (url != module.url) {
+                    module.downloadTextures(url).then(() => { context.changed = true; });
                 }
             } else {
                 context.updateIBLTextures(null);
                 bin.delete(skybox);
                 this.skybox = bin.createTexture(context.defaultIBLTextureParams);
             }
-            data.url = url;
+            module.url = url;
         }
 
-        if (data.textureParams) {
-            context.updateIBLTextures(data.textureParams);
+        if (module.textureParams) {
+            context.updateIBLTextures(module.textureParams);
             bin.delete(skybox);
-            this.skybox = bin.createTexture(data.textureParams.skybox);
+            this.skybox = bin.createTexture(module.textureParams.skybox);
             uniforms.values.mipCount = context.iblTextures.numMipMaps;
             context.updateUniformBuffer(resources.uniforms, this.uniforms);
-            data.textureParams = undefined; // we already copied the pixels into texture, so we no longer need the original.
+            module.textureParams = undefined; // we already copied the pixels into texture, so we no longer need the original.
         }
     }
 
@@ -143,8 +144,8 @@ class BackgroundModuleContext implements RenderModuleContext {
     }
 
     contextLost() {
-        const { data } = this;
-        data.url = undefined; // force an envmap texture reload
+        const { module } = this;
+        module.url = undefined; // force an envmap texture reload
     }
 
     dispose() {

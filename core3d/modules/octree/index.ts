@@ -13,6 +13,7 @@ import { computeGradientColors, gradientRange } from "./gradient";
 import { shaders } from "./shaders";
 
 export class OctreeModule implements RenderModule {
+    readonly kind = "octree";
     readonly sceneUniforms = {
         applyDefaultHighlight: "bool",
         iblMipCount: "float",
@@ -102,9 +103,9 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     version: string = "";
     readonly projectedSizeSplitThreshold = 1; // / (settings.quality.detail.value * deviceProfile.detailBias); // baseline node size split threshold = 50% of view height
 
-    constructor(readonly renderContext: RenderContext, readonly data: OctreeModule, readonly sceneUniforms: Uniforms, readonly resources: Resources) {
-        this.loader = new NodeLoader(data.nodeLoaderOptions);
-        this.debug = data.debug;
+    constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly sceneUniforms: Uniforms, readonly resources: Resources) {
+        this.loader = new NodeLoader(module.nodeLoaderOptions);
+        this.debug = module.debug;
         const { gl } = renderContext;
         const { programs } = resources;
         this.meshModeLocations = {
@@ -118,7 +119,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     update(state: DerivedRenderState) {
         const beginTime = performance.now();
 
-        const { renderContext, resources, sceneUniforms, projectedSizeSplitThreshold, data } = this;
+        const { renderContext, resources, sceneUniforms, projectedSizeSplitThreshold, module } = this;
         const { gl } = renderContext;
         const { scene, localSpaceTranslation, highlights, points, terrain, outlines } = state;
         const { values } = sceneUniforms;
@@ -156,7 +157,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
 
         if (updateGradients) {
-            glUpdateTexture(gl, resources.gradientsTexture, { ...data.gradientImageParams, image: this.gradientsImage });
+            glUpdateTexture(gl, resources.gradientsTexture, { ...module.gradientImageParams, image: this.gradientsImage });
         }
 
         if (renderContext.hasStateChanged({ scene })) {
@@ -468,7 +469,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     }
 
     renderNodeClippingOutline(node: OctreeNode) {
-        const { resources, renderContext, data } = this;
+        const { resources, renderContext, module } = this;
         const { gl } = renderContext;
         const { programs, transformFeedback, vb_line, vao_line } = resources;
         const { renderedChildMask } = node;
@@ -480,7 +481,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         if ((1 << drawRange.childIndex) & renderedChildMask) {
                             const count = drawRange.count / 3;
                             const first = drawRange.first / 3;
-                            console.assert(count * 2 <= data.maxLines);
+                            console.assert(count * 2 <= module.maxLines);
                             // find triangle intersections
                             glState(gl, {
                                 program: programs.intersect,

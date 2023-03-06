@@ -6,6 +6,7 @@ import { BufferFlags } from "@novorender/core3d/buffers";
 import { shaders } from "./shaders";
 
 export class CubeModule implements RenderModule {
+    readonly kind = "cube";
     readonly uniforms = {
         modelLocalMatrix: "mat4",
         nearOutlineColor: "vec3",
@@ -85,7 +86,7 @@ type Uniforms = ReturnType<CubeModule["createUniforms"]>;
 type Resources = Awaited<ReturnType<CubeModule["createResources"]>>;
 
 class CubeModuleContext implements RenderModuleContext {
-    constructor(readonly context: RenderContext, readonly data: CubeModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
+    constructor(readonly context: RenderContext, readonly module: CubeModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;

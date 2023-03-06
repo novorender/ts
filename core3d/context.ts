@@ -1,6 +1,6 @@
-import { CoordSpace, createDefaultModules } from "./";
+import { CoordSpace, TonemappingMode, createDefaultModules } from "./";
 import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState } from "./";
-import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateProgramAsync, glCreateTimer, glCompile, glClear, type StateParams, glLimits, } from "@novorender/webgl2";
+import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits, } from "@novorender/webgl2";
 import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "@novorender/webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
@@ -10,11 +10,6 @@ import type { ReadonlyVec3 } from "gl-matrix";
 import { mat3, mat4, vec3, vec4 } from "gl-matrix";
 import commonShaderCore from "./common.glsl";
 import { ResourceBin } from "./resource";
-
-function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
-    return !!promise && typeof Reflect.get(promise, "then") === "function";
-}
-
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
@@ -577,6 +572,16 @@ export class RenderContext {
                     glState(gl, null);
                 }
             }
+
+            if (prevState.tonemapping.mode != TonemappingMode.color) {
+                // update debug display
+                const tonemapModule = this.modules?.find(m => m.module.kind == "tonemap");
+                glState(gl, { viewport: { width, height } });
+                tonemapModule?.render(prevState);
+                // reset gl state
+                glState(gl, null);
+            }
+
             this.pickBuffersValid = true;
         }
     }
@@ -694,6 +699,10 @@ export class RenderContext {
         }
         return samples;
     }
+}
+
+function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
+    return !!promise && typeof Reflect.get(promise, "then") === "function";
 }
 
 export interface PickSample {

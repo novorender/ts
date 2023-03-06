@@ -7,6 +7,7 @@ import fragmentShader from "./shader.frag";
 import logoBinary from "./logo.bin";
 
 export class WatermarkModule implements RenderModule {
+    readonly kind = "watermark";
     readonly uniforms = {
         modelClipMatrix: "mat4",
         color: "vec4",
@@ -56,7 +57,7 @@ type Uniforms = ReturnType<WatermarkModule["createUniforms"]>;
 type Resources = Awaited<ReturnType<WatermarkModule["createResources"]>>;
 
 class WatermarkModuleContext implements RenderModuleContext {
-    constructor(readonly context: RenderContext, readonly data: WatermarkModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
+    constructor(readonly context: RenderContext, readonly module: WatermarkModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
@@ -87,7 +88,7 @@ class WatermarkModuleContext implements RenderModuleContext {
     }
 
     render() {
-        const { context, resources, data } = this;
+        const { context, resources, module } = this;
         const { program, uniforms, vao, } = resources;
         const { gl } = context;
 

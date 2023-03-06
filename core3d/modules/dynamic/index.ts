@@ -8,6 +8,7 @@ import { BufferFlags } from "@novorender/core3d/buffers";
 import { ResourceBin } from "@novorender/core3d/resource";
 
 export class DynamicModule implements RenderModule {
+    readonly kind = "dynamic";
     readonly materialUniforms = {
         baseColor: "vec4",
     } as const satisfies Record<string, UniformTypes>;
@@ -48,7 +49,7 @@ class DynamicModuleContext implements RenderModuleContext {
     readonly images = new Map<RenderStateDynamicImage, TextureAsset>();
     readonly samplers = new Map<RenderStateDynamicSampler, SamplerAsset>();
 
-    constructor(readonly context: RenderContext, readonly data: DynamicModule, readonly resources: Resources) {
+    constructor(readonly context: RenderContext, readonly module: DynamicModule, readonly resources: Resources) {
         this.iblTextures = context.iblTextures;
     }
 

@@ -5,6 +5,7 @@ import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
 export class TonemapModule implements RenderModule {
+    readonly kind = "tonemap";
     readonly uniforms = {
         exposure: "float",
         mode: "uint",
@@ -37,7 +38,7 @@ type Resources = Awaited<ReturnType<TonemapModule["createResources"]>>;
 
 class TonemapModuleContext implements RenderModuleContext {
 
-    constructor(readonly context: RenderContext, readonly data: TonemapModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
+    constructor(readonly context: RenderContext, readonly module: TonemapModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
         const { context } = this;
