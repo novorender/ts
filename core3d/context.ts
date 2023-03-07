@@ -10,6 +10,7 @@ import type { ReadonlyVec3 } from "gl-matrix";
 import { mat3, mat4, vec3, vec4 } from "gl-matrix";
 import commonShaderCore from "./common.glsl";
 import { ResourceBin } from "./resource";
+import type { DeviceProfile } from "./device";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
@@ -67,7 +68,7 @@ export class RenderContext {
         readonly default: boolean;
     };
 
-    constructor(readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TexImageSource, options?: WebGLContextAttributes) {
+    constructor(readonly deviceProfile: DeviceProfile, readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TexImageSource, options?: WebGLContextAttributes) {
         // init gl context
         const gl = canvas.getContext("webgl2", options);
         if (!gl)

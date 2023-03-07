@@ -1,13 +1,15 @@
 import { RenderContext } from "./context";
 import { wasmInstance } from "./wasm";
 import lut_ggx_png from "./lut_ggx.png";
+import type { DeviceProfile } from "./device";
 
 export * from "./state";
 export * from "./context";
 export * from "./modules";
 export * from "./highlight";
+export * from "./device";
 
-export async function initCore3D(canvas: HTMLCanvasElement, setRenderContext: (context: RenderContext) => void) {
+export async function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanvasElement, setRenderContext: (context: RenderContext) => void) {
     const options: WebGLContextAttributes = {
         alpha: true,
         antialias: true,
@@ -48,7 +50,7 @@ export async function initCore3D(canvas: HTMLCanvasElement, setRenderContext: (c
 
     let animId: number | undefined;
     async function createContext() {
-        context = new RenderContext(canvas, wasm, lut_ggx, options);
+        context = new RenderContext(deviceProfile, canvas, wasm, lut_ggx, options);
         await context.init();
         setRenderContext(context)
     }
