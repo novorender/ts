@@ -86,7 +86,8 @@ export class NodeLoader {
         const { id, data } = node;
         const url = new URL(node.path, node.context.downloader.baseUrl).toString();
         const { byteSize } = data;
-        const loadMsg: LoadMessage = { kind: "load", id, version, url, byteSize, separatePositionsBuffer: true };
+        const { textureLOD } = node.context.renderContext.deviceProfile;
+        const loadMsg: LoadMessage = { kind: "load", id, version, url, byteSize, separatePositionsBuffer: true, textureLOD };
         console.assert(byteSize != 0);
         const abortMsg: AbortMessage = { kind: "abort", id };
         const abort = () => { this.send(abortMsg); }

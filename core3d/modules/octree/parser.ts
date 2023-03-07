@@ -313,7 +313,7 @@ function fillToInterleavedArray<T extends TypedArray>(dst: T, src: number, byteO
     }
 }
 
-function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean): NodeGeometry {
+function getGeometry(schema: Schema, separatePositionBuffer: boolean, textureLOD: 0 | 1, predicate?: (objectId: number) => boolean): NodeGeometry {
     const { vertex, vertexIndex } = schema;
 
     const filteredSubMeshes = [...getSubMeshes(schema, predicate)];
@@ -475,8 +475,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
         let baseColorTexture: number | undefined;
         if (endTexture > beginTexture) {
             console.assert(beginTexture + 2 == endTexture);
-            const textureRes = 0; // TODO: Adjust from device profile/resolution
-            baseColorTexture = beginTexture + textureRes;
+            baseColorTexture = beginTexture + textureLOD;
         }
 
         if (baseColorTexture != undefined) {
@@ -537,7 +536,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, predicate?
     return { subMeshes, textures } as const satisfies NodeGeometry;
 }
 
-export async function parseNode(id: string, separatePositionBuffer: boolean, version: string, buffer: ArrayBuffer, filterObjectIds: (ids: Uint32Array) => Promise<Uint32Array | undefined>) {
+export async function parseNode(id: string, separatePositionBuffer: boolean, version: string, buffer: ArrayBuffer, textureLOD: 0 | 1, filterObjectIds: (ids: Uint32Array) => Promise<Uint32Array | undefined>) {
     console.assert(version == "1.7");
     // const begin = performance.now();
     const r = new BufferReader(buffer);
@@ -552,7 +551,7 @@ export async function parseNode(id: string, separatePositionBuffer: boolean, ver
     const predicate = filteredObjectIds ? (objectId: number) => (filteredObjectIds.has(objectId)) : undefined;
     // const predicate = (objectId: number) => (true);
     const childInfos = getChildren(id, schema, separatePositionBuffer, predicate);
-    const geometry = getGeometry(schema, separatePositionBuffer, predicate);
+    const geometry = getGeometry(schema, separatePositionBuffer, textureLOD, predicate);
     // const end = performance.now();
     // console.log((end - begin));
     return { childInfos, geometry } as const;

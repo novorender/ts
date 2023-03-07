@@ -19,6 +19,9 @@ export function defaultRenderState(): RenderState {
             near: 0.1,
             far: 1000,
         },
+        quality: {
+            detail: 1,
+        },
         grid: {
             enabled: false,
             color: [2, 2, 2],

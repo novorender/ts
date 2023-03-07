@@ -50,15 +50,20 @@ export class OctreeModule implements RenderModule {
         const highlightTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image: null });
         const gradientsTexture = bin.createTexture(this.gradientImageParams);
 
+        const { outline } = context.deviceProfile.features;
         const transformFeedback = bin.createTransformFeedback()!;
-        const vb_line = bin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: this.maxLines * 2 * 8, usage: "STATIC_DRAW" });
-        const vao_line = bin.createVertexArray({
-            attributes: [
-                { kind: "FLOAT_VEC2", buffer: vb_line, byteStride: 8, byteOffset: 0 }, // position
-            ],
-        });
+        let vb_line: WebGLBuffer | null = null;
+        let vao_line: WebGLVertexArrayObject | null = null;
+        if (outline) {
+            vb_line = bin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: this.maxLines * 2 * 8, usage: "STATIC_DRAW" });
+            vao_line = bin.createVertexArray({
+                attributes: [
+                    { kind: "FLOAT_VEC2", buffer: vb_line, byteStride: 8, byteOffset: 0 }, // position
+                ],
+            });
+        }
 
-        const flags: string[] = ["IOS_WORKAROUND"]; // without this flag, complex scenes crash after a few frames on older IOS and iPad devices.
+        const flags: string[] = context.deviceProfile.quirks.iosShaderBug ? ["IOS_WORKAROUND"] : []; // without this flag, complex scenes crash after a few frames on older IOS and iPad devices.
         const textureNames = ["base_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
         const uniformBufferBlocks = ["Camera", "Clipping", "Scene", "Node"];
@@ -101,7 +106,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     url: string | undefined;
     rootNode: OctreeNode | undefined;
     version: string = "";
-    readonly projectedSizeSplitThreshold = 1; // / (settings.quality.detail.value * deviceProfile.detailBias); // baseline node size split threshold = 50% of view height
+    projectedSizeSplitThreshold = 1; // baseline node size split threshold = 50% of view height
 
     constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly sceneUniforms: Uniforms, readonly resources: Resources) {
         this.loader = new NodeLoader(module.nodeLoaderOptions);
@@ -120,9 +125,11 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const beginTime = performance.now();
 
         const { renderContext, resources, sceneUniforms, projectedSizeSplitThreshold, module } = this;
-        const { gl } = renderContext;
-        const { scene, localSpaceTranslation, highlights, points, terrain, outlines } = state;
+        const { gl, deviceProfile } = renderContext;
+        const { scene, localSpaceTranslation, highlights, points, terrain, outlines, quality } = state;
         const { values } = sceneUniforms;
+
+        this.projectedSizeSplitThreshold = 1 / (quality.detail * deviceProfile.detailBias);
 
         if (values.iblMipCount != renderContext.iblTextures.numMipMaps) {
             values.iblMipCount = renderContext.iblTextures.numMipMaps;
@@ -234,8 +241,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             nodes = [...iterateNodes(rootNode)];
             nodes.sort((a, b) => b.projectedSize - a.projectedSize); // sort by descending projected size
 
-            const maxGPUBytes = 1_000_000_000;
-            const maxPrimitives = 2_000_000;
+            const { maxGPUBytes } = deviceProfile.limits; // 1_000_000_000;
+            const { maxPrimitives } = deviceProfile.limits; // 2_000_000;
             let gpuBytes = 0;
             let primitives = 0; // # rendered primitives (points, lines and triangles)
             for (const node of nodes) {
@@ -303,7 +310,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { resources, renderContext, rootNode, debug } = this;
         const { usePrepass, samplerSingle, samplerMip } = renderContext;
         const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
-        const { gl, iblTextures, cameraUniforms, clippingUniforms } = renderContext;
+        const { gl, iblTextures, cameraUniforms, clippingUniforms, deviceProfile } = renderContext;
         if (rootNode) {
             const program = state.effectiveSamplesMSAA > 1 ? "render" : "dither";
             let nodes = [...iterateNodes(rootNode)];
@@ -341,7 +348,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
 
-            if (state.outlines.nearClipping.enable) {
+            if (state.outlines.nearClipping.enable && deviceProfile.features.outline) {
                 // render clipping outlines
                 glState(gl, {
                     uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
@@ -487,7 +494,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                                 program: programs.intersect,
                                 vertexArrayObject: mesh.vaoTriplets,
                             });
-                            glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line], count, first });
+                            glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line!], count, first });
 
                             // draw lines
                             glState(gl, {

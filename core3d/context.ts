@@ -413,9 +413,8 @@ export class RenderContext {
 
         const drawTimer = this.beginTimer();
 
-        // const samples = 1;
         const { MAX_SAMPLES } = glLimits(gl);
-        const effectiveSamplesMSAA = Math.max(1, Math.min(state.output.samplesMSAA, MAX_SAMPLES));
+        const effectiveSamplesMSAA = Math.max(1, Math.min(MAX_SAMPLES, Math.min(this.deviceProfile.limits.maxSamples, state.output.samplesMSAA)));
 
         // handle resizes
         let resized = false;

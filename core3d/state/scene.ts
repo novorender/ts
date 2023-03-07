@@ -3,7 +3,7 @@ import type { ReadonlyVec3, ReadonlyMat4 } from "gl-matrix";
 export interface RenderStateScene {
     readonly url: string;
     readonly config: OctreeSceneConfig;
-    readonly filter?: ObjectIdFilter
+    readonly filter?: ObjectIdFilter;
 }
 
 export interface ObjectIdFilter {

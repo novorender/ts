@@ -9,6 +9,7 @@ export interface LoadMessage {
     readonly version: string;
     readonly url: string;
     readonly byteSize: number;
+    readonly textureLOD: 0 | 1;
     readonly separatePositionsBuffer: boolean;
 }
 
@@ -120,7 +121,7 @@ export class LoaderHandler {
 
     private async load(params: LoadMessage) {
         const { downloader, downloads } = this;
-        const { url, id, version, byteSize, separatePositionsBuffer } = params;
+        const { url, id, version, byteSize, separatePositionsBuffer, textureLOD } = params;
         try {
             const download = downloader.downloadArrayBufferAbortable(url, new ArrayBuffer(byteSize));
             downloads.set(id, download);
@@ -129,7 +130,7 @@ export class LoaderHandler {
                 downloads.delete(id);
                 // const filterObjectIds = (objectIds: Uint32Array) => (Promise.resolve(objectIds));
                 const filterObjectIds = (objectIds: Uint32Array) => (this.requestFilter(id, objectIds));
-                const { childInfos, geometry } = await parseNode(id, separatePositionsBuffer, version, buffer, filterObjectIds);
+                const { childInfos, geometry } = await parseNode(id, separatePositionsBuffer, version, buffer, textureLOD, filterObjectIds);
                 const loadedMsg: LoadedMessage = { kind: "loaded", id, childInfos, geometry };
                 const transfer: Transferable[] = [];
                 for (const { vertexBuffers, indices } of geometry.subMeshes) {

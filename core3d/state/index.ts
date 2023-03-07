@@ -8,6 +8,32 @@ export * from "./scene";
 export * from "./default";
 export * from "./modify";
 
+export interface RenderState {
+    readonly output: RenderStateOutput;
+    readonly background: RenderStateBackground;
+    readonly camera: RenderStateCamera;
+    readonly quality: RenderStateQuality;
+    readonly grid: RenderStateGrid;
+    readonly cube: RenderStateCube;
+    readonly scene: RenderStateScene | undefined;
+    readonly terrain: RenderStateTerrain;
+    readonly dynamic: RenderStateDynamicObjects;
+    readonly clipping: RenderStateClipping;
+    readonly highlights: RenderStateHighlightGroups;
+    readonly outlines: RenderStateOutlines;
+    readonly tonemapping: RenderStateTonemapping;
+    readonly points: RenderStatePointCloud;
+}
+
+export interface DerivedRenderState extends RenderState {
+    readonly localSpaceTranslation: ReadonlyVec3; // local space is a variant of world space that is much closer to camera to avoid excessively (for float32) large coordinates in shader
+    readonly matrices: Matrices;
+    readonly viewFrustum: ViewFrustum; // in world space
+    readonly effectiveSamplesMSAA: number; // from output.SamplesMSAA, but limited to device's MAX_SAMPLES
+}
+
+export type RenderStateChanges = RecursivePartial<RenderState>;
+
 export interface ViewFrustum {
     readonly left: ReadonlyVec4;
     readonly right: ReadonlyVec4;
@@ -50,6 +76,10 @@ export interface RenderStateCamera {
     readonly fov: number;
     readonly near: number;
     readonly far: number;
+}
+
+export interface RenderStateQuality {
+    readonly detail: number;
 }
 
 export interface RenderStateGrid {
@@ -211,28 +241,3 @@ export interface RenderStateTonemapping {
     /** Debug display frame buffer */
     readonly mode: TonemappingMode;
 }
-
-export interface RenderState {
-    readonly output: RenderStateOutput;
-    readonly background: RenderStateBackground;
-    readonly camera: RenderStateCamera;
-    readonly grid: RenderStateGrid;
-    readonly cube: RenderStateCube;
-    readonly scene: RenderStateScene | undefined;
-    readonly terrain: RenderStateTerrain;
-    readonly dynamic: RenderStateDynamicObjects;
-    readonly clipping: RenderStateClipping;
-    readonly highlights: RenderStateHighlightGroups;
-    readonly outlines: RenderStateOutlines;
-    readonly tonemapping: RenderStateTonemapping;
-    readonly points: RenderStatePointCloud;
-}
-
-export interface DerivedRenderState extends RenderState {
-    readonly localSpaceTranslation: ReadonlyVec3; // local space is a variant of world space that is much closer to camera to avoid excessively (for float32) large coordinates in shader
-    readonly matrices: Matrices;
-    readonly viewFrustum: ViewFrustum; // in world space
-    readonly effectiveSamplesMSAA: number; // from output.SamplesMSAA, but limited to device's MAX_SAMPLES
-}
-
-export type RenderStateChanges = RecursivePartial<RenderState>;
