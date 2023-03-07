@@ -63,10 +63,15 @@ export class CubeModule implements RenderModule {
         });
         bin.subordinate(vao_triplets, vb_triplets);
 
-        const vb_line = bin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: 12 * 2 * 8, usage: "STATIC_DRAW" });
+        // const vb_line = bin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: 12 * 2 * 8, usage: "STATIC_DRAW" });
+        const vb_line = bin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: 12 * 2 * 4, usage: "STATIC_DRAW" });
+        const vb_opacity = bin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: 12 * 4, usage: "STATIC_DRAW" });
         const vao_line = bin.createVertexArray({
             attributes: [
-                { kind: "FLOAT_VEC2", buffer: vb_line, byteStride: 8, byteOffset: 0 }, // position
+                // { kind: "FLOAT_VEC2", buffer: vb_line, byteStride: 8, byteOffset: 0 }, // position
+                // { kind: "FLOAT_VEC2", buffer: vb_line, byteStride: 4, byteOffset: 0, componentType: "HALF_FLOAT" }, // position
+                { kind: "FLOAT_VEC4", buffer: vb_line, byteStride: 8, byteOffset: 0, componentType: "HALF_FLOAT", divisor: 1 }, // position
+                { kind: "FLOAT", buffer: vb_opacity, byteStride: 4, byteOffset: 0, componentType: "FLOAT", divisor: 1 }, // opacity
             ],
         });
 
@@ -75,10 +80,10 @@ export class CubeModule implements RenderModule {
             context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks }),
             context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, header: { flags: ["PICK"] } }),
             context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks }),
-            context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
+            context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices", "opacity"], bufferMode: "SEPARATE_ATTRIBS" } }),
         ]);
         const programs = { color, pick, line, intersect };
-        return { bin, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line, programs } as const;
+        return { bin, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line, vb_opacity, programs } as const;
     }
 }
 
@@ -111,7 +116,7 @@ class CubeModuleContext implements RenderModuleContext {
 
     render(state: DerivedRenderState) {
         const { context, resources } = this;
-        const { programs, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line } = resources;
+        const { programs, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line, vb_opacity } = resources;
         const { gl, cameraUniforms, clippingUniforms } = context;
 
         if (state.cube.enabled) {
@@ -133,23 +138,24 @@ class CubeModuleContext implements RenderModuleContext {
                     program: programs.intersect,
                     vertexArrayObject: vao_triplets,
                 });
-                glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line], count: 12 });
+                glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line, vb_opacity], count: 12 });
 
                 // render intersection lines
                 glState(gl, {
                     program: programs.line,
                     // drawBuffers: context.drawBuffers(BufferFlags.color),
-                    // blend: {
-                    //     enable: true,
-                    //     srcRGB: "SRC_ALPHA",
-                    //     dstRGB: "ONE_MINUS_SRC_ALPHA",
-                    //     srcAlpha: "ZERO",
-                    //     dstAlpha: "ONE",
-                    // },
+                    blend: {
+                        enable: true,
+                        srcRGB: "SRC_ALPHA",
+                        dstRGB: "ONE_MINUS_SRC_ALPHA",
+                        srcAlpha: "ZERO",
+                        dstAlpha: "ONE",
+                    },
                     depth: { test: false, },
                     vertexArrayObject: vao_line,
                 });
-                const stats = glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });
+                // const stats = glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });
+                const stats = glDraw(gl, { kind: "arrays_instanced", mode: "LINES", count: 2, instanceCount: 12 });
                 context["addRenderStatistics"](stats);
             }
         }
@@ -157,7 +163,7 @@ class CubeModuleContext implements RenderModuleContext {
 
     pick(state: DerivedRenderState) {
         const { context, resources } = this;
-        const { programs, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line } = resources;
+        const { programs, uniforms, vao_render } = resources;
         const { gl, cameraUniforms, clippingUniforms } = context;
 
         if (state.cube.enabled) {

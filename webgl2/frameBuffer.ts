@@ -60,6 +60,9 @@ export function glCreateFrameBuffer(gl: WebGL2RenderingContext, params: FrameBuf
 }
 
 export function glInvalidateFrameBuffer(gl: WebGL2RenderingContext, params: InvalidateFrameBufferParams) {
+    if (!params.frameBuffer) {
+        return;
+    }
     const attachments: number[] = [];
     if (params.depth && params.stencil) {
         attachments.push(gl.DEPTH_STENCIL_ATTACHMENT);

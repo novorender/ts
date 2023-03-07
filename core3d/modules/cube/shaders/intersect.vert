@@ -19,12 +19,16 @@ vec2 intersectEdge(vec3 p0, vec3 p1) {
     return mix(p0.xy, p1.xy, t);
 }
 
-out vec4 line_vertices;
+flat out uvec2 line_vertices;
+out float opacity;
 
 void main() {
     vec3 posVS0 = (camera.localViewMatrix * cube.modelLocalMatrix * vertexPos0).xyz;
     vec3 posVS1 = (camera.localViewMatrix * cube.modelLocalMatrix * vertexPos1).xyz;
     vec3 posVS2 = (camera.localViewMatrix * cube.modelLocalMatrix * vertexPos2).xyz;
+    vec3 ab = posVS1 - posVS0;
+    vec3 ac = posVS2 - posVS0;
+    vec3 normal = normalize(cross(ab, ac));
     vec3 z = vec3(posVS0.z, posVS1.z, posVS2.z);
     bvec3 gt = greaterThan(z, vec3(-camera.near));
     bvec3 lt = lessThan(z, vec3(-camera.near));
@@ -44,8 +48,9 @@ void main() {
         }
     }
     if(i == 2) {
-        line_vertices = vec4(line[0], line[1]);
+        line_vertices = uvec2(packHalf2x16(line[0]), packHalf2x16(line[1]));
     } else {
-        line_vertices = vec4(0);
+        line_vertices = uvec2(0);
     }
+    opacity = 1. - abs(normal.z);
 }
