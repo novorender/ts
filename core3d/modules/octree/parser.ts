@@ -63,7 +63,7 @@ export interface VertexAttributes {
     readonly texCoord: VertexAttributeData | null;
     readonly color: VertexAttributeData | null;
     readonly deviation: VertexAttributeData | null;
-    readonly triplets: readonly [VertexAttributeData, VertexAttributeData, VertexAttributeData] | null;
+    readonly triangles: readonly [VertexAttributeData, VertexAttributeData, VertexAttributeData, VertexAttributeData] | null;
 }
 
 export interface SubMesh {
@@ -71,7 +71,7 @@ export interface SubMesh {
     readonly primitiveType: PrimitiveTypeString;
     readonly vertexAttributes: VertexAttributes;
     readonly numVertices: number;
-    readonly numTriplets: number;
+    readonly numTriangles: number;
     readonly objectRanges: readonly MeshObjectRange[];
     // either index range (if index buffer is defined) for use with drawElements(), or vertex range for use with drawArray()
     readonly drawRanges: readonly MeshDrawRange[];
@@ -112,7 +112,7 @@ function computePrimitiveCount(primitiveType: PrimitiveType, numIndices: number)
             return numIndices / 2;
         case PrimitiveType.line_loops:
             return numIndices;
-        case PrimitiveType.line_loops:
+        case PrimitiveType.line_strip:
             return numIndices - 1;
         case PrimitiveType.triangles:
             return numIndices / 3;
@@ -313,7 +313,7 @@ function fillToInterleavedArray<T extends TypedArray>(dst: T, src: number, byteO
     }
 }
 
-function getGeometry(schema: Schema, separatePositionBuffer: boolean, textureLOD: 0 | 1, predicate?: (objectId: number) => boolean): NodeGeometry {
+function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutlines: boolean, textureLOD: 0 | 1, predicate?: (objectId: number) => boolean): NodeGeometry {
     const { vertex, vertexIndex } = schema;
 
     const filteredSubMeshes = [...getSubMeshes(schema, predicate)];
@@ -353,24 +353,29 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, textureLOD
         const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're potentially putting them in a separate buffer
         const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
         const positionStride = computeVertexOffsets([posName]).stride;
-        const tripletStride = positionStride;
+        const trianglePosStride = positionStride * 3;
         const attribOffsets = computeVertexOffsets(attribNames);
         const vertexStride = attribOffsets.stride;
 
         const childIndices = [...new Set<number>(groupMeshes.map(sm => sm.childIndex))].sort();
         let numVertices = 0;
         let numIndices = 0;
-        let numTriplets = 0;
+        let numTriangles = 0;
         for (let i = 0; i < groupMeshes.length; i++) {
             const sm = groupMeshes[i];
             const vtxCnt = sm.vertexRange[1] - sm.vertexRange[0];
             const idxCnt = sm.indexRange[1] - sm.indexRange[0];
             numVertices += vtxCnt;
             numIndices += idxCnt;
-            numTriplets += Math.round((idxCnt > 0 ? idxCnt : vtxCnt) / 3);
+            numTriangles += Math.round((idxCnt > 0 ? idxCnt : vtxCnt) / 3);
         }
         const vertexBuffer = new ArrayBuffer(numVertices * vertexStride);
-        const tripletBuffer = primitiveType >= PrimitiveType.triangles ? new Int16Array(new ArrayBuffer(numTriplets * 3 * tripletStride)) : undefined;
+        let trianglePosBuffer: Int16Array | undefined;
+        let triangleObjectIdBuffer: Uint32Array | undefined;
+        if (enableOutlines && primitiveType == PrimitiveType.triangles) { // TODO: support triangle strips and fans too
+            trianglePosBuffer = new Int16Array(new ArrayBuffer(numTriangles * trianglePosStride));
+            triangleObjectIdBuffer = new Uint32Array(numTriangles);
+        }
         const positionBuffer = separatePositionBuffer ? new ArrayBuffer(numVertices * positionStride) : undefined;
         let indexBuffer: Uint32Array | Uint16Array | undefined;
         if (vertexIndex) {
@@ -378,7 +383,8 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, textureLOD
         }
         let indexOffset = 0;
         let vertexOffset = 0;
-        let tripletOffset = 0;
+        let trianglePosOffset = 0;
+        let triangleObjectIdOffset = 0;
         let drawRanges: MeshDrawRange[] = [];
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
         const objectRanges: Mutable<MeshObjectRange>[] = [];
@@ -416,23 +422,30 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, textureLOD
                     }
                 }
 
-                // create triplet vertex buffer for clipping intersection
-                if (tripletBuffer) {
+                // create triangle vertex buffer for clipping intersection
+                if (trianglePosBuffer && triangleObjectIdBuffer) {
                     const { x, y, z } = vertex.position;
+                    let numTriangles = 0;
                     if (vertexIndex && indexBuffer) {
+                        numTriangles = (endIdx - beginIdx) / 3;
                         for (let i = beginIdx; i < endIdx; i++) {
-                            const idxIn = vertexIndex[i] + beginVtx;
-                            tripletBuffer[tripletOffset++] = x[idxIn];
-                            tripletBuffer[tripletOffset++] = y[idxIn];
-                            tripletBuffer[tripletOffset++] = z[idxIn];
+                            // TODO: Add support for triangle strips and fans as well...
+                            const idx = vertexIndex[i] + beginVtx;
+                            trianglePosBuffer[trianglePosOffset++] = x[idx];
+                            trianglePosBuffer[trianglePosOffset++] = y[idx];
+                            trianglePosBuffer[trianglePosOffset++] = z[idx];
                         }
                     } else {
+                        numTriangles = (endVtx - beginVtx) / 3;
                         for (let i = beginVtx; i < endVtx; i++) {
-                            tripletBuffer[tripletOffset++] = x[i];
-                            tripletBuffer[tripletOffset++] = y[i];
-                            tripletBuffer[tripletOffset++] = z[i];
+                            const idx = i;
+                            trianglePosBuffer[trianglePosOffset++] = x[idx];
+                            trianglePosBuffer[trianglePosOffset++] = y[idx];
+                            trianglePosBuffer[trianglePosOffset++] = z[idx];
                         }
                     }
+                    triangleObjectIdBuffer.fill(objectId, triangleObjectIdOffset, triangleObjectIdOffset + numTriangles);
+                    triangleObjectIdOffset += numTriangles;
                 }
 
                 if (positionBuffer) {
@@ -468,7 +481,8 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, textureLOD
         }
         console.assert(vertexOffset == numVertices);
         console.assert(indexOffset == numIndices);
-        console.assert(tripletOffset == (tripletBuffer?.length ?? 0));
+        console.assert(trianglePosOffset == (trianglePosBuffer?.length ?? 0));
+        console.assert(triangleObjectIdOffset == (triangleObjectIdBuffer?.length ?? 0));
         const indices = indexBuffer ?? numVertices;
 
         const [beginTexture, endTexture] = groupMeshes[0].textureRange;
@@ -485,13 +499,14 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, textureLOD
         const stride = vertexStride;
         const buffer = 0;
         const vertexBuffers: ArrayBuffer[] = [vertexBuffer];
-        if (tripletBuffer) {
-            vertexBuffers.push(tripletBuffer.buffer);
+        if (trianglePosBuffer && triangleObjectIdBuffer) {
+            vertexBuffers.push(trianglePosBuffer.buffer);
+            vertexBuffers.push(triangleObjectIdBuffer.buffer);
         }
         if (positionBuffer) {
             vertexBuffers.push(positionBuffer);
         }
-        const posBufferIndex = positionBuffer ? tripletBuffer ? 2 : 1 : 0;
+        const posBufferIndex = positionBuffer ? trianglePosBuffer ? 3 : 1 : 0;
         const vertexAttributes = {
             position: { kind: "FLOAT_VEC4", buffer: posBufferIndex, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: attribOffsets["position"], byteStride: separatePositionBuffer ? 0 : stride },
             normal: (attributes & OptionalVertexAttribute.normal) != 0 ? { kind: "FLOAT_VEC3", buffer, componentCount: 3, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["normal"], byteStride: stride } : null,
@@ -500,16 +515,17 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, textureLOD
             texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["texCoord"], byteStride: stride } : null,
             color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["color"], byteStride: stride } : null,
             deviation: (attributes & OptionalVertexAttribute.deviation) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["deviation"], byteStride: stride } : null,
-            triplets: tripletBuffer ? [
+            triangles: trianglePosBuffer ? [
                 { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 0, byteStride: 18 },
                 { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 6, byteStride: 18 },
-                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 12, byteStride: 18 }
+                { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 12, byteStride: 18 },
+                { kind: "UNSIGNED_INT", buffer: 2, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, byteOffset: 0, byteStride: 4 },
             ] : null,
         } as const satisfies VertexAttributes;
 
         objectRanges.sort((a, b) => (a.objectId - b.objectId));
 
-        subMeshes.push({ materialType, primitiveType: primitiveTypeStrings[primitiveType], numVertices, numTriplets, objectRanges, vertexAttributes, vertexBuffers, indices, baseColorTexture, drawRanges });
+        subMeshes.push({ materialType, primitiveType: primitiveTypeStrings[primitiveType], numVertices, numTriangles, objectRanges, vertexAttributes, vertexBuffers, indices, baseColorTexture, drawRanges });
     }
 
     const textures = new Array<NodeTexture | undefined>(schema.textureInfo.length);
@@ -536,7 +552,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, textureLOD
     return { subMeshes, textures } as const satisfies NodeGeometry;
 }
 
-export async function parseNode(id: string, separatePositionBuffer: boolean, version: string, buffer: ArrayBuffer, textureLOD: 0 | 1, filterObjectIds: (ids: Uint32Array) => Promise<Uint32Array | undefined>) {
+export async function parseNode(id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, textureLOD: 0 | 1, filterObjectIds: (ids: Uint32Array) => Promise<Uint32Array | undefined>) {
     console.assert(version == "1.7");
     // const begin = performance.now();
     const r = new BufferReader(buffer);
@@ -551,7 +567,7 @@ export async function parseNode(id: string, separatePositionBuffer: boolean, ver
     const predicate = filteredObjectIds ? (objectId: number) => (filteredObjectIds.has(objectId)) : undefined;
     // const predicate = (objectId: number) => (true);
     const childInfos = getChildren(id, schema, separatePositionBuffer, predicate);
-    const geometry = getGeometry(schema, separatePositionBuffer, textureLOD, predicate);
+    const geometry = getGeometry(schema, separatePositionBuffer, enableOutlines, textureLOD, predicate);
     // const end = performance.now();
     // console.log((end - begin));
     return { childInfos, geometry } as const;

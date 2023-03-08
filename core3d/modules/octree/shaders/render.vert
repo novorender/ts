@@ -78,7 +78,6 @@ void main() {
     varyings.normalWS = vertexNormal;
     varyings.normalVS = camera.localViewMatrixNormal * vertexNormal;
     varyings.texCoord0 = vertexTexCoord0;
-    varyings.linearDepth = -posVS.z;
     varyings.elevation = posLS.y;
 #if defined(IOS_WORKAROUND)
     varyings.color = color;

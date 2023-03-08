@@ -83,11 +83,13 @@ export class NodeLoader {
 
     loadNode(node: OctreeNode, version: string): Promise<NodePayload | undefined> {
         const { payloadPromises } = this;
+        const { deviceProfile } = node.context.renderContext;
         const { id, data } = node;
         const url = new URL(node.path, node.context.downloader.baseUrl).toString();
         const { byteSize } = data;
-        const { textureLOD } = node.context.renderContext.deviceProfile;
-        const loadMsg: LoadMessage = { kind: "load", id, version, url, byteSize, separatePositionsBuffer: true, textureLOD };
+        const { textureLOD } = deviceProfile;
+        const enableOutlines = deviceProfile.features.outline;
+        const loadMsg: LoadMessage = { kind: "load", id, version, url, byteSize, separatePositionsBuffer: true, enableOutlines, textureLOD };
         console.assert(byteSize != 0);
         const abortMsg: AbortMessage = { kind: "abort", id };
         const abort = () => { this.send(abortMsg); }

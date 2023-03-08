@@ -30,7 +30,8 @@ layout(location = 2) out uvec2 fragInfo;
 #endif
 
 void main() {
-    if(varyings.linearDepth < camera.near || clip(varyings.positionVS, clipping))
+    float linearDepth = -varyings.positionVS.z;
+    if(linearDepth < camera.near || clip(varyings.positionVS, clipping))
         discard;
 
     vec4 baseColor;
@@ -114,7 +115,7 @@ void main() {
 #if !defined(PICK)
     fragColor = rgba;
 #else
-    fragLinearDepth = varyings.linearDepth;
+    fragLinearDepth = linearDepth;
     fragInfo = uvec2(objectId, packNormalAndDeviation(normalVS.xy, varyings.deviation));
 #endif
 }
