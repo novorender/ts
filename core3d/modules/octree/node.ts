@@ -1,5 +1,5 @@
 import { mat4, type ReadonlyVec3, type ReadonlyVec4, vec3, vec4 } from "gl-matrix";
-import { glUBOProxy, glUpdateBuffer } from "@novorender/webgl2";
+import { glUBOProxy, glUpdateBuffer, type DrawMode } from "@novorender/webgl2";
 import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup } from "@novorender/core3d";
 import { Downloader } from "./download";
 import { createMeshes, deleteMesh, type Mesh, meshPrimitiveCount, updateMeshHighlightGroups } from "./mesh";
@@ -280,7 +280,6 @@ export class OctreeNode {
         try {
             const { context, children, meshes, resourceBin } = this;
             const { renderContext, loader, version } = context;
-            const { gl } = renderContext;
             this.state = NodeState.downloading;
             const payload = await loader.loadNode(this, version); // do actual downloading and parsing in worker
             if (payload) {
@@ -298,6 +297,19 @@ export class OctreeNode {
                     this.applyHighlightGroups(groups);
                 }
                 renderContext.changed = true;
+
+                // // verify projection counts
+                // if (this.id) {
+                //     let numPrimitives = 0;
+                //     for (const m of meshes) {
+                //         const { drawParams } = m;
+                //         const mode = drawParams.mode ?? "TRIANGLES";
+                //         const count = "count" in drawParams ? drawParams.count : 0;
+                //         const primitives = computePrimitiveCount(mode, count)!;
+                //         numPrimitives += primitives;
+                //     }
+                //     console.assert(numPrimitives == this.data.primitives);
+                // }
             }
         } catch (error: any) {
             if (error.name != "AbortError") {
@@ -316,5 +328,26 @@ export class OctreeNode {
                 updateMeshHighlightGroups(gl, mesh, groups);
             }
         }
+    }
+}
+
+function computePrimitiveCount(primitiveType: DrawMode, numIndices: number) {
+    switch (primitiveType) {
+        case "POINTS":
+            return numIndices;
+        case "LINES":
+            return numIndices / 2;
+        case "LINE_LOOP":
+            return numIndices;
+        case "LINE_STRIP":
+            return numIndices - 1;
+        case "TRIANGLES":
+            return numIndices / 3;
+        case "TRIANGLE_STRIP":
+            return numIndices - 2;
+        case "TRIANGLE_FAN":
+            return numIndices - 2;
+        default:
+            console.warn(`Unknown primitive type: ${primitiveType}!`);
     }
 }

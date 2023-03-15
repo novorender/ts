@@ -120,6 +120,8 @@ function computePrimitiveCount(primitiveType: PrimitiveType, numIndices: number)
             return numIndices - 2;
         case PrimitiveType.triangle_fan:
             return numIndices - 2;
+        default:
+            console.warn(`Unknown primitive type: ${primitiveType}!`);
     }
 }
 
@@ -172,14 +174,13 @@ function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, hasMa
 }
 
 export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection, range: Range, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean) {
-    // const { subMeshProjection } = schema;
-    const [begin, end] = range;
     let primitives = 0;
     let totalTextureBytes = 0;
     let totalNumIndices = 0;
     let totalNumVertices = 0;
     let totalNumVertexBytes = 0;
 
+    const [begin, end] = range;
     for (let i = begin; i < end; i++) {
         const objectId = subMeshProjection.objectId[i];
         if (predicate?.(objectId) ?? true) {
@@ -196,11 +197,13 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
             const numBytesPerVertex = separatePositionBuffer ?
                 computeVertexOffsets([pos]).stride + computeVertexOffsets(rest).stride :
                 computeVertexOffsets([pos, ...rest]).stride;
-            primitives += computePrimitiveCount(primitiveType, indices) ?? 0;
+            primitives += computePrimitiveCount(primitiveType, indices ? indices : vertices) ?? 0;
             totalNumIndices += indices;
             totalNumVertices += vertices;
             totalNumVertexBytes += vertices * numBytesPerVertex;
             totalTextureBytes += textureBytes;
+        } else {
+            debugger;
         }
     }
     const idxStride = totalNumVertices < 0xffff ? 2 : 4;
@@ -211,6 +214,8 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
 export function getChildren(parentId: string, schema: Schema, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean): NodeData[] {
     const { childInfo } = schema;
     var children: NodeData[] = [];
+
+    // compute parent/current mesh primitive counts per child partition
     const parentPrimitiveCounts: number[] = [];
     for (const mesh of getSubMeshes(schema, predicate)) {
         const { childIndex, indexRange, vertexRange } = mesh;
@@ -248,12 +253,11 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
 
         // const primitiveType = childInfo.primitiveType[i] as Exclude<PrimitiveType, PrimitiveType.undefined>;
         // const optionalAttributes = childInfo.attributes[i];
-        const subMeshRange = getRange(childInfo.subMeshes, i);
-
-        const parentPrimitives = parentPrimitiveCounts[i];
-        const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshRange, separatePositionBuffer, predicate);
+        const subMeshProjectionRange = getRange(childInfo.subMeshes, i);
+        const parentPrimitives = parentPrimitiveCounts[childIndex];
+        const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshProjectionRange, separatePositionBuffer, predicate);
         const primitivesDelta = primitives - (parentPrimitives ?? 0);
-        // console.assert(primitivesDelta >= 0);
+        console.assert(primitivesDelta >= 0);
         children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
     }
     return children;
@@ -279,9 +283,13 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
 }
 
 export function* getObjectIds(schema: Schema) {
-    const { subMesh } = schema;
+    const { subMesh, subMeshProjection } = schema;
     for (let i = 0; i < subMesh.length; i++) {
         const objectId = subMesh.objectId[i];
+        yield objectId;
+    }
+    for (let i = 0; i < subMeshProjection.length; i++) {
+        const objectId = subMeshProjection.objectId[i];
         yield objectId;
     }
 }
