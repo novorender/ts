@@ -35,6 +35,10 @@ export class NodeLoader {
         this.state = state;
     }
 
+    get activeDownloads() {
+        return this.payloadPromises.size;
+    }
+
     private send(msg: MessageRequest) {
         const { worker, handler } = this;
         if (worker) {
@@ -85,7 +89,7 @@ export class NodeLoader {
         const { payloadPromises } = this;
         const { deviceProfile } = node.context.renderContext;
         const { id, data } = node;
-        const url = new URL(node.path, node.context.downloader.baseUrl).toString();
+        const url = new URL(node.path, node.context.url).toString();
         const { byteSize } = data;
         const { textureLOD } = deviceProfile;
         const enableOutlines = deviceProfile.features.outline;

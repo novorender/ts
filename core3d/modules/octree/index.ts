@@ -2,7 +2,6 @@ import type { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGB
 import type { RenderModuleContext, RenderModule } from "..";
 import { createSceneRootNode } from "@novorender/core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility } from "./node";
-import { Downloader } from "./download";
 import { glUBOProxy, glDraw, glState, glTransformFeedback, glUniformLocations, glUpdateTexture, type TextureParams2DUncompressed, type UniformTypes } from "@novorender/webgl2";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
@@ -100,7 +99,6 @@ const enum UBO { camera, clipping, scene, node };
 class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly loader: NodeLoader;
     readonly meshModeLocations;
-    readonly downloader = new Downloader(new URL((document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url));
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
     readonly debug: boolean;
 
@@ -174,11 +172,11 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const url = scene?.url;
             this.loader.init(scene); // will abort any pending downloads for previous scene
             if (url && url != this.url) {
+                this.url = url;
                 const { config } = scene;
                 this.rootNode?.dispose();
                 const { version } = scene.config;
                 this.version = version;
-                this.downloader.baseUrl = new URL(url);
                 this.rootNode = createSceneRootNode(this, config);
                 this.rootNode.downloadGeometry();
                 const materialData = this.makeMaterialAtlas(state);
@@ -186,10 +184,10 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     glUpdateTexture(gl, resources.materialTexture, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: materialData });
                 }
             } else if (!url) {
+                this.url = url;
                 this.rootNode?.dispose();
                 this.rootNode = undefined;
             }
-            this.url = url;
         }
 
         if (renderContext.hasStateChanged({ outlines })) {
@@ -276,8 +274,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             sessionStorage.setItem("primitives", primitives.toLocaleString());
 
             const maxDownloads = 8;
-            let availableDownloads = maxDownloads - this.downloader.activeDownloads;
-
+            let availableDownloads = maxDownloads - this.loader.activeDownloads;
             for (const node of nodes) {
                 if (availableDownloads > 0 && node.state == NodeState.requestDownload) {
                     node.downloadGeometry();
@@ -542,8 +539,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     }
 
     contextLost() {
-        const { loader, downloader, rootNode } = this;
-        downloader.abort();
+        const { loader, rootNode } = this;
         loader.abortAll();
         rootNode?.dispose(); // consider retaining submesh js data
     }

@@ -24,7 +24,7 @@ export const enum NodeState {
 export interface OctreeContext {
     readonly renderContext: RenderContext;
     readonly loader: NodeLoader;
-    readonly downloader: Downloader;
+    readonly url: string | undefined;
     readonly version: string;
     readonly projectedSizeSplitThreshold: number;
     readonly debug: boolean;

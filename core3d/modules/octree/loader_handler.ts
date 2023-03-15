@@ -141,6 +141,9 @@ export class LoaderHandler {
                     }
                 }
                 this.send(loadedMsg, transfer);
+            } else {
+                const abortedMsg: AbortedMessage = { kind: "aborted", id };
+                this.send(abortedMsg);
             }
         } catch (error) {
             this.error(id, error);
