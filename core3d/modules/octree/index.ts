@@ -251,7 +251,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     gpuBytes += node.data.gpuBytes;
                     primitives += node.renderedPrimitives;
                 }
-                if (node.state == NodeState.requestDownload) {
+                if (node.state == NodeState.requestDownload || node.state == NodeState.downloading) {
                     // include projected resources in the budget
                     primitives += node.data.primitivesDelta;
                     gpuBytes += node.data.gpuBytes;
