@@ -20,7 +20,7 @@ export class OctreeModule implements RenderModule {
         maxPixelSize: "float",
         metricSize: "float",
         toleranceFactor: "float",
-        deviationMode: "uint",
+        deviationFactor: "float",
         deviationRange: "vec2",
         elevationRange: "vec2",
         nearOutlineColor: "vec3",
@@ -76,7 +76,7 @@ export class OctreeModule implements RenderModule {
             context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: { flags: [...flags, "PICK"] } }),
             context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices", "opacity", "object_id"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
             context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Scene"] }),
-            this.debug ? context.makeProgramAsync(bin, { ...shaders.debug, uniformBufferBlocks }) : Promise.resolve(null),
+            context.makeProgramAsync(bin, { ...shaders.debug, uniformBufferBlocks }),
         ]);
         const programs = { render, dither, prepass, pick, intersect, line, debug };
         return {
@@ -86,7 +86,6 @@ export class OctreeModule implements RenderModule {
         } as const;
     }
 
-    readonly debug = false;
     readonly maxLines = 1024 * 1024; // TODO: find a proper size!
 }
 
@@ -100,7 +99,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly loader: NodeLoader;
     readonly meshModeLocations;
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
-    readonly debug: boolean;
+    debug = false;
 
     localSpaceTranslation = vec3.create() as ReadonlyVec3;
     localSpaceChanged = false;
@@ -111,7 +110,6 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
     constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly sceneUniforms: Uniforms, readonly resources: Resources) {
         this.loader = new NodeLoader(module.nodeLoaderOptions);
-        this.debug = module.debug;
         const { gl } = renderContext;
         const { programs } = resources;
         this.meshModeLocations = {
@@ -136,20 +134,17 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             values.iblMipCount = renderContext.iblTextures.numMipMaps;
         }
 
+        this.debug = state.debug.showNodeBounds;
+
         let updateGradients = false;
         if (renderContext.hasStateChanged({ points })) {
             const { size, deviation } = points;
-            let deviationMode = 0;
-            switch (deviation.mode) {
-                case "on": deviationMode = 1; break;
-                case "mix": deviationMode = 2; break;
-            }
             const { values } = sceneUniforms;
             values.pixelSize = size.pixel ?? 0;
             values.maxPixelSize = size.maxPixel ?? 20;
             values.metricSize = size.metric ?? 0;
             values.toleranceFactor = size.toleranceFactor ?? 0;
-            values.deviationMode = deviationMode;
+            values.deviationFactor = deviation.mixFactor;
             values.deviationRange = gradientRange(deviation.colorGradient);
             const deviationColors = computeGradientColors(Gradient.size, deviation.colorGradient);
             this.gradientsImage.set(deviationColors, 0 * Gradient.size * 4);
@@ -286,6 +281,15 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         // console.log(endTime - beginTime);
     }
 
+    applyDefaultAttributeValues() {
+        const { gl } = this.renderContext;
+        // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
+        gl.vertexAttribI4ui(VertexAttributeIds.material, 0xff, 0, 0, 0);
+        gl.vertexAttribI4ui(VertexAttributeIds.objectId, 0xffffffff, 0, 0, 0);
+        gl.vertexAttrib4f(VertexAttributeIds.color0, 1, 1, 1, 1);
+        gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0);
+    }
+
     prepass() {
         const { resources, renderContext, rootNode } = this;
         const { programs } = resources;
@@ -334,11 +338,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
                 ],
             });
+            this.applyDefaultAttributeValues();
             gl.activeTexture(gl.TEXTURE0);
-            // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
-            gl.vertexAttribI4ui(VertexAttributeIds.material, 0xff, 0, 0, 0); // material_index
-            gl.vertexAttribI4ui(VertexAttributeIds.objectId, 0xffffffff, 0, 0, 0); // object_id
-            gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0); // highlight_index
             const meshState: MeshState = {};
             for (const node of nodes) {
                 if (node.visibility != Visibility.none) {
@@ -415,10 +416,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
                 cull: { enable: true, },
             });
-            // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
-            gl.vertexAttribI4ui(VertexAttributeIds.material, 0xff, 0, 0, 0); // material_index
-            gl.vertexAttribI4ui(VertexAttributeIds.objectId, 0xffffffff, 0, 0, 0); // object_id
-            gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0); // highlight_index
+            this.applyDefaultAttributeValues();
             gl.activeTexture(gl.TEXTURE0);
             const meshState: MeshState = {};
             for (const node of nodes) {

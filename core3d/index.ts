@@ -8,6 +8,7 @@ export * from "./context";
 export * from "./modules";
 export * from "./highlight";
 export * from "./device";
+export * from "./benchmark";
 
 export async function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanvasElement, setRenderContext: (context: RenderContext) => void) {
     const options: WebGLContextAttributes = {

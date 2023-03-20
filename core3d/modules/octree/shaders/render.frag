@@ -96,8 +96,8 @@ void main() {
     }
 
     // we put discards here (late) to avoid problems with derivative functions
-    if(meshMode == meshModePoints && distance(gl_FragCoord.xy, varyings.screenPos) > varyings.radius)
-        discard;
+    // if(meshMode == meshModePoints && distance(gl_FragCoord.xy, varyings.screenPos) > varyings.radius)
+    //     discard;
 
 #if defined (PREPASS)
     if(rgba.a < 1.)

@@ -14,6 +14,7 @@ export interface RenderState {
     readonly camera: RenderStateCamera;
     readonly quality: RenderStateQuality;
     readonly grid: RenderStateGrid;
+    readonly debug: RenderStateDebug;
     readonly cube: RenderStateCube;
     readonly scene: RenderStateScene | undefined;
     readonly terrain: RenderStateTerrain;
@@ -80,6 +81,10 @@ export interface RenderStateCamera {
 
 export interface RenderStateQuality {
     readonly detail: number;
+}
+
+export interface RenderStateDebug {
+    readonly showNodeBounds: boolean;
 }
 
 export interface RenderStateGrid {
@@ -161,7 +166,7 @@ export interface RenderStatePointCloud {
     };
 
     readonly deviation: {
-        readonly mode: "on" | "off" | "mix";
+        readonly mixFactor: number; // 0-1, where 0 is 100% original vertex color and 1 is 100% color gradient color
         readonly colorGradient: RenderStateColorGradient<RGBA>;
     };
 }

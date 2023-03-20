@@ -128,7 +128,7 @@ function computePrimitiveCount(primitiveType: PrimitiveType, numIndices: number)
 const vertexAttribs = {
     position: { type: Float16Array, components: ["x", "y", "z"] },
     normal: { type: Int8Array, components: ["x", "y", "z"] },
-    color: { type: Uint32Array }, // RGBA8
+    color: { type: Uint8Array, components: ["red", "green", "blue", "alpha"] },
     texCoord: { type: Float16Array, components: ["x", "y"] },
     deviation: { type: Float16Array },
     materialIndex: { type: Uint8Array },
@@ -203,7 +203,7 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
             totalNumVertexBytes += vertices * numBytesPerVertex;
             totalTextureBytes += textureBytes;
         } else {
-            debugger;
+            // debugger;
         }
     }
     const idxStride = totalNumVertices < 0xffff ? 2 : 4;
@@ -257,7 +257,7 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
         const parentPrimitives = parentPrimitiveCounts[childIndex];
         const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshProjectionRange, separatePositionBuffer, predicate);
         const primitivesDelta = primitives - (parentPrimitives ?? 0);
-        console.assert(primitivesDelta >= 0);
+        console.assert(parentId == "0" || primitivesDelta >= 0, "negative primitive delta");
         children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
     }
     return children;

@@ -22,6 +22,9 @@ export function defaultRenderState(): RenderState {
         quality: {
             detail: 1,
         },
+        debug: {
+            showNodeBounds: false,
+        },
         grid: {
             enabled: false,
             color: [2, 2, 2],
@@ -85,13 +88,13 @@ export function defaultRenderState(): RenderState {
                 toleranceFactor: 0,
             },
             deviation: {
-                mode: "on",
+                mixFactor: 1,
                 colorGradient: {
                     knots: [
                         { position: -1, color: [1, 0, 0, 1] },
                         { position: -0.5, color: [1, 1, 0, 1] },
-                        { position: -0.45, color: [1, 1, 0, 0] },
-                        { position: 0.45, color: [1, 1, 0, 0] },
+                        { position: -0.25, color: [0, 1, 0, 1] },
+                        { position: 0.25, color: [0, 1, 0, 1] },
                         { position: 0.5, color: [1, 1, 0, 1] },
                         { position: 1, color: [0, 1, 0, 1] },
                     ],

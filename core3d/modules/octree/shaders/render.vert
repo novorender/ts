@@ -36,7 +36,7 @@ const vec3 vertexNormal = vec3(0);
 const uint vertexMaterial = 0U;
 const uint vertexObjectId = 0U;
 const vec2 vertexTexCoord0 = vec2(0);
-const vec4 vertexColor0 = vec4(0);
+const vec4 vertexColor0 = vec4(1);
 const float vertexDeviation = 0.;
 const uint vertexHighlight = 0U;
 #endif
@@ -45,19 +45,12 @@ void main() {
     vec4 posLS = node.modelLocalMatrix * vertexPosition;
     vec4 posVS = camera.localViewMatrix * posLS;
     gl_Position = camera.viewClipMatrix * posVS;
-    vec4 color = vertexMaterial == 0xffU ? vec4(0) : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
+    vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
 
     if(meshMode == meshModePoints) {
-        if(scene.deviationMode != 0U) {
+        if(scene.deviationFactor > 0.) {
             vec4 gradientColor = getGradientColor(textures.gradients, vertexDeviation, deviationV, scene.deviationRange);
-            if(scene.deviationMode == 1U) {
-                if(gradientColor.a < 0.1)
-                    return;
-                color = gradientColor;
-            } else if(gradientColor.a > 0.99)
-                color.rgb = gradientColor.rgb;
-            else if(gradientColor.a > 0.01)
-                color.rgb = vertexColor0.rgb * (1.0 - gradientColor.a) + gradientColor.rgb * gradientColor.a;
+            color = mix(vertexColor0, gradientColor, scene.deviationFactor);
         }
 
         // compute point size
