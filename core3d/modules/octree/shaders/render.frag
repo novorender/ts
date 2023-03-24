@@ -62,7 +62,7 @@ void main() {
         rgba = baseColor;
     } else if(meshMode == meshModeTerrain) {
         rgba = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange);
-    } else if(varyings.texCoord0 != vec2(0)) {
+    } else if(baseColor == vec4(0)) {
         rgba = texture(textures.base_color, varyings.texCoord0);
     } else {
         vec4 diffuseOpacity = baseColor;
