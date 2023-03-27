@@ -161,6 +161,7 @@
         "    float maxPixelSize;\r",
         "    float metricSize;\r",
         "    float toleranceFactor;\r",
+        "    uint deviationIndex;\r",
         "    float deviationFactor;\r",
         "    vec2 deviationRange;\r",
         "    // terrain elevation\r",

@@ -22,6 +22,7 @@ export class OctreeModule implements RenderModule {
         toleranceFactor: "float",
         deviationFactor: "float",
         deviationRange: "vec2",
+        deviationIndex: "uint",
         elevationRange: "vec2",
         nearOutlineColor: "vec3",
     } as const satisfies Record<string, UniformTypes>;
@@ -144,6 +145,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             values.maxPixelSize = size.maxPixel ?? 20;
             values.metricSize = size.metric ?? 0;
             values.toleranceFactor = size.toleranceFactor ?? 0;
+            values.deviationIndex = deviation.index;
             values.deviationFactor = deviation.mixFactor;
             values.deviationRange = gradientRange(deviation.colorGradient);
             const deviationColors = computeGradientColors(Gradient.size, deviation.colorGradient);
@@ -287,6 +289,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         gl.vertexAttribI4ui(VertexAttributeIds.material, 0xff, 0, 0, 0);
         gl.vertexAttribI4ui(VertexAttributeIds.objectId, 0xffffffff, 0, 0, 0);
         gl.vertexAttrib4f(VertexAttributeIds.color0, 1, 1, 1, 1);
+        gl.vertexAttrib4f(VertexAttributeIds.deviations, 0, 0, 0, 0);
         gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0);
     }
 
@@ -654,7 +657,7 @@ const enum VertexAttributeIds {
     objectId,
     texCoord0,
     color0,
-    deviation,
+    deviations,
     highlight,
 };
 

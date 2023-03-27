@@ -81,7 +81,7 @@ void main() {
         }
         case tonemapModeDeviation: {
             float deviation = unpackDeviation(texture(textures.info, varyings.uv).y);
-            color.rgb = deviation > 0. ? vec3(0, deviation / tonemapMaxDeviation, 0) : vec3(-deviation / tonemapMaxDeviation, 0, 0);
+            color.rgb = deviation > 0. ? vec3(0, deviation / tonemapMaxDeviation, 1) : vec3(-deviation / tonemapMaxDeviation, 1, 0);
             break;
         }
         case tonemapModeZbuffer: {

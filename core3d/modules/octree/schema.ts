@@ -1,9 +1,8 @@
-import { BufferReader } from "./util";
-import type { EnumArray, U8, U16, U32, I8, I16, I32, F16, F32, F64 } from "./util";
+import { BufferReader } from "./util.js";
+import type { EnumArray, U8, U16, U32, I8, I16, I32, F16, F32, F64 } from "./util.js";
 
 // Type of GL render primitive.
 export const enum PrimitiveType {
-    undefined = 255,
     points = 0,
     lines = 1,
     line_loops = 2,
@@ -18,7 +17,6 @@ export const enum OptionalVertexAttribute {
     normal = 1,
     color = 2,
     texCoord = 4,
-    deviation = 8,
 };
 
 // Type of material.
@@ -55,11 +53,11 @@ export interface ChildInfo {
     readonly childIndex: U8;
     readonly childMask: U32; // Set of bits (max 32) for which child indices are referenced by geometry.
     readonly tolerance: I8; // A power of two exponent describing the error tolerance of this node, which is used to determine LOD.
+    readonly nodeSize: F32; // Used to determine LOD based on projected size of node.
     readonly totalByteSize: U32; // # uncompressed bytes total for child binary file.
     readonly offset: Double3; // Model -> world space translation vector.
     readonly scale: F32; // Model -> world space uniform scale factor (from unit [-1,1] vectors).
     readonly bounds: Bounds; // Bounding volume (in model space).
-    readonly weightedCenter: Float3; // Weighted center coordinate (in model space).
     readonly subMeshes: SubMeshProjectionRange;
 };
 
@@ -104,6 +102,7 @@ export interface SubMeshProjection {
     readonly objectId: U32;
     readonly primitiveType: EnumArray<PrimitiveType>;
     readonly attributes: EnumArray<OptionalVertexAttribute>;
+    readonly numDeviations: U8; // # of deviation vertex attributes (0-3)
     readonly numIndices: U32; // zero if no index buffer
     readonly numVertices: U32;
     readonly numTextureBytes: U32;
@@ -118,8 +117,11 @@ export interface SubMesh {
     readonly primitiveType: EnumArray<PrimitiveType>;
     readonly materialType: EnumArray<MaterialType>;
     readonly attributes: EnumArray<OptionalVertexAttribute>;
+    readonly numDeviations: U8; // # of deviation vertex attributes (0-4)
     readonly vertices: VertexRange; // Vertices are local to each sub-mesh.
-    readonly indices: VertexIndexRange; // Indices, if any, are 16-bit and relative to the local vertex range.
+    readonly primitiveVertexIndices: VertexIndexRange; // Triangle vertex index triplets, or line index pairs, if any, are 16-bit and relative to the local vertex range.
+    readonly edgeVertexIndices: VertexIndexRange; // "Hard" edge vertex index pairs, if any, are 16-bit and relative to the local vertex range.
+    readonly cornerVertexIndices: VertexIndexRange; // "Hard" corner vertex indices, if any, are 16-bit and relative to the local vertex range.
     readonly textures: TextureInfoRange;
 };
 
@@ -151,7 +153,7 @@ export interface Vertex {
     readonly normal?: Int8_3;
     readonly color?: RGBA_U8;
     readonly texCoord?: Half2;
-    readonly deviation?: F16;
+    readonly deviations: Deviations;
 };
 
 export interface Int16_3 {
@@ -182,15 +184,31 @@ export interface Half2 {
     readonly y: F16;
 };
 
+// Mesh deviations vertex attributes
+export interface Deviations {
+    readonly length: number;
+    readonly a?: F16;
+    readonly b?: F16;
+    readonly c?: F16;
+    readonly d?: F16;
+};
+
+// Mesh triangles
+export interface Triangle {
+    readonly length: number;
+    readonly topologyFlags?: U8; // Bits [0-2] are edge flags (vertex pairs ab, bc, ca), [3-5] corner flags. True = edge/corner is a "hard", or true topological feature and should be rendered and/or snapped to.
+};
+
 export function readSchema(r: BufferReader) {
-    const sizes = r.u32(7);
-    const flags = r.u8(5);
+    const sizes = r.u32(8);
+    const flags = r.u8(9);
     const schema = {
         childInfo: {
             length: sizes[0],
             childIndex: r.u8(sizes[0]),
             childMask: r.u32(sizes[0]),
             tolerance: r.i8(sizes[0]),
+            nodeSize: r.f32(sizes[0]),
             totalByteSize: r.u32(sizes[0]),
             offset: {
                 length: sizes[0],
@@ -227,12 +245,6 @@ export function readSchema(r: BufferReader) {
                     radius: r.f32(sizes[0]),
                 } as BoundingSphere,
             } as Bounds,
-            weightedCenter: {
-                length: sizes[0],
-                x: r.f32(sizes[0]),
-                y: r.f32(sizes[0]),
-                z: r.f32(sizes[0]),
-            } as Float3,
             subMeshes: { start: r.u32(sizes[0]), count: r.u32(sizes[0]) } as SubMeshProjectionRange,
         } as ChildInfo,
         subMeshProjection: {
@@ -240,6 +252,7 @@ export function readSchema(r: BufferReader) {
             objectId: r.u32(sizes[1]),
             primitiveType: r.u8(sizes[1]) as EnumArray<PrimitiveType>,
             attributes: r.u8(sizes[1]) as EnumArray<OptionalVertexAttribute>,
+            numDeviations: r.u8(sizes[1]),
             numIndices: r.u32(sizes[1]),
             numVertices: r.u32(sizes[1]),
             numTextureBytes: r.u32(sizes[1]),
@@ -252,8 +265,11 @@ export function readSchema(r: BufferReader) {
             primitiveType: r.u8(sizes[2]) as EnumArray<PrimitiveType>,
             materialType: r.u8(sizes[2]) as EnumArray<MaterialType>,
             attributes: r.u8(sizes[2]) as EnumArray<OptionalVertexAttribute>,
+            numDeviations: r.u8(sizes[2]),
             vertices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexRange,
-            indices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexIndexRange,
+            primitiveVertexIndices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexIndexRange,
+            edgeVertexIndices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexIndexRange,
+            cornerVertexIndices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexIndexRange,
             textures: { start: r.u8(sizes[2]), count: r.u8(sizes[2]) } as TextureInfoRange,
         } as SubMesh,
         textureInfo: {
@@ -299,10 +315,20 @@ export function readSchema(r: BufferReader) {
                 x: r.f16(sizes[4]),
                 y: r.f16(sizes[4]),
             } as Half2,
-            deviation: !flags[3] ? undefined : r.f16(sizes[4]),
+            deviations: {
+                length: sizes[4],
+                a: !flags[3] ? undefined : r.f16(sizes[4]),
+                b: !flags[4] ? undefined : r.f16(sizes[4]),
+                c: !flags[5] ? undefined : r.f16(sizes[4]),
+                d: !flags[6] ? undefined : r.f16(sizes[4]),
+            } as Deviations,
         } as Vertex,
-        vertexIndex: !flags[4] ? undefined : r.u16(sizes[5]),
-        texturePixels: r.u8(sizes[6]),
+        triangle: {
+            length: sizes[5],
+            topologyFlags: !flags[7] ? undefined : r.u8(sizes[5]),
+        } as Triangle,
+        vertexIndex: !flags[8] ? undefined : r.u16(sizes[6]),
+        texturePixels: r.u8(sizes[7]),
     } as const;
     console.assert(r.eof);
     return schema;

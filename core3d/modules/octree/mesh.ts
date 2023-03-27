@@ -36,11 +36,11 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
         const ib = typeof indices != "number" ? resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
-        const { triangles, position, normal, material, objectId, texCoord, color, deviation } = vertexAttributes;
+        const { triangles, position, normal, material, objectId, texCoord, color, deviations } = vertexAttributes;
         function convertAttrib(a: VertexAttributeData | null) {
             return a ? { ...a, buffer: buffers[a.buffer] } as VertexAttribute : null;
         }
-        const attributes = [position, normal, material, objectId, texCoord, color, deviation].map(convertAttrib);
+        const attributes = [position, normal, material, objectId, texCoord, color, deviations].map(convertAttrib);
         const triangleAttributes = triangles ? triangles.map(convertAttrib) : null;
 
         // add extra highlight vertex buffer and attribute

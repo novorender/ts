@@ -153,6 +153,7 @@ struct SceneUniforms {
     float maxPixelSize;
     float metricSize;
     float toleranceFactor;
+    uint deviationIndex;
     float deviationFactor;
     vec2 deviationRange;
     // terrain elevation

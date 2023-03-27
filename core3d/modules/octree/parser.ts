@@ -21,7 +21,6 @@ export interface MeshObjectRange {
 const primitiveTypeStrings = ["POINTS", "LINES", "LINE_LOOP", "LINE_STRIP", "TRIANGLES", "TRIANGLE_STRIP", "TRIANGLE_FAN"] as const;
 export type PrimitiveTypeString = typeof primitiveTypeStrings[number];
 
-
 export interface Bounds {
     readonly box: AABB;
     readonly sphere: BoundingSphere;
@@ -62,7 +61,7 @@ export interface VertexAttributes {
     readonly objectId: VertexAttributeData | null;
     readonly texCoord: VertexAttributeData | null;
     readonly color: VertexAttributeData | null;
-    readonly deviation: VertexAttributeData | null;
+    readonly deviations: VertexAttributeData | null;
     readonly triangles: readonly [VertexAttributeData, VertexAttributeData, VertexAttributeData, VertexAttributeData] | null;
 }
 
@@ -97,6 +96,7 @@ function getVec3(v: Float3 | Double3, i: number) {
 }
 
 type Range = readonly [begin: number, end: number];
+type DevianceCount = 0 | 1 | 2 | 3 | 4;
 
 function getRange(v: { readonly start: ArrayLike<number>, count: ArrayLike<number>; }, i: number): Range {
     const begin = v.start[i];
@@ -125,19 +125,22 @@ function computePrimitiveCount(primitiveType: PrimitiveType, numIndices: number)
     }
 }
 
-const vertexAttribs = {
-    position: { type: Float16Array, components: ["x", "y", "z"] },
-    normal: { type: Int8Array, components: ["x", "y", "z"] },
-    color: { type: Uint8Array, components: ["red", "green", "blue", "alpha"] },
-    texCoord: { type: Float16Array, components: ["x", "y"] },
-    deviation: { type: Float16Array },
-    materialIndex: { type: Uint8Array },
-    objectId: { type: Uint32Array },
-} as const;
-type VertexAttribNames = keyof typeof vertexAttribs;
-type VertexAttrib = { readonly type: typeof vertexAttribs[VertexAttribNames]["type"], readonly components?: readonly string[]; };
+function getVertexAttribs(deviations: number) {
+    return {
+        position: { type: Float16Array, components: ["x", "y", "z"] },
+        normal: { type: Int8Array, components: ["x", "y", "z"] },
+        color: { type: Uint8Array, components: ["red", "green", "blue", "alpha"] },
+        texCoord: { type: Float16Array, components: ["x", "y"] },
+        deviations: { type: Float16Array, components: ["a", "b", "c", "d"].slice(0, deviations) },
+        materialIndex: { type: Uint8Array },
+        objectId: { type: Uint32Array },
+    } as const;
+}
+type VertexAttribs = ReturnType<typeof getVertexAttribs>;
+type VertexAttribNames = keyof VertexAttribs;
+type VertexAttrib = { readonly type: VertexAttribs[VertexAttribNames]["type"], readonly components?: readonly string[]; };
 
-function computeVertexOffsets(attribs: readonly VertexAttribNames[]) {
+function computeVertexOffsets(attribs: readonly VertexAttribNames[], deviations = 0) {
     let offset = 0;
     let offsets: any = {};
     function alignOffset(alignment: number) {
@@ -145,6 +148,7 @@ function computeVertexOffsets(attribs: readonly VertexAttribNames[]) {
         offset += padding; // pad offset to be memory aligned.
     }
     let maxAlign = 1;
+    const vertexAttribs = getVertexAttribs(deviations);
     for (const attrib of attribs) {
         const { type, components } = vertexAttribs[attrib] as VertexAttrib;
         const count = components?.length ?? 1;
@@ -158,12 +162,12 @@ function computeVertexOffsets(attribs: readonly VertexAttribNames[]) {
     return offsets as { readonly [P in VertexAttribNames]?: number; } & { readonly stride: number; };
 }
 
-function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, hasMaterials: boolean, hasObjectIds: boolean) {
+function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, deviations: DevianceCount, hasMaterials: boolean, hasObjectIds: boolean) {
     const attribNames: VertexAttribNames[] = ["position"];
     if (optionalAttributes & OptionalVertexAttribute.normal) attribNames.push("normal");
     if (optionalAttributes & OptionalVertexAttribute.texCoord) attribNames.push("texCoord");
     if (optionalAttributes & OptionalVertexAttribute.color) attribNames.push("color");
-    if (optionalAttributes & OptionalVertexAttribute.deviation) attribNames.push("deviation");
+    if (deviations > 0) attribNames.push("deviations");
     if (hasMaterials) {
         attribNames.push("materialIndex");
     }
@@ -188,12 +192,13 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
             const vertices = subMeshProjection.numVertices[i];
             const textureBytes = subMeshProjection.numTextureBytes[i]; // TODO: adjust by device profile/resolution
             const attributes = subMeshProjection.attributes[i];
+            const deviations = subMeshProjection.numDeviations[i] as DevianceCount;
             const primitiveType = subMeshProjection.primitiveType[i];
             // we assume that textured nodes are terrain with no material index (but object_id?).
             // TODO: state these values explicitly in binary format instead
             const hasMaterials = textureBytes == 0;
             const hasObjectIds = true;
-            const [pos, ...rest] = getVertexAttribNames(attributes, hasMaterials, hasObjectIds);
+            const [pos, ...rest] = getVertexAttribNames(attributes, deviations, hasMaterials, hasObjectIds);
             const numBytesPerVertex = separatePositionBuffer ?
                 computeVertexOffsets([pos]).stride + computeVertexOffsets(rest).stride :
                 computeVertexOffsets([pos, ...rest]).stride;
@@ -274,10 +279,11 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
             const materialType = subMesh.materialType[i];
             const primitiveType = subMesh.primitiveType[i];
             const attributes = subMesh.attributes[i];
+            const deviations = subMesh.numDeviations[i] as DevianceCount;
             const vertexRange = getRange(subMesh.vertices, i);
-            const indexRange = getRange(subMesh.indices, i);
+            const indexRange = getRange(subMesh.primitiveVertexIndices, i);
             const textureRange = getRange(subMesh.textures, i);
-            yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, vertexRange, indexRange, textureRange };
+            yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, deviations, vertexRange, indexRange, textureRange };
         }
     }
 }
@@ -334,30 +340,30 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
         readonly materialType: number;
         readonly primitiveType: number;
         readonly attributes: number;
-        // readonly childIndex: number;
+        readonly deviations: DevianceCount;
         readonly subMeshIndices: number[];
     };
     const groups = new Map<string, Group>();
     for (let i = 0; i < filteredSubMeshes.length; i++) {
-        const { materialType, primitiveType, attributes, childIndex } = filteredSubMeshes[i];
-        const key = `${materialType}_${primitiveType}_${attributes}_${childIndex}`;
+        const { materialType, primitiveType, attributes, deviations, childIndex } = filteredSubMeshes[i];
+        const key = `${materialType}_${primitiveType}_${attributes}_${deviations}_${childIndex}`;
         let group = groups.get(key);
         if (!group) {
-            group = { materialType, primitiveType, attributes, subMeshIndices: [] };
+            group = { materialType, primitiveType, attributes, deviations, subMeshIndices: [] };
             groups.set(key, group);
         }
         group.subMeshIndices.push(i);
     }
 
     // create drawable meshes
-    for (const { materialType, primitiveType, attributes, subMeshIndices } of groups.values()) {
+    for (const { materialType, primitiveType, attributes, deviations, subMeshIndices } of groups.values()) {
         if (subMeshIndices.length == 0)
             continue;
         const groupMeshes = subMeshIndices.map(i => filteredSubMeshes[i]);
         const hasMaterials = groupMeshes.some(m => m.materialIndex != 0xff);
         const hasObjectIds = groupMeshes.some(m => m.objectId != 0xffffffff);
 
-        const allAttribNames = getVertexAttribNames(attributes, hasMaterials, hasObjectIds);
+        const allAttribNames = getVertexAttribNames(attributes, deviations, hasMaterials, hasObjectIds);
         const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're potentially putting them in a separate buffer
         const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
         const positionStride = computeVertexOffsets([posName]).stride;
@@ -405,12 +411,13 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
             const drawRangeBegin = indexBuffer ? indexOffset : vertexOffset;
 
             for (const subMesh of meshes) {
-                const { vertexRange, indexRange, materialIndex, objectId } = subMesh;
+                const { vertexRange, indexRange, materialIndex, deviations, objectId } = subMesh;
                 const context = { materialIndex, objectId };
                 const [beginVtx, endVtx] = vertexRange;
                 const [beginIdx, endIdx] = indexRange;
 
                 // create vertex buffer
+                const vertexAttribs = getVertexAttribs(deviations);
                 for (const attribName of attribNames) {
                     const { type, components } = vertexAttribs[attribName] as VertexAttrib;
                     const dst = new type(vertexBuffer, vertexOffset * vertexStride);
@@ -515,6 +522,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
             vertexBuffers.push(positionBuffer);
         }
         const posBufferIndex = positionBuffer ? trianglePosBuffer ? 3 : 1 : 0;
+        const deviancesKind = deviations == 0 || deviations == 1 ? "FLOAT" as const : `FLOAT_VEC${deviations}` as const;
         const vertexAttributes = {
             position: { kind: "FLOAT_VEC4", buffer: posBufferIndex, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: attribOffsets["position"], byteStride: separatePositionBuffer ? 0 : stride },
             normal: (attributes & OptionalVertexAttribute.normal) != 0 ? { kind: "FLOAT_VEC3", buffer, componentCount: 3, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["normal"], byteStride: stride } : null,
@@ -522,7 +530,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
             objectId: hasObjectIds ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, byteOffset: attribOffsets["objectId"], byteStride: stride } : null,
             texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["texCoord"], byteStride: stride } : null,
             color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["color"], byteStride: stride } : null,
-            deviation: (attributes & OptionalVertexAttribute.deviation) != 0 ? { kind: "FLOAT", buffer, componentCount: 1, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["deviation"], byteStride: stride } : null,
+            deviations: deviations != 0 ? { kind: deviancesKind, buffer, componentCount: deviations, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["deviations"], byteStride: stride } : null,
             triangles: trianglePosBuffer ? [
                 { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 0, byteStride: 18 },
                 { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 6, byteStride: 18 },

@@ -29,7 +29,7 @@ layout(location = 2) in uint vertexMaterial;
 layout(location = 3) in uint vertexObjectId;
 layout(location = 4) in vec2 vertexTexCoord0;
 layout(location = 5) in vec4 vertexColor0;
-layout(location = 6) in float vertexDeviation;
+layout(location = 6) in vec4 vertexDeviations;
 layout(location = 7) in uint vertexHighlight;
 #else
 const vec3 vertexNormal = vec3(0);
@@ -37,7 +37,7 @@ const uint vertexMaterial = 0U;
 const uint vertexObjectId = 0U;
 const vec2 vertexTexCoord0 = vec2(0);
 const vec4 vertexColor0 = vec4(1);
-const float vertexDeviation = 0.;
+const vec4 vertexDeviations = vec4(0);
 const uint vertexHighlight = 0U;
 #endif
 
@@ -48,8 +48,9 @@ void main() {
     vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
 
     if(meshMode == meshModePoints) {
+        float deviation = vertexDeviations[scene.deviationIndex];
         if(scene.deviationFactor > 0.) {
-            vec4 gradientColor = getGradientColor(textures.gradients, vertexDeviation, deviationV, scene.deviationRange);
+            vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
             color = mix(vertexColor0, gradientColor, scene.deviationFactor);
         }
 
@@ -64,7 +65,7 @@ void main() {
 
         // Convert radius to window coordinates
         varyings.radius = max(1.0, gl_PointSize * 0.5);
-        varyings.deviation = vertexDeviation;
+        varyings.deviation = deviation;
     }
 
     varyings.positionVS = posVS.xyz;

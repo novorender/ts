@@ -88,6 +88,7 @@ export function defaultRenderState(): RenderState {
                 toleranceFactor: 0,
             },
             deviation: {
+                index: 0,
                 mixFactor: 0,
                 colorGradient: {
                     knots: [

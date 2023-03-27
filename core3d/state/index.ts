@@ -166,6 +166,7 @@ export interface RenderStatePointCloud {
     };
 
     readonly deviation: {
+        readonly index: number; // 0-3, which deviance vertex attribute to render
         readonly mixFactor: number; // 0-1, where 0 is 100% original vertex color and 1 is 100% color gradient color
         readonly colorGradient: RenderStateColorGradient<RGBA>;
     };
