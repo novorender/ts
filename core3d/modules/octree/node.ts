@@ -82,7 +82,7 @@ export class OctreeNode {
             min: "vec3",
             max: "vec3",
         });
-        this.uniformsData.values.tolerance = data.tolerance;
+        this.uniformsData.values.tolerance = Math.pow(2, data.tolerance);
     }
 
     dispose() {
