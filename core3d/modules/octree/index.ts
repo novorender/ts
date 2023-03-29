@@ -293,7 +293,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
         gl.vertexAttribI4ui(VertexAttributeIds.material, 0xff, 0, 0, 0);
         gl.vertexAttribI4ui(VertexAttributeIds.objectId, 0xffffffff, 0, 0, 0);
-        gl.vertexAttrib4f(VertexAttributeIds.color0, 1, 1, 1, 1);
+        gl.vertexAttrib4f(VertexAttributeIds.color0, 0, 0, 0, 0);
         gl.vertexAttrib4f(VertexAttributeIds.deviations, 0, 0, 0, 0);
         gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0);
     }
