@@ -93,6 +93,11 @@ export class OctreeModule implements RenderModule {
 type Uniforms = ReturnType<OctreeModule["createUniforms"]>;
 type Resources = Awaited<ReturnType<OctreeModule["createResources"]>>;
 
+interface RenderNode {
+    readonly mask: number;
+    readonly node: OctreeNode;
+};
+
 const enum Gradient { size = 1024 };
 const enum UBO { camera, clipping, scene, node };
 
@@ -126,10 +131,10 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         const { renderContext, resources, sceneUniforms, projectedSizeSplitThreshold, module } = this;
         const { gl, deviceProfile } = renderContext;
-        const { scene, localSpaceTranslation, highlights, points, terrain, outlines, quality } = state;
+        const { scene, localSpaceTranslation, highlights, points, terrain, outlines } = state;
         const { values } = sceneUniforms;
 
-        this.projectedSizeSplitThreshold = 1 / (quality.detail * deviceProfile.detailBias);
+        this.projectedSizeSplitThreshold = 1 / deviceProfile.detailBias;
 
         if (values.iblMipCount != renderContext.iblTextures.numMipMaps) {
             values.iblMipCount = renderContext.iblTextures.numMipMaps;
@@ -293,21 +298,55 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0);
     }
 
-    prepass() {
+    getRenderNodes(projectedSizeSplitThreshold: number): readonly RenderNode[] {
+        const { rootNode } = this;
+        // create list of meshes that we can sort by material/state?
+        const nodes: RenderNode[] = [];
+        function iterate(node: OctreeNode): boolean {
+            let mask = node.data.childMask;
+            let rendered = false;
+            if (node.visibility != Visibility.none) {
+                if (node.shouldSplit(projectedSizeSplitThreshold)) {
+                    for (const child of node.children) {
+                        if (child.hasGeometry) {
+                            rendered = true;
+                            if (iterate(child)) {
+                                mask &= ~(1 << child.data.childIndex);
+                            }
+                        }
+                    }
+                } else {
+                    rendered = true;
+                }
+                if (mask) {
+                    nodes.push({ mask, node });
+                }
+            }
+            return rendered;
+        }
+        if (rootNode) {
+            iterate(rootNode);
+        }
+        nodes.sort((a, b) => a.node.viewDistance - b.node.viewDistance); // sort nodes front to back, i.e. ascending view distance
+        return nodes;
+    }
+
+    prepass(state: DerivedRenderState) {
         const { resources, renderContext, rootNode } = this;
         const { programs } = resources;
         const { gl } = renderContext;
         if (rootNode) {
-            let nodes = [...iterateNodes(rootNode)];
-            nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
+            // let nodes = [...iterateNodes(rootNode)];
+            // nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
+            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail);
             glState(gl, {
                 program: programs.prepass,
                 depth: { test: true },
             });
             gl.activeTexture(gl.TEXTURE0);
             const meshState: MeshState = {};
-            for (const node of nodes) {
-                this.renderNode(node, meshState, "prepass");
+            for (const { mask, node } of renderNodes) {
+                this.renderNode(node, mask, meshState, "prepass");
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
         }
@@ -320,8 +359,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { gl, iblTextures, cameraUniforms, clippingUniforms, deviceProfile } = renderContext;
         if (rootNode) {
             const program = state.effectiveSamplesMSAA > 1 ? "render" : "dither";
-            let nodes = [...iterateNodes(rootNode)];
-            nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
+            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail);
             const { diffuse, specular } = iblTextures;
             glState(gl, {
                 program: programs[program],
@@ -344,11 +382,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             this.applyDefaultAttributeValues();
             gl.activeTexture(gl.TEXTURE0);
             const meshState: MeshState = {};
-            for (const node of nodes) {
-                if (node.visibility != Visibility.none) {
-                    // TODO: extract meshes and sort by type so we can keep state changes to a minimum.
-                    this.renderNode(node, meshState, program);
-                }
+            for (const { mask, node } of renderNodes) {
+                this.renderNode(node, mask, meshState, program);
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
 
@@ -361,9 +396,9 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         writeMask: false
                     },
                 });
-                for (const node of nodes) {
-                    if (node.visibility != Visibility.none && node.intersectsPlane(state.viewFrustum.near)) {
-                        this.renderNodeClippingOutline(node);
+                for (const { mask, node } of renderNodes) {
+                    if (node.intersectsPlane(state.viewFrustum.near)) {
+                        this.renderNodeClippingOutline(node, mask);
                     }
                 }
             }
@@ -385,7 +420,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     },
                     // drawBuffers: renderContext.drawBuffers(BufferFlags.color),
                 });
-                for (const node of nodes) {
+                for (const { mask, node } of renderNodes) {
                     this.renderNodeDebug(node);
                 }
 
@@ -396,7 +431,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         color: [0, 0, 0, .75],
                     },
                 });
-                for (const node of nodes) {
+                for (const { mask, node } of renderNodes) {
                     this.renderNodeDebug(node);
                 }
             }
@@ -411,9 +446,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const state = prevState!;
 
         if (rootNode) {
-            let nodes = [...iterateNodes(rootNode)];
-            nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
-
+            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail)
             glState(gl, {
                 program: programs.pick,
                 uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
@@ -422,8 +455,8 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             this.applyDefaultAttributeValues();
             gl.activeTexture(gl.TEXTURE0);
             const meshState: MeshState = {};
-            for (const node of nodes) {
-                this.renderNode(node, meshState, "pick");
+            for (const { mask, node } of renderNodes) {
+                this.renderNode(node, mask, meshState, "pick");
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
 
@@ -436,9 +469,9 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         writeMask: false
                     },
                 });
-                for (const node of nodes) {
-                    if (node.visibility != Visibility.none && node.intersectsPlane(state.viewFrustum.near)) {
-                        this.renderNodeClippingOutline(node);
+                for (const { mask, node } of renderNodes) {
+                    if (node.intersectsPlane(state.viewFrustum.near)) {
+                        this.renderNodeClippingOutline(node, mask);
                     }
                 }
             }
@@ -446,13 +479,13 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
     }
 
-    renderNode(node: OctreeNode, meshState: MeshState, program: "prepass" | "render" | "dither" | "pick") {
+    renderNode(node: OctreeNode, mask: number, meshState: MeshState, program: "prepass" | "render" | "dither" | "pick") {
         const { renderContext } = this;
         const { gl } = renderContext;
         const { resources, meshModeLocations } = this;
-        const { data, renderedChildMask } = node;
+        const { data } = node;
         const prepass = program == "prepass";
-        if (renderedChildMask && node.uniforms) {
+        if (mask && node.uniforms) {
             gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms);
             const modeMeshModeLocation = meshModeLocations[program];
             for (const mesh of node.meshes) {
@@ -478,12 +511,12 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 if (program = "render" || program == "dither") {
                     gl.bindTexture(gl.TEXTURE_2D, mesh.baseColorTexture ?? resources.defaultBaseColorTexture);
                 }
-                if (renderedChildMask == data.childMask) {
+                if (mask == data.childMask) {
                     const stats = glDraw(gl, mesh.drawParams);
                     renderContext["addRenderStatistics"](stats);
                 } else {
                     // determine which portions of the parent node must be rendered based on what children currently don't render themselves
-                    const multiDrawParams = getMultiDrawParams(mesh, renderedChildMask);
+                    const multiDrawParams = getMultiDrawParams(mesh, mask);
                     if (multiDrawParams) {
                         const stats = glDraw(gl, multiDrawParams);
                         renderContext["addRenderStatistics"](stats);
@@ -493,17 +526,16 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
     }
 
-    renderNodeClippingOutline(node: OctreeNode) {
+    renderNodeClippingOutline(node: OctreeNode, mask: number) {
         const { resources, renderContext, module } = this;
         const { gl } = renderContext;
         const { programs, transformFeedback, vb_line, vao_line } = resources;
-        const { renderedChildMask } = node;
-        if (renderedChildMask && node.uniforms) {
+        if (mask && node.uniforms) {
             gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms);
             for (const mesh of node.meshes) {
                 if (mesh.numTriangles) {
                     for (const drawRange of mesh.drawRanges) {
-                        if ((1 << drawRange.childIndex) & renderedChildMask) {
+                        if ((1 << drawRange.childIndex) & mask) {
                             const count = drawRange.count / 3;
                             const first = drawRange.first / 3;
                             console.assert(count * 2 <= module.maxLines);
@@ -571,7 +603,6 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
     }
 }
-
 
 function* iterateNodes(node: OctreeNode | undefined): IterableIterator<OctreeNode> {
     if (node) {

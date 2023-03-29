@@ -26,7 +26,6 @@ export interface OctreeContext {
     readonly loader: NodeLoader;
     readonly url: string | undefined;
     readonly version: string;
-    readonly projectedSizeSplitThreshold: number;
     readonly debug: boolean;
     readonly localSpaceChanged: boolean;
 }
@@ -72,9 +71,10 @@ export class OctreeNode {
             vec4.fromValues(x1, y1, z1, 1),
         ];
 
-        const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
-        this.size = Math.pow(2, data.tolerance) * toleranceScale;
+        // const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
+        // this.size = Math.pow(2, data.tolerance) * toleranceScale;
         // this.size = Math.max(box.max[0] - box.min[0], Math.max(box.max[1] - box.min[1], box.max[2] - box.min[2])) * 4;
+        this.size = data.nodeSize;
         this.uniformsData = glUBOProxy({
             modelLocalMatrix: "mat4",
             tolerance: "float",
@@ -298,19 +298,6 @@ export class OctreeNode {
                     this.applyHighlightGroups(groups);
                 }
                 renderContext.changed = true;
-
-                // // verify projection counts
-                // if (this.id) {
-                //     let numPrimitives = 0;
-                //     for (const m of meshes) {
-                //         const { drawParams } = m;
-                //         const mode = drawParams.mode ?? "TRIANGLES";
-                //         const count = "count" in drawParams ? drawParams.count : 0;
-                //         const primitives = computePrimitiveCount(mode, count)!;
-                //         numPrimitives += primitives;
-                //     }
-                //     console.assert(numPrimitives == this.data.primitives);
-                // }
             }
         } catch (error: any) {
             if (error.name != "AbortError") {
@@ -329,26 +316,5 @@ export class OctreeNode {
                 updateMeshHighlightGroups(gl, mesh, groups);
             }
         }
-    }
-}
-
-function computePrimitiveCount(primitiveType: DrawMode, numIndices: number) {
-    switch (primitiveType) {
-        case "POINTS":
-            return numIndices;
-        case "LINES":
-            return numIndices / 2;
-        case "LINE_LOOP":
-            return numIndices;
-        case "LINE_STRIP":
-            return numIndices - 1;
-        case "TRIANGLES":
-            return numIndices / 3;
-        case "TRIANGLE_STRIP":
-            return numIndices - 2;
-        case "TRIANGLE_FAN":
-            return numIndices - 2;
-        default:
-            console.warn(`Unknown primitive type: ${primitiveType}!`);
     }
 }

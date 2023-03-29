@@ -25,7 +25,8 @@ function rootNodeData(config: OctreeSceneConfig): NodeData {
         id: "",
         childIndex: 0,
         childMask: 1,
-        tolerance: 0, // is this correct/fixed or do we need to put it into config?
+        tolerance: 0,
+        nodeSize: 0,
         byteSize: rootByteSize,
         offset,
         scale,

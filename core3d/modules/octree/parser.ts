@@ -34,6 +34,7 @@ export interface NodeData {
     readonly childMask: number; // 32-bit mask for what child indices (octants) have geometry
     readonly tolerance: number;
     readonly byteSize: number; // uncompressed byte size of node file
+    readonly nodeSize: number; // node extent in meters, for use with LOD projection error.
     readonly offset: ReadonlyVec3;
     readonly scale: number;
     readonly bounds: Bounds;
@@ -237,6 +238,7 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
         const childMask = childInfo.childMask[i];
         const id = parentId + childIndex.toString(32); // use radix 32 (0-9, a-v) encoding, which allows for max 32 children per node
         const tolerance = childInfo.tolerance[i];
+        const nodeSize = childInfo.nodeSize[i];
         const byteSize = childInfo.totalByteSize[i];
         const offset = getVec3(childInfo.offset, i);
         const scale = childInfo.scale[i];
@@ -262,8 +264,8 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
         const parentPrimitives = parentPrimitiveCounts[childIndex];
         const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshProjectionRange, separatePositionBuffer, predicate);
         const primitivesDelta = primitives - (parentPrimitives ?? 0);
-        console.assert(parentId == "0" || primitivesDelta >= 0, "negative primitive delta");
-        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
+        // console.assert(parentId == "0" || primitivesDelta >= 0, "negative primitive delta");
+        children.push({ id, childIndex, childMask, tolerance, nodeSize, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
     }
     return children;
 }
