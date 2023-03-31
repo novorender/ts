@@ -47,15 +47,17 @@ void main() {
     highlight = varyingsFlat.highlight;
 #endif
 
-    vec3 normalVS = varyings.normalVS;
-    if(dot(normalVS, normalVS) < .1) {
-        // compute geometric/flat normal from derivatives
-        vec3 axisX = dFdx(varyings.positionVS);
-        vec3 axisY = dFdy(varyings.positionVS);
-        normalVS = normalize(cross(axisX, axisY));
-    } else {
-        normalVS = normalize(normalVS);
+    vec3 normalVS = normalize(varyings.normalVS);
+    // compute geometric/flat normal from derivatives
+    vec3 axisX = dFdx(varyings.positionVS);
+    vec3 axisY = dFdy(varyings.positionVS);
+    vec3 geometricNormalVS = normalize(cross(axisX, axisY));
+
+    if(dot(normalVS, normalVS) < 0.1 || dot(normalVS, geometricNormalVS) < 0.) {
+        normalVS = geometricNormalVS;
     }
+    // vec3 normalWS = varyings.normalWS;
+    vec3 normalWS = normalize(camera.viewLocalMatrixNormal * normalVS);
 
     vec4 rgba;
     if(meshMode == meshModePoints) {
@@ -72,7 +74,7 @@ void main() {
         specularShininess.rgb = sRGBToLinear(specularShininess.rgb);
 
         vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
-        vec3 N = normalize(gl_FrontFacing ? varyings.normalWS : -varyings.normalWS);
+        vec3 N = normalize(normalWS);
 
         vec3 irradiance = texture(textures.ibl.diffuse, N).rgb;
         float perceptualRoughness = clamp((1.0 - specularShininess.a), 0.0, 1.0);
