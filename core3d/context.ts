@@ -692,7 +692,7 @@ export class RenderContext {
                     const normal = vec3.transformMat3(vec3.create(), normalVS, viewWorldMatrixNormal);
                     vec3.normalize(normal, normal);
 
-                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, deviation } as const;
+                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, deviation, depth } as const;
                     samples.push(sample);
                 }
             }
@@ -714,6 +714,7 @@ export interface PickSample {
     readonly normal: ReadonlyVec3;
     readonly objectId: number;
     readonly deviation: number;
+    readonly depth: number;
 };
 
 export interface AsyncProgramParams {
