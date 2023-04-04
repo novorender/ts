@@ -3,7 +3,7 @@ import { glUBOProxy, glUpdateBuffer, type DrawMode } from "@novorender/webgl2";
 import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup } from "@novorender/core3d";
 import { Downloader } from "./download";
 import { createMeshes, deleteMesh, type Mesh, meshPrimitiveCount, updateMeshHighlightGroups } from "./mesh";
-import { type NodeData } from "./parser";
+import { NodeType, type NodeData } from "./parser";
 import { NodeLoader } from "./loader";
 import { ResourceBin } from "@novorender/core3d/resource";
 
@@ -48,6 +48,12 @@ export class OctreeNode {
     visibility = Visibility.undefined;
     viewDistance = 0;
     projectedSize = 0;
+    static readonly errorModifiers = {
+        [NodeType.Mixed]: 1,
+        [NodeType.Geometry]: 1,
+        [NodeType.Points]: .01,
+        [NodeType.Textured]: .01,
+    };
 
     constructor(readonly context: OctreeContext, readonly data: NodeData) {
         // create uniform buffer
@@ -71,10 +77,12 @@ export class OctreeNode {
             vec4.fromValues(x1, y1, z1, 1),
         ];
 
+        const errorModifier = OctreeNode.errorModifiers[data.type];
+
         // const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         // this.size = Math.pow(2, data.tolerance) * toleranceScale;
         // this.size = Math.max(box.max[0] - box.min[0], Math.max(box.max[1] - box.min[1], box.max[2] - box.min[2])) * 4;
-        this.size = data.nodeSize;
+        this.size = data.nodeSize * errorModifier;
         this.uniformsData = glUBOProxy({
             modelLocalMatrix: "mat4",
             tolerance: "float",

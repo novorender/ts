@@ -26,10 +26,13 @@ export interface Bounds {
     readonly sphere: BoundingSphere;
 };
 
+export const enum NodeType { Mixed, Geometry, Points, Textured };
+
 // node data contains everything needed to create a new node, except its geometry and textures
 // this data comes from the parent node and is used to determine visibility and whether to load node geometry or not
 export interface NodeData {
     readonly id: string;
+    readonly type: NodeType;
     readonly childIndex: number; // octant # (not mask, but index)
     readonly childMask: number; // 32-bit mask for what child indices (octants) have geometry
     readonly tolerance: number;
@@ -223,19 +226,29 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
 
     // compute parent/current mesh primitive counts per child partition
     const parentPrimitiveCounts: number[] = [];
+    const nodeTypes: NodeType[] = [];
     for (const mesh of getSubMeshes(schema, predicate)) {
-        const { childIndex, indexRange, vertexRange } = mesh;
+        const { childIndex, indexRange, vertexRange, primitiveType, materialIndex } = mesh;
         const numIndices = indexRange[1] - indexRange[0];
         const numVertices = vertexRange[1] - vertexRange[0];
         const n = numIndices ? numIndices : numVertices;
         let count = parentPrimitiveCounts[childIndex] ?? 0;
         count += computePrimitiveCount(mesh.primitiveType, n) ?? 0;
         parentPrimitiveCounts[childIndex] = count;
+        if (nodeTypes[childIndex] != NodeType.Mixed) {
+            const nodeType = primitiveType == PrimitiveType.points ? NodeType.Points : materialIndex == 0xff ? NodeType.Textured : NodeType.Geometry;
+            if (nodeTypes[childIndex] == undefined) {
+                nodeTypes[childIndex] = nodeType;
+            } else if (nodeTypes[childIndex] != nodeType) {
+                nodeTypes[childIndex] = NodeType.Mixed;
+            }
+        }
     }
 
     for (let i = 0; i < childInfo.length; i++) {
         const childIndex = childInfo.childIndex[i];
         const childMask = childInfo.childMask[i];
+        const type = nodeTypes[childIndex] ?? NodeType.Mixed;
         const id = parentId + childIndex.toString(32); // use radix 32 (0-9, a-v) encoding, which allows for max 32 children per node
         const tolerance = childInfo.tolerance[i];
         const nodeSize = childInfo.nodeSize[i];
@@ -265,7 +278,7 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
         const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshProjectionRange, separatePositionBuffer, predicate);
         const primitivesDelta = primitives - (parentPrimitives ?? 0);
         // console.assert(parentId == "0" || primitivesDelta >= 0, "negative primitive delta");
-        children.push({ id, childIndex, childMask, tolerance, nodeSize, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
+        children.push({ id, type, childIndex, childMask, tolerance, nodeSize, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
     }
     return children;
 }

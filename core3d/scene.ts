@@ -1,5 +1,5 @@
 import type { OctreeSceneConfig, RenderStateScene } from ".";
-import type { NodeData } from "./modules/octree/parser";
+import { NodeType, type NodeData } from "./modules/octree/parser";
 import { OctreeNode, type OctreeContext } from "./modules/octree/node";
 
 
@@ -25,6 +25,7 @@ function rootNodeData(config: OctreeSceneConfig): NodeData {
         id: "",
         childIndex: 0,
         childMask: 1,
+        type: NodeType.Mixed,
         tolerance: 0,
         nodeSize: 0,
         byteSize: rootByteSize,
