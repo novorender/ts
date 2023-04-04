@@ -303,9 +303,9 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         // create list of meshes that we can sort by material/state?
         const nodes: RenderNode[] = [];
         function iterate(node: OctreeNode): boolean {
-            let mask = node.data.childMask;
             let rendered = false;
             if (node.visibility != Visibility.none) {
+                let mask = node.data.childMask;
                 if (node.shouldSplit(projectedSizeSplitThreshold)) {
                     for (const child of node.children) {
                         if (child.hasGeometry) {
@@ -315,10 +315,9 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                             }
                         }
                     }
-                } else {
-                    rendered = true;
                 }
                 if (mask) {
+                    rendered = true;
                     nodes.push({ mask, node });
                 }
             }
