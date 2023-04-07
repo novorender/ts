@@ -78,6 +78,11 @@ export class RenderContext {
         const defaultBin = this.defaultResourceBin = this.resourceBin("context");
         const iblBin = this.iblResourceBin = this.resourceBin("ibl");
         console.assert(extensions.loseContext != null, extensions.multiDraw != null, extensions.colorBufferFloat != null);
+        const { provokingVertex } = extensions;
+        if (provokingVertex) {
+            provokingVertex.provokingVertexWEBGL(provokingVertex.FIRST_VERTEX_CONVENTION_WEBGL);
+            console.log({ provokingVertex });
+        }
         this.commonChunk = commonShaderCore;
 
         // ggx lookup texture and ibl samplers

@@ -15,6 +15,7 @@ function getWebGL2Extensions(gl: WebGL2RenderingContext) {
         multiDraw: gl.getExtension("WEBGL_MULTI_DRAW") as WEBGL_multi_draw | null,
         drawBuffersIndexed: gl.getExtension("OES_draw_buffers_indexed") as OES_draw_buffers_indexed_ext | null,
         disjointTimerQuery: gl.getExtension('EXT_disjoint_timer_query_webgl2') as EXT_disjoint_timer_query_webgl2_ext,
+        provokingVertex: gl.getExtension('WEBGL_provoking_vertex') as WEBGL_provoking_vertex | null,
     } as const;
 }
 
@@ -40,3 +41,10 @@ export interface EXT_disjoint_timer_query_webgl2_ext {
     readonly GPU_DISJOINT_EXT: 0x8FBB;  // GL.GPU_DISJOINT_EXT;
     queryCounterEXT(query: WebGLQuery, target: 0x8E28 /*GL.TIMESTAMP_EXT*/): void;
 }
+
+export interface WEBGL_provoking_vertex {
+    readonly FIRST_VERTEX_CONVENTION_WEBGL: 0x8E4D;
+    readonly LAST_VERTEX_CONVENTION_WEBGL: 0x8E4E; // default
+    readonly PROVOKING_VERTEX_WEBGL: 0x8E4F;
+    provokingVertexWEBGL(provokeMode: 0x8E4D | 0x8E4E): void;
+};
