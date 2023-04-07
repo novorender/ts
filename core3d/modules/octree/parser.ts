@@ -495,10 +495,11 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
 
                 // update object ranges
                 const prev = objectRanges.length - 1;
+                const endVertex = vertexOffset + endVtx - beginVtx;
                 if (prev >= 0 && objectRanges[prev].objectId == objectId) {
-                    objectRanges[prev].endVertex = endVtx; // merge with previous entry
+                    objectRanges[prev].endVertex = endVertex; // merge with previous entry
                 } else {
-                    objectRanges.push({ objectId, beginVertex: vertexOffset, endVertex: vertexOffset + endVtx - beginVtx });
+                    objectRanges.push({ objectId, beginVertex: vertexOffset, endVertex });
                 }
 
                 vertexOffset += endVtx - beginVtx;
@@ -595,6 +596,9 @@ export async function parseNode(id: string, separatePositionBuffer: boolean, ena
         return objectIds ? new Set<number>(objectIds) : undefined;
     }
     const filteredObjectIds = await filter();
+    if (filteredObjectIds && filteredObjectIds.size > 0) {
+        console.log(` ${filteredObjectIds.size}`);
+    }
     const predicate = filteredObjectIds ? (objectId: number) => (filteredObjectIds.has(objectId)) : undefined;
     // const predicate = (objectId: number) => (true);
     const childInfos = getChildren(id, schema, separatePositionBuffer, predicate);

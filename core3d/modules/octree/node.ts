@@ -127,7 +127,7 @@ export class OctreeNode {
     }
 
     get hasGeometry() {
-        return this.meshes.length > 0;
+        return this.meshes.length > 0 || this.uniforms != undefined;
     }
 
     get renderedChildMask() {

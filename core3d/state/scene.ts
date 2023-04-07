@@ -8,6 +8,7 @@ export interface RenderStateScene {
 
 export interface ObjectIdFilter {
     readonly mode: "include" | "exclude";
+    /** Sorted (ascending) list of unique object ids to filter. */
     readonly objectIds: Iterable<number>;
 };
 
