@@ -450,6 +450,14 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 program: programs.pick,
                 uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
                 cull: { enable: true, },
+                textures: [
+                    { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // basecolor - will be overridden by nodes that have textures, e.g. terrain nodes.
+                    { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerNearest },
+                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
+                    { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest },
+                    { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
+                    { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
+                ],
             });
             this.applyDefaultAttributeValues();
             gl.activeTexture(gl.TEXTURE0);
@@ -486,7 +494,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const prepass = program == "prepass";
         if (mask && node.uniforms) {
             gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms);
-            const modeMeshModeLocation = meshModeLocations[program];
+            const meshModeLocation = meshModeLocations[program];
             for (const mesh of node.meshes) {
                 const { materialType } = mesh;
                 const isTransparent = materialType == MaterialType.transparent;
@@ -496,7 +504,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const mode = mesh.materialType == MaterialType.elevation ? MeshMode.elevation : mesh.drawParams.mode == "POINTS" ? MeshMode.points : MeshMode.triangles;
                 if (meshState.mode != mode) {
                     meshState.mode = mode;
-                    gl.uniform1ui(modeMeshModeLocation, mode);
+                    gl.uniform1ui(meshModeLocation, mode);
                 }
                 const doubleSided = mesh.materialType != MaterialType.opaque;
                 if (meshState.doubleSided != doubleSided) {

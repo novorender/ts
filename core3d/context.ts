@@ -81,7 +81,6 @@ export class RenderContext {
         const { provokingVertex } = extensions;
         if (provokingVertex) {
             provokingVertex.provokingVertexWEBGL(provokingVertex.FIRST_VERTEX_CONVENTION_WEBGL);
-            console.log({ provokingVertex });
         }
         this.commonChunk = commonShaderCore;
 
