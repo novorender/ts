@@ -596,9 +596,6 @@ export async function parseNode(id: string, separatePositionBuffer: boolean, ena
         return objectIds ? new Set<number>(objectIds) : undefined;
     }
     const filteredObjectIds = await filter();
-    if (filteredObjectIds && filteredObjectIds.size > 0) {
-        console.log(` ${filteredObjectIds.size}`);
-    }
     const predicate = filteredObjectIds ? (objectId: number) => (filteredObjectIds.has(objectId)) : undefined;
     // const predicate = (objectId: number) => (true);
     const childInfos = getChildren(id, schema, separatePositionBuffer, predicate);
