@@ -26,6 +26,6 @@ void main() {
     fragColor = vec4(gl_FrontFacing ? varyings.color : vec3(.25), 1);
 #else
     fragLinearDepth = varyings.linearDepth;
-    fragInfo = uvec2(cubeId, packNormal(normalize(varyings.normal).xy));
+    fragInfo = uvec2(cubeId, packNormal(normalize(varyings.normal).xyz));
 #endif
 }

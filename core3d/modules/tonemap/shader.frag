@@ -46,12 +46,11 @@ void main() {
             break;
         }
         case tonemapModeNormal: {
-            vec2 xy = unpackNormal(texture(textures.info, varyings.uv).y);
-            if(any(isnan(xy))) {
+            vec3 xyz = unpackNormal(texture(textures.info, varyings.uv).y);
+            if(any(isnan(xyz))) {
                 color.rgb = vec3(0);
             } else {
-                float z = sqrt(1. - dot(xy, xy));
-                color.rgb = vec3(xy, z) * .5 + .5;
+                color.rgb = xyz * .5 + .5;
             }
             break;
         }

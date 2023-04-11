@@ -243,25 +243,46 @@ vec4 getGradientColor(sampler2D gradientTexture, float position, float v, vec2 r
 }
 
 // packing
-uint packNormal(vec2 normal) {
+
+// we use octrahedral packing of normals to map 3 components down to 2: https://jcgt.org/published/0003/02/01/
+vec2 signNotZero(vec2 v) { // returns ±1
+    return vec2((v.x >= 0.) ? +1. : -1., (v.y >= 0.) ? +1. : -1.);
+}
+
+vec2 float32x3_to_oct(vec3 v) { // assume normalized input. Output is on [-1, 1] for each component.
+    // project the sphere onto the octahedron, and then onto the xy plane
+    vec2 p = v.xy * (1. / (abs(v.x) + abs(v.y) + abs(v.z)));
+    // reflect the folds of the lower hemisphere over the diagonals
+    return (v.z <= 0.) ? ((1. - abs(p.yx)) * signNotZero(p)) : p;
+}
+
+vec3 oct_to_float32x3(vec2 e) {
+    vec3 v = vec3(e.xy, 1. - abs(e.x) - abs(e.y));
+    if(v.z < 0.)
+        v.xy = (1. - abs(v.yx)) * signNotZero(v.xy);
+    return normalize(v);
+}
+
+uint packNormal(vec3 normal) {
+    vec2 xy = float32x3_to_oct(normal);
     uvec2 nu = uvec2(clamp(normal, -1., 1.) * 127.);
     uint n = nu.x & 0xffU | (nu.y & 0xffU) << 8;
     return n;
 }
 
-uint packNormalAndDeviation(vec2 normal, float deviation) {
-    uvec2 nu = uvec2(clamp(normal, -1., 1.) * 127.);
-    uint n = nu.x & 0xffU | (nu.y & 0xffU) << 8;
+uint packNormalAndDeviation(vec3 normal, float deviation) {
+    uint n = packNormal(normal);
     uint d = packHalf2x16(vec2(0, deviation));
     return n | d;
 }
 
-vec2 unpackNormal(uint normalAndDeviation) {
+vec3 unpackNormal(uint normalAndDeviation) {
     uint xui = normalAndDeviation >> 0U & 0xffU;
     uint yui = normalAndDeviation >> 8U & 0xffU;
     float nx = float(xui & 0x7fU) / 127. * ((xui & 0x80U) == 0U ? 1. : -1.);
     float ny = float(yui & 0x7fU) / 127. * ((yui & 0x80U) == 0U ? 1. : -1.);
-    return vec2(nx, ny);
+    vec2 xy = vec2(nx, ny);
+    return oct_to_float32x3(xy);
 }
 
 float unpackDeviation(uint normalAndDeviation) {

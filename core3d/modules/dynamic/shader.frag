@@ -225,6 +225,6 @@ void main() {
     // only write to pick buffers for opaque triangles (for devices without OES_draw_buffers_indexed support)
     if(outColor.a >= 0.99) {
         fragLinearDepth = varyings.linearDepth;
-        fragInfo = uvec2(instance.objectId, packNormal((camera.localViewMatrixNormal * normal).xy));
+        fragInfo = uvec2(instance.objectId, packNormal((camera.localViewMatrixNormal * normal).xyz));
     }
 }

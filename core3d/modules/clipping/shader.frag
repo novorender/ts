@@ -56,5 +56,5 @@ void main() {
         discard;
     fragColor = rgba;
     fragLinearDepth = -posVS.z;
-    fragInfo = uvec2(objectId, packNormal(clipping.planes[idx[i]].xy));
+    fragInfo = uvec2(objectId, packNormal(clipping.planes[idx[i]].xyz));
 }

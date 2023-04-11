@@ -676,10 +676,20 @@ export class RenderContext {
                 if (objectId != 0xffffffff) {
                     const depth = depths[buffOffs];
                     const [deviation16] = new Uint16Array(infos.buffer, buffOffs * 8 + 6, 1);
-                    const [nx8, ny8] = new Int8Array(infos.buffer, buffOffs * 8 + 4, 2);
-                    const nx = nx8 / 127;
-                    const ny = ny8 / 127;
                     const deviation = wasm.float32(deviation16);
+
+                    // compute normal
+                    const [nx8, ny8] = new Int8Array(infos.buffer, buffOffs * 8 + 4, 2);
+                    let nx = nx8 / 127;
+                    let ny = ny8 / 127;
+                    // convert octahedral projection to a 3 component normal: https://jcgt.org/published/0003/02/01/
+                    const nz = 1 - Math.abs(nx) - Math.abs(ny);
+                    if (nz < 0) {
+                        const sx = nx >= 0 ? 1 : -1;
+                        const sy = ny >= 0 ? 1 : -1;
+                        nx = 1 - Math.abs(ny) * sx;
+                        ny = 1 - Math.abs(nx) * sy;
+                    }
 
                     // compute clip space x,y coords
                     const xCS = ((ix + 0.5) / width) * 2 - 1;
@@ -688,7 +698,6 @@ export class RenderContext {
                     // compute view space position and normal
                     const scale = isOrtho ? 1 : depth;
                     const posVS = vec3.fromValues((xCS / viewClipMatrix[0]) * scale, (yCS / viewClipMatrix[5]) * scale, -depth);
-                    const nz = Math.sqrt(1 - (nx * nx + ny * ny));
                     const normalVS = vec3.fromValues(nx, ny, nz);
 
                     // convert into world space.
