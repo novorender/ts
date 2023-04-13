@@ -91,6 +91,9 @@ struct DynamicVaryings {
     mat3 tbn; // in world space
     vec3 toCamera; // in world space (camera - position)
 };
+struct DynamicVaryingsFlat {
+    uint objectId;
+};
 struct MaterialUniforms {
     vec4 baseColorFactor;
     vec3 emissiveFactor;
@@ -106,10 +109,9 @@ struct MaterialUniforms {
     int emissiveUVSet;
     uint radianceMipCount;
 };
-struct InstanceUniforms {
-    mat4 modelLocalMatrix;
-    mat3 modelLocalMatrixNormal;
-    uint objectId;
+struct ObjectUniforms {
+    mat4 worldLocalMatrix;
+    uint baseObjectId;
 };
 struct DynamicTextures {
     sampler2D lut_ggx;

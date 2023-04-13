@@ -1,4 +1,4 @@
-import type { ReadonlyMat3, ReadonlyMat4 } from "gl-matrix";
+import type { ReadonlyMat3, ReadonlyMat4, ReadonlyQuat, ReadonlyVec3 } from "gl-matrix";
 import type { DrawMode, MagFilterString, MinFilterString, RGBA, TextureParams2DUncompressed, VertexAttribute, WrapString } from "@novorender/webgl2";
 import type { RGB } from "./types";
 
@@ -87,14 +87,14 @@ export interface RenderStateDynamicMaterialGGX extends RenderStateDynamicMateria
 export type RenderStateDynamicMaterial = RenderStateDynamicMaterialUnlit | RenderStateDynamicMaterialGGX;
 
 export interface RenderStateDynamicInstance {
-    // parent/children?
-    readonly transform: ReadonlyMat4;
-    readonly objectId?: number;
+    readonly position: ReadonlyVec3;
+    readonly rotation?: ReadonlyQuat;
 }
 
 export interface RenderStateDynamicObject {
     readonly mesh: RenderStateDynamicMesh;
-    readonly instance: RenderStateDynamicInstance;
+    readonly instances: readonly RenderStateDynamicInstance[];
+    readonly baseObjectId?: number;
 }
 
 export interface RenderStateDynamicObjects {

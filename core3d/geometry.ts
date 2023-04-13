@@ -1,4 +1,4 @@
-import { mat4, type ReadonlyVec2, type ReadonlyVec3, vec2, vec3 } from "gl-matrix";
+import { mat4, type ReadonlyVec2, type ReadonlyVec3, vec2, vec3, quat } from "gl-matrix";
 import type { RenderStateDynamicGeometry, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicVertexAttributes } from "./state";
 
 const defaultMaterial: RenderStateDynamicMaterial = {
@@ -12,8 +12,25 @@ const testMaterial: RenderStateDynamicMaterial = {
 };
 
 const defaultInstance: RenderStateDynamicInstance = {
-    transform: mat4.create(),
+    position: vec3.create(),
 };
+
+export function createRandomInstances(count = 1, radius?: number) {
+    const instances: RenderStateDynamicInstance[] = [];
+    const r = radius ?? count <= 1 ? 0 : Math.pow(count, 1 / 3) * 2;
+    const rndCoord = () => ((Math.random() * 2 - 1) * r);
+    const rndAngle = () => (Math.random() * 360);
+    for (var i = 0; i < count; i++) {
+        const position = vec3.fromValues(rndCoord(), rndCoord(), rndCoord());
+        if (vec3.sqrLen(position) > r * r) {
+            i--;
+            continue;
+        }
+        const rotation = quat.fromEuler(quat.create(), rndAngle(), rndAngle(), rndAngle());
+        instances.push({ position, rotation })
+    }
+    return instances;
+}
 
 export function createTestCube(): RenderStateDynamicObject {
     const vertices = createCubeVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
@@ -33,7 +50,8 @@ export function createTestCube(): RenderStateDynamicObject {
 
     const primitive: RenderStateDynamicMeshPrimitive = { geometry, material: testMaterial };
     const mesh: RenderStateDynamicMesh = { primitives: [primitive] };
-    return { mesh, instance: defaultInstance };
+    const instances = [defaultInstance];
+    return { mesh, instances };
 }
 
 function createCubeVertices(pack: (position: ReadonlyVec3, normal: ReadonlyVec3, color: ReadonlyVec3) => Iterable<number>) {
@@ -81,7 +99,8 @@ function createCubeIndices() {
     ]);
 }
 
-export function createTestSphere(radius = 1, detail = 0): RenderStateDynamicObject {
+export function createTestSphere(detail = 0): RenderStateDynamicObject {
+    const radius = 1;
     const { positionBuffer, normalBuffer, texCoordBuffer } = icosahedron(radius, detail);
 
     const attributes = {
@@ -98,7 +117,7 @@ export function createTestSphere(radius = 1, detail = 0): RenderStateDynamicObje
 
     const primitive: RenderStateDynamicMeshPrimitive = { geometry, material: testMaterial };
     const mesh: RenderStateDynamicMesh = { primitives: [primitive] };
-    return { mesh, instance: defaultInstance };
+    return { mesh, instances: [defaultInstance] };
 }
 
 function icosahedron(radius: number, detail: number) {

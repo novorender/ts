@@ -1,6 +1,6 @@
-import type { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "@novorender/core3d";
+import type { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "@novorender/core3d";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glDraw, glState, type UniformTypes, type VertexArrayParams, type VertexAttribute, type DrawParamsElements, type DrawParamsArrays, type StateParams } from "@novorender/webgl2";
+import { glUBOProxy, glDraw, glState, type UniformTypes, type VertexArrayParams, type VertexAttribute, type DrawParamsElements, type DrawParamsArrays, type StateParams, type DrawParamsArraysInstanced, type DrawParamsElementsInstanced } from "@novorender/webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat3, mat4, vec3 } from "gl-matrix";
@@ -26,7 +26,7 @@ export class DynamicModule implements RenderModule {
         const bin = context.resourceBin("Dynamic");
         const defaultSampler = bin.createSampler({ magnificationFilter: "LINEAR", minificationFilter: "LINEAR_MIPMAP_LINEAR", wrap: ["REPEAT", "REPEAT"] });
         const defaultTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array(4) }); // used to avoid warnings on android
-        const uniformBufferBlocks = ["Camera", "Material", "Instance"];
+        const uniformBufferBlocks = ["Camera", "Material", "Object"];
         const textureNames = ["lut_ggx", "ibl.diffuse", "ibl.specular", "base_color", "metallic_roughness", "normal", "emissive", "occlusion"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
         const [unlit, ggx] = await Promise.all([
@@ -44,7 +44,7 @@ class DynamicModuleContext implements RenderModuleContext {
     iblTextures;
     readonly buffers = new Map<BufferSource, BufferAsset>();
     readonly geometries = new Map<RenderStateDynamicGeometry, GeometryAsset>();
-    readonly instances = new Map<RenderStateDynamicInstance, InstanceAsset>();
+    readonly objects = new Map<RenderStateDynamicObject, ObjectAsset>();
     readonly materials = new Map<RenderStateDynamicMaterial, MaterialAsset>();
     readonly images = new Map<RenderStateDynamicImage, TextureAsset>();
     readonly samplers = new Map<RenderStateDynamicSampler, SamplerAsset>();
@@ -82,7 +82,7 @@ class DynamicModuleContext implements RenderModuleContext {
             const textures = [...new Set<RenderStateDynamicTexture>(materials.flatMap(m => [...getTextures(m)]))];
             const images = [...new Set<RenderStateDynamicImage>(textures.map(t => t.image))];
             const samplers = [...new Set<RenderStateDynamicSampler>(textures.map(t => t.sampler!).filter(s => s))];
-            const instances = [...new Set<RenderStateDynamicInstance>(dynamic.objects.map(o => o.instance))];
+            const objects = [...new Set<RenderStateDynamicObject>(dynamic.objects.map(o => o))];
             const vertexBuffers = new Set<BufferSource>(geometries.flatMap(g => [...Object.values(g.attributes).map((a: RenderStateDynamicVertexAttribute) => a.buffer).filter(b => b)]));
             const indexBuffers = new Set<BufferSource>(geometries.map(g => typeof g.indices == "number" ? undefined : g.indices).filter(b => b) as BufferSource[]);
             const numVertexBuffers = vertexBuffers.size;
@@ -91,11 +91,11 @@ class DynamicModuleContext implements RenderModuleContext {
             syncAssets(bin, images, this.images, data => new TextureAsset(bin, data));
             syncAssets(bin, samplers, this.samplers, data => new SamplerAsset(bin, data));
             syncAssets(bin, geometries, this.geometries, data => new GeometryAsset(bin, data, this.buffers));
-            syncAssets(bin, instances, this.instances, data => new InstanceAsset(bin, context, data, state));
+            syncAssets(bin, objects, this.objects, data => new ObjectAsset(bin, context, data, state));
             syncAssets(bin, materials, this.materials, data => new MaterialAsset(bin, context, data, this.images, this.samplers, defaultTexture, defaultSampler, programs[data.kind]));
         }
         if (context.hasStateChanged({ localSpaceTranslation })) {
-            for (const instance of this.instances.values()) {
+            for (const instance of this.objects.values()) {
                 instance.update(context, state);
             }
         }
@@ -119,21 +119,21 @@ class DynamicModuleContext implements RenderModuleContext {
             },
         });
 
-        const { instances, geometries, materials } = this;
-        const meshes: { readonly material: MaterialAsset; readonly geometry: GeometryAsset; readonly instance: InstanceAsset }[] = [];
+        const { objects, geometries, materials } = this;
+        const meshes: { readonly material: MaterialAsset; readonly geometry: GeometryAsset; readonly object: ObjectAsset }[] = [];
         for (const obj of state.dynamic.objects) {
-            const instance = instances.get(obj.instance)!;
+            const objAsset = objects.get(obj)!;
             for (const primitive of obj.mesh.primitives) {
                 const geometry = geometries.get(primitive.geometry)!;
                 const material = materials.get(primitive.material)!;
-                meshes.push({ material, geometry, instance });
+                meshes.push({ material, geometry, object: objAsset });
             }
         }
-        // sort by material and then instance
+        // sort by material and then object
         meshes.sort((a, b) => {
             let diff = a.material.index - b.material.index;
             if (diff == 0) {
-                diff = a.instance.index - b.instance.index;
+                diff = a.object.index - b.object.index;
             }
             return diff;
         })
@@ -142,20 +142,38 @@ class DynamicModuleContext implements RenderModuleContext {
         gl.vertexAttrib4f(3, 1, 1, 1, 1); // color0
 
         let currentMaterial: MaterialAsset = undefined!;
-        let currentInstance: InstanceAsset = undefined!;
-        for (const { material, instance, geometry } of meshes) {
+        let currentObject: ObjectAsset = undefined!;
+
+        for (const { material, object, geometry } of meshes) {
             if (currentMaterial != material) {
                 currentMaterial = material;
                 gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, material.uniformsBuffer);
                 glState(gl, currentMaterial.stateParams);
             }
-            if (currentInstance != instance) {
-                currentInstance = instance;
-                gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, instance.uniformsBuffer);
+            if (currentObject != object) {
+                currentObject = object;
+                gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, object.uniformsBuffer);
             }
             gl.bindVertexArray(geometry.resources.vao);
-            const stats = glDraw(gl, geometry.drawParams);
+            // TODO: create an geometry+instances VAO?
+            gl.bindBuffer(gl.ARRAY_BUFFER, object.instancesBuffer);
+            for (let i = 0; i < 4; i++) {
+                const attrib = i + VertexAttribs.matrix0;
+                gl.vertexAttribPointer(attrib, 3, gl.FLOAT, false, 4 * 12, i * 12);
+                gl.vertexAttribDivisor(attrib, 1);
+                gl.enableVertexAttribArray(attrib);
+            }
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            const kind = `${geometry.drawParams.kind}_instanced` as const;
+            const params = { ...geometry.drawParams, kind, instanceCount: object.numInstances } as (DrawParamsArraysInstanced | DrawParamsElementsInstanced);
+            const stats = glDraw(gl, params);
+            gl.bindVertexArray(null);
             context["addRenderStatistics"](stats);
+        }
+
+        for (let i = 0; i < 4; i++) {
+            const attrib = i + VertexAttribs.matrix0;
+            gl.disableVertexAttribArray(attrib);
         }
     }
 
@@ -167,10 +185,10 @@ class DynamicModuleContext implements RenderModuleContext {
     }
 
     dispose() {
-        const { resources, buffers, geometries, materials, instances } = this;
+        const { resources, buffers, geometries, materials, objects } = this;
         const { bin, programs, defaultSampler, defaultTexture } = resources;
         this.contextLost();
-        const assets = [...buffers.values(), ...geometries.values(), ...materials.values(), ...instances.values()];
+        const assets = [...buffers.values(), ...geometries.values(), ...materials.values(), ...objects.values()];
         for (const asset of assets) {
             asset.dispose(bin);
         }
@@ -180,7 +198,7 @@ class DynamicModuleContext implements RenderModuleContext {
         buffers.clear();
         geometries.clear();
         materials.clear();
-        instances.clear();
+        objects.clear();
     }
 }
 
@@ -218,6 +236,19 @@ class BufferAsset {
     dispose(bin: ResourceBin) {
         bin.delete(this.buffer);
     }
+}
+
+const enum VertexAttribs {
+    position,
+    normal,
+    tangent,
+    color0,
+    texCoord0,
+    texCoord1,
+    matrix0,
+    matrix1,
+    matrix2,
+    matrix3,
 }
 
 class GeometryAsset {
@@ -262,33 +293,46 @@ class GeometryAsset {
     }
 }
 
-class InstanceAsset {
+class ObjectAsset {
     index = 0;
-    private readonly modelWorldMatrix;
     private readonly uniforms;
-    readonly uniformsBuffer;
 
-    constructor(bin: ResourceBin, context: RenderContext, data: RenderStateDynamicInstance, state: DerivedRenderState) {
-        this.modelWorldMatrix = data.transform;
+    readonly numInstances: number;
+    readonly uniformsBuffer: WebGLBuffer;
+    readonly instancesBuffer: WebGLBuffer;
+
+    constructor(bin: ResourceBin, context: RenderContext, data: RenderStateDynamicObject, state: DerivedRenderState) {
         const uniformsDesc = {
-            modelLocalMatrix: "mat4",
-            modelLocalMatrixNormal: "mat3",
-            objectId: "uint",
+            worldLocalMatrix: "mat4",
+            baseObjectId: "uint",
         } as const satisfies Record<string, UniformTypes>;
         this.uniforms = glUBOProxy(uniformsDesc);
         const { values } = this.uniforms;
-        values.objectId = data.objectId ?? 0xffffffff;
+        values.baseObjectId = data.baseObjectId ?? 0xffffffff;
         this.uniformsBuffer = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
+        const { instances } = data;
+        this.numInstances = instances.length;
+        this.instancesBuffer = ObjectAsset.createInstancesBuffer(bin, instances);
         this.update(context, state);
     }
 
+    static createInstancesBuffer(bin: ResourceBin, instances: readonly RenderStateDynamicInstance[]) {
+        const srcData = new Float32Array(instances.length * 12);
+        for (let i = 0; i < instances.length; i++) {
+            const { position, rotation } = instances[i];
+            const transform = rotation ? mat4.fromRotationTranslation(mat4.create(), rotation, position) : mat4.fromTranslation(mat4.create(), position);
+            const [e00, e01, e02, e03, e10, e11, e12, e13, e20, e21, e22, e23, e30, e31, e32, e33] = transform;
+            const elems4x3 = [e00, e01, e02, e10, e11, e12, e20, e21, e22, e30, e31, e32];
+            srcData.set(elems4x3, i * elems4x3.length);
+            // srcData.set(transform, i * 16);
+        }
+        return bin.createBuffer({ kind: "ARRAY_BUFFER", srcData });
+    }
+
     update(context: RenderContext, state: DerivedRenderState) {
-        const { uniforms, modelWorldMatrix, uniformsBuffer } = this;
+        const { uniforms, uniformsBuffer } = this;
         const { values } = uniforms;
-        const worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), state.localSpaceTranslation));
-        const modelLocalMatrix = mat4.multiply(mat4.create(), worldLocalMatrix, modelWorldMatrix);
-        values.modelLocalMatrix = modelLocalMatrix;
-        values.modelLocalMatrixNormal = mat3.normalFromMat4(mat3.create(), modelLocalMatrix);
+        values.worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), state.localSpaceTranslation));
         context.updateUniformBuffer(uniformsBuffer, uniforms);
     }
 
