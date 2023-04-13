@@ -125,7 +125,6 @@ struct DynamicTextures {
 const uint maxHighlights = 256U;
 struct OctreeVaryings {
     vec3 positionVS; // view space
-    vec3 normalWS; // world space
     vec3 normalVS; // view space
     vec2 texCoord0;
     vec2 screenPos;

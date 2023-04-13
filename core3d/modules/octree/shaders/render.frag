@@ -53,10 +53,10 @@ void main() {
     vec3 axisY = dFdy(varyings.positionVS);
     vec3 geometricNormalVS = normalize(cross(axisX, axisY));
 
+    // ensure that vertex normal points in same direction as geometric normal (which always faces camera)
     if(dot(normalVS, normalVS) < 0.1 || dot(normalVS, geometricNormalVS) < 0.) {
         normalVS = geometricNormalVS;
     }
-    // vec3 normalWS = varyings.normalWS;
     vec3 normalWS = normalize(camera.viewLocalMatrixNormal * normalVS);
 
     vec4 rgba;

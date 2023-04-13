@@ -69,7 +69,6 @@ void main() {
     }
 
     varyings.positionVS = posVS.xyz;
-    varyings.normalWS = vertexNormal;
     varyings.normalVS = normalize(camera.localViewMatrixNormal * vertexNormal);
     varyings.texCoord0 = vertexTexCoord0;
     varyings.elevation = posLS.y;
