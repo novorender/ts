@@ -51,8 +51,8 @@ export class OctreeNode {
     static readonly errorModifiers = {
         [NodeType.Mixed]: 1,
         [NodeType.Geometry]: 1,
-        [NodeType.Points]: .01,
-        [NodeType.Textured]: .01,
+        [NodeType.Points]: .08,
+        [NodeType.Textured]: .08,
     };
 
     constructor(readonly context: OctreeContext, readonly data: NodeData) {
