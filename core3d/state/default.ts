@@ -1,4 +1,3 @@
-import { quat, vec3 } from "gl-matrix";
 import { type RenderState, TonemappingMode } from ".";
 
 export function defaultRenderState(): RenderState {
@@ -12,8 +11,8 @@ export function defaultRenderState(): RenderState {
         },
         camera: {
             kind: "pinhole",
-            position: vec3.create(),
-            rotation: quat.create(),
+            position: [0, 0, 0],
+            rotation: [0, 0, 0, 1],
             pivot: undefined,
             fov: 45,
             near: 0.1,
@@ -71,10 +70,9 @@ export function defaultRenderState(): RenderState {
             groups: [],
         },
         outlines: {
-            nearClipping: {
-                enable: false,
-                color: [10, 10, 10], // bright white (overexposed)
-            }
+            enabled: false,
+            color: [10, 10, 10], // bright white (overexposed)
+            plane: [0, 0, 1, 0],
         },
         tonemapping: {
             exposure: 0,

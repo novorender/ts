@@ -52,6 +52,22 @@ bool clip(vec3 point, ClippingUniforms clipping) {
     return clipping.mode == clippingModeIntersection ? inside : !inside;
 }
 
+// outlines
+struct OutlineUniforms {
+    mat4 localPlaneMatrix;
+    mat4 planeLocalMatrix;
+    vec3 color;
+};
+
+bool clipOutlines(vec3 point, ClippingUniforms clipping) {
+    float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
+    bool inside = clipping.mode == clippingModeIntersection ? clipping.numPlanes > 0U : true;
+    for(uint i = 0U; i < clipping.numPlanes; i++) {
+        inside = inside && dot(vec4(point, 1), clipping.planes[i]) * s < 0.;
+    }
+    return !inside;
+}
+
 // cube
 const uint cubeId = 0xfffffff8U;
 struct CubeVaryings {
@@ -62,7 +78,6 @@ struct CubeVaryings {
 };
 struct CubeUniforms {
     mat4 modelLocalMatrix;
-    vec3 nearOutlineColor;
 };
 
 // grid
@@ -159,8 +174,6 @@ struct SceneUniforms {
     vec2 deviationRange;
     // terrain elevation
     vec2 elevationRange;
-    // outlines
-    vec3 nearOutlineColor;
 };
 struct NodeUniforms {
     mat4 modelLocalMatrix;

@@ -228,12 +228,12 @@ export const enum TonemappingMode {
 };
 
 export interface RenderStateOutlinesNearClipping {
-    readonly enable: boolean;
-    readonly color: RGB;
 }
 
 export interface RenderStateOutlines {
-    readonly nearClipping: RenderStateOutlinesNearClipping;
+    readonly enabled: boolean;
+    readonly color: RGB;
+    readonly plane: ReadonlyVec4;
 }
 
 export interface RenderStateTonemapping {

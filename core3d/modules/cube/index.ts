@@ -7,9 +7,8 @@ import { shaders } from "./shaders";
 
 export class CubeModule implements RenderModule {
     readonly kind = "cube";
-    readonly uniforms = {
+    readonly cubeUniforms = {
         modelLocalMatrix: "mat4",
-        nearOutlineColor: "vec3",
     } as const satisfies Record<string, UniformTypes>;
 
     async withContext(context: RenderContext) {
@@ -19,7 +18,9 @@ export class CubeModule implements RenderModule {
     }
 
     createUniforms() {
-        return glUBOProxy(this.uniforms);
+        return {
+            cube: glUBOProxy(this.cubeUniforms),
+        } as const;
     }
 
     async createResources(context: RenderContext, uniformsProxy: Uniforms) {
@@ -38,7 +39,9 @@ export class CubeModule implements RenderModule {
         }
 
         const bin = context.resourceBin("Cube");
-        const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
+        const uniforms = {
+            cube: bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.cube.buffer.byteLength }),
+        } as const;
         const transformFeedback = bin.createTransformFeedback();
 
         const vb_render = bin.createBuffer({ kind: "ARRAY_BUFFER", srcData: vertices });
@@ -79,8 +82,8 @@ export class CubeModule implements RenderModule {
         const [color, pick, line, intersect] = await Promise.all([
             context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks }),
             context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, header: { flags: ["PICK"] } }),
-            context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks }),
-            context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks, transformFeedback: { varyings: ["line_vertices", "opacity"], bufferMode: "SEPARATE_ATTRIBS" } }),
+            context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks: [...uniformBufferBlocks, "Outline"] }),
+            context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks: [...uniformBufferBlocks, "Outline"], transformFeedback: { varyings: ["line_vertices", "opacity"], bufferMode: "SEPARATE_ATTRIBS" } }),
         ]);
         const programs = { color, pick, line, intersect };
         return { bin, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line, vb_opacity, programs } as const;
@@ -94,9 +97,8 @@ class CubeModuleContext implements RenderModuleContext {
     constructor(readonly context: RenderContext, readonly module: CubeModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     update(state: DerivedRenderState) {
-        const { context, resources } = this;
-        const { cube, localSpaceTranslation, outlines } = state;
-        const { values } = this.uniforms;
+        const { context, resources, uniforms } = this;
+        const { cube, localSpaceTranslation } = state;
         if (context.hasStateChanged({ cube, localSpaceTranslation })) {
             const { scale, position } = cube;
             const posLS = vec3.subtract(vec3.create(), position, localSpaceTranslation);
@@ -106,24 +108,21 @@ class CubeModuleContext implements RenderModuleContext {
                 0, 0, scale, 0,
                 ...posLS, 1
             ] as Parameters<typeof mat4.fromValues>;
-            values.modelLocalMatrix = mat4.fromValues(...m);
+            uniforms.cube.values.modelLocalMatrix = mat4.fromValues(...m);
         }
-        if (context.hasStateChanged({ outlines })) {
-            values.nearOutlineColor = outlines.nearClipping.color;
-        }
-        context.updateUniformBuffer(resources.uniforms, this.uniforms);
+        context.updateUniformBuffer(resources.uniforms.cube, uniforms.cube);
     }
 
     render(state: DerivedRenderState) {
         const { context, resources } = this;
         const { programs, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line, vb_opacity } = resources;
-        const { gl, cameraUniforms, clippingUniforms } = context;
+        const { gl, cameraUniforms, clippingUniforms, outlineUniforms, deviceProfile } = context;
 
         if (state.cube.enabled) {
             // render normal cube
             glState(gl, {
                 program: programs.color,
-                uniformBuffers: [cameraUniforms, clippingUniforms, uniforms],
+                uniformBuffers: [cameraUniforms, clippingUniforms, uniforms.cube],
                 // drawBuffers: context.drawBuffers(),
                 depth: { test: true, },
                 cull: { enable: false },
@@ -132,10 +131,11 @@ class CubeModuleContext implements RenderModuleContext {
             const stats = glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
             context["addRenderStatistics"](stats);
 
-            if (state.outlines.nearClipping.enable) {
+            if (state.outlines.enabled && deviceProfile.features.outline) {
                 // transform vertex triplets into intersection lines
                 glState(gl, {
                     program: programs.intersect,
+                    uniformBuffers: [cameraUniforms, clippingUniforms, uniforms.cube, outlineUniforms],
                     vertexArrayObject: vao_triplets,
                 });
                 glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line, vb_opacity], count: 12 });
@@ -169,7 +169,7 @@ class CubeModuleContext implements RenderModuleContext {
         if (state.cube.enabled) {
             glState(gl, {
                 program: programs.pick,
-                uniformBuffers: [cameraUniforms, clippingUniforms, uniforms],
+                uniformBuffers: [cameraUniforms, clippingUniforms, uniforms.cube],
                 depth: { test: true, },
                 cull: { enable: false },
                 vertexArrayObject: vao_render,

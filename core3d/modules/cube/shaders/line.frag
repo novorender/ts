@@ -10,6 +10,10 @@ layout(std140) uniform Cube {
     CubeUniforms cube;
 };
 
+layout(std140) uniform Outline {
+    OutlineUniforms outline;
+};
+
 in struct {
     vec3 positionVS;
     float opacity;
@@ -18,7 +22,7 @@ in struct {
 layout(location = 0) out vec4 fragColor;
 
 void main() {
-    if(clip(varyings.positionVS, clipping))
+    if(clipOutlines(varyings.positionVS, clipping))
         discard;
-    fragColor = vec4(cube.nearOutlineColor, varyings.opacity);
+    fragColor = vec4(outline.color, varyings.opacity);
 }

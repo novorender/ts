@@ -11,6 +11,7 @@ import { mat3, mat4, vec3, vec4 } from "gl-matrix";
 import commonShaderCore from "./common.glsl";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
+import { othoNormalBasisMatrixFromPlane } from "./util";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
@@ -18,7 +19,8 @@ export class RenderContext {
     private modules: readonly RenderModuleContext[] | undefined;
     private cameraUniformsData;
     private clippingUniformsData;
-    private localSpaceTranslation = vec3.create() as ReadonlyVec3;
+    private outlinesUniformsData;
+    protected localSpaceTranslation = vec3.create() as ReadonlyVec3;
     private readonly asyncPrograms: AsyncProgramInfo[] = [];
     readonly gl: WebGL2RenderingContext;
     readonly commonChunk: string;
@@ -53,6 +55,7 @@ export class RenderContext {
     // constant gl resources
     readonly cameraUniforms: WebGLBuffer;
     readonly clippingUniforms: WebGLBuffer;
+    readonly outlineUniforms: WebGLBuffer;
     readonly lut_ggx: WebGLTexture;
     readonly samplerMip: WebGLSampler; // use to read diffuse texture
     readonly samplerSingle: WebGLSampler; // use to read the other textures
@@ -129,6 +132,14 @@ export class RenderContext {
             mode: "uint",
         });
         this.clippingUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.clippingUniformsData.buffer.byteLength });
+
+        // outlines uniforms
+        this.outlinesUniformsData = glUBOProxy({
+            localPlaneMatrix: "mat4",
+            planeLocalMatrix: "mat4",
+            color: "vec3",
+        });
+        this.outlineUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.outlinesUniformsData.buffer.byteLength });
     }
 
     async init(modules?: readonly RenderModule[]) {
@@ -454,6 +465,7 @@ export class RenderContext {
         }
         this.updateCameraUniforms(derivedState);
         this.updateClippingUniforms(derivedState);
+        this.updateOutlinesUniforms(derivedState);
 
         // update internal state
         this.isOrtho = derivedState.camera.kind == "orthographic";
@@ -635,6 +647,29 @@ export class RenderContext {
             values["numPlanes"] = enabled ? planes.length : 0;
             values["mode"] = mode;
             this.updateUniformBuffer(clippingUniforms, clippingUniformsData);
+        }
+    }
+
+    private updateOutlinesUniforms(state: DerivedRenderState) {
+        const { outlines, matrices } = state;
+        if (this.hasStateChanged({ outlines, matrices })) {
+            const { outlineUniforms, outlinesUniformsData } = this;
+            const { color, plane } = outlines;
+            // transform outline plane into local space
+            const [x, y, z, offset] = plane;
+            const normal = vec3.fromValues(x, y, z);
+            const distance = offset - vec3.dot(this.localSpaceTranslation, normal);
+            const margin = 0.001; // add a tiny margin so that these lines aren't clipped by the clipping plane itself
+            const planeLS = vec4.fromValues(normal[0], normal[1], normal[2], -distance - margin);
+            // compute plane projection matrices
+            const localPlaneMatrix = othoNormalBasisMatrixFromPlane(planeLS);
+            const planeLocalMatrix = mat4.invert(mat4.create(), localPlaneMatrix);
+            // set uniform values
+            const { values } = outlinesUniformsData;
+            values.planeLocalMatrix = planeLocalMatrix;
+            values.localPlaneMatrix = localPlaneMatrix;
+            values.color = color;
+            this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
         }
     }
 
