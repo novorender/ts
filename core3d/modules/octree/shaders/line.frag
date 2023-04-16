@@ -24,14 +24,13 @@ flat in struct {
 } varyingsFlat;
 
 layout(location = 0) out vec4 fragColor;
-layout(location = 1) out float fragLinearDepth;
-layout(location = 2) out uvec2 fragInfo;
+layout(location = 1) out uvec4 fragPick;
 
 void main() {
     if(clipOutlines(varyings.positionVS, clipping))
         discard;
 
     fragColor = vec4(outline.color, varyings.opacity);
-    fragLinearDepth = -varyings.positionVS.z;
-    fragInfo = uvec2(varyingsFlat.objectId, 0);
+    float linearDepth = -varyings.positionVS.z;
+    fragPick = uvec4(varyingsFlat.objectId, 0, 0, floatBitsToUint(linearDepth));
 }

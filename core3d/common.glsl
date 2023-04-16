@@ -74,7 +74,6 @@ struct CubeVaryings {
     vec3 posVS;
     vec3 normal;
     vec3 color;
-    float linearDepth;
 };
 struct CubeUniforms {
     mat4 modelLocalMatrix;
@@ -221,8 +220,7 @@ struct TonemappingUniforms {
 };
 struct TonemappingTextures {
     sampler2D color;
-    sampler2D depth;
-    usampler2D info;
+    usampler2D pick;
     sampler2D zbuffer;
 };
 
@@ -277,28 +275,14 @@ vec3 oct_to_float32x3(vec2 e) {
     return normalize(v);
 }
 
-uint packNormal(vec3 normal) {
-    vec2 xy = float32x3_to_oct(normal);
-    uvec2 nu = uvec2(clamp(normal, -1., 1.) * 127.);
-    uint n = nu.x & 0xffU | (nu.y & 0xffU) << 8;
-    return n;
+uvec2 packNormalAndDeviation(vec3 normal, float deviation) {
+    return uvec2(packHalf2x16(normal.xy), packHalf2x16(vec2(normal.z, deviation)));
 }
 
-uint packNormalAndDeviation(vec3 normal, float deviation) {
-    uint n = packNormal(normal);
-    uint d = packHalf2x16(vec2(0, deviation));
-    return n | d;
+uvec2 packNormal(vec3 normal) {
+    return packNormalAndDeviation(normal, 0.);
 }
 
-vec3 unpackNormal(uint normalAndDeviation) {
-    uint xui = normalAndDeviation >> 0U & 0xffU;
-    uint yui = normalAndDeviation >> 8U & 0xffU;
-    float nx = float(xui & 0x7fU) / 127. * ((xui & 0x80U) == 0U ? 1. : -1.);
-    float ny = float(yui & 0x7fU) / 127. * ((yui & 0x80U) == 0U ? 1. : -1.);
-    vec2 xy = vec2(nx, ny);
-    return oct_to_float32x3(xy);
-}
-
-float unpackDeviation(uint normalAndDeviation) {
-    return unpackHalf2x16(normalAndDeviation).y;
+vec4 unpackNormalAndDeviation(uvec2 normalAndDeviation) {
+    return vec4(unpackHalf2x16(normalAndDeviation[0]), unpackHalf2x16(normalAndDeviation[1]));
 }

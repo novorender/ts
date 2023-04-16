@@ -26,7 +26,7 @@ export class TonemapModule implements RenderModule {
         const bin = context.resourceBin("Tonemap");
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
         const sampler = bin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
-        const textureNames = ["color", "depth", "info", "zbuffer"] as const;
+        const textureNames = ["color", "pick", "zbuffer"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
         const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks: ["Tonemapping"], textureUniforms })
         return { bin, uniforms, sampler, program } as const;
@@ -68,8 +68,7 @@ class TonemapModuleContext implements RenderModuleContext {
             uniformBuffers: [uniforms],
             textures: [
                 { kind: "TEXTURE_2D", texture: textures.color, sampler },
-                { kind: "TEXTURE_2D", texture: textures.linearDepth, sampler },
-                { kind: "TEXTURE_2D", texture: textures.info, sampler },
+                { kind: "TEXTURE_2D", texture: textures.pick, sampler },
                 { kind: "TEXTURE_2D", texture: textures.depth, sampler },
             ],
             frameBuffer: null,

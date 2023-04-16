@@ -13,8 +13,7 @@ layout(std140) uniform Colors {
 in ClippingVaryings varyings;
 
 layout(location = 0) out vec4 fragColor;
-layout(location = 1) out float fragLinearDepth;
-layout(location = 2) out uvec2 fragInfo;
+layout(location = 1) out uvec4 fragPick;
 
 void main() {
     vec3 dir = normalize(varyings.dirVS);
@@ -55,6 +54,7 @@ void main() {
     if(rgba.a == 0.)
         discard;
     fragColor = rgba;
-    fragLinearDepth = -posVS.z;
-    fragInfo = uvec2(objectId, packNormal(clipping.planes[idx[i]].xyz));
+    vec3 normal = camera.viewLocalMatrixNormal * clipping.planes[idx[i]].xyz;
+    float linearDepth = -posVS.z;
+    fragPick = uvec4(objectId, packNormal(normal), floatBitsToUint(linearDepth));
 }

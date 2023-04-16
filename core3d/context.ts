@@ -220,8 +220,7 @@ export class RenderContext {
         const activeBuffers = buffers; // & this.drawBuffersMask;
         return [
             activeBuffers & BufferFlags.color ? "COLOR_ATTACHMENT0" : "NONE",
-            activeBuffers & BufferFlags.linearDepth ? "COLOR_ATTACHMENT1" : "NONE",
-            activeBuffers & BufferFlags.info ? "COLOR_ATTACHMENT2" : "NONE",
+            activeBuffers & BufferFlags.pick ? "COLOR_ATTACHMENT1" : "NONE",
         ] as const;
     }
 
@@ -347,12 +346,6 @@ export class RenderContext {
         statistics.lines += stats.lines;
         statistics.triangles += stats.triangles;
         statistics.drawCalls += drawCalls;
-    }
-
-    //* @internal */
-    async getLinearDepthBuffer() {
-        this.renderPickBuffers();
-        return (await this.buffers.pickBuffers()).depths;
     }
 
     //* @internal */
@@ -572,13 +565,13 @@ export class RenderContext {
             const stateParams: StateParams = {
                 viewport: { width, height },
                 frameBuffer: buffers.frameBuffers.pick,
-                drawBuffers: this.drawBuffers(BufferFlags.linearDepth | BufferFlags.info),
+                drawBuffers: this.drawBuffers(BufferFlags.pick),
                 depth: { test: true, writeMask: true },
             };
             glState(gl, stateParams);
             glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 }); // we need to clear (again) since depth might be different for pick and color renders and we're also not using MSAA depth buffer.
-            glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
-            glClear(gl, { kind: "COLOR", drawBuffer: 2, type: "Uint", color: [0xffffffff, 0x0000ffff, 0, 0] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
+            // glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
+            glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Uint", color: [0xffffffff, 0x0000_0000, 0x0000_0000, 0x7f80_0000] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format), 0x7f80_0000 is Float32.+inf
 
             for (const module of this.modules) {
                 if (module) {
@@ -599,6 +592,14 @@ export class RenderContext {
             }
 
             this.pickBuffersValid = true;
+        }
+    }
+
+    //* @internal */
+    *getLinearDepths(pick: Uint32Array): IterableIterator<number> {
+        const floats = new Float32Array(pick.buffer);
+        for (let i = 3; i < pick.length; i += 4) {
+            yield floats[i];
         }
     }
 
@@ -685,7 +686,8 @@ export class RenderContext {
         const px = Math.round(x / cssWidth * width);
         const py = Math.round((1 - (y + 0.5) / cssHeight) * height);
         console.assert(px >= 0 && py >= 0 && px < width && py < height);
-        const { depths, infos } = await buffers.pickBuffers();
+        const { pick } = await buffers.pickBuffers();
+        const floats = new Float32Array(pick.buffer);
 
         // fetch sample rectangle from read buffers
         const r = Math.ceil(sampleDiscRadius);
@@ -707,25 +709,16 @@ export class RenderContext {
                 if (dx * dx + dy * dy > r2)
                     continue; // filter out samples that lie outside sample disc radius
                 const buffOffs = ix + iy * width;
-                const objectId = infos[buffOffs * 2];
+                const objectId = pick[buffOffs * 4];
                 if (objectId != 0xffffffff) {
-                    const depth = depths[buffOffs];
-                    const [deviation16] = new Uint16Array(infos.buffer, buffOffs * 8 + 6, 1);
+                    const depth = floats[buffOffs * 4 + 3];
+                    const [nx16, ny16, nz16, deviation16] = new Uint16Array(pick.buffer, buffOffs * 16 + 4, 4);
+                    const nx = wasm.float32(nx16);
+                    const ny = wasm.float32(ny16);
+                    const nz = wasm.float32(nz16);
                     const deviation = wasm.float32(deviation16);
 
                     // compute normal
-                    const [nx8, ny8] = new Int8Array(infos.buffer, buffOffs * 8 + 4, 2);
-                    let nx = nx8 / 127;
-                    let ny = ny8 / 127;
-                    // convert octahedral projection to a 3 component normal: https://jcgt.org/published/0003/02/01/
-                    const nz = 1 - Math.abs(nx) - Math.abs(ny);
-                    if (nz < 0) {
-                        const sx = nx >= 0 ? 1 : -1;
-                        const sy = ny >= 0 ? 1 : -1;
-                        nx = 1 - Math.abs(ny) * sx;
-                        ny = 1 - Math.abs(nx) * sy;
-                    }
-
                     // compute clip space x,y coords
                     const xCS = ((ix + 0.5) / width) * 2 - 1;
                     const yCS = ((iy + 0.5) / height) * 2 - 1;
@@ -733,11 +726,11 @@ export class RenderContext {
                     // compute view space position and normal
                     const scale = isOrtho ? 1 : depth;
                     const posVS = vec3.fromValues((xCS / viewClipMatrix[0]) * scale, (yCS / viewClipMatrix[5]) * scale, -depth);
-                    const normalVS = vec3.fromValues(nx, ny, nz);
 
                     // convert into world space.
                     const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrix);
-                    const normal = vec3.transformMat3(vec3.create(), normalVS, viewWorldMatrixNormal);
+                    // const normal = vec3.transformMat3(vec3.create(), normalVS, viewWorldMatrixNormal);
+                    const normal = vec3.fromValues(nx, ny, nz);
                     vec3.normalize(normal, normal);
 
                     const sample = { x: ix - px, y: iy - py, position, normal, objectId, deviation, depth } as const;

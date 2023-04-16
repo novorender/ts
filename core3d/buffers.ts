@@ -3,17 +3,17 @@ import { ResourceBin } from "./resource";
 
 export const enum BufferFlags {
     color = 0x01,
-    linearDepth = 0x02,
-    info = 0x04,
-    depth = 0x08,
-    all = color | linearDepth | info | depth,
+    pick = 0x02,
+    depth = 0x04,
+    all = color | pick | depth,
 };
 
 /*
-info buffer layout
+pick buffer layout
   object_id: u32
-  normal: 2 x i8
+  normal: 3 x f16
   deviation: f16
+  linear_depth f32
 */
 
 export class RenderBuffers {
@@ -22,7 +22,7 @@ export class RenderBuffers {
     readonly renderBuffers;
     readonly frameBuffers;
     readonly readBuffers;
-    private pick;
+    private typedArrays;
     private pickFence: {
         readonly sync: WebGLSync,
         readonly promises: { readonly resolve: () => void, readonly reject: (reason: string) => void }[],
@@ -32,8 +32,7 @@ export class RenderBuffers {
         // const color = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "RGBA16F", type: "HALF_FLOAT", image: null });
         const textures = this.textures = {
             color: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "R11F_G11F_B10F", type: "HALF_FLOAT", image: null }),
-            linearDepth: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "R32F", type: "FLOAT", image: null }),
-            info: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "RG32UI", type: "UNSIGNED_INT", image: null }),
+            pick: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "RGBA32UI", type: "UNSIGNED_INT", image: null }), // TODO: Pack linearDepth into this buffer instead.
             depth: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "DEPTH_COMPONENT32F", type: "FLOAT", image: null }),
         } as const;
 
@@ -58,21 +57,18 @@ export class RenderBuffers {
             pick: resourceBin.createFrameBuffer({
                 color: [
                     null,
-                    { kind: "DRAW_FRAMEBUFFER", texture: textures.linearDepth },
-                    { kind: "DRAW_FRAMEBUFFER", texture: textures.info },
+                    { kind: "DRAW_FRAMEBUFFER", texture: textures.pick },
                 ],
                 depth: { kind: "DRAW_FRAMEBUFFER", texture: textures.depth },
             }),
         } as const;
 
         this.readBuffers = {
-            linearDepth: resourceBin.createBuffer({ kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 4, usage: "STREAM_READ" }),
-            info: resourceBin.createBuffer({ kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 8, usage: "STREAM_READ" }),
+            pick: resourceBin.createBuffer({ kind: "PIXEL_PACK_BUFFER", byteSize: width * height * 16, usage: "STREAM_READ" }),
         } as const;
 
-        this.pick = {
-            depths: new Float32Array(width * height * 1),
-            infos: new Uint32Array(width * height * 2),
+        this.typedArrays = {
+            pick: new Uint32Array(width * height * 4),
         } as const;
     }
 
@@ -88,10 +84,9 @@ export class RenderBuffers {
     invalidate(frameBuffer: keyof RenderBuffers["frameBuffers"], buffers: BufferFlags) {
         const { gl, frameBuffers } = this;
         var color = (buffers & BufferFlags.color) != 0;
-        var linearDepth = (buffers & BufferFlags.linearDepth) != 0;
-        var info = (buffers & BufferFlags.info) != 0;
+        var pick = (buffers & BufferFlags.pick) != 0;
         var depth = (buffers & BufferFlags.depth) != 0;
-        glInvalidateFrameBuffer(gl, { kind: "DRAW_FRAMEBUFFER", frameBuffer: frameBuffers[frameBuffer], color: [color, linearDepth, info], depth });
+        glInvalidateFrameBuffer(gl, { kind: "DRAW_FRAMEBUFFER", frameBuffer: frameBuffers[frameBuffer], color: [color, pick], depth });
     }
 
     // copy framebuffer into read buffers
@@ -99,8 +94,7 @@ export class RenderBuffers {
         const { gl, width, height, frameBuffers, readBuffers } = this;
         glReadPixels(gl, {
             width, height, frameBuffer: frameBuffers.pick, buffers: [
-                { attachment: "COLOR_ATTACHMENT1", buffer: readBuffers.linearDepth, format: "RED", type: "FLOAT" },
-                { attachment: "COLOR_ATTACHMENT2", buffer: readBuffers.info, format: "RG_INTEGER", type: "UNSIGNED_INT" },
+                { attachment: "COLOR_ATTACHMENT1", buffer: readBuffers.pick, format: "RGBA_INTEGER", type: "UNSIGNED_INT" },
             ]
         });
     }
@@ -119,9 +113,9 @@ export class RenderBuffers {
                 promises.push({ resolve, reject });
             });
             await promise;
-            return this.pick;
+            return this.typedArrays;
         } else {
-            return Promise.resolve(this.pick);
+            return Promise.resolve(this.typedArrays);
         }
     }
 
@@ -131,7 +125,7 @@ export class RenderBuffers {
     }
 
     pollPickFence() {
-        const { gl, pickFence, readBuffers, pick } = this;
+        const { gl, pickFence, readBuffers, typedArrays } = this;
         if (pickFence) {
             const { sync, promises } = pickFence;
             const status = gl.clientWaitSync(sync, gl.SYNC_FLUSH_COMMANDS_BIT, 0);
@@ -143,10 +137,8 @@ export class RenderBuffers {
             } else if (status != gl.TIMEOUT_EXPIRED) {
                 // we must copy read buffers into typed arrays in one go, or get annoying gl pipeline stalled warning on chrome
                 // this means we allocate more memory, but this also makes subsequent picks faster.
-                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, readBuffers.linearDepth);
-                gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, pick.depths);
-                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, readBuffers.info);
-                gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, pick.infos);
+                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, readBuffers.pick);
+                gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, typedArrays.pick);
                 gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
                 // resolve promises
                 for (const promise of promises) {

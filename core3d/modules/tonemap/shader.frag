@@ -46,7 +46,7 @@ void main() {
             break;
         }
         case tonemapModeNormal: {
-            vec3 xyz = unpackNormal(texture(textures.info, varyings.uv).y);
+            vec3 xyz = unpackNormalAndDeviation(texture(textures.pick, varyings.uv).yz).xyz;
             if(any(isnan(xyz))) {
                 color.rgb = vec3(0);
             } else {
@@ -55,7 +55,7 @@ void main() {
             break;
         }
         case tonemapModeDepth: {
-            float linearDepth = texture(textures.depth, varyings.uv).x;
+            float linearDepth = uintBitsToFloat(texture(textures.pick, varyings.uv).w);
             if(isinf(linearDepth)) {
                 color.rgb = vec3(0, 0, 0.25);
             } else {
@@ -65,7 +65,7 @@ void main() {
             break;
         }
         case tonemapModeObjectId: {
-            uint objectId = texture(textures.info, varyings.uv).x;
+            uint objectId = texture(textures.pick, varyings.uv).x;
             if(objectId == 0xffffffffU) {
                 color.rgb = vec3(0);
             } else {
@@ -79,7 +79,7 @@ void main() {
             break;
         }
         case tonemapModeDeviation: {
-            float deviation = unpackDeviation(texture(textures.info, varyings.uv).y);
+            float deviation = unpackNormalAndDeviation(texture(textures.pick, varyings.uv).yz).w;
             color.rgb = deviation > 0. ? vec3(0, deviation / tonemapMaxDeviation, 0) : vec3(-deviation / tonemapMaxDeviation, 0, 0);
             break;
         }

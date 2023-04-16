@@ -16,8 +16,7 @@ in DynamicVaryings varyings;
 flat in DynamicVaryingsFlat varyingsFlat;
 
 layout(location = 0) out vec4 fragColor;
-layout(location = 1) out float fragLinearDepth;
-layout(location = 2) out uvec2 fragInfo;
+layout(location = 1) out uvec4 fragPick;
 
 float clampedDot(vec3 x, vec3 y) {
     return clamp(dot(x, y), 0.0, 1.0);
@@ -225,7 +224,6 @@ void main() {
     fragColor = outColor;
     // only write to pick buffers for opaque triangles (for devices without OES_draw_buffers_indexed support)
     if(outColor.a >= 0.99) {
-        fragLinearDepth = varyings.linearDepth;
-        fragInfo = uvec2(varyingsFlat.objectId, packNormal((camera.localViewMatrixNormal * normal).xyz));
+        fragPick = uvec4(varyingsFlat.objectId, packNormal(normal), floatBitsToUint(varyings.linearDepth));
     }
 }

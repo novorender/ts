@@ -25,8 +25,7 @@ flat in OctreeVaryingsFlat varyingsFlat;
 #if !defined (PICK)
 layout(location = 0) out vec4 fragColor;
 #else
-layout(location = 1) out float fragLinearDepth;
-layout(location = 2) out uvec2 fragInfo;
+layout(location = 1) out uvec4 fragPick;
 #endif
 
 void main() {
@@ -58,6 +57,7 @@ void main() {
         normalVS = geometricNormalVS;
     }
     vec3 normalWS = normalize(camera.viewLocalMatrixNormal * normalVS);
+    vec3 geometricNormalWS = normalize(camera.viewLocalMatrixNormal * geometricNormalVS);
 
     vec4 rgba;
     if(meshMode == meshModePoints) {
@@ -117,7 +117,6 @@ void main() {
 #if !defined(PICK)
     fragColor = rgba;
 #else
-    fragLinearDepth = linearDepth;
-    fragInfo = uvec2(objectId, packNormalAndDeviation(normalVS.xyz, varyings.deviation));
+    fragPick = uvec4(objectId, packNormalAndDeviation(geometricNormalWS, varyings.deviation), floatBitsToUint(linearDepth));
 #endif
 }

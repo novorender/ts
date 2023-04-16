@@ -20,7 +20,6 @@ void main() {
     vec4 posVS = camera.localViewMatrix * cube.modelLocalMatrix * vertexPosition;
     gl_Position = camera.viewClipMatrix * posVS;
     varyings.posVS = posVS.xyz;
-    varyings.normal = camera.localViewMatrixNormal * vertexNormal;
+    varyings.normal = vertexNormal;
     varyings.color = vertexColor;
-    varyings.linearDepth = -posVS.z;
 }
