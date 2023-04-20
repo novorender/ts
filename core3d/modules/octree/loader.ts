@@ -93,7 +93,8 @@ export class NodeLoader {
         const { byteSize } = data;
         const { textureLOD } = deviceProfile;
         const enableOutlines = deviceProfile.features.outline;
-        const loadMsg: LoadMessage = { kind: "load", id, version, url, byteSize, separatePositionsBuffer: true, enableOutlines, textureLOD };
+        const applyFilter = this.state?.filter != undefined;
+        const loadMsg: LoadMessage = { kind: "load", id, version, url, byteSize, separatePositionsBuffer: true, enableOutlines, applyFilter, textureLOD };
         console.assert(byteSize != 0);
         const abortMsg: AbortMessage = { kind: "abort", id };
         const abort = () => { this.send(abortMsg); }

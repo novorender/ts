@@ -584,19 +584,21 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
     return { subMeshes, textures } as const satisfies NodeGeometry;
 }
 
-export async function parseNode(id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, textureLOD: 0 | 1, filterObjectIds: (ids: Uint32Array) => Promise<Uint32Array | undefined>) {
+export async function parseNode(id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, textureLOD: 0 | 1, filterObjectIds?: (ids: Uint32Array) => Promise<Uint32Array | undefined>) {
     console.assert(version == "1.7");
     // const begin = performance.now();
     const r = new BufferReader(buffer);
     var schema = readSchema(r);
-    async function filter() {
+    let predicate: ((objectId: number) => boolean) | undefined;
+    if (filterObjectIds) {
         let objectIds: Uint32Array | undefined = new Uint32Array(new Set<number>(getObjectIds(schema)));
         objectIds.sort();
         objectIds = await filterObjectIds(objectIds);
-        return objectIds ? new Set<number>(objectIds) : undefined;
+        if (objectIds) {
+            const filteredObjectIds = new Set<number>(objectIds);
+            predicate = (objectId: number) => (filteredObjectIds.has(objectId));
+        }
     }
-    const filteredObjectIds = await filter();
-    const predicate = filteredObjectIds ? (objectId: number) => (filteredObjectIds.has(objectId)) : undefined;
     // const predicate = (objectId: number) => (true);
     const childInfos = getChildren(id, schema, separatePositionBuffer, predicate);
     const geometry = getGeometry(schema, separatePositionBuffer, enableOutlines, textureLOD, predicate);

@@ -12,6 +12,7 @@ export interface LoadMessage {
     readonly textureLOD: 0 | 1;
     readonly separatePositionsBuffer: boolean;
     readonly enableOutlines: boolean;
+    readonly applyFilter: boolean;
 }
 
 export interface AbortMessage {
@@ -122,7 +123,7 @@ export class LoaderHandler {
 
     private async load(params: LoadMessage) {
         const { downloader, downloads } = this;
-        const { url, id, version, byteSize, separatePositionsBuffer, enableOutlines, textureLOD } = params;
+        const { url, id, version, byteSize, separatePositionsBuffer, enableOutlines, textureLOD, applyFilter } = params;
         try {
             const download = downloader.downloadArrayBufferAbortable(url, new ArrayBuffer(byteSize));
             downloads.set(id, download);
@@ -130,7 +131,7 @@ export class LoaderHandler {
             if (buffer) {
                 downloads.delete(id);
                 // const filterObjectIds = (objectIds: Uint32Array) => (Promise.resolve(objectIds));
-                const filterObjectIds = (objectIds: Uint32Array) => (this.requestFilter(id, objectIds));
+                const filterObjectIds = params.applyFilter ? (objectIds: Uint32Array) => (this.requestFilter(id, objectIds)) : undefined;
                 const { childInfos, geometry } = await parseNode(id, separatePositionsBuffer, enableOutlines, version, buffer, textureLOD, filterObjectIds);
                 const loadedMsg: LoadedMessage = { kind: "loaded", id, childInfos, geometry };
                 const transfer: Transferable[] = [];
