@@ -3,8 +3,6 @@ export interface DeviceProfile {
     readonly features: DeviceFeatures;
     readonly limits: DeviceLimits;
     readonly quirks: DeviceQuirks;
-    /** Texture resolution bias. 0 = full res, 1 = half res */
-    readonly textureLOD: 0 | 1;
     /** Geometry detail bias. */
     readonly detailBias: number;
 }
