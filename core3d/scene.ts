@@ -4,13 +4,11 @@ import { OctreeNode, type OctreeContext } from "./modules/octree/node";
 
 
 export async function downloadScene(url: string, abortController?: AbortController): Promise<RenderStateScene> {
-    const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     if (!abortController)
         abortController = new AbortController();
     const { signal } = abortController;
-    const baseUrl = new URL(url, scriptUrl);
-    const config = (await download(new URL("config.json", baseUrl), "json", signal)) as OctreeSceneConfig;
-    return { url: baseUrl.toString(), config } as const;
+    const config = (await download(new URL("config.json", url), "json", signal)) as OctreeSceneConfig;
+    return { url: url.toString(), config } as const;
 }
 
 export function createSceneRootNode(context: OctreeContext, config: OctreeSceneConfig) {
