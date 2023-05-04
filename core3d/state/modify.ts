@@ -19,7 +19,7 @@ export function mergeRecursive(original: any, changes: any) {
     for (const key in changes) {
         const originalValue = original ? original[key] : undefined;
         const changedValue = changes[key];
-        if (changedValue && typeof changedValue == "object" && !Array.isArray(changedValue)) {
+        if (changedValue != undefined && typeof changedValue == "object" && !Array.isArray(changedValue)) {
             clone[key] = mergeRecursive(originalValue, changedValue);
         } else {
             clone[key] = changedValue;
