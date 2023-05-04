@@ -49,8 +49,8 @@ export class OctreeNode {
     viewDistance = 0;
     projectedSize = 0;
     static readonly errorModifiers = {
-        [NodeType.Mixed]: 1,
-        [NodeType.Geometry]: 1,
+        [NodeType.Mixed]: 0.5,
+        [NodeType.Geometry]: 0.5,
         [NodeType.Points]: .08,
         [NodeType.Textured]: .08,
     };
