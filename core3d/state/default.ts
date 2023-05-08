@@ -16,7 +16,7 @@ export function defaultRenderState(): RenderState {
             pivot: undefined,
             fov: 45,
             near: 0.1,
-            far: 1000,
+            far: 10000,
         },
         quality: {
             detail: 1,
