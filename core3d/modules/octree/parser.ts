@@ -396,7 +396,9 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
             const idxCnt = sm.indexRange[1] - sm.indexRange[0];
             numVertices += vtxCnt;
             numIndices += idxCnt;
-            numTriangles += Math.round((idxCnt > 0 ? idxCnt : vtxCnt) / 3);
+            if (primitiveType == PrimitiveType.triangles) {
+                numTriangles += Math.round((idxCnt > 0 ? idxCnt : vtxCnt) / 3);
+            }
         }
         const vertexBuffer = new ArrayBuffer(numVertices * vertexStride);
         let trianglePosBuffer: Int16Array | undefined;

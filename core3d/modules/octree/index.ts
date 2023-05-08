@@ -384,9 +384,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             if (state.outlines.enabled && deviceProfile.features.outline) {
                 // transform outline plane into local space
                 const [x, y, z, offset] = state.outlines.plane;
-                const normal = vec3.fromValues(x, y, z);
-                const distance = offset - vec3.dot(renderContext["localSpaceTranslation"], normal);
-                const planeLS = vec4.fromValues(normal[0], normal[1], normal[2], -distance);
+                const plane = vec4.fromValues(x, y, z, -offset);
 
                 // render clipping outlines
                 glState(gl, {
@@ -397,7 +395,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     },
                 });
                 for (const { mask, node } of renderNodes) {
-                    if (node.intersectsPlane(planeLS)) {
+                    if (node.intersectsPlane(plane)) {
                         this.renderNodeClippingOutline(node, mask);
                     }
                 }
@@ -541,7 +539,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         if (mask && node.uniforms) {
             gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms);
             for (const mesh of node.meshes) {
-                if (mesh.numTriangles) {
+                if (mesh.numTriangles && mesh.drawParams.mode == "TRIANGLES" && !mesh.baseColorTexture) {
                     for (const drawRange of mesh.drawRanges) {
                         if ((1 << drawRange.childIndex) & mask) {
                             const count = drawRange.count / 3;
