@@ -42,3 +42,16 @@ export class PointrateProfiler {
         return rate;
     }
 }
+
+/*
+macbook pro 13 2018 / Intel Iris Plus Graphics 655 (https://support.apple.com/kb/SP775?locale=en_US)
+chrome: fr: 13.17, pr: 0.49
+safari: fr: 10.1, pr: 0.07
+(chrome and safari differs significantly in point rate, even on M1 mac)
+(no timer webgl extensions on either browser)
+
+macobook pro 13 M1 2020
+chrome: fr: 182, pr: 1.3
+safari: fr: 79, pr: 1.3
+
+*/
