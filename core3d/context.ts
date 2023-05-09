@@ -660,11 +660,13 @@ export class RenderContext {
             const [x, y, z, offset] = plane;
             const normal = vec3.fromValues(x, y, z);
             const distance = offset - vec3.dot(this.localSpaceTranslation, normal);
-            const margin = 0.001; // add a tiny margin so that these lines aren't clipped by the clipping plane itself
-            const planeLS = vec4.fromValues(normal[0], normal[1], normal[2], -distance - margin);
+            // const margin = 0.001; // add a tiny margin so that these lines aren't clipped by the clipping plane itself
+            const planeLS = vec4.fromValues(normal[0], normal[1], normal[2], -distance);
             // compute plane projection matrices
-            const localPlaneMatrix = othoNormalBasisMatrixFromPlane(planeLS);
-            const planeLocalMatrix = mat4.invert(mat4.create(), localPlaneMatrix);
+            // const localPlaneMatrix = othoNormalBasisMatrixFromPlane(planeLS);
+            // const planeLocalMatrix = mat4.invert(mat4.create(), localPlaneMatrix);
+            const planeLocalMatrix = othoNormalBasisMatrixFromPlane(planeLS);
+            const localPlaneMatrix = mat4.invert(mat4.create(), planeLocalMatrix);
             // set uniform values
             const { values } = outlinesUniformsData;
             values.planeLocalMatrix = planeLocalMatrix;
