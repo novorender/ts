@@ -56,7 +56,7 @@ class ToonModuleContext implements RenderModuleContext {
         const { gl, cameraUniforms } = context;
         const { textures } = context.buffers;
 
-        if (false) {
+        if (true) {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],
@@ -65,6 +65,16 @@ class ToonModuleContext implements RenderModuleContext {
                     { kind: "TEXTURE_2D", texture: textures.pick, sampler },
                     { kind: "TEXTURE_2D", texture: textures.depth, sampler },
                 ],
+                sample: {
+                    alphaToCoverage: false
+                },
+                blend: {
+                    enable: false,
+                    srcRGB: "SRC_ALPHA",
+                    dstRGB: "ONE_MINUS_SRC_ALPHA",
+                    srcAlpha: "ONE",
+                    dstAlpha: "ONE",
+                },
                 depth: {
                     test: false,
                     writeMask: false,
