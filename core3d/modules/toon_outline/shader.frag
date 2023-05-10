@@ -26,15 +26,35 @@ layout(location = 0) out vec4 fragColor;
         1., 2.,  0., -2., -1.);
 
 
+bool objectTest(uint objectId, vec2 bl, vec2 tr, vec2 br, vec2 tl) {
+    uint obj0 = texture(textures.pick, bl).x;
+    if (obj0 != objectId) {
+        return true;
+    }
+    uint obj1 = texture(textures.pick, tr).x;
+    if(obj1 != objectId) {
+        return true;
+    }
+    uint obj2 = texture(textures.pick, br).x;
+    if(obj2 != objectId) {
+        return true;
+    }
+    uint obj3 = texture(textures.pick, tl).x;
+    if(obj3 != objectId) {
+        return true;
+    }
+    return false;
+}
+
 float depthTest2(float centerDepth, vec2[25] uv) {
 
-        float f0 = 0.;
-        float f1 = 2.;
+    //     float f0 = 2.;
+    //     float f1 = 1.;
     // float horizontalSobel[25] = float[](
     //     f0, f0,f0*2.,f0,f0,
     //     f1, f1, f1 * 2., f1, f1,
     //     0., 0., 0., 0., 0.,
-    //     - 0., -0., -0., -0., -0.,
+    //     -f1, -f1, -f1 * 2., -f1, -f1,
     //     -f0, -f0, -f0 * 2., -f0, -f0);
 
     // float verticalSobel[25] = float[](
@@ -59,32 +79,12 @@ float depthTest2(float centerDepth, vec2[25] uv) {
             }
             float sobelFactorH = horizontalSobel[idx];
             float sobelFactorV = verticalSobel[idx];
-            float val = abs(centerDepth - uintBitsToFloat(texture(textures.pick, uvCoord).w)) /centerDepth  > threshold ? 1. : 0.;
+            float val = abs(centerDepth - uintBitsToFloat(texture(textures.pick, uvCoord).w)) / centerDepth > threshold ? 1. : 0.;
             horizontal += sobelFactorH * val;
             vertical += sobelFactorV * val;
         }
-
+    }
     return sqrt(pow(horizontal, 2.) + pow(vertical, 2.)) / 35.;
-}
-
-bool objectTest(uint objectId, vec2 bl, vec2 tr, vec2 br, vec2 tl) {
-    uint obj0 = texture(textures.pick, bl).x;
-    if (obj0 != objectId) {
-        return true;
-    }
-    uint obj1 = texture(textures.pick, tr).x;
-    if(obj1 != objectId) {
-        return true;
-    }
-    uint obj2 = texture(textures.pick, br).x;
-    if(obj2 != objectId) {
-        return true;
-    }
-    uint obj3 = texture(textures.pick, tl).x;
-    if(obj3 != objectId) {
-        return true;
-    }
-    return false;
 }
 
 
@@ -139,8 +139,8 @@ void main() {
 
     float normalEdge = 0.;
     float depthEdge = depthTest2(centerDepth, uvCoords);
-    if(depthEdge < 0.8) {
-        normalEdge = normalTest2(centerNormal, uvCoords);
+     if(depthEdge < 0.8) {
+         normalEdge = normalTest2(centerNormal, uvCoords);
     }
     float edge = min(0.8, max(depthEdge, normalEdge));
 
