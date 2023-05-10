@@ -70,6 +70,8 @@ export class RenderContext {
         readonly numMipMaps: number; // # of radiance/specular mip map levels.
         readonly default: boolean;
     };
+    isIdleFrame = false;
+
 
     constructor(readonly deviceProfile: DeviceProfile, readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TexImageSource, options?: WebGLContextAttributes) {
         // init gl context

@@ -99,6 +99,10 @@ export function defaultRenderState(): RenderState {
                     ],
                 }
             },
+        },
+        toonOutline: {
+            enabled: false,
+            color: [0, 0, 0]
         }
     };
     return state;

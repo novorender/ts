@@ -95,6 +95,10 @@ struct GridUniforms {
     float distance;
 };
 
+struct ToonOutlineUniforms {
+    vec3 color;
+};
+
 // dynamic geometry
 const vec3 ambientLight = vec3(0);
 struct DynamicVaryings {

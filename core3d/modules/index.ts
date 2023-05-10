@@ -33,7 +33,7 @@ export function createDefaultModules() {
         new CubeModule(),
         new OctreeModule(),
         new DynamicModule(),
-        //new ToonModule(),
+        new ToonModule(),
         new GridModule(),
         new ClippingModule(),
         new WatermarkModule(),

@@ -2,6 +2,10 @@ layout(std140) uniform Camera {
     CameraUniforms camera;
 };
 
+// layout(std140) uniform ToonOutline {
+//     ToonOutlineUniforms toonOutline;
+// };
+
 out vec2 uv;
 
 void main() {

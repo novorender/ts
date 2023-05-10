@@ -6,9 +6,9 @@ import fragmentShader from "./shader.frag";
 import { mat4, vec3 } from "gl-matrix";
 
 export class ToonModule implements RenderModule {
-    readonly kind = "grid";
+    readonly kind = "toon_outline";
     readonly uniforms = {
-        distance: "float",
+        color: "vec3",
     } as const satisfies Record<string, UniformTypes>;
 
     async withContext(context: RenderContext) {
@@ -42,10 +42,10 @@ class ToonModuleContext implements RenderModuleContext {
     update(state: DerivedRenderState) {
         const { context, resources } = this;
         const { uniforms } = resources;
-        const { grid, localSpaceTranslation } = state;
-        if (context.hasStateChanged({ grid, localSpaceTranslation })) {
+        const { toonOutline, localSpaceTranslation } = state;
+        if (context.hasStateChanged({ toonOutline, localSpaceTranslation })) {
             const { values } = this.uniforms;
-            values.distance = grid.distance;
+            values.color = toonOutline.color;
             context.updateUniformBuffer(uniforms, this.uniforms);
         }
     }
@@ -56,7 +56,7 @@ class ToonModuleContext implements RenderModuleContext {
         const { gl, cameraUniforms } = context;
         const { textures } = context.buffers;
 
-        if (true) {
+        if (state.toonOutline.enabled && context.isIdleFrame) {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],
@@ -66,7 +66,7 @@ class ToonModuleContext implements RenderModuleContext {
                     { kind: "TEXTURE_2D", texture: textures.depth, sampler },
                 ],
                 sample: {
-                    alphaToCoverage: false
+                    alphaToCoverage: true
                 },
                 blend: {
                     enable: false,

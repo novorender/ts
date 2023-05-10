@@ -24,6 +24,7 @@ export interface RenderState {
     readonly outlines: RenderStateOutlines;
     readonly tonemapping: RenderStateTonemapping;
     readonly points: RenderStatePointCloud;
+    readonly toonOutline: RenderStateToonOutline;
 }
 
 export interface DerivedRenderState extends RenderState {
@@ -246,4 +247,9 @@ export interface RenderStateTonemapping {
 
     /** Debug display frame buffer */
     readonly mode: TonemappingMode;
+}
+
+export interface RenderStateToonOutline {
+    readonly enabled: boolean;
+    readonly color: RGB;
 }
