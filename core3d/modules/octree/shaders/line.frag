@@ -27,8 +27,8 @@ layout(location = 0) out vec4 fragColor;
 layout(location = 1) out uvec4 fragPick;
 
 void main() {
-    if(clipOutlines(varyings.positionVS, clipping))
-        discard;
+    // if(clipOutlines(varyings.positionVS, clipping))
+    //     discard;
 
     fragColor = vec4(outline.color, varyings.opacity);
     float linearDepth = -varyings.positionVS.z;
