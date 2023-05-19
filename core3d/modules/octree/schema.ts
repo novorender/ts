@@ -1,5 +1,5 @@
-import { BufferReader } from "./util.js";
-import type { EnumArray, U8, U16, U32, I8, I16, I32, F16, F32, F64 } from "./util.js";
+import { BufferReader } from "./util";
+import type { EnumArray, U8, U16, U32, I8, I16, I32, F16, F32, F64 } from "./util";
 
 // Type of GL render primitive.
 export const enum PrimitiveType {
@@ -17,6 +17,7 @@ export const enum OptionalVertexAttribute {
     normal = 1,
     color = 2,
     texCoord = 4,
+    projectedPos = 8,
 };
 
 // Type of material.
@@ -153,6 +154,7 @@ export interface Vertex {
     readonly normal?: Int8_3;
     readonly color?: RGBA_U8;
     readonly texCoord?: Half2;
+    readonly projectedPos?: Int16_3;
     readonly deviations: Deviations;
 };
 
@@ -201,7 +203,7 @@ export interface Triangle {
 
 export function readSchema(r: BufferReader) {
     const sizes = r.u32(8);
-    const flags = r.u8(9);
+    const flags = r.u8(10);
     const schema = {
         childInfo: {
             length: sizes[0],
@@ -315,19 +317,25 @@ export function readSchema(r: BufferReader) {
                 x: r.f16(sizes[4]),
                 y: r.f16(sizes[4]),
             } as Half2,
+            projectedPos: !flags[3] ? undefined : {
+                length: sizes[4],
+                x: r.i16(sizes[4]),
+                y: r.i16(sizes[4]),
+                z: r.i16(sizes[4]),
+            } as Int16_3,
             deviations: {
                 length: sizes[4],
-                a: !flags[3] ? undefined : r.f16(sizes[4]),
-                b: !flags[4] ? undefined : r.f16(sizes[4]),
-                c: !flags[5] ? undefined : r.f16(sizes[4]),
-                d: !flags[6] ? undefined : r.f16(sizes[4]),
+                a: !flags[4] ? undefined : r.f16(sizes[4]),
+                b: !flags[5] ? undefined : r.f16(sizes[4]),
+                c: !flags[6] ? undefined : r.f16(sizes[4]),
+                d: !flags[7] ? undefined : r.f16(sizes[4]),
             } as Deviations,
         } as Vertex,
         triangle: {
             length: sizes[5],
-            topologyFlags: !flags[7] ? undefined : r.u8(sizes[5]),
+            topologyFlags: !flags[8] ? undefined : r.u8(sizes[5]),
         } as Triangle,
-        vertexIndex: !flags[8] ? undefined : r.u16(sizes[6]),
+        vertexIndex: !flags[9] ? undefined : r.u16(sizes[6]),
         texturePixels: r.u8(sizes[7]),
     } as const;
     console.assert(r.eof);
