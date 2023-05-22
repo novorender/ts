@@ -1,8 +1,8 @@
 {
     "name": "@novorender/ts",
+    "private": true,
     "version": "1.0.0",
     "description": "",
-    "main": "index.js",
     "type": "module",
     "scripts": {
         "watch": "tsc --watch --noemit"
@@ -18,6 +18,7 @@
     },
     "homepage": "https://github.com/novorender/ts#readme",
     "devDependencies": {
+        "@microsoft/api-extractor": "^7.35.0",
         "esbuild": "^0.17.10",
         "esbuild-plugin-inline-worker": "^0.1.1",
         "ip": "^1.1.8",

@@ -81,6 +81,7 @@ export interface VertexAttributeInt extends VertexAttributeCommon {
     readonly normalized?: undefined;
 }
 
+/** @internal */
 export interface VertexAttributeUint extends VertexAttributeCommon {
     readonly kind: ShaderTypeUint;
     readonly componentType?: ComponentTypeUint; // default: UNSIGNED_INT

@@ -1,0 +1,19 @@
+{
+    "name": "@novorender/web_app",
+    "version": "1.0.0",
+    "description": "",
+    "main": "./dist/web_app/index.js",
+    "typings": "./dist/web_app/index.d.ts",
+    "type": "module",
+    "scripts": {},
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/novorender/ts.git"
+    },
+    "author": "",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/novorender/ts/issues"
+    },
+    "homepage": "https://github.com/novorender/ts#readme"
+}

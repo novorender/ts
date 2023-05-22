@@ -1,3 +1,4 @@
+/** @public */
 export function glBlit(gl: WebGL2RenderingContext, params: BlitParams) {
     const w = gl.drawingBufferWidth;
     const h = gl.drawingBufferHeight;
