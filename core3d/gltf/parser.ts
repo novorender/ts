@@ -25,7 +25,7 @@ function getTransform(node: GLTF.Node) {
     return transform;
 }
 
-export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externalImageBlobs: (Blob | undefined)[], objectId?: number): Promise<readonly RenderStateDynamicObject[]> {
+export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externalImageBlobs: (Blob | undefined)[], baseObjectId?: number): Promise<readonly RenderStateDynamicObject[]> {
     const { extensionsRequired, extensionsUsed } = gltf;
     if (extensionsUsed && extensionsUsed.length != 0 && extensionsUsed[0] != "KHR_materials_unlit") {
         console.warn(`The following glTF extensions were used, but are not supported: ${extensionsUsed.join(', ')}!`);
@@ -259,7 +259,7 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
                 if (node.mesh != undefined) {
                     const instance: RenderStateDynamicInstance = decomposeMatrix(transform);
                     const mesh = meshes[node.mesh];
-                    const obj: RenderStateDynamicObject = { instances: [instance], mesh, baseObjectId: objectId };
+                    const obj: RenderStateDynamicObject = { instances: [instance], mesh, baseObjectId };
                     objects.push(obj);
                 }
                 if (node.children) {
