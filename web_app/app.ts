@@ -123,21 +123,11 @@ export class WebApp implements ViewStateContext {
     }
 
     //* @internal */
-    async loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit = true): Promise<ReadonlyVec3> {
-        let scene: RenderStateScene | undefined;
-        if (sceneId) {
-            let url = new URL(`/assets/octrees/${sceneId}/`, this.scriptUrl).toString();
-            // check if data is available locally first
-            const response = await fetch(new URL("config.json", url), { method: "HEAD", mode: "cors" });
-            if (!response.ok) {
-                url = new URL(`${this.alternateUrl}${sceneId}/`).toString();
-                // const response2 = await fetch(new URL("config.json", url), { method: "HEAD", mode: "cors" });
-            }
-            scene = await downloadScene(url);
-            // scene = { ...scene, filter: { mode: "include", objectIds: [/*1264,*/ 21019, 21832, 21833, 21846, 21847, 22056, 22384, 22450, 22711] } };
-        }
-        let center = initPos ?? scene?.config.center ?? vec3.create();
-        const radius = scene?.config.boundingSphere.radius ?? 5;
+    async loadScene(url: string, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit = true): Promise<ReadonlyVec3> {
+        const scene = await downloadScene(url);
+
+        let center = initPos ?? scene.config.center ?? vec3.create();
+        const radius = scene.config.boundingSphere.radius ?? 5;
         if (autoFit) {
             this.activeController.autoFit(center, radius);
         }
