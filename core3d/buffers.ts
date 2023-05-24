@@ -1,4 +1,4 @@
-import { glBlit, glInvalidateFrameBuffer, glReadPixels } from "@novorender/webgl2";
+import { glBlit, glInvalidateFrameBuffer, glReadPixels } from "webgl2";
 import { ResourceBin } from "./resource";
 
 export const enum BufferFlags {

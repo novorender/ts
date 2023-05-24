@@ -1,9 +1,9 @@
-import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
+import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glDraw, glState, glUBOProxy, type UniformTypes } from "@novorender/webgl2";
+import { glDraw, glState, glUBOProxy, type UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { ResourceBin } from "@novorender/core3d/resource";
+import { ResourceBin } from "core3d/resource";
 
 export class ClippingModule implements RenderModule {
     readonly kind = "clipping";

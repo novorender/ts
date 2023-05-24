@@ -1,15 +1,15 @@
 
-import { createTestSphere, createTestCube, createRandomInstances } from "@novorender/core3d/geometry";
-import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, modifyRenderStateFromCadSpace, RenderContext, type RenderStateDynamicObject, type RenderStateScene } from "@novorender/core3d";
-import { type RenderState, type RenderStateChanges, type RenderStateClippingPlane } from "@novorender/core3d";
-import { downloadScene } from "@novorender/core3d/scene";
+import { createTestSphere, createTestCube, createRandomInstances } from "core3d/geometry";
+import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, modifyRenderStateFromCadSpace, RenderContext, type RenderStateDynamicObject, type RenderStateScene } from "core3d";
+import { type RenderState, type RenderStateChanges, type RenderStateClippingPlane } from "core3d";
+import { downloadScene } from "core3d/scene";
 import { type ReadonlyVec3, vec3, quat, mat3 } from "gl-matrix";
 import { OrbitController } from "./controller/orbit";
 import { OrthoController } from "./controller/ortho";
 import { FlightController } from "./controller/flight";
 import { BaseController } from "./controller/base";
 import { ControllerInput } from "./controller/input";
-import type { DeviceProfile } from "@novorender/core3d/device";
+import type { DeviceProfile } from "core3d/device";
 import { PanoramaController } from "./controller/panorama";
 
 const coreProfile = {

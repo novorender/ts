@@ -1,4 +1,4 @@
-import type { RenderStateColorGradient, RGB, RGBA } from "@novorender/core3d";
+import type { RenderStateColorGradient, RGB, RGBA } from "core3d";
 import { vec4 } from "gl-matrix";
 
 export function gradientRange(gradient: RenderStateColorGradient<RGB | RGBA>) {

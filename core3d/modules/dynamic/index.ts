@@ -1,11 +1,11 @@
-import type { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "@novorender/core3d";
+import type { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glDraw, glState, type UniformTypes, type VertexArrayParams, type VertexAttribute, type DrawParamsElements, type DrawParamsArrays, type StateParams, type DrawParamsArraysInstanced, type DrawParamsElementsInstanced } from "@novorender/webgl2";
+import { glUBOProxy, glDraw, glState, type UniformTypes, type VertexArrayParams, type VertexAttribute, type DrawParamsElements, type DrawParamsArrays, type StateParams, type DrawParamsArraysInstanced, type DrawParamsElementsInstanced } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat3, mat4, vec3 } from "gl-matrix";
-import { BufferFlags } from "@novorender/core3d/buffers";
-import { ResourceBin } from "@novorender/core3d/resource";
+import { BufferFlags } from "core3d/buffers";
+import { ResourceBin } from "core3d/resource";
 
 export class DynamicModule implements RenderModule {
     readonly kind = "dynamic";

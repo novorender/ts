@@ -1,4 +1,4 @@
-import { glClear, glCreateProgram, glDraw, glState, glUniformLocations } from "@novorender/webgl2";
+import { glClear, glCreateProgram, glDraw, glState, glUniformLocations } from "webgl2";
 import { measure } from "./util";
 import { Benchmark } from "./benchmark";
 import { shaders } from "./shaders";

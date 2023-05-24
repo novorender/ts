@@ -1,4 +1,4 @@
-import { glClear, glCreateBuffer, glCreateProgram, glCreateVertexArray, glDraw, glState } from "@novorender/webgl2";
+import { glClear, glCreateBuffer, glCreateProgram, glCreateVertexArray, glDraw, glState } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 

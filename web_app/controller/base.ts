@@ -1,4 +1,4 @@
-import { type RenderStateScene, type RenderStateCamera, type RenderState, type RenderStateChanges, type RenderContext, mergeRecursive, type RecursivePartial } from "@novorender/core3d";
+import { type RenderStateScene, type RenderStateCamera, type RenderState, type RenderStateChanges, type RenderContext, mergeRecursive, type RecursivePartial } from "core3d";
 import { type ReadonlyVec3, vec2, type ReadonlyQuat, vec3 } from "gl-matrix";
 import { ControllerInput } from "./input";
 import type { FlightControllerParams } from "./flight";

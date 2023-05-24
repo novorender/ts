@@ -1,7 +1,7 @@
 
 import { mat3, quat, vec3, type ReadonlyQuat, type ReadonlyVec3 } from "gl-matrix";
 import type { RenderState, RenderStateCamera, RenderStateChanges, RenderStateClipping, RenderStateOutput } from ".";
-import type { MutableCameraState } from "@novorender/web_app/controller/base";
+import type { MutableCameraState } from "web_app/controller/base";
 
 // this function will create a copy where unchanged properties have same identity (=== operator yields true)
 // use this to quickly check for changes.

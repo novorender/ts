@@ -1,4 +1,4 @@
-import { glCreateBuffer, glCreateFrameBuffer, glCreateProgram, glCreateRenderbuffer, glCreateSampler, glCreateTexture, glCreateVertexArray, type WebGLResource, type BufferParams, type BufferTargetString, type FrameBufferParams, type ProgramParams, type RenderbufferParams, type SamplerParams, type TextureParams, type TextureTargetString, type VertexArrayParams, glCreateProgramAsync, type ProgramAsyncParams, glLimits } from "@novorender/webgl2";
+import { glCreateBuffer, glCreateFrameBuffer, glCreateProgram, glCreateRenderbuffer, glCreateSampler, glCreateTexture, glCreateVertexArray, type WebGLResource, type BufferParams, type BufferTargetString, type FrameBufferParams, type ProgramParams, type RenderbufferParams, type SamplerParams, type TextureParams, type TextureTargetString, type VertexArrayParams, glCreateProgramAsync, type ProgramAsyncParams, glLimits } from "webgl2";
 
 export class ResourceBin {
     private readonly resourceMap = new Map<WebGLResource, ResourceInfo[]>();

@@ -18,10 +18,10 @@
     },
     "homepage": "https://github.com/novorender/ts#readme",
     "devDependencies": {
-        "@microsoft/api-extractor": "^7.35.0",
         "esbuild": "^0.17.10",
         "esbuild-plugin-inline-worker": "^0.1.1",
         "ip": "^1.1.8",
+        "tsup": "^6.7.0",
         "typescript": "^5.0.0-beta"
     },
     "dependencies": {

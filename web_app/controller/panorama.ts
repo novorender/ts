@@ -1,7 +1,7 @@
 
 import { type ReadonlyVec3, vec3, type ReadonlyQuat, glMatrix, quat } from "gl-matrix";
 import { BaseController, type ControllerInitParams, type MutableCameraState } from "./base";
-import { type RenderStateScene, type RenderStateCamera, type RenderState, mergeRecursive, type RecursivePartial } from "@novorender/core3d";
+import { type RenderStateScene, type RenderStateCamera, type RenderState, mergeRecursive, type RecursivePartial } from "core3d";
 import { PitchRollYawOrientation } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 

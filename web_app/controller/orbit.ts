@@ -1,5 +1,5 @@
 
-import { mergeRecursive, type RecursivePartial, type RenderStateCamera } from "@novorender/core3d";
+import { mergeRecursive, type RecursivePartial, type RenderStateCamera } from "core3d";
 import { type ReadonlyVec3, glMatrix, vec2, vec3 } from "gl-matrix";
 import { BaseController, type ControllerInitParams, type MutableCameraState } from "./base";
 import { PitchRollYawOrientation } from "./orientation";

@@ -1,11 +1,11 @@
-import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
-import { parseKTX } from "@novorender/core3d/ktx";
+import type { DerivedRenderState, RenderContext } from "core3d";
+import { parseKTX } from "core3d/ktx";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glClear, glDraw, glState } from "@novorender/webgl2";
-import { type TextureParams, type UniformTypes, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped } from "@novorender/webgl2";
+import { glUBOProxy, glClear, glDraw, glState } from "webgl2";
+import { type TextureParams, type UniformTypes, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { BufferFlags } from "@novorender/core3d/buffers";
+import { BufferFlags } from "core3d/buffers";
 
 export class BackgroundModule implements RenderModule {
     readonly kind = "background";

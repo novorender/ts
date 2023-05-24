@@ -1,9 +1,9 @@
 import { type ReadonlyVec3, vec3 } from "gl-matrix";
-import type { AABB, BoundingSphere } from "@novorender/core3d/state";
+import type { AABB, BoundingSphere } from "core3d/state";
 import { type Double3, type Float3, MaterialType, OptionalVertexAttribute, PrimitiveType, readSchema, type Schema, type SubMeshProjection, TextureSemantic } from "./schema";
 import { BufferReader, Float16Array } from "./util";
-import type { ComponentType, ShaderAttributeType, TextureParams } from "@novorender/webgl2";
-import { parseKTX } from "@novorender/core3d/ktx";
+import type { ComponentType, ShaderAttributeType, TextureParams } from "webgl2";
+import { parseKTX } from "core3d/ktx";
 
 export interface MeshDrawRange {
     readonly childIndex: number;

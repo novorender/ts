@@ -1,14 +1,14 @@
-import type { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "@novorender/core3d";
+import type { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
-import { createSceneRootNode } from "@novorender/core3d/scene";
+import { createSceneRootNode } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility } from "./node";
-import { glUBOProxy, glDraw, glState, glTransformFeedback, glUniformLocations, glUpdateTexture, type TextureParams2DUncompressed, type UniformTypes } from "@novorender/webgl2";
+import { glUBOProxy, glDraw, glState, glTransformFeedback, glUniformLocations, glUpdateTexture, type TextureParams2DUncompressed, type UniformTypes } from "webgl2";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
 import { type ReadonlyVec3, vec3, mat4, vec4 } from "gl-matrix";
 import { NodeLoader, type NodeLoaderOptions } from "./loader";
 import { computeGradientColors, gradientRange } from "./gradient";
-// import { BufferFlags } from "@novorender/core3d/buffers";
+// import { BufferFlags } from "core3d/buffers";
 import { shaders } from "./shaders";
 
 export class OctreeModule implements RenderModule {
