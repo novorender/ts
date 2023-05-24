@@ -1,6 +1,6 @@
 
 import { createTestSphere, createTestCube, createRandomInstances } from "@novorender/core3d/geometry";
-import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type RenderStateDynamicObject, type RenderStateScene } from "@novorender/core3d";
+import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, modifyRenderStateFromCadSpace, RenderContext, type RenderStateDynamicObject, type RenderStateScene } from "@novorender/core3d";
 import { type RenderState, type RenderStateChanges, type RenderStateClippingPlane } from "@novorender/core3d";
 import { downloadScene } from "@novorender/core3d/scene";
 import { type ReadonlyVec3, vec3, quat, mat3 } from "gl-matrix";
@@ -117,7 +117,7 @@ export class WebApp implements ViewStateContext {
         height = Math.round(height * scale);
         const { output } = this.renderState;
         if (width != output.width || height != output.height) {
-            this.renderState = modifyRenderState(this.renderState, { output: { width, height } });
+            this.renderState = modifyRenderStateFromCadSpace(this.renderState, { output: { width, height } });
             // this.modifyRenderState({ output: { width, height } });
         }
     }
@@ -301,7 +301,7 @@ export class WebApp implements ViewStateContext {
                 }
 
                 if (this.stateChanges) {
-                    this.renderState = modifyRenderState(this.renderState, this.stateChanges);
+                    this.renderState = modifyRenderStateFromCadSpace(this.renderState, this.stateChanges);
                     this.stateChanges = undefined;
                 }
                 const { renderState } = this;
