@@ -1,5 +1,5 @@
 
-import { type ReadonlyVec3, vec3, glMatrix, quat } from "gl-matrix";
+import { type ReadonlyVec3, vec3, glMatrix, quat, mat3 } from "gl-matrix";
 import { BaseController, type ControllerContext, type ControllerInitParams, type MutableCameraState } from "./base";
 import { type RenderStateCamera, type RecursivePartial, mergeRecursive } from "@novorender/core3d";
 import { PitchRollYawOrientation, clamp } from "./orientation";
@@ -157,17 +157,6 @@ export class FlightController extends BaseController {
         orientation.roll = 0;
         const [zoomX, zoomY] = zoomPos;
 
-        if (tx || ty || tz) {
-            if (tz != 0) {
-                tx += zoomX * tz * 0.6;
-                ty += -zoomY * tz * 0.6;
-            }
-            const linearVelocity = multiplier * params.linearVelocity / height;
-            const worldPosDelta = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * linearVelocity, -ty * linearVelocity, tz * linearVelocity), orientation.rotation);
-            this.position = vec3.add(vec3.create(), this.position, worldPosDelta);
-            this.changed = true;
-        }
-
         if (rx || ry) {
             const rotationalVelocity = (shouldPivot ? 180 : this.fov) * params.rotationalVelocity / height;
             orientation.pitch += rx * rotationalVelocity;
@@ -181,18 +170,30 @@ export class FlightController extends BaseController {
             }
             this.changed = true;
         }
+
+        if (tx || ty || tz) {
+            if (tz != 0) {
+                tx += zoomX * tz * 0.6;
+                ty += -zoomY * tz * 0.6;
+                console.log(zoomX);
+            }
+            const linearVelocity = multiplier * params.linearVelocity / height;
+            const worldPosDelta = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * linearVelocity, -ty * linearVelocity, tz * linearVelocity), orientation.rotation);
+            this.position = vec3.add(vec3.create(), this.position, worldPosDelta);
+            this.changed = true;
+        }
     }
 
     override stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera> {
         const changes: MutableCameraState = {};
         const { position, orientation, pivot, fov } = this;
-        if (!state || state.position !== position) {
+        if (!state || !vec3.exactEquals(state.position, position)) {
             changes.position = position;
         }
-        if (!state || state.rotation !== orientation.rotation) {
+        if (!state || !quat.exactEquals(state.rotation, orientation.rotation)) {
             changes.rotation = orientation.rotation;
         }
-        if (!state || state.pivot !== pivot?.center) {
+        if (!state || (pivot && state.pivot && vec3.exactEquals(state.pivot, pivot?.center))) {
             changes.pivot = pivot?.center;
         }
         if (!state || state.fov !== fov) {

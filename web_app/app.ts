@@ -1,6 +1,6 @@
 
 import { createTestSphere, createTestCube, createRandomInstances } from "@novorender/core3d/geometry";
-import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, modifyRenderState, RenderContext, type RenderStateDynamicObject, type RenderStateScene } from "@novorender/core3d";
+import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type RenderStateDynamicObject, type RenderStateScene } from "@novorender/core3d";
 import { type RenderState, type RenderStateChanges, type RenderStateClippingPlane } from "@novorender/core3d";
 import { downloadScene } from "@novorender/core3d/scene";
 import { type ReadonlyVec3, vec3, quat, mat3 } from "gl-matrix";
@@ -129,7 +129,11 @@ export class WebApp implements ViewStateContext {
         let center = initPos ?? scene.config.center ?? vec3.create();
         const radius = scene.config.boundingSphere.radius ?? 5;
         if (autoFit) {
-            this.activeController.autoFit(center, radius);
+            const autofit = vec3.clone(center);
+            const tmp = autofit[1];
+            autofit[1] = -autofit[2];
+            autofit[2] = tmp;
+            this.activeController.autoFit(autofit, radius);
         }
         const camera = this.activeController.stateChanges();
         center = centerPos ? centerPos : center;
