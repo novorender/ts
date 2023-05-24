@@ -1,5 +1,7 @@
 
-import type { RenderState, RenderStateChanges, RenderStateClipping, RenderStateOutput } from ".";
+import { mat3, quat, vec3, type ReadonlyQuat, type ReadonlyVec3 } from "gl-matrix";
+import type { RenderState, RenderStateCamera, RenderStateChanges, RenderStateClipping, RenderStateOutput } from ".";
+import type { MutableCameraState } from "@novorender/web_app/controller/base";
 
 // this function will create a copy where unchanged properties have same identity (=== operator yields true)
 // use this to quickly check for changes.
@@ -12,6 +14,28 @@ export function modifyRenderState(state: RenderState, changes: RenderStateChange
         verifyClippingState(newState.clipping);
     }
     return newState;
+}
+
+export function modifyRenderStateFromCadSpace(state: RenderState, changes: RenderStateChanges): RenderState {
+    const { camera } = changes;
+    if (camera) {
+        const cameraChanges: MutableCameraState = {};
+        const mat = mat3.fromValues(
+            1, 0, 0,
+            0, 0, 1,
+            0, -1, 0);
+        if (camera.position) {
+            cameraChanges.position = vec3.transformMat3(vec3.create(), camera.position as vec3, mat);
+        }
+        if (camera.pivot) {
+            cameraChanges.pivot = vec3.transformMat3(vec3.create(), camera.pivot as vec3, mat);
+        }
+        if (camera.rotation) {
+            cameraChanges.rotation = quat.mul(quat.create(), quat.fromMat3(quat.create(), mat), camera.rotation as quat);
+        }
+        changes = mergeRecursive(changes, { camera: cameraChanges });
+    }
+    return modifyRenderState(state, changes);
 }
 
 export function mergeRecursive(original: any, changes: any) {
