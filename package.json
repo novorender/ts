@@ -5,7 +5,10 @@
     "description": "",
     "type": "module",
     "scripts": {
-        "watch": "tsc --watch --noemit"
+        "watch": "npm run typescript -- --watch",
+        "build:webapp": "npm run typescript && node ./build_bundle && npm run tsup -- web_app/index.ts --dts-only",
+        "typescript": "tsc --noemit",
+        "tsup": "tsup"
     },
     "repository": {
         "type": "git",
