@@ -118,7 +118,7 @@ export class OrbitController extends BaseController {
                 orientation.roll = 0;
             }
         }
-        this.input.callbacks = this;
+        this.attach();
         this.changed = true;
     }
 

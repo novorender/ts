@@ -67,7 +67,7 @@ export class PanoramaController extends BaseController {
             this.fov = fovDegrees;
         }
         this.changed = false;
-        this.input.callbacks = this;
+        this.attach();
     }
 
     override autoFit(center: ReadonlyVec3, radius: number): void {

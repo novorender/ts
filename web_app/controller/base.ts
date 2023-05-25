@@ -97,6 +97,9 @@ export abstract class BaseController {
     abstract update(): void;
     abstract stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera>;
     abstract updateParams(params: RecursivePartial<ControllerParams>): void;
+    attach() {
+        this.input.callbacks = this;
+    }
 
     mouseButtonChanged(event: MouseEvent): Promise<void> | void { }
     touchChanged(event: TouchEvent): Promise<void> | void { }
