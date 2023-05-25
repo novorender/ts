@@ -27,7 +27,7 @@ export class OctreeModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     readonly gradientImageParams: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: Gradient.size, height: 2, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null };
-    readonly nodeLoaderOptions: NodeLoaderOptions = { useWorker: true }; // set to false for better debugging
+    readonly nodeLoaderOptions: NodeLoaderOptions = { useWorker: false }; // set to false for better debugging
     readonly maxHighlights = 8;
 
     async withContext(context: RenderContext) {
@@ -224,6 +224,7 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         renderContext.updateUniformBuffer(resources.sceneUniforms, uniforms.scene);
 
         const { rootNode } = this;
+        console.log(rootNode);
         if (rootNode) {
             rootNode.update(state); // recursively update all nodes' visibility and projectedSize++
 
@@ -694,6 +695,7 @@ const enum VertexAttributeIds {
     objectId,
     texCoord0,
     color0,
+    projectedPos,
     deviations,
     highlight,
 };
