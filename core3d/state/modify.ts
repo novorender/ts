@@ -20,18 +20,15 @@ export function modifyRenderStateFromCadSpace(state: RenderState, changes: Rende
     const { camera } = changes;
     if (camera) {
         const cameraChanges: MutableCameraState = {};
-        const mat = mat3.fromValues(
-            1, 0, 0,
-            0, 0, 1,
-            0, -1, 0);
+        const flipZY = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
         if (camera.position) {
-            cameraChanges.position = vec3.transformMat3(vec3.create(), camera.position as vec3, mat);
+            cameraChanges.position = vec3.transformQuat(vec3.create(), camera.position as vec3, flipZY);
         }
         if (camera.pivot) {
-            cameraChanges.pivot = vec3.transformMat3(vec3.create(), camera.pivot as vec3, mat);
+            cameraChanges.pivot = vec3.transformQuat(vec3.create(), camera.pivot as vec3, flipZY);
         }
         if (camera.rotation) {
-            cameraChanges.rotation = quat.mul(quat.create(), quat.fromMat3(quat.create(), mat), camera.rotation as quat);
+            cameraChanges.rotation = quat.mul(quat.create(), flipZY, camera.rotation as quat);
         }
         changes = mergeRecursive(changes, { camera: cameraChanges });
     }

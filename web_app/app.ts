@@ -1,6 +1,6 @@
 
 import { createTestSphere, createTestCube, createRandomInstances } from "core3d/geometry";
-import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, modifyRenderStateFromCadSpace, RenderContext, type RenderStateDynamicObject, type RenderStateScene } from "core3d";
+import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, modifyRenderStateFromCadSpace, RenderContext, type OctreeSceneConfig, type RenderStateDynamicObject, type RenderStateScene } from "core3d";
 import { type RenderState, type RenderStateChanges, type RenderStateClippingPlane } from "core3d";
 import { downloadScene } from "core3d/scene";
 import { type ReadonlyVec3, vec3, quat, mat3 } from "gl-matrix";
@@ -42,7 +42,7 @@ export interface ViewStateContext {
     readonly controllers: { readonly [key: string]: BaseController };
     activeController: BaseController;
     modifyRenderState(changes: RenderStateChanges): void;
-    loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit: boolean): Promise<ReadonlyVec3>;
+    loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit: boolean): Promise<OctreeSceneConfig>;
     switchCameraController(kind: string): Promise<void>;
 }
 
@@ -123,7 +123,7 @@ export class WebApp implements ViewStateContext {
     }
 
     //* @internal */
-    async loadScene(url: string, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit = true): Promise<ReadonlyVec3> {
+    async loadScene(url: string, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit = true): Promise<OctreeSceneConfig> {
         const scene = await downloadScene(url);
 
         let center = initPos ?? scene.config.center ?? vec3.create();
@@ -162,7 +162,41 @@ export class WebApp implements ViewStateContext {
             camera,
             grid: { origin: center },
         });
-        return center;
+
+        const flipYZ = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
+        const { config } = scene;
+        return {
+            ...config,
+            center: vec3.transformQuat(vec3.create(), config.center, flipYZ),
+            offset: vec3.transformQuat(vec3.create(), config.offset, flipYZ),
+            boundingSphere: {
+                radius: config.boundingSphere.radius,
+                center: vec3.transformQuat(vec3.create(), config.boundingSphere.center, flipYZ),
+            },
+            aabb: {
+                min: vec3.transformQuat(vec3.create(), config.aabb.min, flipYZ),
+                max: vec3.transformQuat(vec3.create(), config.aabb.max, flipYZ),
+            }
+        }
+    }
+
+
+    async pick(x: number, y: number, sampleDiscRadius = 0) {
+        const context = this.renderContext;
+        if (context) {
+            const samples = await context.pick(x, y, sampleDiscRadius);
+            if (samples.length) {
+                const flipYZ = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
+                const centerSample = samples.reduce((a, b) => a.depth < b.depth ? a : b);
+                const flippedSample = {
+                    ...centerSample,
+                    position: vec3.transformQuat(vec3.create(), centerSample.position, flipYZ),
+                    normal: vec3.transformQuat(vec3.create(), centerSample.normal, flipYZ)
+                }
+                return flippedSample;
+            }
+        }
+        return undefined;
     }
 
     async switchCameraController(kind: string) {
