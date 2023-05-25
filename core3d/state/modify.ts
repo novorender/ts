@@ -20,7 +20,7 @@ export function modifyRenderStateFromCadSpace(state: RenderState, changes: Rende
     const { camera } = changes;
     if (camera) {
         const cameraChanges: MutableCameraState = {};
-        const flipZY = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
+        const flipZY = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
         if (camera.position) {
             cameraChanges.position = vec3.transformQuat(vec3.create(), camera.position as vec3, flipZY);
         }
