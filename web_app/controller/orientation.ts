@@ -78,14 +78,14 @@ export class PitchRollYawOrientation {
         const y = sinYaw * cosPitch * cosRoll - cosYaw * sinPitch * sinRoll;
         const z = cosYaw * cosPitch * sinRoll - sinYaw * sinPitch * cosRoll;
         const w = cosYaw * cosPitch * cosRoll + sinYaw * sinPitch * sinRoll;
-        const flipYZ = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
+        const flipYZ = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
         return quat.mul(quat.create(), flipYZ, quat.fromValues(x, y, z, w));
     }
 }
 
 function decomposeRotation(rot: ReadonlyQuat) {
     //ported from https://github.com/BabylonJS/Babylon.js/blob/fe8e43bc526f01a3649241d3819a45455a085461/packages/dev/core/src/Maths/math.vector.ts
-    const flipXZ = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
+    const flipXZ = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
 
     const [qx, qy, qz, qw] = quat.mul(quat.create(), flipXZ, rot);
     const zAxisY = qy * qz - qx * qw;
