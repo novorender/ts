@@ -92,6 +92,7 @@ export class WebApp implements ViewStateContext {
             panorama: new PanoramaController(input)
         } as const
         this.activeController = this.controllers["flight"];
+        this.activeController.attach();
         this.activeController.updateParams({ proportionalCameraSpeed: { min: 0.2, max: 1000 } });
 
         const resizeObserver = new ResizeObserver(() => { this.resize(); });
