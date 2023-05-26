@@ -115,7 +115,7 @@ export class OctreeNode {
     }
 
     get isRoot() {
-        return this.id.length == 0;
+        return this.id.length < 2;
     }
 
     get path() {

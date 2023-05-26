@@ -224,7 +224,6 @@ class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         renderContext.updateUniformBuffer(resources.sceneUniforms, uniforms.scene);
 
         const { rootNode } = this;
-        console.log(rootNode);
         if (rootNode) {
             rootNode.update(state); // recursively update all nodes' visibility and projectedSize++
 

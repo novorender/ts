@@ -175,7 +175,6 @@ export class FlightController extends BaseController {
             if (tz != 0) {
                 tx += zoomX * tz * 0.6;
                 ty += -zoomY * tz * 0.6;
-                console.log(zoomX);
             }
             const linearVelocity = multiplier * params.linearVelocity / height;
             const worldPosDelta = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * linearVelocity, -ty * linearVelocity, tz * linearVelocity), orientation.rotation);
