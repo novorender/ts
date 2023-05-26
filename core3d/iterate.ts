@@ -29,7 +29,6 @@ export function* mergeSorted(iterators: Iterable<Iterator<number> | undefined>) 
         for (let i = 0; i < activeIterators.length; i++) {
             const iterator = activeIterators[i];
             const currentGroupObjectId = iterator.currentValue;
-            console.assert(minValue != currentGroupObjectId); // a number should only be assigned to one group
             if (minValue > currentGroupObjectId) {
                 minValue = currentGroupObjectId;
                 minIdx = i;

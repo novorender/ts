@@ -175,7 +175,6 @@ export class FlightController extends BaseController {
             if (tz != 0) {
                 tx += zoomX * tz * 0.6;
                 ty += -zoomY * tz * 0.6;
-                console.log(zoomX);
             }
             const linearVelocity = multiplier * params.linearVelocity / height;
             const worldPosDelta = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * linearVelocity, -ty * linearVelocity, tz * linearVelocity), orientation.rotation);
@@ -213,7 +212,8 @@ export class FlightController extends BaseController {
             if (renderContext && event.buttons & (MouseButtons.right | MouseButtons.middle)) {
                 const [sample] = await renderContext.pick(event.offsetX, event.offsetY);
                 if (sample) {
-                    this.setPivot(sample.position, true);
+                    const flippedPos = vec3.fromValues(sample.position[0], -sample.position[2], sample.position[1]);
+                    this.setPivot(flippedPos, true);
                 } else {
                     this.resetPivot(true);
                 }
@@ -230,7 +230,8 @@ export class FlightController extends BaseController {
         if (pointerTable.length == 3 && renderContext) {
             const [sample] = await renderContext.pick(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2));
             if (sample) {
-                this.setPivot(sample.position, true);
+                const flippedPos = vec3.fromValues(sample.position[0], -sample.position[2], sample.position[1]);
+                this.setPivot(flippedPos, true);
             } else {
                 this.resetPivot(true);
             }

@@ -65,6 +65,7 @@ export interface VertexAttributes {
     readonly objectId: VertexAttributeData | null;
     readonly texCoord: VertexAttributeData | null;
     readonly color: VertexAttributeData | null;
+    readonly projectedPos: VertexAttributeData | null;
     readonly deviations: VertexAttributeData | null;
     readonly triangles: readonly [VertexAttributeData, VertexAttributeData, VertexAttributeData, VertexAttributeData] | null;
 }
@@ -131,10 +132,11 @@ function computePrimitiveCount(primitiveType: PrimitiveType, numIndices: number)
 
 function getVertexAttribs(deviations: number) {
     return {
-        position: { type: Float16Array, components: ["x", "y", "z"] },
+        position: { type: Uint16Array, components: ["x", "y", "z"] },
         normal: { type: Int8Array, components: ["x", "y", "z"] },
-        color: { type: Uint8Array, components: ["red", "green", "blue", "alpha"] },
         texCoord: { type: Float16Array, components: ["x", "y"] },
+        color: { type: Uint8Array, components: ["red", "green", "blue", "alpha"] },
+        projectedPos: { type: Uint16Array, components: ["x", "y", "z"] },
         deviations: { type: Float16Array, components: ["a", "b", "c", "d"].slice(0, deviations) },
         materialIndex: { type: Uint8Array },
         objectId: { type: Uint32Array },
@@ -171,6 +173,7 @@ function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, devia
     if (optionalAttributes & OptionalVertexAttribute.normal) attribNames.push("normal");
     if (optionalAttributes & OptionalVertexAttribute.texCoord) attribNames.push("texCoord");
     if (optionalAttributes & OptionalVertexAttribute.color) attribNames.push("color");
+    if (optionalAttributes & OptionalVertexAttribute.projectedPos) attribNames.push("projectedPos");
     if (deviations > 0) attribNames.push("deviations");
     if (hasMaterials) {
         attribNames.push("materialIndex");
@@ -547,6 +550,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
             objectId: hasObjectIds ? { kind: "UNSIGNED_INT", buffer, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, byteOffset: attribOffsets["objectId"], byteStride: stride } : null,
             texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["texCoord"], byteStride: stride } : null,
             color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["color"], byteStride: stride } : null,
+            projectedPos: (attributes & OptionalVertexAttribute.projectedPos) != 0 ? { kind: "FLOAT_VEC4", buffer, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: attribOffsets["projectedPos"], byteStride: stride } : null,
             deviations: deviations != 0 ? { kind: deviationsKind, buffer, componentCount: deviations, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["deviations"], byteStride: stride } : null,
             triangles: trianglePosBuffer ? [
                 { kind: "FLOAT_VEC4", buffer: 1, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 0, byteStride: 18 },

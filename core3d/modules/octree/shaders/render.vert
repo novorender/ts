@@ -29,14 +29,16 @@ layout(location = 2) in uint vertexMaterial;
 layout(location = 3) in uint vertexObjectId;
 layout(location = 4) in vec2 vertexTexCoord0;
 layout(location = 5) in vec4 vertexColor0;
-layout(location = 6) in vec4 vertexDeviations;
-layout(location = 7) in uint vertexHighlight;
+layout(location = 6) in vec4 vertexProjectedPos;
+layout(location = 7) in vec4 vertexDeviations;
+layout(location = 8) in uint vertexHighlight;
 #else
 const vec3 vertexNormal = vec3(0);
 const uint vertexMaterial = 0U;
 const uint vertexObjectId = 0U;
 const vec2 vertexTexCoord0 = vec2(0);
 const vec4 vertexColor0 = vec4(1);
+const vec4 vertexProjectedPos = vec4(0);
 const vec4 vertexDeviations = vec4(0);
 const uint vertexHighlight = 0U;
 #endif
