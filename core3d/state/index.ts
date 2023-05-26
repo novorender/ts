@@ -173,12 +173,12 @@ export interface RenderStatePointCloud {
     };
 }
 
-export const enum ClippingMode {
+export enum ClippingMode {
     intersection,
     union,
 }
 
-export const enum ClippingId { // object_id's for picking
+export enum ClippingId { // object_id's for picking
     plane0 = 0xfffffff0, plane1, plane2, plane3, plane4, plane5, plane6
 }
 
@@ -219,7 +219,7 @@ export interface RenderStateHighlightGroups {
     readonly groups: readonly RenderStateHighlightGroup[];
 }
 
-export const enum TonemappingMode {
+export enum TonemappingMode {
     color,
     normal,
     depth,
