@@ -75,18 +75,21 @@ function traverseObjectIds(groups: readonly RenderStateHighlightGroup[]) {
 export function updateMeshHighlightGroups(gl: WebGL2RenderingContext, mesh: Mesh, groups: readonly RenderStateHighlightGroup[]) {
     if (mesh.highlightVB) {
         const highlightBuffer = new Uint8Array(mesh.numVertices);
-        const iterator = mesh.objectRanges[Symbol.iterator]();
-        let currentRange = iterator.next().value as MeshObjectRange | undefined;
-        for (const { value, sourceIndex } of traverseObjectIds(groups)) {
-            while (currentRange && currentRange.objectId < value) {
-                currentRange = iterator.next().value as MeshObjectRange | undefined;
-            }
-            if (!currentRange) {
-                break;
-            }
-            if (currentRange.objectId == value) {
-                const { beginVertex, endVertex } = currentRange;
-                highlightBuffer.fill(sourceIndex + 1, beginVertex, endVertex);
+        if (groups.length > 0) {
+            const iterator = mesh.objectRanges[Symbol.iterator]();
+            let currentRange = iterator.next().value as MeshObjectRange | undefined;
+            for (const { value, sourceIndex } of traverseObjectIds(groups)) {
+                while (currentRange && currentRange.objectId < value) {
+                    currentRange = iterator.next().value as MeshObjectRange | undefined;
+                }
+                if (!currentRange) {
+                    break;
+                }
+                while (currentRange && currentRange.objectId == value) {
+                    const { beginVertex, endVertex } = currentRange;
+                    highlightBuffer.fill(sourceIndex + 1, beginVertex, endVertex);
+                    currentRange = iterator.next().value as MeshObjectRange | undefined;
+                }
             }
         }
         glUpdateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: highlightBuffer, targetBuffer: mesh.highlightVB });

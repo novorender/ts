@@ -157,7 +157,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         // recompile shader programs if flags have changed
         if (this.currentProgramFlags != currentProgramFlags) {
             this.currentProgramFlags = currentProgramFlags;
-            OctreeModule.compileShaders(renderContext, resources.bin, resources.programs).then(() => {
+            OctreeModule.compileShaders(renderContext, resources.bin, resources.programs, currentProgramFlags).then(() => {
                 // console.log(`new render program flags:`, currentProgramFlags);
                 renderContext.changed = true;
             });

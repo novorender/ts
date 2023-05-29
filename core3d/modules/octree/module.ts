@@ -120,13 +120,13 @@ export class OctreeModule implements RenderModule {
         return { defines, flags } as const;
     }
 
-    static async compileShaders(context: RenderContext, bin: ResourceBin, programs: Mutable<Programs>): Promise<void> {
+    static async compileShaders(context: RenderContext, bin: ResourceBin, programs: Mutable<Programs>, programFlags = OctreeModule.defaultProgramFlags): Promise<void> {
         const { textureUniforms, uniformBufferBlocks } = OctreeModule;
         const promises: Promise<void>[] = [];
         for (const pass of OctreeModule.passes) {
             const modes = (programs[pass] ??= {} as ModePrograms) as Mutable<ModePrograms>;
             for (const mode of OctreeModule.modes) {
-                const promise = context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(pass, mode) });
+                const promise = context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(pass, mode, programFlags) });
                 const compiledPromise = promise.then(program => {
                     modes[mode] = program;
                 });
