@@ -259,7 +259,7 @@ export class FlightController extends BaseController {
             }
         }
 
-        if (event instanceof TouchEvent) {
+        if (isTouchEvent(event)) {
             if (pointerTable.length > 1) {
                 setPickPosition(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2))
             }
@@ -286,4 +286,8 @@ export class FlightController extends BaseController {
         vec3.transformQuat(offset, offset, invRot)
         this.pivot = { center, offset, distance, active };
     }
+}
+
+function isTouchEvent(event: MouseEvent | TouchEvent): event is TouchEvent {
+    return TouchEvent && event instanceof TouchEvent;
 }
