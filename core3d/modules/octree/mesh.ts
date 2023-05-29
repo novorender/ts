@@ -1,9 +1,9 @@
-import { glUpdateBuffer, type DrawParams, type VertexAttribute, type DrawParamsArraysMultiDraw, type DrawParamsElementsMultiDraw } from "@novorender/webgl2";
-import type { RenderStateHighlightGroup } from "@novorender/core3d";
-import { mergeSorted } from "@novorender/core3d/iterate";
+import { glUpdateBuffer, type DrawParams, type VertexAttribute, type DrawParamsArraysMultiDraw, type DrawParamsElementsMultiDraw } from "webgl2";
+import type { RenderStateHighlightGroup } from "core3d";
+import { mergeSorted } from "core3d/iterate";
 import type { MeshDrawRange, MeshObjectRange, NodeGeometry, VertexAttributeData } from "./parser";
 import { MaterialType } from "./schema";
-import { ResourceBin } from "@novorender/core3d/resource";
+import { ResourceBin } from "core3d/resource";
 
 export interface Mesh {
     readonly materialType: MaterialType;
@@ -36,11 +36,11 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
         const ib = typeof indices != "number" ? resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
-        const { triangles, position, normal, material, objectId, texCoord, color, deviations } = vertexAttributes;
+        const { triangles, position, normal, material, objectId, texCoord, color, projectedPos, deviations } = vertexAttributes;
         function convertAttrib(a: VertexAttributeData | null) {
             return a ? { ...a, buffer: buffers[a.buffer] } as VertexAttribute : null;
         }
-        const attributes = [position, normal, material, objectId, texCoord, color, deviations].map(convertAttrib);
+        const attributes = [position, normal, material, objectId, texCoord, color, projectedPos, deviations].map(convertAttrib);
         const triangleAttributes = triangles ? triangles.map(convertAttrib) : null;
 
         // add extra highlight vertex buffer and attribute

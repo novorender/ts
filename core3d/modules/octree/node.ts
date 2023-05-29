@@ -1,11 +1,11 @@
 import { mat4, type ReadonlyVec3, type ReadonlyVec4, vec3, vec4 } from "gl-matrix";
-import { glUBOProxy, glUpdateBuffer, type DrawMode } from "@novorender/webgl2";
-import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup } from "@novorender/core3d";
+import { glUBOProxy, glUpdateBuffer, type DrawMode } from "webgl2";
+import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup } from "core3d";
 import { Downloader } from "./download";
 import { createMeshes, deleteMesh, type Mesh, meshPrimitiveCount, updateMeshHighlightGroups } from "./mesh";
 import { NodeType, type NodeData } from "./parser";
 import { NodeLoader } from "./loader";
-import { ResourceBin } from "@novorender/core3d/resource";
+import { ResourceBin } from "core3d/resource";
 
 export const enum Visibility {
     undefined,
@@ -115,7 +115,7 @@ export class OctreeNode {
     }
 
     get isRoot() {
-        return this.id.length == 0;
+        return this.id.length < 2;
     }
 
     get path() {

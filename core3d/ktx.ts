@@ -1,5 +1,5 @@
-import type { CubeImages, TextureParams } from "@novorender/webgl2";
-import { GL } from "@novorender/webgl2/constants";
+import type { CubeImages, TextureParams } from "webgl2";
+import { GL } from "webgl2/constants";
 
 const identifier = new Uint8Array([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A]);
 const HEADER_LEN = 12 + (13 * 4); // identifier + header elements (not including key value meta-data pairs)

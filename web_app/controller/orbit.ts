@@ -1,5 +1,5 @@
 
-import { mergeRecursive, type RecursivePartial, type RenderStateCamera } from "@novorender/core3d";
+import { mergeRecursive, type RecursivePartial, type RenderStateCamera } from "core3d";
 import { type ReadonlyVec3, glMatrix, vec2, vec3 } from "gl-matrix";
 import { BaseController, type ControllerInitParams, type MutableCameraState } from "./base";
 import { PitchRollYawOrientation } from "./orientation";
@@ -118,7 +118,7 @@ export class OrbitController extends BaseController {
                 orientation.roll = 0;
             }
         }
-        this.input.callbacks = this;
+        this.attach();
         this.changed = true;
     }
 

@@ -62,6 +62,9 @@ export class ControllerInput {
 
     get zoomPos() {
         const { width, height, _zoomX, _zoomY } = this;
+        if (_zoomX == 0 && _zoomY == 0) {
+            return [0, 0];
+        }
         return [-(_zoomX - width / 2) / height * 2, (_zoomY - height / 2) / height * 2];
     }
 
@@ -126,6 +129,8 @@ export class ControllerInput {
             e.preventDefault();
         }
         this._keys.add(e.code);
+        this._zoomX = 0;
+        this._zoomY = 0;
     };
 
     private keyup = (e: KeyboardEvent) => {

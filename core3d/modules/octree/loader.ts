@@ -1,10 +1,10 @@
 ///@ts-ignore
 import createWorker from "./loader.worker.js"; // uses esbuild-plugin-inline-worker to inline worker code.
-import type { RenderStateScene } from "@novorender/core3d/state";
+import type { RenderStateScene } from "core3d/state";
 import type { AbortAllMessage, AbortMessage, CloseMessage, FilteredMessage, FilterMessage, LoadMessage, MessageRequest, MessageResponse, NodePayload } from "./loader_handler";
 import { LoaderHandler } from "./loader_handler";
 import { OctreeNode } from "./node.js";
-import { filterSortedExclude, filterSortedInclude } from "@novorender/core3d/iterate.js";
+import { filterSortedExclude, filterSortedInclude } from "core3d/iterate.js";
 
 interface PayloadPromiseMethods { readonly resolve: (value: NodePayload | undefined) => void, readonly reject: (reason: string) => void };
 
@@ -89,11 +89,15 @@ export class NodeLoader {
         const { payloadPromises } = this;
         const { deviceProfile } = node.context.renderContext;
         const { id, data } = node;
-        const url = new URL(node.path, node.context.url).toString();
+        if (node.context.url == undefined) {
+            return Promise.resolve(undefined);
+        }
+        const url = new URL(node.context.url);
+        url.pathname += node.path;
         const { byteSize } = data;
         const enableOutlines = deviceProfile.features.outline;
         const applyFilter = this.state?.filter != undefined;
-        const loadMsg: LoadMessage = { kind: "load", id, version, url, byteSize, separatePositionsBuffer: true, enableOutlines, applyFilter };
+        const loadMsg: LoadMessage = { kind: "load", id, version, url: url.toString(), byteSize, separatePositionsBuffer: true, enableOutlines, applyFilter };
         console.assert(byteSize != 0);
         const abortMsg: AbortMessage = { kind: "abort", id };
         const abort = () => { this.send(abortMsg); }

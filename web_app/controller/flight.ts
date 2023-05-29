@@ -1,7 +1,7 @@
 
-import { type ReadonlyVec3, vec3, glMatrix, quat } from "gl-matrix";
+import { type ReadonlyVec3, vec3, glMatrix, quat, mat3 } from "gl-matrix";
 import { BaseController, type ControllerContext, type ControllerInitParams, type MutableCameraState } from "./base";
-import { type RenderStateCamera, type RecursivePartial, mergeRecursive } from "@novorender/core3d";
+import { type RenderStateCamera, type RecursivePartial, mergeRecursive } from "core3d";
 import { PitchRollYawOrientation, clamp } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 
@@ -23,6 +23,7 @@ interface Pivot {
     center: ReadonlyVec3;
     offset: ReadonlyVec3;
     distance: number;
+    active: boolean;
 }
 
 export class FlightController extends BaseController {
@@ -143,7 +144,6 @@ export class FlightController extends BaseController {
             return;
         }
         this.lastUpdate = performance.now();
-        console.log("update");
 
         const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_1_move_y;
         const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_1_move_x;
@@ -161,7 +161,7 @@ export class FlightController extends BaseController {
             const rotationalVelocity = (shouldPivot ? 180 : this.fov) * params.rotationalVelocity / height;
             orientation.pitch += rx * rotationalVelocity;
             orientation.yaw += ry * rotationalVelocity;
-            if (pivot && shouldPivot) {
+            if (pivot && shouldPivot && pivot.active) {
                 const { center, offset, distance } = pivot;
                 const pos = vec3.fromValues(0, 0, distance);
                 vec3.add(pos, pos, offset);
@@ -186,13 +186,13 @@ export class FlightController extends BaseController {
     override stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera> {
         const changes: MutableCameraState = {};
         const { position, orientation, pivot, fov } = this;
-        if (!state || state.position !== position) {
+        if (!state || !vec3.exactEquals(state.position, position)) {
             changes.position = position;
         }
-        if (!state || state.rotation !== orientation.rotation) {
+        if (!state || !quat.exactEquals(state.rotation, orientation.rotation)) {
             changes.rotation = orientation.rotation;
         }
-        if (!state || state.pivot !== pivot?.center) {
+        if (!state || (pivot && state.pivot && vec3.exactEquals(state.pivot, pivot?.center))) {
             changes.pivot = pivot?.center;
         }
         if (!state || state.fov !== fov) {
@@ -212,12 +212,13 @@ export class FlightController extends BaseController {
             if (renderContext && event.buttons & (MouseButtons.right | MouseButtons.middle)) {
                 const [sample] = await renderContext.pick(event.offsetX, event.offsetY);
                 if (sample) {
-                    this.setPivot(sample.position);
+                    const flippedPos = vec3.fromValues(sample.position[0], -sample.position[2], sample.position[1]);
+                    this.setPivot(flippedPos, true);
                 } else {
-                    this.resetPivot();
+                    this.resetPivot(true);
                 }
             } else {
-                this.resetPivot();
+                this.resetPivot(false);
             }
         }
         this.prevMouseButtons = event.buttons;
@@ -229,12 +230,13 @@ export class FlightController extends BaseController {
         if (pointerTable.length == 3 && renderContext) {
             const [sample] = await renderContext.pick(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2));
             if (sample) {
-                this.setPivot(sample.position);
+                const flippedPos = vec3.fromValues(sample.position[0], -sample.position[2], sample.position[1]);
+                this.setPivot(flippedPos, true);
             } else {
-                this.resetPivot();
+                this.resetPivot(true);
             }
         } else {
-            this.resetPivot();
+            this.resetPivot(false);
         }
     }
 
@@ -266,14 +268,14 @@ export class FlightController extends BaseController {
         }
     }
 
-    private resetPivot() {
+    private resetPivot(active: boolean) {
         const { pivot } = this;
         if (pivot) {
-            this.setPivot(pivot.center);
+            this.setPivot(pivot.center, active);
         }
     }
 
-    private setPivot(center: ReadonlyVec3) {
+    private setPivot(center: ReadonlyVec3, active: boolean) {
         const { position, orientation } = this;
         const distance = vec3.distance(center, position);
         const offset = vec3.fromValues(0, 0, distance);
@@ -282,6 +284,6 @@ export class FlightController extends BaseController {
         vec3.sub(offset, position, offset);
         const invRot = quat.invert(quat.create(), orientation.rotation);
         vec3.transformQuat(offset, offset, invRot)
-        this.pivot = { center, offset, distance };
+        this.pivot = { center, offset, distance, active };
     }
 }

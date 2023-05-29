@@ -1,8 +1,8 @@
-import type { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "@novorender/core3d";
+import type { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
-import { createSceneRootNode } from "@novorender/core3d/scene";
+import { createSceneRootNode } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility } from "./node";
-import { glDraw, glState, glTransformFeedback, glUpdateTexture } from "@novorender/webgl2";
+import { glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
 import { type ReadonlyVec3, vec3, vec4 } from "gl-matrix";

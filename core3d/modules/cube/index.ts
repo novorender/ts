@@ -1,8 +1,8 @@
-import type { DerivedRenderState, RenderContext } from "@novorender/core3d";
+import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glDraw, glState, glTransformFeedback, type UniformTypes } from "@novorender/webgl2";
+import { glUBOProxy, glDraw, glState, glTransformFeedback, type UniformTypes } from "webgl2";
 import { mat4, vec3, type ReadonlyVec3 } from "gl-matrix";
-import { BufferFlags } from "@novorender/core3d/buffers";
+import { BufferFlags } from "core3d/buffers";
 import { shaders } from "./shaders";
 
 export class CubeModule implements RenderModule {

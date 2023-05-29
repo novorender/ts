@@ -1,15 +1,15 @@
 
-import { createTestSphere, createTestCube, createRandomInstances } from "@novorender/core3d/geometry";
-import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, modifyRenderState, RenderContext, type RenderStateDynamicObject, type RenderStateScene } from "@novorender/core3d";
-import { type RenderState, type RenderStateChanges, type RenderStateClippingPlane } from "@novorender/core3d";
-import { downloadScene } from "@novorender/core3d/scene";
-import { type ReadonlyVec3, vec3, quat, mat3 } from "gl-matrix";
+import { createTestSphere, createTestCube, createRandomInstances } from "core3d/geometry";
+import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, modifyRenderStateFromCadSpace, RenderContext, type OctreeSceneConfig, type RenderStateDynamicObject, type RenderStateScene } from "core3d";
+import { type RenderState, type RenderStateChanges, type RenderStateClippingPlane } from "core3d";
+import { downloadScene } from "core3d/scene";
+import { type ReadonlyVec3, vec3, quat, mat3, vec4 } from "gl-matrix";
 import { OrbitController } from "./controller/orbit";
 import { OrthoController } from "./controller/ortho";
 import { FlightController } from "./controller/flight";
 import { BaseController } from "./controller/base";
 import { ControllerInput } from "./controller/input";
-import type { DeviceProfile } from "@novorender/core3d/device";
+import type { DeviceProfile } from "core3d/device";
 import { PanoramaController } from "./controller/panorama";
 
 const coreProfile = {
@@ -37,12 +37,12 @@ const deviceProfile = {
 export interface ViewStateContext {
     readonly scriptUrl: string;
     readonly renderContext: RenderContext | undefined;
-    readonly renderState: RenderState;
+    readonly _renderState: RenderState;
     // readonly clippingPlanes: readonly RenderStateClippingPlane[];
     readonly controllers: { readonly [key: string]: BaseController };
     activeController: BaseController;
     modifyRenderState(changes: RenderStateChanges): void;
-    loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit: boolean): Promise<ReadonlyVec3>;
+    loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit: boolean): Promise<OctreeSceneConfig>;
     switchCameraController(kind: string): Promise<void>;
 }
 
@@ -57,7 +57,7 @@ export class WebApp implements ViewStateContext {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     readonly alternateUrl = new URL("http://192.168.1.129:9090/").toString();
     public renderContext: RenderContext | undefined;
-    public renderState: RenderState;
+    public _renderState: RenderState;
     private stateChanges: RenderStateChanges | undefined;
 
     //* @internal */
@@ -81,9 +81,51 @@ export class WebApp implements ViewStateContext {
         this.renderContext = context;
     }
 
+    get renderState() {
+        const { _renderState } = this;
+
+        const flipZY = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
+        const clippingPlanes: RenderStateClippingPlane[] = [];
+        for (const plane of _renderState.clipping.planes) {
+            if (plane) {
+                const p = plane as RenderStateClippingPlane;
+                const { normalOffset } = p;
+                if (normalOffset) {
+                    clippingPlanes.push({
+                        normalOffset: vec4.fromValues(normalOffset[0], -normalOffset[2], normalOffset[1], normalOffset[3]),
+                        color: p.color ?? undefined
+                    });
+                }
+            }
+        }
+        return {
+            ..._renderState,
+            camera: {
+                ..._renderState.camera,
+                position: vec3.transformQuat(vec3.create(), _renderState.camera.position, flipZY),
+                pivot: _renderState.camera.pivot ? vec3.transformQuat(vec3.create(), _renderState.camera.pivot, flipZY) : undefined,
+                rotation: quat.mul(quat.create(), flipZY, _renderState.camera.rotation),
+            },
+            grid: {
+                ..._renderState.grid,
+                axisX: vec3.transformQuat(vec3.create(), _renderState.grid.axisX, flipZY),
+                axisY: vec3.transformQuat(vec3.create(), _renderState.grid.axisY, flipZY),
+                origin: vec3.transformQuat(vec3.create(), _renderState.grid.origin, flipZY)
+            },
+            clipping: {
+                ..._renderState.clipping,
+                planes: clippingPlanes
+            },
+            outlines: {
+                ..._renderState.outlines,
+                plane: vec4.fromValues(_renderState.outlines.plane[0], -_renderState.outlines.plane[2], _renderState.outlines.plane[1], _renderState.outlines.plane[3])
+            }
+        };
+    }
+
     constructor(readonly canvas: HTMLCanvasElement, readonly appState: AppState) {
         initCore3D(deviceProfile, canvas, this.setRenderContext);
-        this.renderState = defaultRenderState();
+        this._renderState = defaultRenderState();
         const input = new ControllerInput(canvas);
         this.controllers = {
             flight: new FlightController(this, input),
@@ -92,6 +134,7 @@ export class WebApp implements ViewStateContext {
             panorama: new PanoramaController(input)
         } as const
         this.activeController = this.controllers["flight"];
+        this.activeController.attach();
         this.activeController.updateParams({ proportionalCameraSpeed: { min: 0.2, max: 1000 } });
 
         const resizeObserver = new ResizeObserver(() => { this.resize(); });
@@ -115,60 +158,65 @@ export class WebApp implements ViewStateContext {
         let { width, height } = this.canvas.getBoundingClientRect();
         width = Math.round(width * scale);
         height = Math.round(height * scale);
-        const { output } = this.renderState;
+        const { output } = this._renderState;
         if (width != output.width || height != output.height) {
-            this.renderState = modifyRenderState(this.renderState, { output: { width, height } });
+            this._renderState = modifyRenderStateFromCadSpace(this._renderState, { output: { width, height } });
             // this.modifyRenderState({ output: { width, height } });
         }
     }
 
     //* @internal */
-    async loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit = true): Promise<ReadonlyVec3> {
-        let scene: RenderStateScene | undefined;
-        if (sceneId) {
-            let url = new URL(`/assets/octrees/${sceneId}/`, this.scriptUrl).toString();
-            // check if data is available locally first
-            const response = await fetch(new URL("config.json", url), { method: "HEAD", mode: "cors" });
-            if (!response.ok) {
-                url = new URL(`${this.alternateUrl}${sceneId}/`).toString();
-                // const response2 = await fetch(new URL("config.json", url), { method: "HEAD", mode: "cors" });
+    async loadScene(url: string, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit = true): Promise<OctreeSceneConfig> {
+        const scene = await downloadScene(url);
+
+        const flipYZ = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
+        const { config } = scene;
+        const flippedConfig = {
+            ...config,
+            center: vec3.transformQuat(vec3.create(), config.center, flipYZ),
+            offset: vec3.transformQuat(vec3.create(), config.offset, flipYZ),
+            boundingSphere: {
+                radius: config.boundingSphere.radius,
+                center: vec3.transformQuat(vec3.create(), config.boundingSphere.center, flipYZ),
+            },
+            aabb: {
+                min: vec3.transformQuat(vec3.create(), config.aabb.min, flipYZ),
+                max: vec3.transformQuat(vec3.create(), config.aabb.max, flipYZ),
             }
-            scene = await downloadScene(url);
-            // scene = { ...scene, filter: { mode: "include", objectIds: [/*1264,*/ 21019, 21832, 21833, 21846, 21847, 22056, 22384, 22450, 22711] } };
         }
-        let center = initPos ?? scene?.config.center ?? vec3.create();
-        const radius = scene?.config.boundingSphere.radius ?? 5;
+
+        let center = initPos ?? flippedConfig.center ?? vec3.create();
+        const radius = flippedConfig.boundingSphere.radius ?? 5;
         if (autoFit) {
             this.activeController.autoFit(center, radius);
         }
         const camera = this.activeController.stateChanges();
         center = centerPos ? centerPos : center;
-        // const dir = vec3.fromValues(-0.5270090794146822, 0, -0.8498596532454572);
-        // const pos = vec3.fromValues(115213.01647839644, 42.620445251464865, -1091231.5616925554);
-        // const dot = vec3.dot(dir, pos);
-
-        const centerDir = vec3.fromValues(0, 0, 1);
-        vec3.normalize(centerDir, centerDir);
-        const [cx, cy, cz] = centerDir;
-        const offs = vec3.dot(centerDir, center);
-        // offs = 10;
-
-        this.clippingPlanes = [
-            // { normalOffset: [1, 0, 0, center[0]], color: [1, 0, 0, 0.5] },
-            // { normalOffset: [0, 1, 0, center[1]], color: [0, 1, 0, 0.5] },
-            { normalOffset: [cx, cy, cz, offs], color: [0, 0, 1, 0.5] },
-        ];
-        // this.clippingPlanes = [
-        //     // { normalOffset: [1, 0, 0, center[0]], color: [1, 0, 0, 0.5] },
-        //     // { normalOffset: [0, 1, 0, center[1]], color: [0, 1, 0, 0.5] },
-        //     { normalOffset: [dir[0], dir[1], dir[2], dot], color: [0, 0, 1, 0.5] },
-        // ];
         this.modifyRenderState({
             scene,
             camera,
             grid: { origin: center },
         });
-        return center;
+        return flippedConfig;
+    }
+
+
+    async pick(x: number, y: number, sampleDiscRadius = 0) {
+        const context = this.renderContext;
+        if (context) {
+            const samples = await context.pick(x, y, sampleDiscRadius);
+            if (samples.length) {
+                const flipYZ = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
+                const centerSample = samples.reduce((a, b) => a.depth < b.depth ? a : b);
+                const flippedSample = {
+                    ...centerSample,
+                    position: vec3.transformQuat(vec3.create(), centerSample.position, flipYZ),
+                    normal: vec3.transformQuat(vec3.create(), centerSample.normal, flipYZ)
+                }
+                return flippedSample;
+            }
+        }
+        return undefined;
     }
 
     async switchCameraController(kind: string) {
@@ -268,7 +316,7 @@ export class WebApp implements ViewStateContext {
                 break;
             }
             this.resize();
-            const cameraChanges = activeController.renderStateChanges(this.renderState.camera, renderTime - prevRenderTime);
+            const cameraChanges = activeController.renderStateChanges(this._renderState.camera, renderTime - prevRenderTime);
             if (cameraChanges) {
                 this.modifyRenderState(cameraChanges);
             }
@@ -300,22 +348,22 @@ export class WebApp implements ViewStateContext {
                         this.dynamicResolutionScaling(frameIntervals);
                     }
                     const activeDetailModifier = 0.5;
-                    if (this.renderState.quality.detail != activeDetailModifier) {
+                    if (this._renderState.quality.detail != activeDetailModifier) {
                         this.currentDetailBias = activeDetailModifier;
                         this.modifyRenderState({ quality: { detail: activeDetailModifier } });
                     }
                 }
 
                 if (this.stateChanges) {
-                    this.renderState = modifyRenderState(this.renderState, this.stateChanges);
+                    this._renderState = modifyRenderStateFromCadSpace(this._renderState, this.stateChanges);
                     this.stateChanges = undefined;
                 }
-                const { renderState } = this;
-                if (prevState !== renderState || renderContext.changed) {
-                    prevState = renderState;
-                    const statsPromise = renderContext.render(renderState);
+                const { _renderState } = this;
+                if (prevState !== _renderState || renderContext.changed) {
+                    prevState = _renderState;
+                    const statsPromise = renderContext.render(_renderState);
                     //stats
-                    pickRenderState = renderState;
+                    pickRenderState = _renderState;
                 }
             }
             if (activeController.changed && isIdleFrame) {

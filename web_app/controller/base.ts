@@ -1,4 +1,4 @@
-import { type RenderStateScene, type RenderStateCamera, type RenderState, type RenderStateChanges, type RenderContext, mergeRecursive, type RecursivePartial } from "@novorender/core3d";
+import { type RenderStateScene, type RenderStateCamera, type RenderState, type RenderStateChanges, type RenderContext, mergeRecursive, type RecursivePartial, type RenderStateGrid, type RenderStateClippingPlane, type RenderStateClipping } from "core3d";
 import { type ReadonlyVec3, vec2, type ReadonlyQuat, vec3 } from "gl-matrix";
 import { ControllerInput } from "./input";
 import type { FlightControllerParams } from "./flight";
@@ -97,6 +97,9 @@ export abstract class BaseController {
     abstract update(): void;
     abstract stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera>;
     abstract updateParams(params: RecursivePartial<ControllerParams>): void;
+    attach() {
+        this.input.callbacks = this;
+    }
 
     mouseButtonChanged(event: MouseEvent): Promise<void> | void { }
     touchChanged(event: TouchEvent): Promise<void> | void { }
@@ -124,10 +127,8 @@ export abstract class BaseController {
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 export type MutableCameraState = Partial<Mutable<RenderStateCamera>>;
-
 export interface ControllerContext {
     readonly renderContext: RenderContext | undefined;
-    readonly renderState: RenderState;
 }
 
 export interface ControllerInitParams {

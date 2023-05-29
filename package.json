@@ -5,7 +5,10 @@
     "description": "",
     "type": "module",
     "scripts": {
-        "watch": "tsc --watch --noemit"
+        "watch": "npm run typescript -- --watch",
+        "build:webapp": "npm run typescript && node ./build_bundle && npm run tsup -- web_app/index.ts --dts-only",
+        "typescript": "tsc --noemit",
+        "tsup": "tsup"
     },
     "repository": {
         "type": "git",
@@ -18,10 +21,10 @@
     },
     "homepage": "https://github.com/novorender/ts#readme",
     "devDependencies": {
-        "@microsoft/api-extractor": "^7.35.0",
         "esbuild": "^0.17.10",
         "esbuild-plugin-inline-worker": "^0.1.1",
         "ip": "^1.1.8",
+        "tsup": "^6.7.0",
         "typescript": "^5.0.0-beta"
     },
     "dependencies": {

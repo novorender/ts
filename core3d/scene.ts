@@ -7,7 +7,9 @@ export async function downloadScene(url: string, abortController?: AbortControll
     if (!abortController)
         abortController = new AbortController();
     const { signal } = abortController;
-    const config = (await download(new URL("config.json", url), "json", signal)) as OctreeSceneConfig;
+    const fullUrl = new URL(url);
+    fullUrl.pathname += "config.json";
+    const config = (await download(fullUrl, "json", signal)) as OctreeSceneConfig;
     return { url: url.toString(), config } as const;
 }
 

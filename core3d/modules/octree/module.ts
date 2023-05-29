@@ -1,9 +1,9 @@
-import type { RenderContext } from "@novorender/core3d";
+import type { RenderContext } from "core3d";
 import type { RenderModule } from "..";
-import { glUBOProxy, type TextureParams2DUncompressed, type UniformTypes } from "@novorender/webgl2";
+import { glUBOProxy, type TextureParams2DUncompressed, type UniformTypes } from "webgl2";
 import { type NodeLoaderOptions } from "./loader";
 import { shaders } from "./shaders";
-import type { ResourceBin } from "@novorender/core3d/resource";
+import type { ResourceBin } from "core3d/resource";
 import { OctreeModuleContext } from "./context";
 
 export const enum ShaderPass { color, pick, pre };
