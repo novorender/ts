@@ -445,7 +445,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 if (meshState.mode != mode) {
                     meshState.mode = mode;
                     gl.useProgram(programs[pass][mode]);
-                    // gl.uniform1ui(meshModeLocation, mode);
                 }
                 const doubleSided = mesh.materialType != MaterialType.opaque;
                 if (meshState.doubleSided != doubleSided) {
@@ -456,7 +455,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         gl.enable(gl.CULL_FACE);
                     }
                 }
-                if (pass = ShaderPass.color) {
+                if (pass == ShaderPass.color) {
                     gl.bindTexture(gl.TEXTURE_2D, mesh.baseColorTexture ?? resources.defaultBaseColorTexture);
                 }
                 if (mask == data.childMask) {
