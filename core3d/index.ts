@@ -9,6 +9,9 @@ export * from "./modules";
 export * from "./highlight";
 export * from "./device";
 export * from "./benchmark";
+export * from "./geometry";
+export { downloadScene } from "./scene";
+export { loadGLTF } from "./gltf";
 
 export async function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanvasElement, setRenderContext: (context: RenderContext) => void) {
     const options: WebGLContextAttributes = {

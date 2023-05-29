@@ -1,16 +1,7 @@
 
-import { createTestSphere, createTestCube, createRandomInstances } from "core3d/geometry";
-import { createColorSetHighlight, createHSLATransformHighlight, createNeutralHighlight, defaultRenderState, initCore3D, mergeRecursive, modifyRenderStateFromCadSpace, RenderContext, type OctreeSceneConfig, type RenderStateDynamicObject, type RenderStateScene } from "core3d";
-import { type RenderState, type RenderStateChanges, type RenderStateClippingPlane } from "core3d";
-import { downloadScene } from "core3d/scene";
-import { type ReadonlyVec3, vec3, quat, mat3, vec4 } from "gl-matrix";
-import { OrbitController } from "./controller/orbit";
-import { OrthoController } from "./controller/ortho";
-import { FlightController } from "./controller/flight";
-import { BaseController } from "./controller/base";
-import { ControllerInput } from "./controller/input";
-import type { DeviceProfile } from "core3d/device";
-import { PanoramaController } from "./controller/panorama";
+import { type ReadonlyVec3, vec3, quat, vec4 } from "gl-matrix";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, modifyRenderStateFromCadSpace, RenderContext, type OctreeSceneConfig, type DeviceProfile } from "core3d";
+import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController } from "./controller";
 
 const coreProfile = {
     features: {
@@ -34,24 +25,11 @@ const deviceProfile = {
     framerateTarget: 30 as number
 } as const;
 
-export interface ViewStateContext {
-    readonly scriptUrl: string;
-    readonly renderContext: RenderContext | undefined;
-    readonly _renderState: RenderState;
-    // readonly clippingPlanes: readonly RenderStateClippingPlane[];
-    readonly controllers: { readonly [key: string]: BaseController };
-    activeController: BaseController;
-    modifyRenderState(changes: RenderStateChanges): void;
-    loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit: boolean): Promise<OctreeSceneConfig>;
-    switchCameraController(kind: string): Promise<void>;
-}
-
 export interface AppState {
     readonly msaa: number,
     readonly quit: boolean,
     controllerState: string
 }
-
 
 export class WebApp implements ViewStateContext {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
@@ -163,6 +141,25 @@ export class WebApp implements ViewStateContext {
             this._renderState = modifyRenderStateFromCadSpace(this._renderState, { output: { width, height } });
             // this.modifyRenderState({ output: { width, height } });
         }
+    }
+
+    /**
+     * Retrieve list of available background/IBL environments.
+     * @public
+     * @param indexUrl The absolute or relative url of the index.json file. Relative url will be relative to the novorender api script url. If undefined, "/assets/env/index.json" will be used by default.
+     * @returns A promise of a list of environments.
+     */
+    async availableEnvironments(indexUrl?: string): Promise<EnvironmentDescription[]> {
+        let environments: EnvironmentDescription[] = [];
+        const url = new URL(indexUrl ?? "/assets/env/index.json", this.scriptUrl);
+        const response = await fetch(url.toString());
+        if (response.ok) {
+            const json = await response.json();
+            environments = (json as string[]).map(name => {
+                return { name, url: new URL(name, url).toString(), thumnbnailURL: new URL(`thumbnails/${name}.png`, url).toString() } as EnvironmentDescription;
+            });
+        }
+        return environments;
     }
 
     //* @internal */
@@ -386,4 +383,31 @@ export class WebApp implements ViewStateContext {
     modifyRenderState(changes: RenderStateChanges): void {
         this.stateChanges = mergeRecursive(this.stateChanges, changes);
     }
+}
+
+/** @internal */
+export interface ViewStateContext {
+    readonly scriptUrl: string;
+    readonly renderContext: RenderContext | undefined;
+    readonly _renderState: RenderState;
+    // readonly clippingPlanes: readonly RenderStateClippingPlane[];
+    readonly controllers: { readonly [key: string]: BaseController };
+    activeController: BaseController;
+    modifyRenderState(changes: RenderStateChanges): void;
+    loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit: boolean): Promise<OctreeSceneConfig>;
+    switchCameraController(kind: string): Promise<void>;
+}
+
+/** Background/IBL environment description
+  *  @public
+  */
+export interface EnvironmentDescription {
+    /** Display name of environment */
+    readonly name: string;
+
+    /** Data URL. */
+    readonly url: string;
+
+    /** Thumbnail URL. */
+    readonly thumnbnailURL: string;
 }
