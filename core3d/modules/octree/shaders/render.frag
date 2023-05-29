@@ -15,14 +15,11 @@ layout(std140) uniform Node {
 };
 
 uniform OctreeTextures textures;
-uniform uint meshMode; // TODO: Make a #define instead?
 
 in OctreeVaryings varyings;
-#ifndef IOS_WORKAROUND
 flat in OctreeVaryingsFlat varyingsFlat;
-#endif
 
-#if !defined (PICK)
+#if (PASS != PASS_PICK)
 layout(location = 0) out vec4 fragColor;
 #else
 layout(location = 1) out uvec4 fragPick;
@@ -30,21 +27,17 @@ layout(location = 1) out uvec4 fragPick;
 
 void main() {
     float linearDepth = -varyings.positionVS.z;
+#if defined(CLIP)
     if(linearDepth < camera.near || clip(varyings.positionVS, clipping))
         discard;
+#endif
 
     vec4 baseColor;
     uint objectId;
     uint highlight;
-#if defined(IOS_WORKAROUND)
-    baseColor = varyings.color;
-    objectId = uint(varyings.objectId[0]) | uint(varyings.objectId[1]) << 16U;
-    highlight = uint(round(varyings.highlight));
-#else
     baseColor = varyingsFlat.color;
     objectId = varyingsFlat.objectId;
     highlight = varyingsFlat.highlight;
-#endif
 
     vec3 normalVS = normalize(varyings.normalVS);
     // compute geometric/flat normal from derivatives
@@ -59,12 +52,13 @@ void main() {
     vec3 normalWS = normalize(camera.viewLocalMatrixNormal * normalVS);
     vec3 geometricNormalWS = normalize(camera.viewLocalMatrixNormal * geometricNormalVS);
 
-    vec4 rgba;
-    if(meshMode == meshModePoints) {
-        rgba = baseColor;
-    } else if(meshMode == meshModeTerrain) {
-        rgba = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange);
-    } else if(baseColor == vec4(0)) {
+    vec4 rgba = vec4(0);
+#if (MODE == MODE_POINTS)
+    rgba = baseColor;
+#elif (MODE == MODE_TERRAIN)
+    rgba = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange);
+#elif (MODE == MODE_TRIANGLES)
+    if(baseColor == vec4(0)) {
         rgba = texture(textures.base_color, varyings.texCoord0);
     } else {
         vec4 diffuseOpacity = baseColor;
@@ -85,7 +79,9 @@ void main() {
         vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
         rgba = vec4(rgb, baseColor.a);
     }
+#endif
 
+#if defined (HIGHLIGHT)
     if(highlight != 0U || !scene.applyDefaultHighlight) {
         float u = (float(highlight) + 0.5) / float(maxHighlights);
         mat4 colorTransform;
@@ -96,12 +92,15 @@ void main() {
         vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / 5.0));
         rgba = colorTransform * rgba + colorTranslation;
     }
+#endif
 
     // we put discards here (late) to avoid problems with derivative functions
-    // if(meshMode == meshModePoints && distance(gl_FragCoord.xy, varyings.screenPos) > varyings.radius)
-    //     discard;
+#if (MODE == MODE_POINTS)
+    if(distance(gl_FragCoord.xy, varyings.screenPos) > varyings.radius)
+        discard;
+#endif
 
-#if defined (PREPASS)
+#if (PASS == PASS_PRE)
     if(rgba.a < 1.)
         discard;
 #else
@@ -114,7 +113,7 @@ void main() {
         discard;
 #endif
 
-#if !defined(PICK)
+#if (PASS != PASS_PICK)
     fragColor = rgba;
 #else
     fragPick = uvec4(objectId, packNormalAndDeviation(geometricNormalWS, varyings.deviation), floatBitsToUint(linearDepth));

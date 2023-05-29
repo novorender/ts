@@ -81,8 +81,8 @@ export class OctreeNode {
 
         // const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         // this.size = Math.pow(2, data.tolerance) * toleranceScale;
-        // this.size = Math.max(box.max[0] - box.min[0], Math.max(box.max[1] - box.min[1], box.max[2] - box.min[2])) * 4;
-        this.size = data.nodeSize * errorModifier;
+        this.size = Math.max(box.max[0] - box.min[0], Math.max(box.max[1] - box.min[1], box.max[2] - box.min[2])) * 4 * errorModifier;
+        // this.size = data.nodeSize * errorModifier;
         this.uniformsData = glUBOProxy({
             modelLocalMatrix: "mat4",
             tolerance: "float",

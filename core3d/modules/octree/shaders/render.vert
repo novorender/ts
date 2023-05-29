@@ -15,15 +15,12 @@ layout(std140) uniform Node {
 };
 
 uniform OctreeTextures textures;
-uniform uint meshMode;
 
 out OctreeVaryings varyings;
-#ifndef IOS_WORKAROUND
 flat out OctreeVaryingsFlat varyingsFlat;
-#endif
 
 layout(location = 0) in vec4 vertexPosition;
-#if !defined(PREPASS)
+#if (PASS != PASS_PRE)
 layout(location = 1) in vec3 vertexNormal;
 layout(location = 2) in uint vertexMaterial;
 layout(location = 3) in uint vertexObjectId;
@@ -47,38 +44,32 @@ void main() {
     gl_Position = camera.viewClipMatrix * posVS;
     vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
 
-    if(meshMode == meshModePoints) {
-        float deviation = vertexDeviations[scene.deviationIndex];
-        if(scene.deviationFactor > 0.) {
-            vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
-            color = mix(vertexColor0, gradientColor, scene.deviationFactor);
-        }
+#if (MODE == MODE_POINTS)
+    float deviation = vertexDeviations[scene.deviationIndex];
+    if(scene.deviationFactor > 0.) {
+        vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
+        color = mix(vertexColor0, gradientColor, scene.deviationFactor);
+    }
 
         // compute point size
-        float linearSize = scene.metricSize + node.tolerance * scene.toleranceFactor;
-        float projectedSize = camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 0.5 / gl_Position.w;
-        gl_PointSize = min(scene.maxPixelSize, max(1.0, scene.pixelSize + projectedSize));
+    float linearSize = scene.metricSize + node.tolerance * scene.toleranceFactor;
+    float projectedSize = camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 0.5 / gl_Position.w;
+    gl_PointSize = min(scene.maxPixelSize, max(1.0, scene.pixelSize + projectedSize));
 
         // Convert position to window coordinates
-        vec2 halfsize = camera.viewSize * 0.5;
-        varyings.screenPos = halfsize + ((gl_Position.xy / gl_Position.w) * halfsize);
+    vec2 halfsize = camera.viewSize * 0.5;
+    varyings.screenPos = halfsize + ((gl_Position.xy / gl_Position.w) * halfsize);
 
         // Convert radius to window coordinates
-        varyings.radius = max(1.0, gl_PointSize * 0.5);
-        varyings.deviation = deviation;
-    }
+    varyings.radius = max(1.0, gl_PointSize * 0.5);
+    varyings.deviation = deviation;
+#endif
 
     varyings.positionVS = posVS.xyz;
     varyings.normalVS = normalize(camera.localViewMatrixNormal * vertexNormal);
     varyings.texCoord0 = vertexTexCoord0;
     varyings.elevation = posLS.y;
-#if defined(IOS_WORKAROUND)
-    varyings.color = color;
-    varyings.objectId = vec2(vertexObjectId & 0xffffU, vertexObjectId >> 16U) + 0.5;
-    varyings.highlight = float(vertexHighlight);
-#else
     varyingsFlat.color = color;
     varyingsFlat.objectId = vertexObjectId;
     varyingsFlat.highlight = vertexHighlight;
-#endif
 }

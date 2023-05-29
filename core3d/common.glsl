@@ -1,4 +1,12 @@
 // shared/global stuff
+#define PASS_COLOR 0
+#define PASS_PICK 1
+#define PASS_PRE 2
+
+#ifndef PASS
+#define PASS PASS_COLOR // avoid red squigglies in editor
+#endif
+
 struct CameraUniforms {
     mat4 clipViewMatrix;
     mat4 viewClipMatrix;
@@ -142,6 +150,14 @@ struct DynamicTextures {
 };
 
 // octree
+#define MODE_TRIANGLES 0
+#define MODE_POINTS 1
+#define MODE_TERRAIN 2
+
+#ifndef MODE
+#define MODE MODE_TRIANGLES // avoid red squigglies in editor
+#endif
+
 const uint maxHighlights = 256U;
 struct OctreeVaryings {
     vec3 positionVS; // view space
@@ -151,19 +167,12 @@ struct OctreeVaryings {
     float radius;
     float deviation;
     float elevation;
-#ifdef IOS_WORKAROUND
-    vec4 color;
-    vec2 objectId; // older (<A15) IOS and Ipads crash if we use flat/uint here, so we use two floats instead
-    float highlight;
-#endif
 };
-#ifndef IOS_WORKAROUND
 struct OctreeVaryingsFlat {
     vec4 color;
     uint objectId;
     uint highlight;
 };
-#endif
 struct SceneUniforms {
     bool applyDefaultHighlight;
     float iblMipCount;
@@ -186,9 +195,6 @@ struct NodeUniforms {
     vec3 min;
     vec3 max;
 };
-const uint meshModeTriangles = 0U;
-const uint meshModePoints = 1U;
-const uint meshModeTerrain = 2U;
 const struct OctreeTextures {
     sampler2D base_color;
     IBLTextures ibl;

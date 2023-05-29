@@ -154,6 +154,11 @@ export class RenderContext {
             const ret = m.withContext(this);
             return isPromise(ret) ? ret : Promise.resolve(ret);
         });
+        this.linkAsyncPrograms();
+        this.modules = await Promise.all(modulePromises);
+    }
+
+    private linkAsyncPrograms() {
         // link all programs here (this is supposedly faster than interleaving compiles and links)
         const { gl, asyncPrograms } = this;
         for (const { program } of this.asyncPrograms) {
@@ -183,7 +188,6 @@ export class RenderContext {
             }
         }
         pollAsyncPrograms();
-        this.modules = await Promise.all(modulePromises);
     }
 
     dispose() {
@@ -472,6 +476,9 @@ export class RenderContext {
         for (const module of this.modules) {
             module?.update(derivedState);
         }
+
+        // link any updates programs asynchronously here
+        this.linkAsyncPrograms();
 
         // pick frame buffer and clear z-buffer
         const { width, height } = canvas;
