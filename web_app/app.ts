@@ -156,7 +156,7 @@ export class WebApp implements ViewStateContext {
         if (response.ok) {
             const json = await response.json();
             environments = (json as string[]).map(name => {
-                return { name, url: new URL(name, url).toString(), thumnbnailURL: new URL(`thumbnails/${name}.png`, url).toString() } as EnvironmentDescription;
+                return { name, url: new URL(name, url).toString() + "/", thumnbnailURL: new URL(`thumbnails/${name}.png`, url).toString() } as EnvironmentDescription;
             });
         }
         return environments;
