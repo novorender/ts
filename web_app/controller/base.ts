@@ -1,4 +1,4 @@
-import { type RenderStateScene, type RenderStateCamera, type RenderState, type RenderStateChanges, type RenderContext, mergeRecursive, type RecursivePartial, type RenderStateGrid, type RenderStateClippingPlane, type RenderStateClipping } from "core3d";
+import { type RenderStateScene, type RenderStateCamera, type RenderState, type RenderStateChanges, type RenderContext, mergeRecursive, type RecursivePartial, type RenderStateGrid, type RenderStateClippingPlane, type RenderStateClipping, type BoundingSphere } from "core3d";
 import { type ReadonlyVec3, vec2, type ReadonlyQuat, vec3 } from "gl-matrix";
 import { ControllerInput } from "./input";
 import type { FlightControllerParams } from "./flight";
@@ -104,12 +104,12 @@ export abstract class BaseController {
     mouseButtonChanged(event: MouseEvent): Promise<void> | void { }
     touchChanged(event: TouchEvent): Promise<void> | void { }
     moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void { }
-    flyTo(flyTime: number, targetPosition: ReadonlyVec3, targetPitch?: number, targetYaw?: number): void { }
-
+    moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, targetPitch?: number, targetYaw?: number): void { }
+    zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void { }
 
     renderStateChanges(state: RenderStateCamera, elapsedTime: number): RenderStateChanges | undefined {
         this.animate(elapsedTime);
-        if (Object.values(this.input.axes).some(v => v != 0) || this.currentFlyTo) { // check if anything has changed
+        if (Object.values(this.input.axes).some(v => v != 0) || this.currentFlyTo || this.changed) { // check if anything has changed
             this.update();
             this.input.resetAxes();
             const changes = this.stateChanges(state);

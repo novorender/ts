@@ -1,7 +1,7 @@
 
 import { type ReadonlyVec3, vec3, glMatrix, quat, mat3 } from "gl-matrix";
 import { BaseController, type ControllerContext, type ControllerInitParams, type MutableCameraState } from "./base";
-import { type RenderStateCamera, type RecursivePartial, mergeRecursive } from "core3d";
+import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type BoundingSphere } from "core3d";
 import { PitchRollYawOrientation, clamp } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 
@@ -101,7 +101,7 @@ export class FlightController extends BaseController {
         this.params = mergeRecursive(this.params, params);
     }
 
-    override flyTo(flyTime: number, targetPosition: ReadonlyVec3, targetPitch?: number, targetYaw?: number): void {
+    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, targetPitch?: number, targetYaw?: number): void {
         const { orientation, position } = this;
         this.setFlyTo({
             remainingFlightTime: flyTime,
@@ -110,6 +110,23 @@ export class FlightController extends BaseController {
         });
     }
 
+    override zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void {
+        const { orientation, position, fov } = this;
+        if (flyTime) {
+            const dist = Math.max(boundingSphere.radius / Math.tan(glMatrix.toRadian(fov) / 2), boundingSphere.radius);
+            const targetPosition = vec3.create();
+            vec3.add(targetPosition, vec3.transformQuat(targetPosition, vec3.fromValues(0, 0, dist), orientation.rotation), boundingSphere.center);
+            this.setFlyTo({
+                remainingFlightTime: flyTime,
+                target: { pos: vec3.clone(targetPosition), pitch: orientation.pitch, yaw: orientation.yaw + 0.05 },
+                current: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+            });
+        } else {
+            const dist = boundingSphere.radius / Math.tan(glMatrix.toRadian(fov) / 2);
+            this.position = vec3.add(vec3.create(), vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, dist), orientation.rotation), boundingSphere.center);
+            this.changed = true;
+        }
+    }
 
     private proportinalSpeed() {
         const { axes, params, recordedMoveBegin, position, fov } = this;
