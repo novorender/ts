@@ -36,7 +36,7 @@ export class FlightController extends BaseController {
         autoZoomSpeed: false,
         flightTime: 1,
         fieldOfView: 60,
-        pickDelay: 100
+        pickDelay: 200
     };
 
     override kind = "flight" as const;
@@ -53,6 +53,7 @@ export class FlightController extends BaseController {
     private lastUpdate: number = 0;
     private lastRecordePoistion: ReadonlyVec3 | undefined = undefined;
     private recordedMoveBegin: ReadonlyVec3 | undefined = undefined;
+    private inMoveBegin = false;
 
     constructor(readonly context: ControllerContext, input: ControllerInput, params?: FlightControllerParams) {
         super(input);
@@ -260,11 +261,13 @@ export class FlightController extends BaseController {
     async moveBegin(event: TouchEvent | MouseEvent): Promise<void> {
         const { pointerTable, context } = this;
         const { renderContext } = context;
+
         const deltaTime = this.lastUpdate - this.lastUpdatedMoveBegin;
-        if (renderContext == undefined || deltaTime < this.params.pickDelay) {
+
+        if (renderContext == undefined || deltaTime < this.params.pickDelay || this.inMoveBegin) {
             return;
         }
-
+        this.inMoveBegin = true;
         const setPickPosition = async (x: number, y: number) => {
             const [sample] = await renderContext.pick(x, y);
             if (sample) {
@@ -278,11 +281,13 @@ export class FlightController extends BaseController {
 
         if (isTouchEvent(event)) {
             if (pointerTable.length > 1) {
-                setPickPosition(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2))
+                await setPickPosition(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2))
             }
         } else {
-            setPickPosition(event.offsetX, event.offsetY)
+            await setPickPosition(event.offsetX, event.offsetY)
         }
+        this.inMoveBegin = false;
+
     }
 
     private resetPivot(active: boolean) {
