@@ -189,8 +189,8 @@ export class WebApp implements ViewStateContext {
                 const centerSample = samples.reduce((a, b) => a.depth < b.depth ? a : b);
                 const flippedSample = {
                     ...centerSample,
-                    position: vec3.transformQuat(vec3.create(), centerSample.position, flipYZ),
-                    normal: vec3.transformQuat(vec3.create(), centerSample.normal, flipYZ)
+                    position: vec3.fromValues(centerSample.position[0], -centerSample.position[2], centerSample.position[1]),
+                    normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1])
                 }
                 return flippedSample;
             }
