@@ -20,22 +20,6 @@ export function modifyRenderState(state: RenderState, changes: RenderStateChange
     return newState;
 }
 
-export function flipCameraChanges(changes: RecursivePartial<RenderStateCamera>): RecursivePartial<RenderStateCamera> {
-    const { position, rotation, pivot, ...rest } = changes as RenderStateCamera;
-    const flipZY = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
-    const flippedChanges: MutableCameraState = {};
-    if (position) {
-        flippedChanges.position = vec3.transformQuat(vec3.create(), position, flipZY);
-    }
-    if (pivot) {
-        flippedChanges.pivot = vec3.transformQuat(vec3.create(), pivot, flipZY);
-    }
-    if (rotation) {
-        flippedChanges.rotation = quat.mul(quat.create(), flipZY, rotation);
-    }
-    return { ...flippedChanges, ...rest };
-}
-
 export function mergeRecursive(original: any, changes: any) {
     const clone = { ...original };
     for (const key in changes) {

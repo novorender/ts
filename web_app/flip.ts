@@ -1,4 +1,5 @@
-import { quat, vec3, vec4 } from "gl-matrix";
+import type { RenderStateClippingPlane } from "core3d";
+import { quat, vec3, vec4, type ReadonlyVec4 } from "gl-matrix";
 
 const transforms = {
     GLToCAD: flipFuncs(flipGLtoCad),
@@ -9,7 +10,7 @@ export function flipState(changes: any, transform: "GLToCAD" | "CADToGL") {
     flipRecursive(changes, transforms[transform]);
 }
 
-function flipFuncs(swapFunc: (v: number[]) => void) {
+function flipFuncs(swapFunc: (v: number[]) => number[]) {
     const state = {
         camera: {
             position: swapFunc,
@@ -28,6 +29,10 @@ function flipFuncs(swapFunc: (v: number[]) => void) {
         clipping: {
             planes: flipArray(swapFunc),
         },
+        outlines: {
+            plane: swapFunc
+        }
+
     } as const;
     return state;
 }
@@ -41,7 +46,7 @@ function flipCADToGL(v: number[]) {
 }
 
 
-function flipGLtoCad(v: number[]) {
+export function flipGLtoCad(v: number[]) {
     const clone = [...v];
     const tmp = clone[1];
     clone[1] = -clone[2];
@@ -50,11 +55,13 @@ function flipGLtoCad(v: number[]) {
 }
 
 
-function flipArray(swapFunc: (v: number[]) => void) {
-    return function (ar: number[][]) {
+function flipArray(swapFunc: (v: number[]) => number[]) {
+    return function (ar: RenderStateClippingPlane[]) {
+        const flippedPlanes: RenderStateClippingPlane[] = [];
         for (const plane of ar) {
-            swapFunc(plane);
+            flippedPlanes.push({ color: plane.color, normalOffset: swapFunc(plane.normalOffset as any as number[]) as any as ReadonlyVec4 });
         }
+        return flippedPlanes;
     }
 }
 
