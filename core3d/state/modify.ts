@@ -1,6 +1,6 @@
 
 import { mat3, quat, vec3, type ReadonlyQuat, type ReadonlyVec3, vec4, type ReadonlyVec4 } from "gl-matrix";
-import type { RenderState, RenderStateCamera, RenderStateChanges, RenderStateClipping, RenderStateClippingPlane, RenderStateGrid, RenderStateOutput } from ".";
+import type { RecursivePartial, RenderState, RenderStateCamera, RenderStateChanges, RenderStateClipping, RenderStateClippingPlane, RenderStateGrid, RenderStateOutput } from ".";
 import type { MutableCameraState } from "web_app/controller/base";
 import type { RGBA } from "webgl2";
 
@@ -20,58 +20,20 @@ export function modifyRenderState(state: RenderState, changes: RenderStateChange
     return newState;
 }
 
-export function modifyRenderStateFromCadSpace(state: RenderState, changes: RenderStateChanges): RenderState {
-    const { camera, grid, clipping, outlines } = changes;
+export function flipCameraChanges(changes: RecursivePartial<RenderStateCamera>): RecursivePartial<RenderStateCamera> {
+    const { position, rotation, pivot, ...rest } = changes as RenderStateCamera;
     const flipZY = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
-    if (camera) {
-        const c = camera as RenderStateCamera;
-        const cameraChanges: MutableCameraState = {};
-        if (c.position) {
-            cameraChanges.position = vec3.transformQuat(vec3.create(), c.position, flipZY);
-        }
-        if (c.pivot) {
-            cameraChanges.pivot = vec3.transformQuat(vec3.create(), c.pivot, flipZY);
-        }
-        if (c.rotation) {
-            cameraChanges.rotation = quat.mul(quat.create(), flipZY, c.rotation);
-        }
-        changes = mergeRecursive(changes, { camera: cameraChanges });
+    const flippedChanges: MutableCameraState = {};
+    if (position) {
+        flippedChanges.position = vec3.transformQuat(vec3.create(), position, flipZY);
     }
-    if (grid) {
-        const g = grid as RenderStateGrid;
-        const gridChanges: MutableGridState = {};
-        if (g.axisX) {
-            gridChanges.axisX = vec3.transformQuat(vec3.create(), g.axisX, flipZY);
-        }
-        if (g.axisY) {
-            gridChanges.axisY = vec3.transformQuat(vec3.create(), g.axisY, flipZY);
-        }
-        if (g.origin) {
-            gridChanges.origin = vec3.transformQuat(vec3.create(), g.origin, flipZY);
-        }
-        changes = mergeRecursive(changes, { grid: gridChanges });
+    if (pivot) {
+        flippedChanges.pivot = vec3.transformQuat(vec3.create(), pivot, flipZY);
     }
-    if (clipping && clipping.planes) {
-        const flippedPlanes: RenderStateClippingPlane[] = [];
-        for (const plane of clipping.planes) {
-            if (plane) {
-                const p = plane as RenderStateClippingPlane;
-                const { normalOffset } = p;
-                if (normalOffset) {
-                    flippedPlanes.push({
-                        normalOffset: vec4.fromValues(normalOffset[0], normalOffset[2], -normalOffset[1], normalOffset[3]),
-                        color: p.color ?? undefined
-                    });
-                }
-            }
-        }
-        changes = mergeRecursive(changes, { clipping: { planes: flippedPlanes } });
+    if (rotation) {
+        flippedChanges.rotation = quat.mul(quat.create(), flipZY, rotation);
     }
-    if (outlines && outlines.plane) {
-        const p = outlines.plane as ReadonlyVec4;
-        changes = mergeRecursive(changes, { outlines: { plane: vec4.fromValues(p[0], p[2], -p[1], p[3]) } });
-    }
-    return modifyRenderState(state, changes);
+    return { ...flippedChanges, ...rest };
 }
 
 export function mergeRecursive(original: any, changes: any) {

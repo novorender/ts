@@ -1,4 +1,4 @@
-import { type RenderStateScene, type RenderStateCamera, type RenderState, type RenderStateChanges, type RenderContext, mergeRecursive, type RecursivePartial, type RenderStateGrid, type RenderStateClippingPlane, type RenderStateClipping, type BoundingSphere } from "core3d";
+import { type RenderStateScene, type RenderStateCamera, type RenderState, type RenderStateChanges, type RenderContext, mergeRecursive, type RecursivePartial, type RenderStateGrid, type RenderStateClippingPlane, type RenderStateClipping, type BoundingSphere, type PickSample } from "core3d";
 import { type ReadonlyVec3, vec2, type ReadonlyQuat, vec3 } from "gl-matrix";
 import { ControllerInput } from "./input";
 import type { FlightControllerParams } from "./flight";
@@ -127,8 +127,9 @@ export abstract class BaseController {
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 export type MutableCameraState = Partial<Mutable<RenderStateCamera>>;
-export interface ControllerContext {
-    readonly renderContext: RenderContext | undefined;
+
+export interface PickInterface {
+    pick: (x: number, y: number, sampleDiscRadius: number) => Promise<PickSample | undefined>;
 }
 
 export interface ControllerInitParams {

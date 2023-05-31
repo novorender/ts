@@ -1,7 +1,8 @@
 
 import { type ReadonlyVec3, vec3, quat, vec4 } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, modifyRenderStateFromCadSpace, RenderContext, type OctreeSceneConfig, type DeviceProfile } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type OctreeSceneConfig, type DeviceProfile, modifyRenderState } from "core3d";
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController } from "./controller";
+import { flipState } from "./flip";
 
 const coreProfile = {
     features: {
@@ -35,7 +36,8 @@ export class WebApp implements ViewStateContext {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     readonly alternateUrl = new URL("http://192.168.1.129:9090/").toString();
     public renderContext: RenderContext | undefined;
-    public _renderState: RenderState;
+    private renderStateGL: RenderState;
+    private renderStateCad: RenderState;
     private stateChanges: RenderStateChanges | undefined;
 
     //* @internal */
@@ -59,51 +61,31 @@ export class WebApp implements ViewStateContext {
         this.renderContext = context;
     }
 
-    get renderState() {
-        const { _renderState } = this;
-
-        const flipZY = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
-        const clippingPlanes: RenderStateClippingPlane[] = [];
-        for (const plane of _renderState.clipping.planes) {
-            if (plane) {
-                const p = plane as RenderStateClippingPlane;
-                const { normalOffset } = p;
-                if (normalOffset) {
-                    clippingPlanes.push({
-                        normalOffset: vec4.fromValues(normalOffset[0], -normalOffset[2], normalOffset[1], normalOffset[3]),
-                        color: p.color ?? undefined
-                    });
-                }
-            }
+    updateChanges(changes: RenderStateChanges) {
+        this.renderStateCad = mergeRecursive(this.renderStateCad, changes) as RenderState;
+        flipState(changes, "CADToGL");
+        if (changes.camera && changes.camera.rotation) {
+            const flipZY = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
+            (changes.camera as any).rotation = quat.mul(quat.create(), flipZY, changes.camera.rotation as quat);
         }
-        return {
-            ..._renderState,
-            camera: {
-                ..._renderState.camera,
-                position: vec3.transformQuat(vec3.create(), _renderState.camera.position, flipZY),
-                pivot: _renderState.camera.pivot ? vec3.transformQuat(vec3.create(), _renderState.camera.pivot, flipZY) : undefined,
-                rotation: quat.mul(quat.create(), flipZY, _renderState.camera.rotation),
-            },
-            grid: {
-                ..._renderState.grid,
-                axisX: vec3.transformQuat(vec3.create(), _renderState.grid.axisX, flipZY),
-                axisY: vec3.transformQuat(vec3.create(), _renderState.grid.axisY, flipZY),
-                origin: vec3.transformQuat(vec3.create(), _renderState.grid.origin, flipZY)
-            },
-            clipping: {
-                ..._renderState.clipping,
-                planes: clippingPlanes
-            },
-            outlines: {
-                ..._renderState.outlines,
-                plane: vec4.fromValues(_renderState.outlines.plane[0], -_renderState.outlines.plane[2], _renderState.outlines.plane[1], _renderState.outlines.plane[3])
-            }
-        };
+
+        this.renderStateGL = modifyRenderState(this.renderStateGL, changes);
+    }
+
+    createRenderState(state: RenderState) {
+        const clone = structuredClone(state);
+        flipState(clone, "GLToCAD");
+        return clone;
+    }
+
+    get renderState() {
+        return this.renderStateCad;
     }
 
     constructor(readonly canvas: HTMLCanvasElement, readonly appState: AppState) {
         initCore3D(deviceProfile, canvas, this.setRenderContext);
-        this._renderState = defaultRenderState();
+        this.renderStateGL = defaultRenderState();
+        this.renderStateCad = this.createRenderState(this.renderStateGL);
         const input = new ControllerInput(canvas);
         this.controllers = {
             flight: new FlightController(this, input),
@@ -136,9 +118,9 @@ export class WebApp implements ViewStateContext {
         let { width, height } = this.canvas.getBoundingClientRect();
         width = Math.round(width * scale);
         height = Math.round(height * scale);
-        const { output } = this._renderState;
+        const { output } = this.renderStateGL;
         if (width != output.width || height != output.height) {
-            this._renderState = modifyRenderStateFromCadSpace(this._renderState, { output: { width, height } });
+            this.updateChanges({ output: { width, height } });
             // this.modifyRenderState({ output: { width, height } });
         }
     }
@@ -313,7 +295,7 @@ export class WebApp implements ViewStateContext {
                 break;
             }
             this.resize();
-            const cameraChanges = activeController.renderStateChanges(this._renderState.camera, renderTime - prevRenderTime);
+            const cameraChanges = activeController.renderStateChanges(this.renderStateCad.camera, renderTime - prevRenderTime);
             if (cameraChanges) {
                 this.modifyRenderState(cameraChanges);
             }
@@ -345,22 +327,22 @@ export class WebApp implements ViewStateContext {
                         this.dynamicResolutionScaling(frameIntervals);
                     }
                     const activeDetailModifier = 0.5;
-                    if (this._renderState.quality.detail != activeDetailModifier) {
+                    if (this.renderStateGL.quality.detail != activeDetailModifier) {
                         this.currentDetailBias = activeDetailModifier;
                         this.modifyRenderState({ quality: { detail: activeDetailModifier } });
                     }
                 }
 
                 if (this.stateChanges) {
-                    this._renderState = modifyRenderStateFromCadSpace(this._renderState, this.stateChanges);
+                    this.updateChanges(this.stateChanges);
                     this.stateChanges = undefined;
                 }
-                const { _renderState } = this;
-                if (prevState !== _renderState || renderContext.changed) {
-                    prevState = _renderState;
-                    const statsPromise = renderContext.render(_renderState);
+                const { renderStateGL } = this;
+                if (prevState !== renderStateGL || renderContext.changed) {
+                    prevState = renderStateGL;
+                    const statsPromise = renderContext.render(renderStateGL);
                     //stats
-                    pickRenderState = _renderState;
+                    pickRenderState = renderStateGL;
                 }
             }
             if (activeController.changed && isIdleFrame) {
@@ -389,7 +371,7 @@ export class WebApp implements ViewStateContext {
 export interface ViewStateContext {
     readonly scriptUrl: string;
     readonly renderContext: RenderContext | undefined;
-    readonly _renderState: RenderState;
+    readonly renderState: RenderState;
     // readonly clippingPlanes: readonly RenderStateClippingPlane[];
     readonly controllers: { readonly [key: string]: BaseController };
     activeController: BaseController;

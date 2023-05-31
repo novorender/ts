@@ -1,6 +1,6 @@
 
 import { type ReadonlyVec3, vec3, glMatrix, quat, mat3 } from "gl-matrix";
-import { BaseController, type ControllerContext, type ControllerInitParams, type MutableCameraState } from "./base";
+import { BaseController, type ControllerInitParams, type MutableCameraState, type PickInterface } from "./base";
 import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type BoundingSphere } from "core3d";
 import { PitchRollYawOrientation, clamp } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
@@ -65,7 +65,7 @@ export class FlightController extends BaseController {
     private recordedMoveBegin: ReadonlyVec3 | undefined = undefined;
     private inMoveBegin = false;
 
-    constructor(readonly context: ControllerContext, input: ControllerInput, params?: FlightControllerParams) {
+    constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
         super(input);
         this.params = { ...FlightController.defaultParams, ...params } as const;
         const { orientation } = this;
@@ -141,7 +141,7 @@ export class FlightController extends BaseController {
 
 
     protected modifiers() {
-        const { axes, params, recordedMoveBegin, position, fov } = this;
+        const { params, recordedMoveBegin, position, fov } = this;
         const { proportionalCameraSpeed } = params;
         let scale = 20;
         if (proportionalCameraSpeed && recordedMoveBegin) {
@@ -150,7 +150,6 @@ export class FlightController extends BaseController {
             const mousePanModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const touchMovementModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const pinchModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
-
             return {
                 mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale
             }
@@ -213,6 +212,9 @@ export class FlightController extends BaseController {
             const linearVelocity = multiplier * params.linearVelocity / height;
             const worldPosDelta = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * linearVelocity, -ty * linearVelocity, tz * linearVelocity), orientation.rotation);
             this.position = vec3.add(vec3.create(), this.position, worldPosDelta);
+            if (pivot && pivot.active) {
+                this.setPivot(pivot.center, pivot.active);
+            }
             this.changed = true;
         }
     }
@@ -239,15 +241,13 @@ export class FlightController extends BaseController {
     }
 
     override async mouseButtonChanged(event: MouseEvent): Promise<void> {
-        const { context, pivotButton } = this;
-        const { renderContext } = context;
-        if (renderContext) {
+        const { pickInterface, pivotButton } = this;
+        if (pickInterface) {
             const changes = event.buttons;
             if (changes & pivotButton) {
-                const [sample] = await renderContext.pick(event.offsetX, event.offsetY);
+                const sample = await pickInterface.pick(event.offsetX, event.offsetY, 0);
                 if (sample) {
-                    const flippedPos = vec3.fromValues(sample.position[0], -sample.position[2], sample.position[1]);
-                    this.setPivot(flippedPos, true);
+                    this.setPivot(sample.position, true);
                 } else {
                     this.resetPivot(true);
                 }
@@ -258,13 +258,11 @@ export class FlightController extends BaseController {
     }
 
     override async touchChanged(event: TouchEvent): Promise<void> {
-        const { pointerTable, context, pivotFingers } = this;
-        const { renderContext } = context;
-        if (pointerTable.length == pivotFingers && renderContext) {
-            const [sample] = await renderContext.pick(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2));
+        const { pointerTable, pickInterface, pivotFingers } = this;
+        if (pointerTable.length == pivotFingers && pickInterface) {
+            const sample = await pickInterface.pick(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2), 0);
             if (sample) {
-                const flippedPos = vec3.fromValues(sample.position[0], -sample.position[2], sample.position[1]);
-                this.setPivot(flippedPos, true);
+                this.setPivot(sample.position, true);
             } else {
                 this.resetPivot(true);
             }
@@ -274,17 +272,16 @@ export class FlightController extends BaseController {
     }
 
     async moveBegin(event: TouchEvent | MouseEvent): Promise<void> {
-        const { pointerTable, context } = this;
-        const { renderContext } = context;
+        const { pointerTable, pickInterface } = this;
 
         const deltaTime = this.lastUpdate - this.lastUpdatedMoveBegin;
 
-        if (renderContext == undefined || deltaTime < this.params.pickDelay || this.inMoveBegin) {
+        if (pickInterface == undefined || deltaTime < this.params.pickDelay || this.inMoveBegin) {
             return;
         }
         this.inMoveBegin = true;
         const setPickPosition = async (x: number, y: number) => {
-            const [sample] = await renderContext.pick(x, y);
+            const sample = await pickInterface.pick(x, y, 0);
             if (sample) {
                 this.recordedMoveBegin = this.lastRecordePoistion = sample.position;
                 this.lastUpdatedMoveBegin = performance.now();
@@ -332,8 +329,8 @@ function isTouchEvent(event: MouseEvent | TouchEvent): event is TouchEvent {
 export class CadFlightController extends FlightController {
     override kind = "cad" as const;
 
-    constructor(readonly context: ControllerContext, input: ControllerInput, params?: FlightControllerParams) {
-        super(context, input);
+    constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
+        super(pickInterface, input);
         this.pivotButton = MouseButtons.left;
     }
 
