@@ -5,6 +5,15 @@ import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type Bou
 import { PitchRollYawOrientation, clamp } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 
+export interface CameraTransformations {
+    tx: number,
+    ty: number,
+    tz: number,
+    rx: number,
+    ry: number,
+    shouldPivot: boolean
+}
+
 /** Ortho type camera motion controller */
 export interface FlightControllerParams {
     position?: ReadonlyVec3;
@@ -39,15 +48,16 @@ export class FlightController extends BaseController {
         pickDelay: 200
     };
 
-    override kind = "flight" as const;
+    override kind: string = "flight" as const;
     override projection = "pinhole" as const;
     override changed = false;
+    protected pivotButton: MouseButtons = MouseButtons.right;
+    protected pivotFingers: number = 3;
     private params;
     private position: ReadonlyVec3 = vec3.create();
     private readonly orientation = new PitchRollYawOrientation();
     private pivot: Pivot | undefined;
     private fov: number;
-    private prevMouseButtons = MouseButtons.none;
 
     private lastUpdatedMoveBegin: number = 0;
     private lastUpdate: number = 0;
@@ -129,7 +139,8 @@ export class FlightController extends BaseController {
         }
     }
 
-    private proportinalSpeed() {
+
+    protected modifiers() {
         const { axes, params, recordedMoveBegin, position, fov } = this;
         const { proportionalCameraSpeed } = params;
         let scale = 20;
@@ -139,21 +150,35 @@ export class FlightController extends BaseController {
             const mousePanModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const touchMovementModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const pinchModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
+
             return {
-                tx: (axes.keyboard_ad * scale) - (axes.mouse_mmb_move_x * mousePanModifier) - (axes.touch_2_move_x * touchMovementModifier),
-                ty: (axes.keyboard_qe * scale) - (axes.mouse_mmb_move_y * mousePanModifier) - (axes.touch_2_move_y * touchMovementModifier),
-                tz: (axes.keyboard_ws * scale) + (axes.mouse_wheel * mouseWheelModifier) + (axes.touch_pinch2 * pinchModifier)
+                mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale
             }
         }
         return {
-            tx: (axes.keyboard_ad - axes.mouse_mmb_move_x - axes.touch_2_move_x) * scale,
-            ty: (axes.keyboard_qe - axes.mouse_mmb_move_y - axes.touch_2_move_y) * scale,
-            tz: (axes.keyboard_ws + axes.mouse_wheel * 10 + axes.touch_pinch2) * scale
+            mouseWheelModifier: scale, mousePanModifier: scale, touchMovementModifier: scale, pinchModifier: scale, scale
         }
     }
 
+    protected getTransformations(): CameraTransformations {
+        const { axes } = this;
+        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_1_move_y;
+        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_1_move_x;
+        const pivotX = -axes.mouse_rmb_move_y + axes.touch_3_move_y;
+        const pivotY = -axes.mouse_rmb_move_x + axes.touch_3_move_x;
+        const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
+
+        const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
+        const tx = (axes.keyboard_ad * scale) - (axes.mouse_mmb_move_x * mousePanModifier) - (axes.touch_2_move_x * touchMovementModifier);
+        const ty = (axes.keyboard_qe * scale) - (axes.mouse_mmb_move_y * mousePanModifier) - (axes.touch_2_move_y * touchMovementModifier);
+        const tz = (axes.keyboard_ws * scale) + (axes.mouse_wheel * mouseWheelModifier) + (axes.touch_pinch2 * pinchModifier);
+        const rx = shouldPivot ? pivotX : rotX;
+        const ry = shouldPivot ? pivotY : rotY;
+        return { tx, ty, tz, rx, ry, shouldPivot };
+    }
+
     override update(): void {
-        const { axes, multiplier, orientation, params, height, pivot, zoomPos, currentFlyTo } = this;
+        const { multiplier, orientation, params, height, pivot, zoomPos, currentFlyTo } = this;
         if (currentFlyTo) {
             this.position = vec3.clone(currentFlyTo.pos);
             orientation.pitch = currentFlyTo.pitch;
@@ -162,16 +187,7 @@ export class FlightController extends BaseController {
             return;
         }
         this.lastUpdate = performance.now();
-
-        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_1_move_y;
-        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_1_move_x;
-        const pivotX = -axes.mouse_rmb_move_y + axes.touch_3_move_y;
-        const pivotY = -axes.mouse_rmb_move_x + axes.touch_3_move_x;
-        const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
-
-        let { tx, ty, tz } = this.proportinalSpeed();
-        const rx = shouldPivot ? pivotX : rotX;
-        const ry = shouldPivot ? pivotY : rotY;
+        let { tx, ty, tz, rx, ry, shouldPivot } = this.getTransformations();
         orientation.roll = 0;
         const [zoomX, zoomY] = zoomPos;
 
@@ -223,11 +239,11 @@ export class FlightController extends BaseController {
     }
 
     override async mouseButtonChanged(event: MouseEvent): Promise<void> {
-        const { context, prevMouseButtons } = this;
+        const { context, pivotButton } = this;
         const { renderContext } = context;
-        const changes = event.buttons ^ prevMouseButtons;
-        if (changes & (MouseButtons.right | MouseButtons.middle)) {
-            if (renderContext && event.buttons & (MouseButtons.right | MouseButtons.middle)) {
+        if (renderContext) {
+            const changes = event.buttons;
+            if (changes & pivotButton) {
                 const [sample] = await renderContext.pick(event.offsetX, event.offsetY);
                 if (sample) {
                     const flippedPos = vec3.fromValues(sample.position[0], -sample.position[2], sample.position[1]);
@@ -239,13 +255,12 @@ export class FlightController extends BaseController {
                 this.resetPivot(false);
             }
         }
-        this.prevMouseButtons = event.buttons;
     }
 
     override async touchChanged(event: TouchEvent): Promise<void> {
-        const { pointerTable, context } = this;
+        const { pointerTable, context, pivotFingers } = this;
         const { renderContext } = context;
-        if (pointerTable.length == 3 && renderContext) {
+        if (pointerTable.length == pivotFingers && renderContext) {
             const [sample] = await renderContext.pick(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2));
             if (sample) {
                 const flippedPos = vec3.fromValues(sample.position[0], -sample.position[2], sample.position[1]);
@@ -312,4 +327,30 @@ export class FlightController extends BaseController {
 
 function isTouchEvent(event: MouseEvent | TouchEvent): event is TouchEvent {
     return TouchEvent && event instanceof TouchEvent;
+}
+
+export class CadFlightController extends FlightController {
+    override kind = "cad" as const;
+
+    constructor(readonly context: ControllerContext, input: ControllerInput, params?: FlightControllerParams) {
+        super(context, input);
+        this.pivotButton = MouseButtons.left;
+    }
+
+    override getTransformations(): CameraTransformations {
+        const { axes } = this;
+        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_rmb_move_y + axes.touch_3_move_y;
+        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_rmb_move_x + axes.touch_3_move_x;
+        const pivotX = -axes.mouse_lmb_move_y + axes.touch_1_move_y;
+        const pivotY = -axes.mouse_lmb_move_x + axes.touch_1_move_x;
+        const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
+
+        const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
+        const tx = (axes.keyboard_ad * scale) - (axes.mouse_mmb_move_x * mousePanModifier) - (axes.touch_2_move_x * touchMovementModifier);
+        const ty = (axes.keyboard_qe * scale) - (axes.mouse_mmb_move_y * mousePanModifier) - (axes.touch_2_move_y * touchMovementModifier);
+        const tz = (axes.keyboard_ws * scale) + (axes.mouse_wheel * mouseWheelModifier) + (axes.touch_pinch2 * pinchModifier);
+        const rx = shouldPivot ? pivotX : rotX;
+        const ry = shouldPivot ? pivotY : rotY;
+        return { tx, ty, tz, rx, ry, shouldPivot };
+    }
 }

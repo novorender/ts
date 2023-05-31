@@ -166,7 +166,7 @@ export class WebApp implements ViewStateContext {
     async loadScene(url: string, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit = true): Promise<OctreeSceneConfig> {
         const scene = await downloadScene(url);
 
-        const flipYZ = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
+        const flipYZ = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
         const { config } = scene;
         const flippedConfig = {
             ...config,
