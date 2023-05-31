@@ -120,11 +120,10 @@ class BackgroundModuleContext implements RenderModuleContext {
         const { program, uniforms } = resources;
         const { gl, cameraUniforms, samplerSingle, samplerMip } = context;
 
-        if (state.background.color) {
-            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color });
-        } else if (state.camera.kind == "orthographic") {
-            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: state.background.color ?? [0.33, 0.33, 0.33, 1] });
-        } else {
+        const clearColor = state.background.color ?? [0.33, 0.33, 0.33, 1];
+        if (state.camera.kind == "orthographic") {
+            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: clearColor });
+        } else if (state.background.url) {
             const { specular } = context.iblTextures;
             glState(gl, {
                 program,
@@ -140,6 +139,8 @@ class BackgroundModuleContext implements RenderModuleContext {
             });
             const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
             context["addRenderStatistics"](stats);
+        } else {
+            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: clearColor });
         }
     }
 
