@@ -82,7 +82,7 @@ export class View implements ViewStateContext {
         return this.renderStateCad;
     }
 
-    constructor(readonly canvas: HTMLCanvasElement, readonly appState: AppState) {
+    constructor(readonly canvas: HTMLCanvasElement) {
         initCore3D(deviceProfile, canvas, this.setRenderContext);
         this.renderStateGL = defaultRenderState();
         this.renderStateCad = this.createRenderState(this.renderStateGL);
@@ -113,7 +113,7 @@ export class View implements ViewStateContext {
     }
 
     private resize() {
-        const scale = devicePixelRatio * this.resolutionModifier * (this.appState.msaa ? 0.5 : 1); // / 2;
+        const scale = devicePixelRatio * this.resolutionModifier * (this.renderState.output.samplesMSAA > 0 ? 0.5 : 1); // / 2;
         // const scale = 1.0;
         let { width, height } = this.canvas.getBoundingClientRect();
         width = Math.round(width * scale);
@@ -291,9 +291,6 @@ export class View implements ViewStateContext {
             const { renderContext, activeController } = this;
             const renderTime = await RenderContext.nextFrame(renderContext);
             const frameTime = renderTime - prevRenderTime;
-            if (this.appState.quit) {
-                break;
-            }
             this.resize();
             const cameraChanges = activeController.renderStateChanges(this.renderStateCad.camera, renderTime - prevRenderTime);
             if (cameraChanges) {
@@ -344,10 +341,6 @@ export class View implements ViewStateContext {
                     //stats
                     pickRenderState = renderStateGL;
                 }
-            }
-            if (activeController.changed && isIdleFrame) {
-                const controllerState = this.activeController.serialize();
-                this.appState.controllerState = JSON.stringify(controllerState);
             }
 
             if (this.activeController.moving) {
