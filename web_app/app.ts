@@ -1,7 +1,7 @@
 
 import { type ReadonlyVec3, vec3, quat, vec4, type ReadonlyQuat } from "gl-matrix";
 import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type OctreeSceneConfig, type DeviceProfile, modifyRenderState } from "core3d";
-import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController } from "./controller";
+import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
 import { flipState } from "./flip";
 
 const coreProfile = {
@@ -91,7 +91,8 @@ export class View implements ViewStateContext {
             flight: new FlightController(this, input),
             orbit: new OrbitController(input),
             ortho: new OrthoController(input),
-            panorama: new PanoramaController(input)
+            panorama: new PanoramaController(input),
+            cad: new CadFlightController(this, input),
         } as const
         this.activeController = this.controllers["flight"];
         this.activeController.attach();

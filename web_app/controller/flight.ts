@@ -178,10 +178,10 @@ export class FlightController extends BaseController {
 
     protected getTransformations(): CameraTransformations {
         const { axes } = this;
-        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_1_move_y;
-        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_1_move_x;
-        const pivotX = -axes.mouse_rmb_move_y + axes.touch_3_move_y;
-        const pivotY = -axes.mouse_rmb_move_x + axes.touch_3_move_x;
+        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_2_move_y;
+        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_2_move_x;
+        const pivotX = -axes.mouse_rmb_move_y + axes.touch_1_move_y;
+        const pivotY = -axes.mouse_rmb_move_x + axes.touch_1_move_x;
         const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
 
         const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
@@ -277,7 +277,9 @@ export class FlightController extends BaseController {
     override async touchChanged(event: TouchEvent): Promise<void> {
         const { pointerTable, pickInterface, pivotFingers } = this;
         if (pointerTable.length == pivotFingers && pickInterface) {
-            const sample = await pickInterface.pick(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2), 0);
+            const x = pointerTable.length > 1 ? Math.round((pointerTable[0].x + pointerTable[1].x) / 2) : pointerTable[0].x;
+            const y = pointerTable.length > 1 ? Math.round((pointerTable[0].y + pointerTable[1].y) / 2) : pointerTable[0].y;
+            const sample = await pickInterface.pick(x, y, 0);
             if (sample) {
                 this.setPivot(sample.position, true);
             } else {
@@ -327,6 +329,7 @@ export class FlightController extends BaseController {
     }
 
     private setPivot(center: ReadonlyVec3, active: boolean) {
+        console.log("pivot");
         const { position, orientation } = this;
         const distance = vec3.distance(center, position);
         const offset = vec3.fromValues(0, 0, distance);
@@ -349,14 +352,15 @@ export class CadFlightController extends FlightController {
     constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
         super(pickInterface, input);
         this.pivotButton = MouseButtons.left;
+        this.pivotFingers = 1;
     }
 
     override getTransformations(): CameraTransformations {
         const { axes } = this;
         const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_rmb_move_y + axes.touch_3_move_y;
         const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_rmb_move_x + axes.touch_3_move_x;
-        const pivotX = -axes.mouse_lmb_move_y + axes.touch_1_move_y;
-        const pivotY = -axes.mouse_lmb_move_x + axes.touch_1_move_x;
+        const pivotX = -axes.mouse_lmb_move_y + -axes.touch_1_move_y;
+        const pivotY = -axes.mouse_lmb_move_x + -axes.touch_1_move_x;
         const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
 
         const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
