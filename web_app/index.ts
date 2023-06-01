@@ -8,6 +8,6 @@ export { View };
 
 glMatrix.setMatrixArrayType(Array);
 
-export function createView(canvas: HTMLCanvasElement, viewState: AppState) {
-    return new View(canvas, viewState);
+export function createView(canvas: HTMLCanvasElement) {
+    return new View(canvas);
 }
