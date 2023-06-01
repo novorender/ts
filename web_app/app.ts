@@ -1,6 +1,6 @@
 
 import { type ReadonlyVec3, vec3, quat, vec4, type ReadonlyQuat } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type OctreeSceneConfig, type DeviceProfile, modifyRenderState } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type OctreeSceneConfig, type DeviceProfile, modifyRenderState, type RenderStatistics } from "core3d";
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
 import { flipState } from "./flip";
 
@@ -32,6 +32,13 @@ export interface AppState {
     controllerState: string
 }
 
+
+interface ViewStatistics {
+    resolution: number,
+    detailBias: number,
+    fps?: number,
+}
+
 export class View implements ViewStateContext {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     readonly alternateUrl = new URL("http://192.168.1.129:9090/").toString();
@@ -46,6 +53,7 @@ export class View implements ViewStateContext {
     activeController: BaseController;
     //* @internal */
     clippingPlanes: RenderStateClippingPlane[] = [];
+    private _statistics: { render: RenderStatistics, view: ViewStatistics } | undefined = undefined;
 
 
     //Drs
@@ -81,6 +89,11 @@ export class View implements ViewStateContext {
     get renderState() {
         return this.renderStateCad;
     }
+
+    get statistics() {
+        return this._statistics;
+    }
+
 
     constructor(readonly canvas: HTMLCanvasElement) {
         initCore3D(deviceProfile, canvas, this.setRenderContext);
@@ -186,7 +199,6 @@ export class View implements ViewStateContext {
         if (context) {
             const samples = await context.pick(x, y, sampleDiscRadius);
             if (samples.length) {
-                const flipYZ = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
                 const centerSample = samples.reduce((a, b) => a.depth < b.depth ? a : b);
                 const flippedSample = {
                     ...centerSample,
@@ -339,7 +351,9 @@ export class View implements ViewStateContext {
                 if (prevState !== renderStateGL || renderContext.changed) {
                     prevState = renderStateGL;
                     const statsPromise = renderContext.render(renderStateGL);
-                    //stats
+                    statsPromise.then((stats) => {
+                        this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
+                    });
                     pickRenderState = renderStateGL;
                 }
             }
