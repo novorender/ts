@@ -32,7 +32,7 @@ export interface AppState {
     controllerState: string
 }
 
-export class WebApp implements ViewStateContext {
+export class View implements ViewStateContext {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     readonly alternateUrl = new URL("http://192.168.1.129:9090/").toString();
     public renderContext: RenderContext | undefined;
@@ -199,7 +199,7 @@ export class WebApp implements ViewStateContext {
     }
 
     async switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }) {
-        function isControllerKind(kind: string, controllers: Object): kind is keyof WebApp["controllers"] {
+        function isControllerKind(kind: string, controllers: Object): kind is keyof View["controllers"] {
             return kind in controllers;
         }
         if (!isControllerKind(kind, this.controllers))
