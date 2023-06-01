@@ -1,5 +1,5 @@
 import { type RenderStateScene, type RenderStateCamera, type RenderState, type RenderStateChanges, type RenderContext, mergeRecursive, type RecursivePartial, type RenderStateGrid, type RenderStateClippingPlane, type RenderStateClipping, type BoundingSphere, type PickSample } from "core3d";
-import { type ReadonlyVec3, vec2, type ReadonlyQuat, vec3 } from "gl-matrix";
+import { type ReadonlyVec3, vec2, type ReadonlyQuat, vec3, quat } from "gl-matrix";
 import { ControllerInput } from "./input";
 import type { FlightControllerParams } from "./flight";
 import type { OrbitControllerParams } from "./orbit";
@@ -104,7 +104,7 @@ export abstract class BaseController {
     mouseButtonChanged(event: MouseEvent): Promise<void> | void { }
     touchChanged(event: TouchEvent): Promise<void> | void { }
     moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void { }
-    moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, targetPitch?: number, targetYaw?: number): void { }
+    moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void { }
     zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void { }
 
     renderStateChanges(state: RenderStateCamera, elapsedTime: number): RenderStateChanges | undefined {

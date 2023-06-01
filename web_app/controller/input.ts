@@ -203,7 +203,6 @@ export class ControllerInput {
         const { pointerTable, _touchMovePrev } = this;
         this._fingers = event.touches.length;
         this.callbacks?.touchChanged?.(event);
-        await this.callbacks?.moveBegin?.(event);
 
         switch (pointerTable.length) {
             case 1:
@@ -218,6 +217,7 @@ export class ControllerInput {
                 _touchMovePrev[1] = (pointerTable[0].y + pointerTable[1].y) / 2;
                 break;
         }
+        await this.callbacks?.moveBegin?.(event);
     };
 
     private touchend = (event: TouchEvent) => {

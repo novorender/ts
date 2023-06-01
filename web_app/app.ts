@@ -1,5 +1,5 @@
 
-import { type ReadonlyVec3, vec3, quat, vec4 } from "gl-matrix";
+import { type ReadonlyVec3, vec3, quat, vec4, type ReadonlyQuat } from "gl-matrix";
 import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type OctreeSceneConfig, type DeviceProfile, modifyRenderState } from "core3d";
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController } from "./controller";
 import { flipState } from "./flip";
@@ -198,7 +198,7 @@ export class WebApp implements ViewStateContext {
         return undefined;
     }
 
-    async switchCameraController(kind: string) {
+    async switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }) {
         function isControllerKind(kind: string, controllers: Object): kind is keyof WebApp["controllers"] {
             return kind in controllers;
         }
@@ -241,7 +241,7 @@ export class WebApp implements ViewStateContext {
         //     quat.fromMat3(rotation, mat2);
         // }
 
-        activeController.init({ kind, position, rotation, pivot, distance, fovDegrees, fovMeters });
+        activeController.init({ kind, position: initState?.position ?? position, rotation: initState?.rotation ?? rotation, pivot, distance, fovDegrees, fovMeters: initState?.fov ?? fovMeters });
         const changes = activeController.stateChanges();
         this.modifyRenderState({ camera: changes });
     }
@@ -377,7 +377,7 @@ export interface ViewStateContext {
     activeController: BaseController;
     modifyRenderState(changes: RenderStateChanges): void;
     loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit: boolean): Promise<OctreeSceneConfig>;
-    switchCameraController(kind: string): Promise<void>;
+    switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }): Promise<void>;
 }
 
 /** Background/IBL environment description
