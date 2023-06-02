@@ -329,7 +329,6 @@ export class FlightController extends BaseController {
     }
 
     private setPivot(center: ReadonlyVec3, active: boolean) {
-        console.log("pivot");
         const { position, orientation } = this;
         const distance = vec3.distance(center, position);
         const offset = vec3.fromValues(0, 0, distance);
@@ -369,6 +368,7 @@ export class CadFlightController extends FlightController {
         const tz = (axes.keyboard_ws * scale) + (axes.mouse_wheel * mouseWheelModifier) + (axes.touch_pinch2 * pinchModifier);
         const rx = shouldPivot ? pivotX : rotX;
         const ry = shouldPivot ? pivotY : rotY;
+
         return { tx, ty, tz, rx, ry, shouldPivot };
     }
 }

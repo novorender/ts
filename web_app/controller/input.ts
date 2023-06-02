@@ -310,8 +310,8 @@ export class ControllerInput {
             if (_keys.has("KeyD")) axes.keyboard_ad += delta;
             if (_keys.has("KeyW")) axes.keyboard_ws -= delta;
             if (_keys.has("KeyS")) axes.keyboard_ws += delta;
-            if (_keys.has("KeyQ")) axes.keyboard_qe -= delta;
-            if (_keys.has("KeyE")) axes.keyboard_qe += delta;
+            if (_keys.has("KeyQ")) axes.keyboard_qe += delta;
+            if (_keys.has("KeyE")) axes.keyboard_qe -= delta;
             if (_keys.has("ArrowLeft")) axes.keyboard_arrow_left_right -= delta;
             if (_keys.has("ArrowRight")) axes.keyboard_arrow_left_right = delta;;
             if (_keys.has("ArrowUp")) axes.keyboard_arrow_up_down -= delta;
