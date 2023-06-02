@@ -63,24 +63,28 @@ export class PitchRollYawOrientation {
     private computeRotation(): ReadonlyQuat {
         //ported from https://github.com/BabylonJS/Babylon.js/blob/fe8e43bc526f01a3649241d3819a45455a085461/packages/dev/core/src/Maths/math.vector.ts
         const { _roll, _pitch, _yaw } = this;
-        const halfYaw = glMatrix.toRadian(_yaw) * 0.5;
-        const halfPitch = glMatrix.toRadian(_pitch) * 0.5;
-        const halfRoll = glMatrix.toRadian(_roll) * 0.5;
-
-        const sinRoll = Math.sin(halfRoll);
-        const cosRoll = Math.cos(halfRoll);
-        const sinPitch = Math.sin(halfPitch);
-        const cosPitch = Math.cos(halfPitch);
-        const sinYaw = Math.sin(halfYaw);
-        const cosYaw = Math.cos(halfYaw);
-
-        const x = cosYaw * sinPitch * cosRoll + sinYaw * cosPitch * sinRoll;
-        const y = sinYaw * cosPitch * cosRoll - cosYaw * sinPitch * sinRoll;
-        const z = cosYaw * cosPitch * sinRoll - sinYaw * sinPitch * cosRoll;
-        const w = cosYaw * cosPitch * cosRoll + sinYaw * sinPitch * sinRoll;
-        const flipYZ = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
-        return quat.mul(quat.create(), flipYZ, quat.fromValues(x, y, z, w));
+        return computeRotation(_roll, _pitch, _yaw);
     }
+}
+
+export function computeRotation(roll: number, pitch: number, yaw: number) {
+    const halfYaw = glMatrix.toRadian(yaw) * 0.5;
+    const halfPitch = glMatrix.toRadian(pitch) * 0.5;
+    const halfRoll = glMatrix.toRadian(roll) * 0.5;
+
+    const sinRoll = Math.sin(halfRoll);
+    const cosRoll = Math.cos(halfRoll);
+    const sinPitch = Math.sin(halfPitch);
+    const cosPitch = Math.cos(halfPitch);
+    const sinYaw = Math.sin(halfYaw);
+    const cosYaw = Math.cos(halfYaw);
+
+    const x = cosYaw * sinPitch * cosRoll + sinYaw * cosPitch * sinRoll;
+    const y = sinYaw * cosPitch * cosRoll - cosYaw * sinPitch * sinRoll;
+    const z = cosYaw * cosPitch * sinRoll - sinYaw * sinPitch * cosRoll;
+    const w = cosYaw * cosPitch * cosRoll + sinYaw * sinPitch * sinRoll;
+    const flipYZ = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
+    return quat.mul(quat.create(), flipYZ, quat.fromValues(x, y, z, w));
 }
 
 export function decomposeRotation(rot: ReadonlyQuat) {
