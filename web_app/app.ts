@@ -161,25 +161,11 @@ export class View implements ViewStateContext {
     //* @internal */
     async loadScene(url: string, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit = true): Promise<OctreeSceneConfig> {
         const scene = await downloadScene(url);
+        const stateChanges = { scene };
+        flipState(stateChanges, "GLToCAD");
 
-        const flipYZ = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
-        const { config } = scene;
-        const flippedConfig = {
-            ...config,
-            center: vec3.transformQuat(vec3.create(), config.center, flipYZ),
-            offset: vec3.transformQuat(vec3.create(), config.offset, flipYZ),
-            boundingSphere: {
-                radius: config.boundingSphere.radius,
-                center: vec3.transformQuat(vec3.create(), config.boundingSphere.center, flipYZ),
-            },
-            aabb: {
-                min: vec3.transformQuat(vec3.create(), config.aabb.min, flipYZ),
-                max: vec3.transformQuat(vec3.create(), config.aabb.max, flipYZ),
-            }
-        }
-
-        let center = initPos ?? flippedConfig.center ?? vec3.create();
-        const radius = flippedConfig.boundingSphere.radius ?? 5;
+        let center = initPos ?? scene.config.center ?? vec3.create();
+        const radius = scene.config.boundingSphere.radius ?? 5;
         if (autoFit) {
             this.activeController.autoFit(center, radius);
         }
@@ -190,7 +176,7 @@ export class View implements ViewStateContext {
             camera,
             grid: { origin: center },
         });
-        return flippedConfig;
+        return scene.config;
     }
 
 
