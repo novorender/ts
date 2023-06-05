@@ -100,6 +100,7 @@ export class View implements ViewStateContext {
         this.renderStateGL = defaultRenderState();
         this.renderStateCad = this.createRenderState(this.renderStateGL);
         const input = new ControllerInput(canvas);
+
         this.controllers = {
             flight: new FlightController(this, input),
             orbit: new OrbitController(input),
@@ -209,7 +210,7 @@ export class View implements ViewStateContext {
 
         // find minimum renderered distance
         let distance: number | undefined;
-        if (renderContext) {
+        if (renderContext && renderContext.prevState) {
             renderContext.renderPickBuffers();
             const pick = (await renderContext.buffers.pickBuffers()).pick;
             const depths = await renderContext.getLinearDepths(pick);
