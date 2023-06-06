@@ -72,10 +72,6 @@ export class View implements ViewStateContext {
     updateChanges(changes: RenderStateChanges) {
         this.renderStateCad = mergeRecursive(this.renderStateCad, changes) as RenderState;
         flipState(changes, "CADToGL");
-        if (changes.camera && changes.camera.rotation) {
-            const flipZY = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
-            (changes.camera as any).rotation = quat.mul(quat.create(), flipZY, changes.camera.rotation as quat);
-        }
 
         this.renderStateGL = modifyRenderState(this.renderStateGL, changes);
     }
