@@ -113,6 +113,7 @@ struct DynamicVaryings {
     vec4 color0;
     vec2 texCoord0;
     vec2 texCoord1;
+    vec3 positionVS;
     float linearDepth;
     mat3 tbn; // in world space
     vec3 toCamera; // in world space (camera - position)

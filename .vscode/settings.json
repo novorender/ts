@@ -121,6 +121,7 @@
         "    vec4 color0;\r",
         "    vec2 texCoord0;\r",
         "    vec2 texCoord1;\r",
+        "    vec3 positionVS;\r",
         "    float linearDepth;\r",
         "    mat3 tbn; // in world space\r",
         "    vec3 toCamera; // in world space (camera - position)\r",

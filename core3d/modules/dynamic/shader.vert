@@ -35,6 +35,7 @@ void main() {
     vec3 bitangentLS = cross(normalLS, tangentLS.xyz) * vertexTangent.w;
     varyings.tbn = mat3(tangentLS, bitangentLS, normalLS);
 
+    varyings.positionVS = posVS.xyz;
     varyings.toCamera = cameraPosLS - vertexPosLS;
     varyings.texCoord0 = vertexTexCoord0;
     varyings.texCoord1 = vertexTexCoord1;

@@ -44,7 +44,15 @@ NormalInfo getNormalInfo(vec3 v) {
 
     vec3 n, t, b, ng;
 
-    ng = normalize(varyings.tbn[2]);
+    vec3 axisX = dFdx(varyings.positionVS);
+    vec3 axisY = dFdy(varyings.positionVS);
+    vec3 geometricNormalVS = normalize(cross(axisX, axisY));
+
+    vec3 nrm = varyings.tbn[2];
+    if(dot(nrm, nrm) < 0.5)
+        nrm = camera.viewLocalMatrixNormal * geometricNormalVS;
+    ng = normalize(nrm);
+    // ng = normalize(varyings.tbn[2]);
     t = normalize(t_ - ng * dot(ng, t_));
     b = cross(ng, t);
 
