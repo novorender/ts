@@ -108,7 +108,7 @@ void main() {
         discard;
 #endif
 
-#if defined (DITHER)
+#if defined (DITHER) && (PASS == PASS_COLOR)
     if((rgba.a - 0.5 / 16.0) < dither(gl_FragCoord.xy))
         discard;
 #endif
