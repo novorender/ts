@@ -342,7 +342,7 @@ export class FlightController extends BaseController {
 }
 
 function isTouchEvent(event: MouseEvent | TouchEvent): event is TouchEvent {
-    return TouchEvent && event instanceof TouchEvent;
+    return "TouchEvent" in globalThis && event instanceof TouchEvent;
 }
 
 export class CadFlightController extends FlightController {
