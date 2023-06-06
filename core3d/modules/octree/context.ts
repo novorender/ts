@@ -90,24 +90,31 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
 
         if (renderContext.hasStateChanged({ scene })) {
+            this.loader.init(scene); // abort any pending downloads for previous scene
+
+            // delete existing scene
+            this.rootNode?.dispose();
+            this.rootNode = undefined;
+
+            // update material atlas if url has changed
             const url = scene?.url;
-            this.loader.init(scene); // will abort any pending downloads for previous scene
-            if (url && url != this.url) {
+            if (url != this.url) {
                 this.url = url;
+                if (url) {
+                    const materialData = this.makeMaterialAtlas(state);
+                    if (materialData) {
+                        glUpdateTexture(gl, resources.materialTexture, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: materialData });
+                    }
+                }
+            }
+
+            // start recreation of scene
+            if (scene) {
                 const { config } = scene;
-                this.rootNode?.dispose();
                 const { version } = scene.config;
                 this.version = version;
                 this.rootNode = createSceneRootNode(this, config);
                 this.rootNode.downloadGeometry();
-                const materialData = this.makeMaterialAtlas(state);
-                if (materialData) {
-                    glUpdateTexture(gl, resources.materialTexture, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: materialData });
-                }
-            } else if (!url) {
-                this.url = url;
-                this.rootNode?.dispose();
-                this.rootNode = undefined;
             }
         }
 
@@ -440,8 +447,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     continue;
                 gl.bindVertexArray(prepass ? mesh.vaoPosOnly : mesh.vao);
                 const mode = mesh.materialType == MaterialType.elevation ? ShaderMode.terrain : mesh.drawParams.mode == "POINTS" ? ShaderMode.points : ShaderMode.triangles;
-                // if (mode != ShaderMode.triangles)
-                //     continue; // TODO: switch shader instead. split out lines into separate mode. sort meshes by shader (optimize)
                 if (meshState.mode != mode) {
                     meshState.mode = mode;
                     gl.useProgram(programs[pass][mode]);
