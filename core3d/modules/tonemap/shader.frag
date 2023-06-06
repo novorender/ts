@@ -42,7 +42,7 @@ void main() {
         case tonemapModeColor: {
             color = texture(textures.color, varyings.uv);
             color.rgb = RRTAndODTFit(color.rgb * tonemapping.exposure);
-            color.rgb = linearTosRGB(color.rgb);// * color.a;
+            color.rgb = linearTosRGB(color.rgb);
             break;
         }
         case tonemapModeNormal: {

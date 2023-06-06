@@ -123,7 +123,7 @@ class BackgroundModuleContext implements RenderModuleContext {
         const clearColor = state.background.color ?? [0.33, 0.33, 0.33, 1];
         if (state.camera.kind == "orthographic") {
             glClear(gl, { kind: "COLOR", drawBuffer: 0, color: clearColor });
-        } else if (state.background.url) {
+        } else if (state.background.url && !state.background.color) {
             const { specular } = context.iblTextures;
             glState(gl, {
                 program,

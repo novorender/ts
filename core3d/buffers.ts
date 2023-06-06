@@ -29,8 +29,8 @@ export class RenderBuffers {
     } | undefined;
 
     constructor(readonly gl: WebGL2RenderingContext, readonly width: number, readonly height: number, readonly samples: number, readonly resourceBin: ResourceBin) {
-        // const color = glTexture(gl, { kind: "TEXTURE_2D", width, height, internalFormat: "RGBA16F", type: "HALF_FLOAT", image: null });
         const textures = this.textures = {
+            // color: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "RGBA16F", type: "HALF_FLOAT", image: null }),
             color: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "R11F_G11F_B10F", type: "HALF_FLOAT", image: null }),
             pick: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "RGBA32UI", type: "UNSIGNED_INT", image: null }), // TODO: Pack linearDepth into this buffer instead.
             depth: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "DEPTH_COMPONENT32F", type: "FLOAT", image: null }),
