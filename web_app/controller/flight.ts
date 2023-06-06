@@ -2,7 +2,7 @@
 import { type ReadonlyVec3, vec3, glMatrix, quat, mat3 } from "gl-matrix";
 import { BaseController, type ControllerInitParams, type MutableCameraState, type PickInterface } from "./base";
 import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type BoundingSphere } from "core3d";
-import { PitchRollYawOrientation, clamp } from "./orientation";
+import { PitchRollYawOrientation, clamp, decomposeRotation } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 
 export interface CameraTransformations {
@@ -112,13 +112,30 @@ export class FlightController extends BaseController {
         this.params = mergeRecursive(this.params, params);
     }
 
-    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, targetPitch?: number, targetYaw?: number): void {
+    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void {
         const { orientation, position } = this;
-        this.setFlyTo({
-            remainingFlightTime: flyTime,
-            target: { pos: vec3.clone(targetPosition), pitch: targetPitch ?? orientation.pitch, yaw: targetYaw ?? orientation.yaw },
-            current: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
-        });
+        if (flyTime == 0) {
+            this.position = targetPosition;
+            if (rotation) {
+                this.orientation.decomposeRotation(rotation);
+            }
+            this.changed = true;
+        }
+        else {
+            let targetPitch = orientation.pitch;
+            let targetYaw = orientation.yaw;
+            if (rotation) {
+                const { pitch, yaw } = decomposeRotation(rotation)
+                targetPitch = pitch;
+                targetYaw = yaw;
+            }
+
+            this.setFlyTo({
+                remainingFlightTime: flyTime,
+                target: { pos: vec3.clone(targetPosition), pitch: targetPitch ?? orientation.pitch, yaw: targetYaw ?? orientation.yaw },
+                current: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+            });
+        }
     }
 
     override zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void {
@@ -161,10 +178,10 @@ export class FlightController extends BaseController {
 
     protected getTransformations(): CameraTransformations {
         const { axes } = this;
-        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_1_move_y;
-        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_1_move_x;
-        const pivotX = -axes.mouse_rmb_move_y + axes.touch_3_move_y;
-        const pivotY = -axes.mouse_rmb_move_x + axes.touch_3_move_x;
+        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_2_move_y;
+        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_2_move_x;
+        const pivotX = -axes.mouse_rmb_move_y + axes.touch_1_move_y;
+        const pivotY = -axes.mouse_rmb_move_x + axes.touch_1_move_x;
         const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
 
         const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
@@ -260,7 +277,9 @@ export class FlightController extends BaseController {
     override async touchChanged(event: TouchEvent): Promise<void> {
         const { pointerTable, pickInterface, pivotFingers } = this;
         if (pointerTable.length == pivotFingers && pickInterface) {
-            const sample = await pickInterface.pick(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2), 0);
+            const x = pointerTable.length > 1 ? Math.round((pointerTable[0].x + pointerTable[1].x) / 2) : pointerTable[0].x;
+            const y = pointerTable.length > 1 ? Math.round((pointerTable[0].y + pointerTable[1].y) / 2) : pointerTable[0].y;
+            const sample = await pickInterface.pick(x, y, 0);
             if (sample) {
                 this.setPivot(sample.position, true);
             } else {
@@ -332,14 +351,15 @@ export class CadFlightController extends FlightController {
     constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
         super(pickInterface, input);
         this.pivotButton = MouseButtons.left;
+        this.pivotFingers = 1;
     }
 
     override getTransformations(): CameraTransformations {
         const { axes } = this;
         const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_rmb_move_y + axes.touch_3_move_y;
         const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_rmb_move_x + axes.touch_3_move_x;
-        const pivotX = -axes.mouse_lmb_move_y + axes.touch_1_move_y;
-        const pivotY = -axes.mouse_lmb_move_x + axes.touch_1_move_x;
+        const pivotX = -axes.mouse_lmb_move_y + -axes.touch_1_move_y;
+        const pivotY = -axes.mouse_lmb_move_x + -axes.touch_1_move_x;
         const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
 
         const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
@@ -348,6 +368,7 @@ export class CadFlightController extends FlightController {
         const tz = (axes.keyboard_ws * scale) + (axes.mouse_wheel * mouseWheelModifier) + (axes.touch_pinch2 * pinchModifier);
         const rx = shouldPivot ? pivotX : rotX;
         const ry = shouldPivot ? pivotY : rotY;
+
         return { tx, ty, tz, rx, ry, shouldPivot };
     }
 }

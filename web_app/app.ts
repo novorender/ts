@@ -1,7 +1,7 @@
 
-import { type ReadonlyVec3, vec3, quat, vec4 } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type OctreeSceneConfig, type DeviceProfile, modifyRenderState } from "core3d";
-import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController } from "./controller";
+import { type ReadonlyVec3, vec3, quat, vec4, type ReadonlyQuat } from "gl-matrix";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type OctreeSceneConfig, type DeviceProfile, modifyRenderState, type RenderStatistics } from "core3d";
+import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
 import { flipState } from "./flip";
 
 const coreProfile = {
@@ -32,7 +32,14 @@ export interface AppState {
     controllerState: string
 }
 
-export class WebApp implements ViewStateContext {
+
+interface ViewStatistics {
+    resolution: number,
+    detailBias: number,
+    fps?: number,
+}
+
+export class View implements ViewStateContext {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     readonly alternateUrl = new URL("http://192.168.1.129:9090/").toString();
     public renderContext: RenderContext | undefined;
@@ -46,6 +53,7 @@ export class WebApp implements ViewStateContext {
     activeController: BaseController;
     //* @internal */
     clippingPlanes: RenderStateClippingPlane[] = [];
+    private _statistics: { render: RenderStatistics, view: ViewStatistics } | undefined = undefined;
 
 
     //Drs
@@ -82,16 +90,23 @@ export class WebApp implements ViewStateContext {
         return this.renderStateCad;
     }
 
-    constructor(readonly canvas: HTMLCanvasElement, readonly appState: AppState) {
+    get statistics() {
+        return this._statistics;
+    }
+
+
+    constructor(readonly canvas: HTMLCanvasElement) {
         initCore3D(deviceProfile, canvas, this.setRenderContext);
         this.renderStateGL = defaultRenderState();
         this.renderStateCad = this.createRenderState(this.renderStateGL);
         const input = new ControllerInput(canvas);
+
         this.controllers = {
             flight: new FlightController(this, input),
             orbit: new OrbitController(input),
             ortho: new OrthoController(input),
-            panorama: new PanoramaController(input)
+            panorama: new PanoramaController(input),
+            cad: new CadFlightController(this, input),
         } as const
         this.activeController = this.controllers["flight"];
         this.activeController.attach();
@@ -113,7 +128,7 @@ export class WebApp implements ViewStateContext {
     }
 
     private resize() {
-        const scale = devicePixelRatio * this.resolutionModifier * (this.appState.msaa ? 0.5 : 1); // / 2;
+        const scale = devicePixelRatio * this.resolutionModifier * (this.renderState.output.samplesMSAA > 0 ? 0.5 : 1); // / 2;
         // const scale = 1.0;
         let { width, height } = this.canvas.getBoundingClientRect();
         width = Math.round(width * scale);
@@ -147,25 +162,11 @@ export class WebApp implements ViewStateContext {
     //* @internal */
     async loadScene(url: string, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit = true): Promise<OctreeSceneConfig> {
         const scene = await downloadScene(url);
+        const stateChanges = { scene };
+        flipState(stateChanges, "GLToCAD");
 
-        const flipYZ = quat.fromValues(0.7071067811865475, 0, 0, 0.7071067811865476);
-        const { config } = scene;
-        const flippedConfig = {
-            ...config,
-            center: vec3.transformQuat(vec3.create(), config.center, flipYZ),
-            offset: vec3.transformQuat(vec3.create(), config.offset, flipYZ),
-            boundingSphere: {
-                radius: config.boundingSphere.radius,
-                center: vec3.transformQuat(vec3.create(), config.boundingSphere.center, flipYZ),
-            },
-            aabb: {
-                min: vec3.transformQuat(vec3.create(), config.aabb.min, flipYZ),
-                max: vec3.transformQuat(vec3.create(), config.aabb.max, flipYZ),
-            }
-        }
-
-        let center = initPos ?? flippedConfig.center ?? vec3.create();
-        const radius = flippedConfig.boundingSphere.radius ?? 5;
+        let center = initPos ?? scene.config.center ?? vec3.create();
+        const radius = scene.config.boundingSphere.radius ?? 5;
         if (autoFit) {
             this.activeController.autoFit(center, radius);
         }
@@ -176,7 +177,7 @@ export class WebApp implements ViewStateContext {
             camera,
             grid: { origin: center },
         });
-        return flippedConfig;
+        return scene.config;
     }
 
 
@@ -185,7 +186,6 @@ export class WebApp implements ViewStateContext {
         if (context) {
             const samples = await context.pick(x, y, sampleDiscRadius);
             if (samples.length) {
-                const flipYZ = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
                 const centerSample = samples.reduce((a, b) => a.depth < b.depth ? a : b);
                 const flippedSample = {
                     ...centerSample,
@@ -198,8 +198,8 @@ export class WebApp implements ViewStateContext {
         return undefined;
     }
 
-    async switchCameraController(kind: string) {
-        function isControllerKind(kind: string, controllers: Object): kind is keyof WebApp["controllers"] {
+    async switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }) {
+        function isControllerKind(kind: string, controllers: Object): kind is keyof View["controllers"] {
             return kind in controllers;
         }
         if (!isControllerKind(kind, this.controllers))
@@ -210,7 +210,7 @@ export class WebApp implements ViewStateContext {
 
         // find minimum renderered distance
         let distance: number | undefined;
-        if (renderContext) {
+        if (renderContext && renderContext.prevState) {
             renderContext.renderPickBuffers();
             const pick = (await renderContext.buffers.pickBuffers()).pick;
             const depths = await renderContext.getLinearDepths(pick);
@@ -241,7 +241,7 @@ export class WebApp implements ViewStateContext {
         //     quat.fromMat3(rotation, mat2);
         // }
 
-        activeController.init({ kind, position, rotation, pivot, distance, fovDegrees, fovMeters });
+        activeController.init({ kind, position: initState?.position ?? position, rotation: initState?.rotation ?? rotation, pivot, distance, fovDegrees, fovMeters: initState?.fov ?? fovMeters });
         const changes = activeController.stateChanges();
         this.modifyRenderState({ camera: changes });
     }
@@ -291,9 +291,6 @@ export class WebApp implements ViewStateContext {
             const { renderContext, activeController } = this;
             const renderTime = await RenderContext.nextFrame(renderContext);
             const frameTime = renderTime - prevRenderTime;
-            if (this.appState.quit) {
-                break;
-            }
             this.resize();
             const cameraChanges = activeController.renderStateChanges(this.renderStateCad.camera, renderTime - prevRenderTime);
             if (cameraChanges) {
@@ -341,13 +338,11 @@ export class WebApp implements ViewStateContext {
                 if (prevState !== renderStateGL || renderContext.changed) {
                     prevState = renderStateGL;
                     const statsPromise = renderContext.render(renderStateGL);
-                    //stats
+                    statsPromise.then((stats) => {
+                        this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
+                    });
                     pickRenderState = renderStateGL;
                 }
-            }
-            if (activeController.changed && isIdleFrame) {
-                const controllerState = this.activeController.serialize();
-                this.appState.controllerState = JSON.stringify(controllerState);
             }
 
             if (this.activeController.moving) {
@@ -377,7 +372,7 @@ export interface ViewStateContext {
     activeController: BaseController;
     modifyRenderState(changes: RenderStateChanges): void;
     loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit: boolean): Promise<OctreeSceneConfig>;
-    switchCameraController(kind: string): Promise<void>;
+    switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }): Promise<void>;
 }
 
 /** Background/IBL environment description

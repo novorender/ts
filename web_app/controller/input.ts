@@ -203,7 +203,6 @@ export class ControllerInput {
         const { pointerTable, _touchMovePrev } = this;
         this._fingers = event.touches.length;
         this.callbacks?.touchChanged?.(event);
-        await this.callbacks?.moveBegin?.(event);
 
         switch (pointerTable.length) {
             case 1:
@@ -218,6 +217,7 @@ export class ControllerInput {
                 _touchMovePrev[1] = (pointerTable[0].y + pointerTable[1].y) / 2;
                 break;
         }
+        await this.callbacks?.moveBegin?.(event);
     };
 
     private touchend = (event: TouchEvent) => {
@@ -310,8 +310,8 @@ export class ControllerInput {
             if (_keys.has("KeyD")) axes.keyboard_ad += delta;
             if (_keys.has("KeyW")) axes.keyboard_ws -= delta;
             if (_keys.has("KeyS")) axes.keyboard_ws += delta;
-            if (_keys.has("KeyQ")) axes.keyboard_qe -= delta;
-            if (_keys.has("KeyE")) axes.keyboard_qe += delta;
+            if (_keys.has("KeyQ")) axes.keyboard_qe += delta;
+            if (_keys.has("KeyE")) axes.keyboard_qe -= delta;
             if (_keys.has("ArrowLeft")) axes.keyboard_arrow_left_right -= delta;
             if (_keys.has("ArrowRight")) axes.keyboard_arrow_left_right = delta;;
             if (_keys.has("ArrowUp")) axes.keyboard_arrow_up_down -= delta;
