@@ -63,6 +63,7 @@ export class RenderContext {
     // shared mutable state
     prevState: DerivedRenderState | undefined;
     changed = true; // flag to force a re-render when internal render module state has changed, e.g. on download complete.
+    pause = false; // true to freeze all module updates, e.g. downloading of new geometry etc.
     buffers: RenderBuffers = undefined!; // output render buffers. will be set on first render as part of resize.
     iblTextures: { // these are changed by the background module, once download is complete
         readonly diffuse: WebGLTexture; // irradiance cubemap
@@ -473,8 +474,10 @@ export class RenderContext {
         mat3.copy(this.viewWorldMatrixNormal, derivedState.matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World));
 
         // update modules from state
-        for (const module of this.modules) {
-            module?.update(derivedState);
+        if (!this.pause) {
+            for (const module of this.modules) {
+                module?.update(derivedState);
+            }
         }
 
         // link any updates programs asynchronously here
