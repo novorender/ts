@@ -4,6 +4,7 @@ export interface RenderStateScene {
     readonly url: string;
     readonly config: OctreeSceneConfig;
     readonly filter?: ObjectIdFilter;
+    readonly hide?: RenderStateStaticGeometryKinds;
 }
 
 export interface ObjectIdFilter {
@@ -45,6 +46,14 @@ export interface MaterialProperties {
     readonly shininess: Base64String;
 }
 
+export interface RenderStateStaticGeometryKinds {
+    readonly terrain?: boolean,
+    readonly triangles?: boolean,
+    readonly lines?: boolean,
+    readonly points?: boolean,
+    readonly documents?: boolean,
+};
+
 export interface OctreeSceneConfig {
     readonly kind: "octree";
     readonly id: string;
@@ -60,6 +69,6 @@ export interface OctreeSceneConfig {
     readonly materialProperties: MaterialProperties;
 
     readonly modelWorldMatrix?: ReadonlyMat4; // model -> world space transformation matrix
-    readonly subtrees?: ("terrain" | "triangles" | "lines" | "points" | "documents")[];
+    readonly subtrees?: ("" | "terrain" | "triangles" | "lines" | "points" | "documents")[];
     readonly variants?: ("deviation" | "intensity")[];
 }

@@ -1,7 +1,7 @@
 import type { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNode } from "core3d/scene";
-import { NodeState, type OctreeContext, OctreeNode, Visibility } from "./node";
+import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
 import { glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
@@ -30,6 +30,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     rootNode: OctreeNode | undefined;
     version: string = "";
     projectedSizeSplitThreshold = 1; // baseline node size split threshold = 50% of view height
+    hidden = [false, false, false, false, false] as readonly [boolean, boolean, boolean, boolean, boolean];
 
     constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly uniforms: Uniforms, readonly resources: Resources) {
         this.loader = new NodeLoader(module.nodeLoaderOptions);
@@ -90,31 +91,46 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
 
         if (renderContext.hasStateChanged({ scene })) {
-            this.loader.init(scene); // abort any pending downloads for previous scene
-
-            // delete existing scene
-            this.rootNode?.dispose();
-            this.rootNode = undefined;
-
-            // update material atlas if url has changed
-            const url = scene?.url;
-            if (url != this.url) {
-                this.url = url;
-                if (url) {
-                    const materialData = this.makeMaterialAtlas(state);
-                    if (materialData) {
-                        glUpdateTexture(gl, resources.materialTexture, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: materialData });
+            const { prevState } = renderContext;
+            if (scene) {
+                const { hide } = scene;
+                if (hide != prevState?.scene?.hide) {
+                    if (hide) {
+                        const { terrain, points, lines, triangles, documents } = hide;
+                        this.hidden = [terrain ?? false, points ?? false, lines ?? false, triangles ?? false, documents ?? false];
+                    } else {
+                        this.hidden = [true, false, false, false, false];
                     }
                 }
             }
 
-            // start recreation of scene
-            if (scene) {
-                const { config } = scene;
-                const { version } = scene.config;
-                this.version = version;
-                this.rootNode = createSceneRootNode(this, config);
-                this.rootNode.downloadGeometry();
+            if (scene?.url != this.url || scene?.filter != prevState?.scene?.filter) {
+                this.loader.init(scene); // abort any pending downloads for previous scene
+
+                // delete existing scene
+                this.rootNode?.dispose();
+                this.rootNode = undefined;
+
+                // update material atlas if url has changed
+                const url = scene?.url;
+                if (url != this.url) {
+                    this.url = url;
+                    if (url) {
+                        const materialData = this.makeMaterialAtlas(state);
+                        if (materialData) {
+                            glUpdateTexture(gl, resources.materialTexture, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: materialData });
+                        }
+                    }
+                }
+
+                // initiate loading of scene
+                if (scene) {
+                    const { config } = scene;
+                    const { version } = scene.config;
+                    this.version = version;
+                    this.rootNode = createSceneRootNode(this, config);
+                    this.rootNode.downloadGeometry();
+                }
             }
         }
 

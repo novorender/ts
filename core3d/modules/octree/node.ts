@@ -21,6 +21,15 @@ export const enum NodeState {
     ready,
 }
 
+export const enum NodeGeometryKind {
+    none = -1,
+    terrain,
+    triangles,
+    lines,
+    points,
+    documents,
+};
+
 export interface OctreeContext {
     readonly renderContext: RenderContext;
     readonly loader: NodeLoader;
@@ -28,6 +37,7 @@ export interface OctreeContext {
     readonly version: string;
     readonly debug: boolean;
     readonly localSpaceChanged: boolean;
+    readonly hidden: readonly boolean[]; // corresponds to NodeGeometryKind
 }
 
 export class OctreeNode {
@@ -39,6 +49,7 @@ export class OctreeNode {
     readonly children: OctreeNode[] = [];
     readonly meshes: Mesh[] = [];
     readonly uniformsData;
+    readonly geometryKind: NodeGeometryKind;
     uniforms: WebGLBuffer | undefined;
     private readonly center4: ReadonlyVec4;
     private readonly corners: ReadonlyVec4[];
@@ -77,7 +88,7 @@ export class OctreeNode {
             vec4.fromValues(x1, y1, z1, 1),
         ];
 
-        const errorModifier = OctreeNode.errorModifiers[data.type];
+        const errorModifier = OctreeNode.errorModifiers[data.type]; // TODO: clean this up using NodeGeometryType instead!
 
         // const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         // this.size = Math.pow(2, data.tolerance) * toleranceScale;
@@ -91,6 +102,12 @@ export class OctreeNode {
             max: "vec3",
         });
         this.uniformsData.values.tolerance = Math.pow(2, data.tolerance);
+        const { id } = data;
+        if (id.length > 1) {
+            this.geometryKind = (id.charCodeAt(1) - '0'.charCodeAt(0)) as NodeGeometryKind;
+        } else {
+            this.geometryKind = NodeGeometryKind.none;
+        }
     }
 
     dispose() {
@@ -141,8 +158,9 @@ export class OctreeNode {
     }
 
     shouldSplit(projectedSizeSplitThreshold: number): boolean {
-        const { visibility, projectedSize } = this;
-        return this.isRoot || (visibility != Visibility.none && projectedSize > projectedSizeSplitThreshold);
+        const { visibility, projectedSize, context, geometryKind } = this;
+        const hidden = context.hidden[geometryKind ?? -1] ?? false;
+        return !hidden && (this.isRoot || (visibility != Visibility.none && projectedSize > projectedSizeSplitThreshold));
     }
 
     intersectsPlane(plane: ReadonlyVec4) {
