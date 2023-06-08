@@ -1,8 +1,8 @@
 import type { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNode } from "core3d/scene";
-import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
-import { glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
+import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind, NodeGeometryKindMask } from "./node";
+import { glClear, glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
 import { MaterialType } from "./schema";
 import { getMultiDrawParams } from "./mesh";
 import { type ReadonlyVec3, vec3, vec4 } from "gl-matrix";
@@ -27,7 +27,14 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     localSpaceTranslation = vec3.create() as ReadonlyVec3;
     localSpaceChanged = false;
     url: string | undefined;
-    rootNode: OctreeNode | undefined;
+    // rootNode: OctreeNode | undefined;
+    rootNodes: {
+        readonly [NodeGeometryKind.terrain]?: OctreeNode;
+        readonly [NodeGeometryKind.triangles]?: OctreeNode;
+        readonly [NodeGeometryKind.lines]?: OctreeNode;
+        readonly [NodeGeometryKind.points]?: OctreeNode;
+        readonly [NodeGeometryKind.documents]?: OctreeNode;
+    } = {};
     version: string = "";
     projectedSizeSplitThreshold = 1; // baseline node size split threshold = 50% of view height
     hidden = [false, false, false, false, false] as readonly [boolean, boolean, boolean, boolean, boolean];
@@ -108,8 +115,12 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 this.loader.init(scene); // abort any pending downloads for previous scene
 
                 // delete existing scene
-                this.rootNode?.dispose();
-                this.rootNode = undefined;
+                // this.rootNode?.dispose();
+                // this.rootNode = undefined;
+                for (const rootNode of Object.values(this.rootNodes)) {
+                    rootNode.dispose();
+                }
+                this.rootNodes = {};
 
                 // update material atlas if url has changed
                 const url = scene?.url;
@@ -128,11 +139,24 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     const { config } = scene;
                     const { version } = scene.config;
                     this.version = version;
-                    this.rootNode = createSceneRootNode(this, config);
-                    this.rootNode.downloadGeometry();
+                    const rootNode = createSceneRootNode(this, config);
+                    // this.rootNode = rootNode;
+                    rootNode.downloadGeometry().then(() => {
+                        const zeroNode = rootNode.children[0];
+                        zeroNode.downloadGeometry().then(() => {
+                            const rootNodes: any = {};
+                            for (var child of zeroNode.children) {
+                                rootNodes[child.data.childIndex] = child;
+                                child.downloadGeometry();
+                            }
+                            this.rootNodes = rootNodes;
+                        });
+                    });
                 }
             }
         }
+
+        const { rootNodes } = this;
 
         if (renderContext.hasStateChanged({ localSpaceTranslation })) {
             this.localSpaceChanged = localSpaceTranslation !== this.localSpaceTranslation;
@@ -159,8 +183,10 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const prevObjectIds = renderContext.prevState?.highlights.groups.map(g => g.objectIds) ?? [];
             if (!sequenceEqual(objectIds, prevObjectIds)) {
                 // update highlight vertex attributes
-                for (const node of iterateNodes(this.rootNode)) {
-                    node.applyHighlightGroups(groups);
+                for (const rootNode of Object.values(rootNodes)) {
+                    for (const node of iterateNodes(rootNode)) {
+                        node.applyHighlightGroups(groups);
+                    }
                 }
             }
             const { values } = uniforms.scene;
@@ -186,60 +212,62 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             });
         }
 
-        const { rootNode } = this;
-        if (rootNode) {
+        // TODO: double check that node root nodes actually work
+        const nodes: OctreeNode[] = [];
+        for (const rootNode of Object.values(rootNodes)) {
             rootNode.update(state); // recursively update all nodes' visibility and projectedSize++
 
             // collapse nodes
-            let nodes = [...iterateNodes(rootNode)];
-            for (const node of nodes) {
+            const preCollapseNodes = [...iterateNodes(rootNode)];
+            for (const node of preCollapseNodes) {
                 if (!node.shouldSplit(projectedSizeSplitThreshold * 0.98)) { // add a little "slack" before collapsing back again
                     if (node.state != NodeState.collapsed) {
                         node.dispose(); // collapse node
                     }
                 }
             }
-            nodes = [...iterateNodes(rootNode)];
-            nodes.sort((a, b) => b.projectedSize - a.projectedSize); // sort by descending projected size
+            nodes.push(...iterateNodes(rootNode));
+        }
 
-            const { maxGPUBytes } = deviceProfile.limits; // 1_000_000_000;
-            const { maxPrimitives } = deviceProfile.limits; // 2_000_000;
-            let gpuBytes = 0;
-            let primitives = 0; // # rendered primitives (points, lines and triangles)
-            for (const node of nodes) {
-                if (node.hasGeometry) {
-                    gpuBytes += node.data.gpuBytes;
-                    primitives += node.renderedPrimitives;
-                }
-                if (node.state == NodeState.requestDownload || node.state == NodeState.downloading) {
-                    // include projected resources in the budget
-                    primitives += node.data.primitivesDelta;
-                    gpuBytes += node.data.gpuBytes;
-                }
+        nodes.sort((a, b) => b.projectedSize - a.projectedSize); // sort by descending projected size
+
+        const { maxGPUBytes } = deviceProfile.limits; // 1_000_000_000;
+        const { maxPrimitives } = deviceProfile.limits; // 2_000_000;
+        let gpuBytes = 0;
+        let primitives = 0; // # rendered primitives (points, lines and triangles)
+        for (const node of nodes) {
+            if (node.hasGeometry) {
+                gpuBytes += node.data.gpuBytes;
+                primitives += node.renderedPrimitives;
             }
+            if (node.state == NodeState.requestDownload || node.state == NodeState.downloading) {
+                // include projected resources in the budget
+                primitives += node.data.primitivesDelta;
+                gpuBytes += node.data.gpuBytes;
+            }
+        }
 
-            // split nodes based on camera orientation
-            for (const node of nodes) {
-                if (node.shouldSplit(projectedSizeSplitThreshold)) {
-                    if (node.state == NodeState.collapsed) {
-                        if (primitives + node.data.primitivesDelta <= maxPrimitives && gpuBytes + node.data.gpuBytes <= maxGPUBytes) {
-                            node.state = NodeState.requestDownload;
-                            primitives += node.data.primitivesDelta;
-                            gpuBytes += node.data.gpuBytes;
-                        }
+        // split nodes based on camera orientation
+        for (const node of nodes) {
+            if (node.shouldSplit(projectedSizeSplitThreshold)) {
+                if (node.state == NodeState.collapsed) {
+                    if (primitives + node.data.primitivesDelta <= maxPrimitives && gpuBytes + node.data.gpuBytes <= maxGPUBytes) {
+                        node.state = NodeState.requestDownload;
+                        primitives += node.data.primitivesDelta;
+                        gpuBytes += node.data.gpuBytes;
                     }
                 }
             }
-            sessionStorage.setItem("gpu_bytes", gpuBytes.toLocaleString());
-            sessionStorage.setItem("primitives", primitives.toLocaleString());
+        }
+        sessionStorage.setItem("gpu_bytes", gpuBytes.toLocaleString());
+        sessionStorage.setItem("primitives", primitives.toLocaleString());
 
-            const maxDownloads = 8;
-            let availableDownloads = maxDownloads - this.loader.activeDownloads;
-            for (const node of nodes) {
-                if (availableDownloads > 0 && node.state == NodeState.requestDownload) {
-                    node.downloadGeometry();
-                    availableDownloads--;
-                }
+        const maxDownloads = 8;
+        let availableDownloads = maxDownloads - this.loader.activeDownloads;
+        for (const node of nodes) {
+            if (availableDownloads > 0 && node.state == NodeState.requestDownload) {
+                node.downloadGeometry();
+                availableDownloads--;
             }
         }
         const endTime = performance.now();
@@ -256,8 +284,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0);
     }
 
-    getRenderNodes(projectedSizeSplitThreshold: number): readonly RenderNode[] {
-        const { rootNode } = this;
+    getRenderNodes(projectedSizeSplitThreshold: number, rootNode: OctreeNode | undefined): readonly RenderNode[] {
         // create list of meshes that we can sort by material/state?
         const nodes: RenderNode[] = [];
         function iterate(node: OctreeNode): boolean {
@@ -283,19 +310,17 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
         if (rootNode) {
             iterate(rootNode);
+            nodes.sort((a, b) => a.node.viewDistance - b.node.viewDistance); // sort nodes front to back, i.e. ascending view distance
         }
-        nodes.sort((a, b) => a.node.viewDistance - b.node.viewDistance); // sort nodes front to back, i.e. ascending view distance
         return nodes;
     }
 
     prepass(state: DerivedRenderState) {
-        const { resources, renderContext, rootNode } = this;
+        const { resources, renderContext } = this;
         const { programs } = resources;
         const { gl } = renderContext;
-        if (rootNode) {
-            // let nodes = [...iterateNodes(rootNode)];
-            // nodes.sort((a, b) => a.viewDistance - b.viewDistance); // sort nodes front to back, i.e. ascending view distance
-            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail);
+        for (const rootNode of Object.values(this.rootNodes)) {
+            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, rootNode);
             glState(gl, {
                 program: programs.pre,
                 depth: { test: true },
@@ -310,60 +335,72 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     }
 
     render(state: DerivedRenderState) {
-        const { resources, renderContext, rootNode, debug } = this;
+        const { resources, renderContext, debug } = this;
         const { usePrepass, samplerSingle, samplerMip } = renderContext;
         const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
         const { gl, iblTextures, cameraUniforms, clippingUniforms, outlineUniforms, deviceProfile } = renderContext;
-        if (rootNode) {
-            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail);
-            const { diffuse, specular } = iblTextures;
-            glState(gl, {
-                program: programs.color,
-                uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
-                cull: { enable: true, },
-                depth: {
-                    test: true,
-                    writeMask: true,
-                    func: usePrepass ? "LEQUAL" : "LESS",
-                },
-                textures: [
-                    { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // basecolor - will be overridden by nodes that have textures, e.g. terrain nodes.
-                    { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerNearest },
-                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
-                    { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest },
-                    { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
-                    { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
-                ],
-            });
-            this.applyDefaultAttributeValues();
-            gl.activeTexture(gl.TEXTURE0);
+
+        // glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
+
+        const { diffuse, specular } = iblTextures;
+        glState(gl, {
+            program: programs.color,
+            uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
+            cull: { enable: true, },
+            depth: {
+                test: true,
+                writeMask: true,
+                func: usePrepass ? "LEQUAL" : "LESS",
+            },
+            textures: [
+                { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // basecolor - will be overridden by nodes that have textures, e.g. terrain nodes.
+                { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerNearest },
+                { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
+                { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest },
+                { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
+                { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
+            ],
+        });
+        this.applyDefaultAttributeValues();
+        gl.activeTexture(gl.TEXTURE0);
+
+        for (const rootNode of Object.values(this.rootNodes)) {
+            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, rootNode);
             const meshState: MeshState = {};
             for (const { mask, node } of renderNodes) {
                 this.renderNode(node, mask, meshState, ShaderPass.color);
             }
-            gl.bindTexture(gl.TEXTURE_2D, null);
+            if (rootNode.geometryKind == NodeGeometryKind.terrain && state.terrain.asBackground) {
+                glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
+            }
+        }
 
-            if (state.outlines.enabled && deviceProfile.features.outline) {
-                // transform outline plane into local space
-                const [x, y, z, offset] = state.outlines.plane;
-                const plane = vec4.fromValues(x, y, z, -offset);
+        gl.bindTexture(gl.TEXTURE_2D, null);
 
-                // render clipping outlines
-                glState(gl, {
-                    uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
-                    depth: {
-                        test: false,
-                        writeMask: false
-                    },
-                });
-                for (const { mask, node } of renderNodes) {
-                    if (node.intersectsPlane(plane)) {
-                        this.renderNodeClippingOutline(node, mask);
-                    }
+        if (state.outlines.enabled && deviceProfile.features.outline) {
+            // transform outline plane into local space
+            const [x, y, z, offset] = state.outlines.plane;
+            const plane = vec4.fromValues(x, y, z, -offset);
+
+            // render clipping outlines
+            glState(gl, {
+                uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
+                depth: {
+                    test: false,
+                    writeMask: false
+                },
+            });
+            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
+            for (const { mask, node } of renderNodes) {
+                if (node.intersectsPlane(plane)) {
+                    this.renderNodeClippingOutline(node, mask);
                 }
             }
+        }
 
-            if (debug) {
+        if (debug) {
+            for (const rootNode of Object.values(this.rootNodes)) {
+                const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, rootNode);
                 glState(gl, {
                     program: programs.debug,
                     uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
@@ -400,14 +437,14 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     }
 
     pick() {
-        const { resources, renderContext, rootNode } = this;
+        const { resources, renderContext } = this;
         const { gl, cameraUniforms, clippingUniforms, outlineUniforms, samplerSingle, samplerMip, iblTextures, prevState, deviceProfile } = renderContext;
         const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
         const { diffuse, specular } = iblTextures;
         const state = prevState!;
 
-        if (rootNode) {
-            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail)
+        for (const rootNode of Object.values(this.rootNodes)) {
+            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, rootNode);
             glState(gl, {
                 program: programs.pick,
                 uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
@@ -540,15 +577,17 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     }
 
     contextLost() {
-        const { loader, rootNode } = this;
+        const { loader, rootNodes } = this;
         loader.abortAll();
-        rootNode?.dispose(); // consider retaining submesh js data
+        for (const rootNode of Object.values(rootNodes)) {
+            rootNode?.dispose(); // consider retaining submesh js data
+        }
     }
 
     dispose() {
         this.contextLost();
         this.resources.bin.dispose();
-        this.rootNode = undefined;
+        this.rootNodes = {};
     }
 
     makeMaterialAtlas(state: DerivedRenderState) {
@@ -656,6 +695,7 @@ const enum VertexAttributeIds {
     objectId,
     texCoord0,
     color0,
+    projectedPos,
     deviations,
     highlight,
 };

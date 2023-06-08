@@ -121,9 +121,7 @@ class BackgroundModuleContext implements RenderModuleContext {
         const { gl, cameraUniforms, samplerSingle, samplerMip } = context;
 
         const clearColor = state.background.color ?? [0.33, 0.33, 0.33, 1];
-        if (state.camera.kind == "orthographic") {
-            glClear(gl, { kind: "COLOR", drawBuffer: 0, color: clearColor });
-        } else if (state.background.url && !state.background.color) {
+        if ((!state.background.color || state.background.url) && state.camera.kind != "orthographic") {
             const { specular } = context.iblTextures;
             glState(gl, {
                 program,

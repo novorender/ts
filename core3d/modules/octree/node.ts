@@ -28,6 +28,17 @@ export const enum NodeGeometryKind {
     lines,
     points,
     documents,
+    numberOf,
+};
+
+export const enum NodeGeometryKindMask {
+    none = 0,
+    terrain = 1 << NodeGeometryKind.terrain,
+    triangles = 1 << NodeGeometryKind.triangles,
+    lines = 1 << NodeGeometryKind.lines,
+    points = 1 << NodeGeometryKind.points,
+    documents = 1 << NodeGeometryKind.documents,
+    all = terrain | triangles | lines | points | documents,
 };
 
 export interface OctreeContext {
@@ -66,7 +77,7 @@ export class OctreeNode {
         [NodeType.Textured]: .08,
     };
 
-    constructor(readonly context: OctreeContext, readonly data: NodeData) {
+    constructor(readonly context: OctreeContext, readonly data: NodeData, parent: OctreeNode | undefined) {
         // create uniform buffer
         const { sphere, box } = data.bounds;
         const { center, radius } = sphere;
@@ -103,10 +114,14 @@ export class OctreeNode {
         });
         this.uniformsData.values.tolerance = Math.pow(2, data.tolerance);
         const { id } = data;
-        if (id.length > 1) {
-            this.geometryKind = (id.charCodeAt(1) - '0'.charCodeAt(0)) as NodeGeometryKind;
+        if (parent && parent.geometryKind != NodeGeometryKind.none) {
+            this.geometryKind = parent.geometryKind;
         } else {
-            this.geometryKind = NodeGeometryKind.none;
+            if (id.length > 1) {
+                this.geometryKind = (id.charCodeAt(1) - '0'.charCodeAt(0)) as NodeGeometryKind;
+            } else {
+                this.geometryKind = NodeGeometryKind.none;
+            }
         }
     }
 
@@ -312,7 +327,7 @@ export class OctreeNode {
             if (payload) {
                 const { childInfos, geometry } = payload;
                 for (const data of childInfos) {
-                    const child = new OctreeNode(context, data);
+                    const child = new OctreeNode(context, data, this);
                     children.push(child);
                 }
                 this.state = NodeState.ready;

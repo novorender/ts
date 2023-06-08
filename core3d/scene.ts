@@ -15,7 +15,7 @@ export async function downloadScene(url: string, abortController?: AbortControll
 
 export function createSceneRootNode(context: OctreeContext, config: OctreeSceneConfig) {
     const data = rootNodeData(config);
-    return new OctreeNode(context, data);
+    return new OctreeNode(context, data, undefined);
 }
 
 function rootNodeData(config: OctreeSceneConfig): NodeData {
