@@ -10,6 +10,7 @@ import { NodeLoader } from "./loader";
 import { computeGradientColors, gradientRange } from "./gradient";
 // import { BufferFlags } from "@novorender/core3d/buffers";
 import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass } from "./module";
+import { createHighlightsMap } from "./highlights";
 
 const enum UBO { camera, clipping, scene, node };
 
@@ -183,10 +184,13 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const prevObjectIds = renderContext.prevState?.highlights.groups.map(g => g.objectIds) ?? [];
             if (!sequenceEqual(objectIds, prevObjectIds)) {
                 // update highlight vertex attributes
+                const nodes: OctreeNode[] = [];
                 for (const rootNode of Object.values(rootNodes)) {
-                    for (const node of iterateNodes(rootNode)) {
-                        node.applyHighlightGroups(groups);
-                    }
+                    nodes.push(...iterateNodes(rootNode));
+                }
+                const highlights = createHighlightsMap(groups, nodes);
+                for (const node of nodes) {
+                    node.applyHighlights(highlights);
                 }
             }
             const { values } = uniforms.scene;
@@ -633,10 +637,10 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
         }
     }
 
-    function copyMatrix(index: number, rgbaTransform: RGBATransform) {
+    function copyMatrix(index: number, rgbaTransform: RGBATransform | null) {
         for (let col = 0; col < numColorMatrixCols; col++) {
             for (let row = 0; row < numColorMatrixRows; row++) {
-                colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform[col + row * numColorMatrixCols];
+                colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform?.[col + row * numColorMatrixCols] ?? 0;
             }
         }
     }

@@ -1,11 +1,11 @@
 import { mat4, type ReadonlyVec3, type ReadonlyVec4, vec3, vec4 } from "gl-matrix";
-import { glUBOProxy, glUpdateBuffer, type DrawMode } from "webgl2";
+import { glUBOProxy, glUpdateBuffer } from "webgl2";
 import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup } from "core3d";
-import { Downloader } from "./download";
-import { createMeshes, deleteMesh, type Mesh, meshPrimitiveCount, updateMeshHighlightGroups } from "./mesh";
+import { createMeshes, deleteMesh, type Mesh, meshPrimitiveCount, updateMeshHighlights } from "./mesh";
 import { NodeType, type NodeData } from "./parser";
 import { NodeLoader } from "./loader";
 import { ResourceBin } from "core3d/resource";
+import { createHighlightsMap } from "./highlights";
 
 export const enum Visibility {
     undefined,
@@ -352,10 +352,19 @@ export class OctreeNode {
     applyHighlightGroups(groups: readonly RenderStateHighlightGroup[]) {
         const { meshes } = this;
         if (meshes) {
+            const highlights = createHighlightsMap(groups, [this]);
             const { gl } = this.context.renderContext;
             for (const mesh of meshes) {
-                updateMeshHighlightGroups(gl, mesh, groups);
+                updateMeshHighlights(gl, mesh, highlights);
             }
+        }
+    }
+
+    applyHighlights(highlights: Map<number, number>) {
+        const { context, meshes } = this;
+        const { gl } = context.renderContext;
+        for (const mesh of meshes) {
+            updateMeshHighlights(gl, mesh, highlights);
         }
     }
 }

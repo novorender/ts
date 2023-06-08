@@ -1,6 +1,4 @@
 import { glUpdateBuffer, type DrawParams, type VertexAttribute, type DrawParamsArraysMultiDraw, type DrawParamsElementsMultiDraw } from "webgl2";
-import type { RenderStateHighlightGroup } from "core3d";
-import { mergeSorted } from "core3d/iterate";
 import type { MeshDrawRange, MeshObjectRange, NodeGeometry, VertexAttributeData } from "./parser";
 import { MaterialType } from "./schema";
 import { ResourceBin } from "core3d/resource";
@@ -64,33 +62,12 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
     }
 }
 
-// this functon returns all the objectIDs from highlight groups in ascending order, along with their respective highlight index.
-// brute force iteration is slower than using maps or lookup arrays, but requires less memory.
-function traverseObjectIds(groups: readonly RenderStateHighlightGroup[]) {
-    const iterators = groups.map(g => g.objectIds[Symbol.iterator]());
-    return mergeSorted(iterators);
-}
-
-// this is a potentially slow, but memory efficient way to update highlight vertex attributes
-export function updateMeshHighlightGroups(gl: WebGL2RenderingContext, mesh: Mesh, groups: readonly RenderStateHighlightGroup[]) {
+export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, highlights: Map<number, number>) {
     if (mesh.highlightVB) {
         const highlightBuffer = new Uint8Array(mesh.numVertices);
-        if (groups.length > 0) {
-            const iterator = mesh.objectRanges[Symbol.iterator]();
-            let currentRange = iterator.next().value as MeshObjectRange | undefined;
-            for (const { value, sourceIndex } of traverseObjectIds(groups)) {
-                while (currentRange && currentRange.objectId < value) {
-                    currentRange = iterator.next().value as MeshObjectRange | undefined;
-                }
-                if (!currentRange) {
-                    break;
-                }
-                while (currentRange && currentRange.objectId == value) {
-                    const { beginVertex, endVertex } = currentRange;
-                    highlightBuffer.fill(sourceIndex + 1, beginVertex, endVertex);
-                    currentRange = iterator.next().value as MeshObjectRange | undefined;
-                }
-            }
+        for (const { objectId, beginVertex, endVertex } of mesh.objectRanges) {
+            const highlight = highlights.get(objectId) ?? 0;
+            highlightBuffer.fill(highlight, beginVertex, endVertex);
         }
         glUpdateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: highlightBuffer, targetBuffer: mesh.highlightVB });
     }

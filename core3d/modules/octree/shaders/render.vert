@@ -65,6 +65,10 @@ void main() {
         // Convert radius to window coordinates
     varyings.radius = max(1.0, gl_PointSize * 0.5);
     varyings.deviation = deviation;
+#elif defined (HIGHLIGHT)
+    if(vertexHighlight == 0xFFU) {
+        gl_Position = vec4(0); // hide 0xff group by outputing degenerate triangles/lines
+    }
 #endif
 
     varyings.positionVS = posVS.xyz;
