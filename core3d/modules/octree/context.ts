@@ -105,7 +105,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 if (hide != prevState?.scene?.hide) {
                     if (hide) {
                         const { terrain, triangles, lines, points, documents } = hide;
-                        this.hidden = [terrain ?? false, points ?? false, lines ?? false, triangles ?? false, documents ?? false];
+                        this.hidden = [terrain ?? false, triangles ?? false, lines ?? false, points ?? false, documents ?? false];
                     } else {
                         this.hidden = [true, false, false, false, false];
                     }
