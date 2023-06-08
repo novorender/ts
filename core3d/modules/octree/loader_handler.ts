@@ -130,7 +130,7 @@ export class LoaderHandler {
             if (buffer) {
                 downloads.delete(id);
                 // const filterObjectIds = (objectIds: Uint32Array) => (Promise.resolve(objectIds));
-                const filterObjectIds = params.applyFilter ? (objectIds: Uint32Array) => (this.requestFilter(id, objectIds)) : undefined;
+                const filterObjectIds = applyFilter ? (objectIds: Uint32Array) => (this.requestFilter(id, objectIds)) : undefined;
                 const { childInfos, geometry } = await parseNode(id, separatePositionsBuffer, enableOutlines, version, buffer, filterObjectIds);
                 const loadedMsg: LoadedMessage = { kind: "loaded", id, childInfos, geometry };
                 const transfer: Transferable[] = [];
