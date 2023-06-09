@@ -1,6 +1,6 @@
 import type { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
-import { createSceneRootNode } from "core3d/scene";
+import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind, NodeGeometryKindMask } from "./node";
 import { glClear, glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
 import { MaterialType } from "./schema";
@@ -19,6 +19,14 @@ interface RenderNode {
     readonly node: OctreeNode;
 };
 
+export interface RootNodes {
+    readonly [NodeGeometryKind.terrain]?: OctreeNode;
+    readonly [NodeGeometryKind.triangles]?: OctreeNode;
+    readonly [NodeGeometryKind.lines]?: OctreeNode;
+    readonly [NodeGeometryKind.points]?: OctreeNode;
+    readonly [NodeGeometryKind.documents]?: OctreeNode;
+}
+
 export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly loader: NodeLoader;
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
@@ -29,13 +37,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     localSpaceChanged = false;
     url: string | undefined;
     // rootNode: OctreeNode | undefined;
-    rootNodes: {
-        readonly [NodeGeometryKind.terrain]?: OctreeNode;
-        readonly [NodeGeometryKind.triangles]?: OctreeNode;
-        readonly [NodeGeometryKind.lines]?: OctreeNode;
-        readonly [NodeGeometryKind.points]?: OctreeNode;
-        readonly [NodeGeometryKind.documents]?: OctreeNode;
-    } = {};
+    rootNodes: RootNodes = {};
     version: string = "";
     projectedSizeSplitThreshold = 1; // baseline node size split threshold = 50% of view height
     hidden = [false, false, false, false, false] as readonly [boolean, boolean, boolean, boolean, boolean];
@@ -140,18 +142,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     const { config } = scene;
                     const { version } = scene.config;
                     this.version = version;
-                    const rootNode = createSceneRootNode(this, config);
-                    // this.rootNode = rootNode;
-                    rootNode.downloadGeometry().then(() => {
-                        const zeroNode = rootNode.children[0];
-                        zeroNode.downloadGeometry().then(() => {
-                            const rootNodes: any = {};
-                            for (var child of zeroNode.children) {
-                                rootNodes[child.data.childIndex] = child;
-                                child.downloadGeometry();
-                            }
-                            this.rootNodes = rootNodes;
-                        });
+                    createSceneRootNodes(this, config).then(rootNodes => {
+                        this.rootNodes = rootNodes;
                     });
                 }
             }
@@ -270,7 +262,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         let availableDownloads = maxDownloads - this.loader.activeDownloads;
         for (const node of nodes) {
             if (availableDownloads > 0 && node.state == NodeState.requestDownload) {
-                node.downloadGeometry();
+                node.downloadNode();
                 availableDownloads--;
             }
         }

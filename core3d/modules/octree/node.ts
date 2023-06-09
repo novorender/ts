@@ -318,7 +318,7 @@ export class OctreeNode {
         }
     }
 
-    async downloadGeometry() {
+    async downloadNode(createGeometry = true) {
         try {
             const { context, children, meshes, resourceBin } = this;
             const { renderContext, loader, version } = context;
@@ -331,14 +331,16 @@ export class OctreeNode {
                     children.push(child);
                 }
                 this.state = NodeState.ready;
-                meshes.push(...createMeshes(resourceBin, geometry));
-                this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
-                glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
-                const groups = renderContext.prevState?.highlights.groups;
-                if (groups && groups.length) {
-                    this.applyHighlightGroups(groups);
+                if (createGeometry) {
+                    meshes.push(...createMeshes(resourceBin, geometry));
+                    this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
+                    glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
+                    const groups = renderContext.prevState?.highlights.groups;
+                    if (groups && groups.length) {
+                        this.applyHighlightGroups(groups);
+                    }
+                    renderContext.changed = true;
                 }
-                renderContext.changed = true;
             }
         } catch (error: any) {
             if (error.name != "AbortError") {

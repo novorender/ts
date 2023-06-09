@@ -1,7 +1,9 @@
 import type { OctreeSceneConfig, RenderStateScene } from ".";
 import { NodeType, type NodeData } from "./modules/octree/parser";
 import { OctreeNode, type OctreeContext } from "./modules/octree/node";
+import type { RootNodes } from "./modules/octree";
 
+type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
 export async function downloadScene(url: string, abortController?: AbortController): Promise<RenderStateScene> {
     if (!abortController)
@@ -13,9 +15,18 @@ export async function downloadScene(url: string, abortController?: AbortControll
     return { url: url.toString(), config } as const;
 }
 
-export function createSceneRootNode(context: OctreeContext, config: OctreeSceneConfig) {
+export async function createSceneRootNodes(context: OctreeContext, config: OctreeSceneConfig): Promise<RootNodes> {
     const data = rootNodeData(config);
-    return new OctreeNode(context, data, undefined);
+    const root = new OctreeNode(context, data, undefined);
+    // this.rootNode = rootNode;
+    await root.downloadNode(false);
+    const zeroNode = root.children[0];
+    await zeroNode.downloadNode(false);
+    const rootNodes: Mutable<RootNodes> = {};
+    for (var child of zeroNode.children) {
+        rootNodes[child.data.childIndex as keyof RootNodes] = child;
+    }
+    return rootNodes;
 }
 
 function rootNodeData(config: OctreeSceneConfig): NodeData {
