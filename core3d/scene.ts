@@ -1,6 +1,6 @@
 import type { OctreeSceneConfig, RenderStateScene } from ".";
 import { NodeType, type NodeData } from "./modules/octree/parser";
-import { OctreeNode, type OctreeContext } from "./modules/octree/node";
+import { OctreeNode, type OctreeContext, NodeGeometryKind } from "./modules/octree/node";
 import type { RootNodes } from "./modules/octree";
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
@@ -17,15 +17,25 @@ export async function downloadScene(url: string, abortController?: AbortControll
 
 export async function createSceneRootNodes(context: OctreeContext, config: OctreeSceneConfig): Promise<RootNodes> {
     const data = rootNodeData(config);
-    const root = new OctreeNode(context, data, undefined);
-    // this.rootNode = rootNode;
-    await root.downloadNode(false);
-    const zeroNode = root.children[0];
-    await zeroNode.downloadNode(false);
+    // const subtrees = config.subtrees?.map((st, i) => ([st, i] as const))?.filter(([st]) => st.length > 0) ?? [["triangles", NodeGeometryKind.triangles]];
+    let root = new OctreeNode(context, data, undefined);
     const rootNodes: Mutable<RootNodes> = {};
-    for (var child of zeroNode.children) {
+    await root.downloadNode(false);
+    root = root.children[0];
+    await root.downloadNode(false); // extract subtrees
+    const promises: Promise<void>[] = [];
+    for (var child of root.children) {
         rootNodes[child.data.childIndex as keyof RootNodes] = child;
+        const promise = child.downloadNode();
+        promises.push(promise);
     }
+    await Promise.all(promises);
+    // if (subtrees.length > 1) {
+    // } else if (subtrees.length == 1) {
+    //     console.assert(root.children.length == 1);
+    //     const kind = subtrees[0][1] as keyof RootNodes;
+    //     rootNodes[kind] = root;
+    // }
     return rootNodes;
 }
 

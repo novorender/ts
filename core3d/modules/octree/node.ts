@@ -77,7 +77,7 @@ export class OctreeNode {
         [NodeType.Textured]: .08,
     };
 
-    constructor(readonly context: OctreeContext, readonly data: NodeData, parent: OctreeNode | undefined) {
+    constructor(readonly context: OctreeContext, readonly data: NodeData, readonly parent: OctreeNode | undefined) {
         // create uniform buffer
         const { sphere, box } = data.bounds;
         const { center, radius } = sphere;
@@ -114,15 +114,7 @@ export class OctreeNode {
         });
         this.uniformsData.values.tolerance = Math.pow(2, data.tolerance);
         const { id } = data;
-        if (parent && parent.geometryKind != NodeGeometryKind.none) {
-            this.geometryKind = parent.geometryKind;
-        } else {
-            if (id.length > 1) {
-                this.geometryKind = (id.charCodeAt(1) - '0'.charCodeAt(0)) as NodeGeometryKind;
-            } else {
-                this.geometryKind = NodeGeometryKind.none;
-            }
-        }
+        this.geometryKind = id.length >= 2 ? (id.charCodeAt(1) - "0".charCodeAt(0)) as NodeGeometryKind : parent?.geometryKind ?? NodeGeometryKind.none;
     }
 
     dispose() {
@@ -147,7 +139,7 @@ export class OctreeNode {
     }
 
     get isRoot() {
-        return this.id.length < 2;
+        return !this.parent;
     }
 
     get path() {
@@ -271,7 +263,8 @@ export class OctreeNode {
         }
 
         if (context.localSpaceChanged || !this.hasValidModelLocalMatrix) {
-            const { offset, scale } = data;
+            let { offset, scale } = data;
+            // scale *= 2;
             const [ox, oy, oz] = offset;
             const [tx, ty, tz] = state.localSpaceTranslation;
             const modelLocalMatrix = mat4.fromValues(
@@ -318,7 +311,7 @@ export class OctreeNode {
         }
     }
 
-    async downloadNode(createGeometry = true) {
+    async downloadNode(useGeometry = true) {
         try {
             const { context, children, meshes, resourceBin } = this;
             const { renderContext, loader, version } = context;
@@ -327,11 +320,10 @@ export class OctreeNode {
             if (payload) {
                 const { childInfos, geometry } = payload;
                 for (const data of childInfos) {
-                    const child = new OctreeNode(context, data, this);
+                    const child = new OctreeNode(context, data, useGeometry ? this : undefined);
                     children.push(child);
                 }
-                this.state = NodeState.ready;
-                if (createGeometry) {
+                if (useGeometry) {
                     meshes.push(...createMeshes(resourceBin, geometry));
                     this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
                     glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
@@ -341,6 +333,7 @@ export class OctreeNode {
                     }
                     renderContext.changed = true;
                 }
+                this.state = NodeState.ready;
             }
         } catch (error: any) {
             if (error.name != "AbortError") {
