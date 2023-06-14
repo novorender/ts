@@ -716,6 +716,8 @@ export class RenderContext {
         if (y1 > width) y1 = width;
         const samples: PickSample[] = [];
         const { isOrtho, viewClipMatrix, viewWorldMatrix, viewWorldMatrixNormal } = this;
+        const f16NaNMask = 0x7c00;
+
         for (let iy = y0; iy < y1; iy++) {
             const dy = iy - py;
             for (let ix = x0; ix < x1; ix++) {
@@ -730,7 +732,7 @@ export class RenderContext {
                     const nx = wasm.float32(nx16);
                     const ny = wasm.float32(ny16);
                     const nz = wasm.float32(nz16);
-                    const deviation = wasm.float32(deviation16);
+                    const deviation = (deviation16 & f16NaNMask) != f16NaNMask ? wasm.float32(deviation16) : undefined;
 
                     // compute normal
                     // compute clip space x,y coords
@@ -768,7 +770,7 @@ export interface PickSample {
     readonly position: ReadonlyVec3;
     readonly normal: ReadonlyVec3;
     readonly objectId: number;
-    readonly deviation: number;
+    readonly deviation?: number;
     readonly depth: number;
 };
 

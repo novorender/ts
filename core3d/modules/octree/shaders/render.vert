@@ -45,9 +45,10 @@ void main() {
     vec4 posVS = camera.localViewMatrix * posLS;
     gl_Position = camera.viewClipMatrix * posVS;
     vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
+    float deviation = uintBitsToFloat(0x7f800000U); // +inf
 
 #if (MODE == MODE_POINTS)
-    float deviation = vertexDeviations[scene.deviationIndex];
+    deviation = vertexDeviations[scene.deviationIndex];
     if(scene.deviationFactor > 0.) {
         vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
         color = mix(vertexColor0, gradientColor, scene.deviationFactor);
@@ -64,7 +65,6 @@ void main() {
 
         // Convert radius to window coordinates
     varyings.radius = max(1.0, gl_PointSize * 0.5);
-    varyings.deviation = deviation;
 #elif defined (HIGHLIGHT)
     if(vertexHighlight == 0xFFU) {
         gl_Position = vec4(0); // hide 0xff group by outputing degenerate triangles/lines
@@ -74,6 +74,7 @@ void main() {
     varyings.positionVS = posVS.xyz;
     varyings.normalVS = normalize(camera.localViewMatrixNormal * vertexNormal);
     varyings.texCoord0 = vertexTexCoord0;
+    varyings.deviation = deviation;
     varyings.elevation = posLS.y;
     varyingsFlat.color = color;
     varyingsFlat.objectId = vertexObjectId;
