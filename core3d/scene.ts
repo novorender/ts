@@ -1,4 +1,4 @@
-import type { OctreeSceneConfig, RenderStateScene } from ".";
+import type { SceneConfig, RenderStateScene } from ".";
 import { NodeType, type NodeData } from "./modules/octree/parser";
 import { OctreeNode, type OctreeContext, NodeGeometryKind } from "./modules/octree/node";
 import type { RootNodes } from "./modules/octree";
@@ -11,11 +11,11 @@ export async function downloadScene(url: string, abortController?: AbortControll
     const { signal } = abortController;
     const fullUrl = new URL(url);
     fullUrl.pathname += "config.json";
-    const config = (await download(fullUrl, "json", signal)) as OctreeSceneConfig;
+    const config = (await download(fullUrl, "json", signal)) as SceneConfig;
     return { url: url.toString(), config } as const;
 }
 
-export async function createSceneRootNodes(context: OctreeContext, config: OctreeSceneConfig): Promise<RootNodes> {
+export async function createSceneRootNodes(context: OctreeContext, config: SceneConfig): Promise<RootNodes> {
     const data = rootNodeData(config);
     // const subtrees = config.subtrees?.map((st, i) => ([st, i] as const))?.filter(([st]) => st.length > 0) ?? [["triangles", NodeGeometryKind.triangles]];
     let root = new OctreeNode(context, data, undefined);
@@ -39,7 +39,7 @@ export async function createSceneRootNodes(context: OctreeContext, config: Octre
     return rootNodes;
 }
 
-function rootNodeData(config: OctreeSceneConfig): NodeData {
+function rootNodeData(config: SceneConfig): NodeData {
     const { version, rootByteSize, offset, scale, aabb, boundingSphere } = config;
     const bounds = { box: aabb, sphere: boundingSphere } as const;
     return {
@@ -63,7 +63,7 @@ function rootNodeData(config: OctreeSceneConfig): NodeData {
 async function download<T extends "arrayBuffer" | "json">(url: URL, kind: T, signal: AbortSignal) {
     const response = await fetch(url, { mode: "cors", signal });
     if (response.ok) {
-        return (await response[kind]()) as T extends "arrayBuffer" ? ArrayBuffer : OctreeSceneConfig;
+        return (await response[kind]()) as T extends "arrayBuffer" ? ArrayBuffer : SceneConfig;
     } else {
         throw new Error(`HTTP Error:${response.status} ${response.status}`);
     }

@@ -2,7 +2,7 @@ import type { ReadonlyVec3, ReadonlyMat4 } from "gl-matrix";
 
 export interface RenderStateScene {
     readonly url: string;
-    readonly config: OctreeSceneConfig;
+    readonly config: SceneConfig;
     readonly filter?: ObjectIdFilter;
     readonly hide?: RenderStateStaticGeometryKinds;
 }
@@ -54,7 +54,7 @@ export interface RenderStateStaticGeometryKinds {
     readonly documents?: boolean,
 };
 
-export interface OctreeSceneConfig {
+export interface SceneConfig {
     readonly kind: "octree";
     readonly id: string;
     readonly version: string;

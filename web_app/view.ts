@@ -1,6 +1,6 @@
 
 import { type ReadonlyVec3, vec3, quat, vec4, type ReadonlyQuat } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type OctreeSceneConfig, type DeviceProfile, modifyRenderState, type RenderStatistics } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, type DeviceProfile, modifyRenderState, type RenderStatistics, type ObjectIdFilter } from "core3d";
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
 import { flipState } from "./flip";
 
@@ -26,25 +26,12 @@ const deviceProfile = {
     framerateTarget: 30 as number
 } as const;
 
-export interface AppState {
-    readonly msaa: number,
-    readonly quit: boolean,
-    controllerState: string
-}
-
-
-interface ViewStatistics {
-    resolution: number,
-    detailBias: number,
-    fps?: number,
-}
-
-export class View implements ViewStateContext {
+export class View {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     readonly alternateUrl = new URL("http://192.168.1.129:9090/").toString();
     public renderContext: RenderContext | undefined;
-    private renderStateGL: RenderState;
-    private renderStateCad: RenderState;
+    protected renderStateGL: RenderState;
+    protected renderStateCad: RenderState;
     private stateChanges: RenderStateChanges | undefined;
 
     //* @internal */
@@ -53,11 +40,11 @@ export class View implements ViewStateContext {
     activeController: BaseController;
     //* @internal */
     clippingPlanes: RenderStateClippingPlane[] = [];
-    private _statistics: { render: RenderStatistics, view: ViewStatistics } | undefined = undefined;
+    private _statistics: { readonly render: RenderStatistics, readonly view: ViewStatistics } | undefined = undefined;
 
 
-    //Drs
-    private resolutionModifier: number = deviceProfile.renderResolution; //For dynamic resolution scaling
+    // dynamic resolution scaling
+    private resolutionModifier: number = deviceProfile.renderResolution;
     private drsHighInterval = (1000 / deviceProfile.framerateTarget) * 1.2;
     private drsLowInterval = (1000 / deviceProfile.framerateTarget) * 0.9;
     private lastQualityAdjustTime = 0;
@@ -72,7 +59,6 @@ export class View implements ViewStateContext {
     updateChanges(changes: RenderStateChanges) {
         this.renderStateCad = mergeRecursive(this.renderStateCad, changes) as RenderState;
         flipState(changes, "CADToGL");
-
         this.renderStateGL = modifyRenderState(this.renderStateGL, changes);
     }
 
@@ -90,7 +76,6 @@ export class View implements ViewStateContext {
         return this._statistics;
     }
 
-
     constructor(readonly canvas: HTMLCanvasElement) {
         initCore3D(deviceProfile, canvas, this.setRenderContext);
         this.renderStateGL = defaultRenderState();
@@ -106,16 +91,10 @@ export class View implements ViewStateContext {
         } as const
         this.activeController = this.controllers["flight"];
         this.activeController.attach();
-        this.activeController.updateParams({ proportionalCameraSpeed: { min: 0.2, max: 1000 } });
+        this.activeController.updateParams({ proportionalCameraSpeed: { min: 0.2, max: 1000 } }); // TL: why?
 
         const resizeObserver = new ResizeObserver(() => { this.resize(); });
         resizeObserver.observe(canvas);
-
-        this.clippingPlanes = [
-            { normalOffset: [1, 0, 0, 0], color: [1, 0, 0, 0.5] },
-            { normalOffset: [0, 1, 0, 0], color: [0, 1, 0, 0.5] },
-            { normalOffset: [0, 0, 1, 0], color: [0, 0, 1, 0.5] },
-        ];
     }
 
     dispose() {
@@ -132,14 +111,16 @@ export class View implements ViewStateContext {
         const { output } = this.renderStateGL;
         if (width != output.width || height != output.height) {
             this.updateChanges({ output: { width, height } });
-            // this.modifyRenderState({ output: { width, height } });
         }
     }
 
     /**
      * Retrieve list of available background/IBL environments.
      * @public
-     * @param indexUrl The absolute or relative url of the index.json file. Relative url will be relative to the novorender api script url. If undefined, "/assets/env/index.json" will be used by default.
+     * @param indexUrl
+     * The absolute or relative url of the index.json file.
+     * Relative url will be relative to the novorender api script url.
+     * If undefined, "/assets/env/index.json" will be used by default.
      * @returns A promise of a list of environments.
      */
     async availableEnvironments(indexUrl?: string): Promise<EnvironmentDescription[]> {
@@ -155,27 +136,20 @@ export class View implements ViewStateContext {
         return environments;
     }
 
-    //* @internal */
-    async loadScene(url: string, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit = true): Promise<OctreeSceneConfig> {
-        const scene = await downloadScene(url);
+    /**
+     * Load a scene from a url.
+    * @public
+    * @param url The absolute url to the folder containing the scene.
+    * @remarks
+    * The url typically contains the scene id as the latter part of the path, i.e. `https://.../<scene_guid>/`.
+    */
+    async loadSceneFromURL(url: URL): Promise<SceneConfig> {
+        const scene = await downloadScene(url.toString());
         const stateChanges = { scene };
         flipState(stateChanges, "GLToCAD");
-
-        let center = initPos ?? scene.config.center ?? vec3.create();
-        const radius = scene.config.boundingSphere.radius ?? 5;
-        if (autoFit) {
-            this.activeController.autoFit(center, radius);
-        }
-        const camera = this.activeController.stateChanges();
-        center = centerPos ? centerPos : center;
-        this.modifyRenderState({
-            scene,
-            camera,
-            grid: { origin: center },
-        });
+        this.modifyRenderState(stateChanges);
         return scene.config;
     }
-
 
     async pick(x: number, y: number, sampleDiscRadius = 0) {
         const context = this.renderContext;
@@ -221,21 +195,6 @@ export class View implements ViewStateContext {
         const prevController = this.activeController;
         activeController = this.activeController = controllers[kind];
         const { position, rotation, pivot, fovDegrees, fovMeters } = prevState;
-        // if (rotation) {
-        //     const mat = mat3.fromQuat(mat3.create(), rotation);
-        //     const up = vec3.fromValues(0, 1, 0);
-        //     const dir = vec3.fromValues(mat[6], mat[7], mat[8]);
-        //     const side = vec3.cross(vec3.create(), up, dir);
-        //     const newDir = vec3.cross(vec3.create(), side, up);
-        //     vec3.normalize(dir, dir);
-        //     vec3.normalize(side, side);
-        //     const mat2 = mat3.fromValues(
-        //         side[0], side[1], side[2],
-        //         up[0], up[1], up[2],
-        //         newDir[0], newDir[1], newDir[2]
-        //     );
-        //     quat.fromMat3(rotation, mat2);
-        // }
 
         activeController.init({ kind, position: initState?.position ?? position, rotation: initState?.rotation ?? rotation, pivot, distance, fovDegrees, fovMeters: initState?.fov ?? fovMeters });
         const changes = activeController.stateChanges();
@@ -274,6 +233,12 @@ export class View implements ViewStateContext {
             }
         }
     }
+
+    // called before render state changes are applied, i.e. you can still call modifyRenderState() here.
+    animate?(time: number): void;
+
+    // called after all render state changes has been applied, i.e. this is a good time to do custom rendering, e.g. 2D content such as text and lines etc.
+    render?(isIdleFrame: boolean): void;
 
     async run() {
         let prevState: RenderState | undefined;
@@ -326,10 +291,15 @@ export class View implements ViewStateContext {
                     }
                 }
 
+                this.animate?.(renderTime);
+
                 if (this.stateChanges) {
                     this.updateChanges(this.stateChanges);
                     this.stateChanges = undefined;
                 }
+
+                this.render?.(isIdleFrame);
+
                 const { renderStateGL } = this;
                 if (prevState !== renderStateGL || renderContext.changed) {
                     prevState = renderStateGL;
@@ -358,19 +328,6 @@ export class View implements ViewStateContext {
     }
 }
 
-/** @internal */
-export interface ViewStateContext {
-    readonly scriptUrl: string;
-    readonly renderContext: RenderContext | undefined;
-    readonly renderState: RenderState;
-    // readonly clippingPlanes: readonly RenderStateClippingPlane[];
-    readonly controllers: { readonly [key: string]: BaseController };
-    activeController: BaseController;
-    modifyRenderState(changes: RenderStateChanges): void;
-    loadScene(sceneId: string | undefined, initPos: ReadonlyVec3 | undefined, centerPos: ReadonlyVec3 | undefined, autoFit: boolean): Promise<OctreeSceneConfig>;
-    switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }): Promise<void>;
-}
-
 /** Background/IBL environment description
   *  @public
   */
@@ -384,3 +341,16 @@ export interface EnvironmentDescription {
     /** Thumbnail URL. */
     readonly thumnbnailURL: string;
 }
+
+export interface AppState {
+    readonly msaa: number,
+    readonly quit: boolean,
+    controllerState: string
+}
+
+export interface ViewStatistics {
+    readonly resolution: number,
+    readonly detailBias: number,
+    readonly fps?: number,
+}
+

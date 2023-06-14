@@ -1,8 +1,8 @@
-import { View, type AppState } from "./app";
+import { View, type AppState } from "./view";
 import { glMatrix } from "gl-matrix";
 export * from "../core3d";
 // export type { DeviceProfile } from "core3d/device";
-export * from "./app";
+export * from "./view";
 export * from "./controller";
 export { View };
 
