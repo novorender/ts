@@ -298,11 +298,10 @@ export class View {
                     this.stateChanges = undefined;
                 }
 
-                this.render?.(isIdleFrame);
-
                 const { renderStateGL } = this;
                 if (prevState !== renderStateGL || renderContext.changed) {
                     prevState = renderStateGL;
+                    this.render?.(isIdleFrame);
                     const statsPromise = renderContext.render(renderStateGL);
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
