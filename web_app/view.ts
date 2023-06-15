@@ -32,6 +32,7 @@ export class View {
     public renderContext: RenderContext | undefined;
     protected renderStateGL: RenderState;
     protected renderStateCad: RenderState;
+    protected prevRenderStateCad: RenderState | undefined;
     private stateChanges: RenderStateChanges | undefined;
 
     //* @internal */
@@ -57,6 +58,7 @@ export class View {
     }
 
     updateChanges(changes: RenderStateChanges) {
+        this.prevRenderStateCad = this.renderStateCad;
         this.renderStateCad = mergeRecursive(this.renderStateCad, changes) as RenderState;
         flipState(changes, "CADToGL");
         this.renderStateGL = modifyRenderState(this.renderStateGL, changes);
@@ -70,6 +72,10 @@ export class View {
 
     get renderState() {
         return this.renderStateCad;
+    }
+
+    get prevRenderState() {
+        return this.prevRenderStateCad;
     }
 
     get statistics() {
