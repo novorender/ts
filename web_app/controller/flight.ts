@@ -131,9 +131,9 @@ export class FlightController extends BaseController {
             }
 
             this.setFlyTo({
-                remainingFlightTime: flyTime,
-                target: { pos: vec3.clone(targetPosition), pitch: targetPitch ?? orientation.pitch, yaw: targetYaw ?? orientation.yaw },
-                current: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+                totalFlightTime: flyTime,
+                end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
+                begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
             });
         }
     }
@@ -145,9 +145,9 @@ export class FlightController extends BaseController {
             const targetPosition = vec3.create();
             vec3.add(targetPosition, vec3.transformQuat(targetPosition, vec3.fromValues(0, 0, dist), orientation.rotation), boundingSphere.center);
             this.setFlyTo({
-                remainingFlightTime: flyTime,
-                target: { pos: vec3.clone(targetPosition), pitch: orientation.pitch, yaw: orientation.yaw + 0.05 },
-                current: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+                totalFlightTime: flyTime,
+                end: { pos: vec3.clone(targetPosition), pitch: orientation.pitch, yaw: orientation.yaw + 0.05 },
+                begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
             });
         } else {
             const dist = boundingSphere.radius / Math.tan(glMatrix.toRadian(fov) / 2);

@@ -1,5 +1,5 @@
-import { type RenderStateScene, type RenderStateCamera, type RenderState, type RenderStateChanges, type RenderContext, mergeRecursive, type RecursivePartial, type RenderStateGrid, type RenderStateClippingPlane, type RenderStateClipping, type BoundingSphere, type PickSample } from "core3d";
-import { type ReadonlyVec3, vec2, type ReadonlyQuat, vec3, quat } from "gl-matrix";
+import type { RenderStateCamera, RenderStateChanges, RecursivePartial, BoundingSphere, PickSample } from "core3d";
+import { type ReadonlyVec3, type ReadonlyQuat, vec3 } from "gl-matrix";
 import { ControllerInput } from "./input";
 import type { FlightControllerParams } from "./flight";
 import type { OrbitControllerParams } from "./orbit";
@@ -7,14 +7,27 @@ import type { OrthoControllerParams } from "./ortho";
 import type { PanoramaControllerParams } from "./panorama";
 
 export type ControllerParams = FlightControllerParams | OrthoControllerParams | PanoramaControllerParams | OrbitControllerParams;
-export type FlytoObject = { remainingFlightTime: number, target: { pos: vec3, pitch: number, yaw: number }, current: { pos: vec3, pitch: number, yaw: number } }
+export interface Orientation {
+    readonly pos: ReadonlyVec3;
+    readonly pitch: number;
+    readonly yaw: number;
+}
+export interface FlyToParams {
+    readonly totalFlightTime: number;
+    readonly begin: Orientation;
+    readonly end: Orientation;
+}
 
+interface FlyToExt extends FlyToParams {
+    currentFlightTime: number;
+    current: Orientation;
+}
 
 export abstract class BaseController {
     abstract readonly kind: string;
     abstract readonly projection: RenderStateCamera["kind"];
     abstract readonly changed: boolean;
-    private flyToObject: FlytoObject | undefined;
+    private flyTo: FlyToExt | undefined;
 
     constructor(readonly input: ControllerInput) {
         // this.connect();
@@ -59,34 +72,42 @@ export abstract class BaseController {
     }
 
     get currentFlyTo() {
-        return this.flyToObject ? this.flyToObject.current : undefined;
+        return this.flyTo?.current;
     }
 
-    protected setFlyTo(flyTo: FlytoObject) {
-        this.flyToObject = flyTo;
+    protected setFlyTo(flyTo: FlyToParams) {
+        // wrap begin yaw to nearest angular distance
+        let { yaw } = flyTo.begin
+        const target = flyTo.end.yaw;
+        if (yaw - target < -180) yaw += 360;
+        else if (yaw - target > 180) yaw -= 360;
+        const begin = { ...flyTo.begin, yaw };
+        this.flyTo = { ...flyTo, begin, currentFlightTime: 0, current: begin };
     }
 
     animate(elapsedTime: number) {
         if (elapsedTime < 0 || elapsedTime > 250) elapsedTime = 1000 / 60;
         this.input.animate(elapsedTime);
-        const { flyToObject } = this;
-        if (flyToObject) {
-            const { remainingFlightTime, target, current } = flyToObject;
-            if (remainingFlightTime > 0) {
-                if (elapsedTime >= remainingFlightTime) {
-                    this.flyToObject!.current = target;
-                } else {
-                    const e = elapsedTime / remainingFlightTime;
-                    vec3.lerp(this.flyToObject!.current.pos, this.flyToObject!.current.pos, target.pos, e);
-                    let dy = target.yaw - current.yaw;
-                    if (dy < -180) dy += 360;
-                    else if (dy > 180) dy -= 360;
-                    this.flyToObject!.current.yaw += dy * e;
-                    this.flyToObject!.current.pitch += (target.pitch - current.pitch) * e;
-                }
-                this.flyToObject!.remainingFlightTime -= elapsedTime;
+        const { flyTo } = this;
+        if (flyTo) {
+            if (flyTo.currentFlightTime >= flyTo.totalFlightTime) {
+                this.flyTo = undefined;
             } else {
-                this.flyToObject = undefined;
+                flyTo.currentFlightTime += elapsedTime;
+                const { currentFlightTime, totalFlightTime, begin, end, current } = flyTo;
+                if (currentFlightTime < totalFlightTime) {
+                    const lerp = (a: number, b: number, t: number) => (a + (b - a) * t);
+                    const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+                    const t = easeInOut(currentFlightTime / totalFlightTime);
+                    const pos = vec3.lerp(vec3.create(), begin.pos, end.pos, t);
+                    const pitch = lerp(begin.pitch, end.pitch, t);
+                    let yaw = lerp(begin.yaw, end.yaw, t);
+                    if (yaw < -180) yaw += 360;
+                    else if (yaw > 180) yaw -= 360;
+                    flyTo.current = { pos, yaw, pitch } as const;
+                } else {
+                    Object.assign(current, end);
+                }
             }
         }
     }
@@ -104,7 +125,7 @@ export abstract class BaseController {
     mouseButtonChanged(event: MouseEvent): Promise<void> | void { }
     touchChanged(event: TouchEvent): Promise<void> | void { }
     moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void { }
-    moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void { }
+    moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat): void { }
     zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void { }
 
     renderStateChanges(state: RenderStateCamera, elapsedTime: number): RenderStateChanges | undefined {
