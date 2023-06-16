@@ -17,6 +17,7 @@ export class NodeLoader {
     readonly handler;
     readonly payloadPromises = new Map<string, PayloadPromiseMethods>();
     private state: RenderStateScene | undefined;
+    aborted = false;
 
     constructor(options: NodeLoaderOptions) {
         if (options.useWorker) {

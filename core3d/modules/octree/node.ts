@@ -334,6 +334,8 @@ export class OctreeNode {
                     renderContext.changed = true;
                 }
                 this.state = NodeState.ready;
+            } else {
+                this.state = NodeState.collapsed;
             }
         } catch (error: any) {
             if (error.name != "AbortError") {

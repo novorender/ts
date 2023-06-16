@@ -143,7 +143,9 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     const { version } = scene.config;
                     this.version = version;
                     createSceneRootNodes(this, config).then(rootNodes => {
-                        this.rootNodes = rootNodes;
+                        if (rootNodes) {
+                            this.rootNodes = rootNodes;
+                        }
                     });
                 }
             }

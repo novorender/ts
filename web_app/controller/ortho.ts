@@ -1,8 +1,8 @@
 
-import { type ReadonlyVec3, vec3, type ReadonlyQuat } from "gl-matrix";
+import { type ReadonlyVec3, vec3, type ReadonlyQuat, glMatrix, quat } from "gl-matrix";
 import { BaseController, type ControllerInitParams, type MutableCameraState } from "./base";
-import { mergeRecursive, type RecursivePartial, type RenderStateCamera } from "core3d";
-import { PitchRollYawOrientation } from "./orientation";
+import { mergeRecursive, type BoundingSphere, type RecursivePartial, type RenderStateCamera } from "core3d";
+import { PitchRollYawOrientation, decomposeRotation } from "./orientation";
 import { ControllerInput } from "./input";
 
 /** Ortho type camera motion controller */
@@ -78,8 +78,61 @@ export class OrthoController extends BaseController {
         this.changed = true;
     }
 
+
+    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void {
+        const { orientation, position } = this;
+        if (flyTime) {
+            let targetPitch = orientation.pitch;
+            let targetYaw = orientation.yaw;
+            if (rotation) {
+                const { pitch, yaw } = decomposeRotation(rotation)
+                targetPitch = pitch / Math.PI * 180;
+                targetYaw = yaw / Math.PI * 180;
+            }
+
+            this.setFlyTo({
+                totalFlightTime: flyTime,
+                end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
+                begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+            });
+        }
+        else {
+            this.position = targetPosition;
+            if (rotation) {
+                this.orientation.decomposeRotation(rotation);
+            }
+            this.changed = true;
+        }
+    }
+
+    override zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void {
+        const { orientation, position, fov } = this;
+        if (flyTime) {
+            const dist = Math.max(boundingSphere.radius / Math.tan(glMatrix.toRadian(fov) / 2), boundingSphere.radius);
+            const targetPosition = vec3.create();
+            vec3.add(targetPosition, vec3.transformQuat(targetPosition, vec3.fromValues(0, 0, dist), orientation.rotation), boundingSphere.center);
+            this.setFlyTo({
+                totalFlightTime: flyTime,
+                end: { pos: vec3.clone(targetPosition), pitch: orientation.pitch, yaw: orientation.yaw + 0.05 },
+                begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+            });
+        } else {
+            const dist = boundingSphere.radius / Math.tan(glMatrix.toRadian(fov) / 2);
+            this.position = vec3.add(vec3.create(), vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, dist), orientation.rotation), boundingSphere.center);
+            this.changed = true;
+        }
+    }
+
     override update() {
-        const { axes, zoomPos, height, position, orientation, hasShift } = this;
+        const { axes, zoomPos, height, position, orientation, hasShift, currentFlyTo } = this;
+
+        if (currentFlyTo) {
+            this.position = vec3.clone(currentFlyTo.pos);
+            orientation.pitch = currentFlyTo.pitch;
+            orientation.yaw = currentFlyTo.yaw;
+            this.changed = true;
+            return;
+        }
 
         let tx = -axes.keyboard_ad + axes.mouse_lmb_move_x + axes.touch_1_move_x;
         let ty = -axes.keyboard_ws + axes.mouse_lmb_move_y + axes.touch_1_move_y;

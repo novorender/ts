@@ -114,20 +114,13 @@ export class FlightController extends BaseController {
 
     override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void {
         const { orientation, position } = this;
-        if (flyTime == 0) {
-            this.position = targetPosition;
-            if (rotation) {
-                this.orientation.decomposeRotation(rotation);
-            }
-            this.changed = true;
-        }
-        else {
+        if (flyTime) {
             let targetPitch = orientation.pitch;
             let targetYaw = orientation.yaw;
             if (rotation) {
                 const { pitch, yaw } = decomposeRotation(rotation)
-                targetPitch = pitch;
-                targetYaw = yaw;
+                targetPitch = pitch / Math.PI * 180;
+                targetYaw = yaw / Math.PI * 180;
             }
 
             this.setFlyTo({
@@ -135,6 +128,13 @@ export class FlightController extends BaseController {
                 end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
                 begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
             });
+        }
+        else {
+            this.position = targetPosition;
+            if (rotation) {
+                this.orientation.decomposeRotation(rotation);
+            }
+            this.changed = true;
         }
     }
 
@@ -155,7 +155,6 @@ export class FlightController extends BaseController {
             this.changed = true;
         }
     }
-
 
     protected modifiers() {
         const { params, recordedMoveBegin, position, fov } = this;
