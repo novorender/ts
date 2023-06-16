@@ -193,6 +193,7 @@
         "    int deviationIndex;\r",
         "    float deviationFactor;\r",
         "    vec2 deviationRange;\r",
+        "    bool useProjectedPosition;\r",
         "    // terrain elevation\r",
         "    vec2 elevationRange;\r",
         "};\r",

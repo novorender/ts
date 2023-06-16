@@ -99,6 +99,7 @@ export function defaultRenderState(): RenderState {
                     ],
                 }
             },
+            useProjectedPosition: false
         },
         toonOutline: {
             enabled: false,

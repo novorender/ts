@@ -22,6 +22,7 @@ export class OctreeModule implements RenderModule {
         deviationIndex: "int",
         deviationFactor: "float",
         deviationRange: "vec2",
+        useProjectedPosition: "bool",
         elevationRange: "vec2",
     } as const satisfies Record<string, UniformTypes>;
 
