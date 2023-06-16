@@ -83,6 +83,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             values.deviationIndex = deviation.index;
             values.deviationFactor = deviation.mixFactor;
             values.deviationRange = gradientRange(deviation.colorGradient);
+            values.useProjectedPosition = points.useProjectedPosition;
             const deviationColors = computeGradientColors(Gradient.size, deviation.colorGradient);
             this.gradientsImage.set(deviationColors, 0 * Gradient.size * 4);
             updateGradients = true;
@@ -276,6 +277,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         gl.vertexAttribI4ui(VertexAttributeIds.material, 0xff, 0, 0, 0);
         gl.vertexAttribI4ui(VertexAttributeIds.objectId, 0xffffffff, 0, 0, 0);
         gl.vertexAttrib4f(VertexAttributeIds.color0, 0, 0, 0, 0);
+        gl.vertexAttrib4f(VertexAttributeIds.projectedPos, 0, 0, 0, 0);
         gl.vertexAttrib4f(VertexAttributeIds.deviations, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
         gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0);
     }

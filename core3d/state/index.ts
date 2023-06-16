@@ -171,6 +171,10 @@ export interface RenderStatePointCloud {
         readonly mixFactor: number; // 0-1, where 0 is 100% original vertex color and 1 is 100% color gradient color
         readonly colorGradient: RenderStateColorGradient<RGBA>;
     };
+
+
+    /**Use pre calculated projected position instead of original */
+    readonly useProjectedPosition: boolean;
 }
 
 export enum ClippingMode {
