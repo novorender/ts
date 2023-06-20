@@ -3,8 +3,8 @@ layout(std140) uniform Camera {
 };
 
 layout(std140) uniform Background {
-    BackgroundUniforms uniforms;
-} background;
+    BackgroundUniforms background;
+};
 
 uniform BackgroundTextures textures;
 

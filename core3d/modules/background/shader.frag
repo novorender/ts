@@ -3,8 +3,8 @@ layout(std140) uniform Camera {
 };
 
 layout(std140) uniform Background {
-    BackgroundUniforms uniforms;
-} background;
+    BackgroundUniforms background;
+};
 
 uniform BackgroundTextures textures;
 
@@ -14,10 +14,12 @@ layout(location = 0) out vec4 fragColor;
 
 void main() {
     vec3 rgb;
-    if(background.uniforms.envBlurNormalized == 0.) {
+    if(background.envBlurNormalized == 0.) {
         rgb = texture(textures.skybox, normalize(varyings.dir)).rgb;
     } else {
-        rgb = textureLod(textures.ibl.specular, normalize(varyings.dir), background.uniforms.envBlurNormalized * float(background.uniforms.mipCount - 1)).rgb;
+        float lod = background.envBlurNormalized * float(background.mipCount - 1);
+        lod = min(lod, float(background.mipCount - 4)); // the last 3 mips are black for some reason (because of RGBA16F format?), so we clamp to avoid this.
+        rgb = textureLod(textures.ibl.specular, normalize(varyings.dir), lod).rgb;
     }
     fragColor = vec4(rgb, 1);
 }
