@@ -103,6 +103,9 @@ void main() {
 #if (PASS == PASS_PRE)
     if(rgba.a < 1.)
         discard;
+#elif (PASS == PASS_PICK)
+    if(rgba.a < scene.pickOpacityThreshold)
+        discard;
 #else
     if(rgba.a <= 0.)
         discard;

@@ -104,7 +104,10 @@ export function defaultRenderState(): RenderState {
         toonOutline: {
             enabled: false,
             color: [0, 0, 0]
-        }
+        },
+        pick: {
+            opacityThreshold: 1,
+        },
     };
     return state;
 }

@@ -53,7 +53,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         const { renderContext, resources, uniforms, projectedSizeSplitThreshold, module } = this;
         const { gl, deviceProfile } = renderContext;
-        const { scene, localSpaceTranslation, highlights, points, terrain, output, clipping } = state;
+        const { scene, localSpaceTranslation, highlights, points, terrain, pick, output, clipping } = state;
         const { values } = uniforms.scene;
 
         let { currentProgramFlags } = this;
@@ -95,6 +95,11 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const elevationColors = computeGradientColors(Gradient.size, terrain.elevationGradient);
             this.gradientsImage.set(elevationColors, 1 * Gradient.size * 4);
             updateGradients = true;
+        }
+
+        if (renderContext.hasStateChanged({ pick })) {
+            const { values } = uniforms.scene;
+            values.pickOpacityThreshold = pick.opacityThreshold;
         }
 
         if (updateGradients) {

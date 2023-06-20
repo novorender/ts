@@ -42,14 +42,17 @@ const uint vertexHighlight = 0U;
 
 void main() {
     vec4 vertPos = vertexPosition;
+    if(scene.useProjectedPosition && vertexProjectedPos.w != 0.) {
+        vertPos = vertexProjectedPos;
+    }
+    vec4 posLS = node.modelLocalMatrix * vertPos;
+    vec4 posVS = camera.localViewMatrix * posLS;
+    gl_Position = camera.viewClipMatrix * posVS;
 
     vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
     float deviation = uintBitsToFloat(0x7f800000U); // +inf
 
 #if (MODE == MODE_POINTS)
-    if(scene.useProjectedPosition && vertexProjectedPos.w != 0.) {
-        vertPos = vertexProjectedPos;
-    }
     deviation = vertexDeviations[scene.deviationIndex];
     if(scene.deviationFactor > 0.) {
         vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
@@ -67,15 +70,9 @@ void main() {
 
         // Convert radius to window coordinates
     varyings.radius = max(1.0, gl_PointSize * 0.5);
-#endif
-
-    vec4 posLS = node.modelLocalMatrix * vertPos;
-    vec4 posVS = camera.localViewMatrix * posLS;
-    gl_Position = camera.viewClipMatrix * posVS;
-
-#if defined (HIGHLIGHT)
+#elif defined (HIGHLIGHT)
     if(vertexHighlight == 0xFFU) {
-        gl_Position = vec4(0); // hide 0xff group by outputing degenerate triangles/lines
+        gl_Position = vec4(0); // hide 0xff group by outputting degenerate triangles/lines
     }
 #endif
 

@@ -24,6 +24,7 @@ export class OctreeModule implements RenderModule {
         deviationRange: "vec2",
         useProjectedPosition: "bool",
         elevationRange: "vec2",
+        pickOpacityThreshold: "float",
     } as const satisfies Record<string, UniformTypes>;
 
     readonly gradientImageParams: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: Gradient.size, height: 2, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null };

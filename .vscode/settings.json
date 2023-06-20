@@ -196,6 +196,7 @@
         "    bool useProjectedPosition;\r",
         "    // terrain elevation\r",
         "    vec2 elevationRange;\r",
+        "    float pickOpacityThreshold;\r",
         "};\r",
         "struct NodeUniforms {\r",
         "    mat4 modelLocalMatrix;\r",

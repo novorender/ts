@@ -25,6 +25,7 @@ export interface RenderState {
     readonly tonemapping: RenderStateTonemapping;
     readonly points: RenderStatePointCloud;
     readonly toonOutline: RenderStateToonOutline;
+    readonly pick: RenderStatePick;
 }
 
 export interface DerivedRenderState extends RenderState {
@@ -256,4 +257,14 @@ export interface RenderStateTonemapping {
 export interface RenderStateToonOutline {
     readonly enabled: boolean;
     readonly color: RGB;
+}
+
+export interface RenderStatePick {
+    /** The opacity/alpha minimum (inclusive) threshold at which to include a pixel in the pick output.
+     * @public
+     * @remarks
+     * A value between 0 and 1, where 0 includes all pixels no matter how transparent and 1 only includes 100% opaque pixels.
+     * The default value is 1.
+     */
+    readonly opacityThreshold: number;
 }

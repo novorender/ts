@@ -188,6 +188,7 @@ struct SceneUniforms {
     bool useProjectedPosition;
     // terrain elevation
     vec2 elevationRange;
+    float pickOpacityThreshold;
 };
 struct NodeUniforms {
     mat4 modelLocalMatrix;
