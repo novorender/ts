@@ -67,15 +67,17 @@ void main() {
 
         // Convert radius to window coordinates
     varyings.radius = max(1.0, gl_PointSize * 0.5);
-#elif defined (HIGHLIGHT)
-    if(vertexHighlight == 0xFFU) {
-        gl_Position = vec4(0); // hide 0xff group by outputing degenerate triangles/lines
-    }
 #endif
 
     vec4 posLS = node.modelLocalMatrix * vertPos;
     vec4 posVS = camera.localViewMatrix * posLS;
     gl_Position = camera.viewClipMatrix * posVS;
+
+#if defined (HIGHLIGHT)
+    if(vertexHighlight == 0xFFU) {
+        gl_Position = vec4(0); // hide 0xff group by outputing degenerate triangles/lines
+    }
+#endif
 
     varyings.positionVS = posVS.xyz;
     varyings.normalVS = normalize(camera.localViewMatrixNormal * vertexNormal);
