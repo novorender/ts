@@ -21,6 +21,10 @@ export interface AbortMessage {
 
 export interface AbortAllMessage {
     readonly kind: "abort_all";
+
+}
+export interface AbortedAllMessage {
+    readonly kind: "aborted_all";
 }
 
 export interface CloseMessage {
@@ -63,7 +67,7 @@ export interface ErrorMessage {
 }
 
 export type MessageRequest = LoadMessage | AbortMessage | AbortAllMessage | CloseMessage | FilteredMessage;
-export type MessageResponse = FilterMessage | LoadedMessage | AbortedMessage | ErrorMessage;
+export type MessageResponse = FilterMessage | LoadedMessage | AbortedMessage | AbortedAllMessage | ErrorMessage;
 
 export interface HandlerReturn {
     readonly response: MessageResponse;
@@ -127,8 +131,8 @@ export class LoaderHandler {
             const download = downloader.downloadArrayBufferAbortable(url, new ArrayBuffer(byteSize));
             downloads.set(id, download);
             const buffer = await download.result;
+            downloads.delete(id);
             if (buffer) {
-                downloads.delete(id);
                 // const filterObjectIds = (objectIds: Uint32Array) => (Promise.resolve(objectIds));
                 const filterObjectIds = applyFilter ? (objectIds: Uint32Array) => (this.requestFilter(id, objectIds)) : undefined;
                 const { childInfos, geometry } = await parseNode(id, separatePositionsBuffer, enableOutlines, version, buffer, filterObjectIds);
@@ -172,16 +176,18 @@ export class LoaderHandler {
         filterPromise?.resolve(undefined);
     }
 
-    private abortAll(params: AbortAllMessage) {
-        const { downloader, downloads, filterPromises } = this;
+    private async abortAll(params: AbortAllMessage) {
+        const { downloads, downloader, filterPromises } = this;
         for (const download of downloads.values()) {
             download.abort();
         }
-        for (const filterPromise of filterPromises.values()) {
+        for (const [id, filterPromise] of filterPromises) {
             filterPromise.resolve(undefined);
         }
-        downloads.clear();
-        filterPromises.clear();
-        downloader.abort();
+        await downloader.complete();
+        console.assert(downloads.size == 0);
+        console.assert(filterPromises.size == 0);
+        const abortedAllMsg = { kind: "aborted_all" } as AbortedAllMessage;
+        this.send(abortedAllMsg);
     }
 }

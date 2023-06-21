@@ -44,8 +44,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
     constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly uniforms: Uniforms, readonly resources: Resources) {
         this.loader = new NodeLoader(module.nodeLoaderOptions);
-        const { gl } = renderContext;
-        const { programs } = resources;
     }
 
     update(state: DerivedRenderState) {
@@ -124,8 +122,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 this.loader.init(scene); // abort any pending downloads for previous scene
 
                 // delete existing scene
-                // this.rootNode?.dispose();
-                // this.rootNode = undefined;
                 for (const rootNode of Object.values(this.rootNodes)) {
                     rootNode.dispose();
                 }
@@ -148,10 +144,12 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     const { config } = scene;
                     const { version } = scene.config;
                     this.version = version;
-                    createSceneRootNodes(this, config).then(rootNodes => {
-                        if (rootNodes) {
-                            this.rootNodes = rootNodes;
-                        }
+                    this.loader.abortAllPromise.then(() => { // make sure we wait for any previous aborts to complete
+                        createSceneRootNodes(this, config).then(rootNodes => {
+                            if (rootNodes) {
+                                this.rootNodes = rootNodes;
+                            }
+                        });
                     });
                 }
             }

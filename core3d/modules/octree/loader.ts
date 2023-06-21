@@ -17,6 +17,8 @@ export class NodeLoader {
     readonly handler;
     readonly payloadPromises = new Map<string, PayloadPromiseMethods>();
     private state: RenderStateScene | undefined;
+    abortAllPromise: Promise<void> = Promise.resolve();
+    private resolveAbortAll: (() => void) | undefined;
     aborted = false;
 
     constructor(options: NodeLoaderOptions) {
@@ -50,6 +52,12 @@ export class NodeLoader {
     }
 
     private receive(msg: MessageResponse) {
+        if (msg.kind == "aborted_all") {
+            const { resolveAbortAll } = this;
+            this.resolveAbortAll = undefined;
+            resolveAbortAll?.();
+            return;
+        }
         const { id } = msg;
         switch (msg.kind) {
             case "filter":
@@ -77,8 +85,12 @@ export class NodeLoader {
     }
 
     abortAll() {
+        this.abortAllPromise = new Promise<void>((resolve) => {
+            this.resolveAbortAll = resolve;
+        })
         const msg: AbortAllMessage = { kind: "abort_all" };
         this.send(msg);
+        this.payloadPromises.clear();
     }
 
     dispose() {
