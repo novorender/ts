@@ -13,7 +13,7 @@ export * from "./geometry";
 export { downloadScene } from "./scene";
 export { loadGLTF } from "./gltf";
 
-export async function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanvasElement, setRenderContext: (context: RenderContext) => void) {
+export function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanvasElement, setRenderContext: (context: RenderContext) => void) {
     const options: WebGLContextAttributes = {
         alpha: true,
         antialias: true,
@@ -26,17 +26,18 @@ export async function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanva
         stencil: false,
     };
 
-    const wasm = await wasmInstance();
+    const wasmPromise = wasmInstance();
     const blob = new Blob([lut_ggx_png], { type: "image/png" });
-    const lut_ggx = await createImageBitmap(blob);
-    let context: RenderContext | undefined;
+    const lut_ggxPromise = createImageBitmap(blob);
+    let renderContext: RenderContext | undefined;
+    let context = { renderContext: undefined as RenderContext | undefined };
 
     canvas.addEventListener("webglcontextlost", function (event: WebGLContextEvent) {
         event.preventDefault();
         console.info("WebGL Context lost!");
-        if (context) {
-            context["contextLost"]();
-            context = undefined;
+        if (renderContext) {
+            renderContext["contextLost"]();
+            context.renderContext = undefined;
         }
         // trigger a reset of canvas on safari.
         canvas.width = 300;
@@ -54,9 +55,19 @@ export async function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanva
 
     let animId: number | undefined;
     async function createContext() {
-        context = new RenderContext(deviceProfile, canvas, wasm, lut_ggx, options);
-        await context.init();
-        setRenderContext(context)
+        const wasm = await wasmPromise;
+        const lut_ggx = await lut_ggxPromise;
+        renderContext = new RenderContext(deviceProfile, canvas, wasm, lut_ggx, options);
+        await renderContext.init();
+        setRenderContext(renderContext);
     }
-    await createContext();
+    createContext();
+
+    // return a method to update device profile and recreate renderContext
+    return async (value: DeviceProfile) => {
+        deviceProfile = value;
+        await createContext();
+    }
 }
+
+

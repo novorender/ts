@@ -1,35 +1,15 @@
-
-import { type ReadonlyVec3, vec3, quat, vec4, type ReadonlyQuat } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, type DeviceProfile, modifyRenderState, type RenderStatistics, type ObjectIdFilter } from "core3d";
+import { type ReadonlyVec3, vec3, type ReadonlyQuat } from "gl-matrix";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics } from "core3d";
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
 import { flipState } from "./flip";
-
-const coreProfile = {
-    features: {
-        outline: true,
-    },
-    limits: {
-        maxGPUBytes: 2_000_000_000,
-        maxPrimitives: 100_000_000,
-        maxSamples: 4, // MSAA
-    },
-    quirks: {
-        iosShaderBug: false, // Older (<A15) IOS devices has a bug when using flat interpolation in complex shaders, which causes Safari to crash after a while. Update: Fixed with WEBGL_provoking_vertex extension!
-    },
-    detailBias: 0.6,
-} as const satisfies DeviceProfile;
-
-
-const deviceProfile = {
-    ...coreProfile,
-    renderResolution: 1,
-    framerateTarget: 30 as number
-} as const;
+import type { DeviceProfileExt } from "./device";
 
 export class View {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     readonly alternateUrl = new URL("http://192.168.1.129:9090/").toString();
     public renderContext: RenderContext | undefined;
+    private _deviceProfile: DeviceProfileExt;
+    private _setDeviceProfile: (value: DeviceProfileExt) => void;
     protected renderStateGL: RenderState;
     protected renderStateCad: RenderState;
     protected prevRenderStateCad: RenderState | undefined;
@@ -43,18 +23,41 @@ export class View {
     clippingPlanes: RenderStateClippingPlane[] = [];
     private _statistics: { readonly render: RenderStatistics, readonly view: ViewStatistics } | undefined = undefined;
 
-
     // dynamic resolution scaling
-    private resolutionModifier: number = deviceProfile.renderResolution;
-    private drsHighInterval = (1000 / deviceProfile.framerateTarget) * 1.2;
-    private drsLowInterval = (1000 / deviceProfile.framerateTarget) * 0.9;
+    private resolutionModifier = 1;
+    private drsHighInterval = 50;
+    private drsLowInterval = 100;
     private lastQualityAdjustTime = 0;
     private resolutionTier: 0 | 1 | 2 = 2;
 
     private currentDetailBias: number = 1;
 
-    private setRenderContext = (context: RenderContext): void => {
-        this.renderContext = context;
+    constructor(readonly canvas: HTMLCanvasElement, deviceProfile: DeviceProfileExt) {
+        this._deviceProfile = deviceProfile;
+        this._setDeviceProfile = initCore3D(deviceProfile, canvas, this.setRenderContext);
+        this.renderStateGL = defaultRenderState();
+        this.renderStateCad = this.createRenderState(this.renderStateGL);
+
+        const input = new ControllerInput(canvas);
+
+        this.controllers = {
+            flight: new FlightController(this, input),
+            orbit: new OrbitController(input),
+            ortho: new OrthoController(input),
+            panorama: new PanoramaController(input),
+            cad: new CadFlightController(this, input),
+        } as const;
+        this.activeController = this.controllers["flight"];
+        this.activeController.attach();
+        this.activeController.updateParams({ proportionalCameraSpeed: { min: 0.2, max: 1000 } }); // TL: why?
+
+        const resizeObserver = new ResizeObserver(() => { this.resize(); });
+        resizeObserver.observe(canvas);
+    }
+
+    dispose() {
+        this.renderContext?.dispose();
+        this.renderContext = undefined;
     }
 
     updateChanges(changes: RenderStateChanges) {
@@ -82,30 +85,22 @@ export class View {
         return this._statistics;
     }
 
-    constructor(readonly canvas: HTMLCanvasElement) {
-        initCore3D(deviceProfile, canvas, this.setRenderContext);
-        this.renderStateGL = defaultRenderState();
-        this.renderStateCad = this.createRenderState(this.renderStateGL);
-        const input = new ControllerInput(canvas);
-
-        this.controllers = {
-            flight: new FlightController(this, input),
-            orbit: new OrbitController(input),
-            ortho: new OrthoController(input),
-            panorama: new PanoramaController(input),
-            cad: new CadFlightController(this, input),
-        } as const
-        this.activeController = this.controllers["flight"];
-        this.activeController.attach();
-        this.activeController.updateParams({ proportionalCameraSpeed: { min: 0.2, max: 1000 } }); // TL: why?
-
-        const resizeObserver = new ResizeObserver(() => { this.resize(); });
-        resizeObserver.observe(canvas);
+    // changing device profile will recreate the entire renderContext, so use with caution!
+    get deviceProfile() { return this._deviceProfile; }
+    set deviceProfile(value: DeviceProfileExt) {
+        this._deviceProfile = value;
+        this._setDeviceProfile?.(value); // this will in turn trigger this.useDeviceProfile
     }
 
-    dispose() {
-        this.renderContext?.dispose();
-        this.renderContext = undefined;
+    readonly setRenderContext = (context: RenderContext) => {
+        this.renderContext = context;
+        this.useDeviceProfile(this._deviceProfile);
+    }
+
+    private useDeviceProfile(deviceProfile: DeviceProfileExt) {
+        this.resolutionModifier = deviceProfile.renderResolution;
+        this.drsHighInterval = (1000 / deviceProfile.framerateTarget) * 1.2;
+        this.drsLowInterval = (1000 / deviceProfile.framerateTarget) * 0.9;
     }
 
     private resize() {
@@ -211,6 +206,7 @@ export class View {
     dynamicResolutionScaling(frameIntervals: number[]) {
         const samples = 9;
         if (frameIntervals.length == samples) {
+            const { deviceProfile } = this;
             const highFrameInterval = this.drsHighInterval;
             const lowFrameInterval = this.drsLowInterval;
             const sortedIntervals = [...frameIntervals];
@@ -255,7 +251,7 @@ export class View {
         let wasIdle = false;
         const frameIntervals: number[] = [];
         for (; ;) {
-            const { renderContext, activeController } = this;
+            const { renderContext, activeController, deviceProfile } = this;
             const renderTime = await RenderContext.nextFrame(renderContext);
             const frameTime = renderTime - prevRenderTime;
             this.resize();
