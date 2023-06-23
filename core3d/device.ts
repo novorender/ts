@@ -5,6 +5,8 @@ export interface DeviceProfile {
     readonly quirks: DeviceQuirks;
     /** Geometry detail bias. */
     readonly detailBias: number;
+    readonly renderResolution: number;
+    readonly framerateTarget: number;
 }
 
 export interface DeviceFeatures {
