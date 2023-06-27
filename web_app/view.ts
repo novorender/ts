@@ -103,7 +103,7 @@ export class View {
     }
 
     private resize() {
-        const scale = devicePixelRatio * this.resolutionModifier * (this.renderState.output.samplesMSAA > 0 ? 0.5 : 1); // / 2;
+        const scale = devicePixelRatio * this.resolutionModifier;
         // const scale = 1.0;
         let { width, height } = this.canvas.getBoundingClientRect();
         width = Math.round(width * scale);
