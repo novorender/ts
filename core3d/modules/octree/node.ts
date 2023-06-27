@@ -253,15 +253,14 @@ export class OctreeNode {
         const imagePlane = viewFrustum.image;
         const projection = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
         const viewDistance = this.viewDistance = vec4.dot(imagePlane, center4);
-        const distance = Math.max(0.001, viewDistance - radius); // we subtract radius to get the projection size at the extremity nearest the camera
         if (visibility <= Visibility.none) {
             this.projectedSize = 0;
         } else if (camera.kind == "pinhole") {
-            this.projectedSize = (this.size * projection[5]) / (-distance * projection[11]);
+            const distance = Math.max(0.001, viewDistance - radius); // we subtract radius to get the projection size at the extremity nearest the camera
+            this.projectedSize = ((this.size * projection[5]) / ((-distance * 10) * projection[11])) * 10;
         } else {
             this.projectedSize = this.size * projection[5];
         }
-        this.projectedSize *= distance / 10;
 
         if (context.localSpaceChanged || !this.hasValidModelLocalMatrix) {
             let { offset, scale } = data;
