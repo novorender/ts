@@ -167,7 +167,7 @@ export class FlightController extends BaseController {
             const touchMovementModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const pinchModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             return {
-                mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale
+                mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale: 20
             }
         }
         return {
@@ -177,10 +177,10 @@ export class FlightController extends BaseController {
 
     protected getTransformations(): CameraTransformations {
         const { axes } = this;
-        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_2_move_y;
-        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_2_move_x;
-        const pivotX = -axes.mouse_rmb_move_y + axes.touch_1_move_y;
-        const pivotY = -axes.mouse_rmb_move_x + axes.touch_1_move_x;
+        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_1_move_y;
+        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_1_move_x;
+        const pivotX = -axes.mouse_rmb_move_y + axes.touch_3_move_y;
+        const pivotY = -axes.mouse_rmb_move_x + axes.touch_3_move_x;
         const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
 
         const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
