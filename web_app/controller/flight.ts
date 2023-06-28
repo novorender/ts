@@ -45,7 +45,7 @@ export class FlightController extends BaseController {
         autoZoomSpeed: false,
         flightTime: 1,
         fieldOfView: 60,
-        pickDelay: 200
+        pickDelay: 200,
     };
 
     override kind: string = "flight" as const;
@@ -162,7 +162,7 @@ export class FlightController extends BaseController {
         let scale = 20;
         if (proportionalCameraSpeed && recordedMoveBegin) {
             scale = vec3.dist(position, recordedMoveBegin) * Math.tan(((Math.PI / 180) * fov) / 2) * 2;
-            const mouseWheelModifier = clamp(scale / 3, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
+            const mouseWheelModifier = this.input.hasShift ? 0 : clamp(scale / 3, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const mousePanModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const touchMovementModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const pinchModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
