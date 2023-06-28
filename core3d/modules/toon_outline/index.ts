@@ -36,6 +36,10 @@ export class ToonModule implements RenderModule {
 type Uniforms = ReturnType<ToonModule["createUniforms"]>;
 type Resources = Awaited<ReturnType<ToonModule["createResources"]>>;
 
+function isEnabled(context: RenderContext, state: DerivedRenderState) {
+    return state.toonOutline.enabled && (context.isIdleFrame || !state.toonOutline.onlyOnIdleFrame);
+}
+
 class ToonModuleContext implements RenderModuleContext {
     constructor(readonly context: RenderContext, readonly module: ToonModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
@@ -48,6 +52,9 @@ class ToonModuleContext implements RenderModuleContext {
             values.color = toonOutline.color;
             context.updateUniformBuffer(uniforms, this.uniforms);
         }
+        if (context.isRendering() && !context.isPickBuffersValid() && isEnabled(context, state)) {
+            context.renderPickBuffers();
+        }
     }
 
     render(state: DerivedRenderState) {
@@ -56,7 +63,7 @@ class ToonModuleContext implements RenderModuleContext {
         const { gl, cameraUniforms } = context;
         const { textures } = context.buffers;
 
-        if (state.toonOutline.enabled && context.isIdleFrame) {
+        if (context.isRendering() && context.isPickBuffersValid() && isEnabled(context, state)) {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],

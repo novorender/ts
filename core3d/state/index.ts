@@ -257,6 +257,7 @@ export interface RenderStateTonemapping {
 export interface RenderStateToonOutline {
     readonly enabled: boolean;
     readonly color: RGB;
+    readonly onlyOnIdleFrame: boolean;
 }
 
 export interface RenderStatePick {
