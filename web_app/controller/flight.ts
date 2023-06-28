@@ -171,7 +171,7 @@ export class FlightController extends BaseController {
             }
         }
         return {
-            mouseWheelModifier: scale, mousePanModifier: scale, touchMovementModifier: scale, pinchModifier: scale, scale
+            mouseWheelModifier: this.input.hasShift ? 0 : scale, mousePanModifier: scale, touchMovementModifier: scale, pinchModifier: scale, scale
         }
     }
 
