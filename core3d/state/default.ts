@@ -103,7 +103,8 @@ export function defaultRenderState(): RenderState {
         },
         toonOutline: {
             enabled: false,
-            color: [0, 0, 0]
+            color: [0, 0, 0],
+            onlyOnIdleFrame: true,
         },
         pick: {
             opacityThreshold: 1,

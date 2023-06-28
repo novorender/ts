@@ -1,15 +1,14 @@
 import { type ReadonlyVec3, vec3, type ReadonlyQuat } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile } from "core3d";
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
 import { flipState } from "./flip";
-import type { DeviceProfileExt } from "./device";
 
 export class View {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
     readonly alternateUrl = new URL("http://192.168.1.129:9090/").toString();
     public renderContext: RenderContext | undefined;
-    private _deviceProfile: DeviceProfileExt;
-    private _setDeviceProfile: (value: DeviceProfileExt) => void;
+    private _deviceProfile: DeviceProfile;
+    private _setDeviceProfile: (value: DeviceProfile) => void;
     protected renderStateGL: RenderState;
     protected renderStateCad: RenderState;
     protected prevRenderStateCad: RenderState | undefined;
@@ -32,7 +31,7 @@ export class View {
 
     private currentDetailBias: number = 1;
 
-    constructor(readonly canvas: HTMLCanvasElement, deviceProfile: DeviceProfileExt) {
+    constructor(readonly canvas: HTMLCanvasElement, deviceProfile: DeviceProfile) {
         this._deviceProfile = deviceProfile;
         this._setDeviceProfile = initCore3D(deviceProfile, canvas, this.setRenderContext);
         this.renderStateGL = defaultRenderState();
@@ -87,7 +86,7 @@ export class View {
 
     // changing device profile will recreate the entire renderContext, so use with caution!
     get deviceProfile() { return this._deviceProfile; }
-    set deviceProfile(value: DeviceProfileExt) {
+    set deviceProfile(value: DeviceProfile) {
         this._deviceProfile = value;
         this._setDeviceProfile?.(value); // this will in turn trigger this.useDeviceProfile
     }
@@ -97,14 +96,14 @@ export class View {
         this.useDeviceProfile(this._deviceProfile);
     }
 
-    private useDeviceProfile(deviceProfile: DeviceProfileExt) {
+    private useDeviceProfile(deviceProfile: DeviceProfile) {
         this.resolutionModifier = deviceProfile.renderResolution;
         this.drsHighInterval = (1000 / deviceProfile.framerateTarget) * 1.2;
         this.drsLowInterval = (1000 / deviceProfile.framerateTarget) * 0.9;
     }
 
     private resize() {
-        const scale = devicePixelRatio * this.resolutionModifier * (this.renderState.output.samplesMSAA > 0 ? 0.5 : 1); // / 2;
+        const scale = devicePixelRatio * this.resolutionModifier;
         // const scale = 1.0;
         let { width, height } = this.canvas.getBoundingClientRect();
         width = Math.round(width * scale);

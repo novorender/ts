@@ -218,6 +218,14 @@ export class RenderContext {
         return this.gl.drawingBufferHeight;
     }
 
+    isPickBuffersValid() {
+        return this.pickBuffersValid;
+    }
+
+    isRendering() {
+        return this.prevState != undefined;
+    }
+
     isContextLost() {
         return this.gl.isContextLost();
     }

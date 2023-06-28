@@ -11,14 +11,14 @@ uniform TonemappingTextures textures;
 in vec2 uv;
 layout(location = 0) out vec4 fragColor;
 
-    float horizontalSobel[25] = float[](
+    const float horizontalSobel[25] = float[](
         1., 1., 2., 1., 1.,
         2., 2.,4.,2.,2.,
         0., 0., 0., 0., 0.,
         -2., -2., -4., -2., -2.,
         - 1., -1., -2., -1., -1.);
 
-    float verticalSobel[25] = float[](
+    const float verticalSobel[25] = float[](
         1., 2.,  0., -2., -1.,
         1., 2.,  0., -2., -1.,
         2., 4.,  0., -4., -2.,
@@ -46,24 +46,27 @@ bool objectTest(uint objectId, vec2 bl, vec2 tr, vec2 br, vec2 tl) {
     return false;
 }
 
-float depthTest2(float centerDepth, vec2[25] uv) {
+    float getPixelOffset(int index, float pixelSize) {
+        switch (index) {
+            case 0:
+            return -pixelSize * 2.;
+            case 1: 
+            return -pixelSize;
+            case 2:
+            return 0.;
+            case 3:
+            return pixelSize;
+            case 4: 
+            return pixelSize * 2.;
+        }
+        return 0.;
+    }
 
-    //     float f0 = 2.;
-    //     float f1 = 1.;
-    // float horizontalSobel[25] = float[](
-    //     f0, f0,f0*2.,f0,f0,
-    //     f1, f1, f1 * 2., f1, f1,
-    //     0., 0., 0., 0., 0.,
-    //     -f1, -f1, -f1 * 2., -f1, -f1,
-    //     -f0, -f0, -f0 * 2., -f0, -f0);
+    vec2 getUvCoord(int i, int j, vec2 uv, float pixelSizeX, float pixelSizeY) {
+        return uv + vec2(getPixelOffset(i, pixelSizeX), getPixelOffset(j, pixelSizeY));
+    }
 
-    // float verticalSobel[25] = float[](
-    //     f1,      f0,      0., -f0,     -f1,
-    //     f1,      f0,      0., -f0,     -f1,
-    //     f1 * 2., f0 * 2., 0., -f0* 2., -f1 * 2.,
-    //     f1,      f0,      0., -f0,     -f1,
-    //     f1,      f0,      0., -f0,     -f1);
-
+float depthTest2(float centerDepth, vec2 uv, float pixelSizeX, float pixelSizeY) {
     const float threshold = 0.02;
     float horizontal = 0.;
     float vertical = 0.;
@@ -73,7 +76,7 @@ float depthTest2(float centerDepth, vec2[25] uv) {
             if(idx == 12) {
                 continue;
             }
-            vec2 uvCoord = uv[idx];
+            vec2 uvCoord = getUvCoord(i, j, uv, pixelSizeX, pixelSizeY);
             if(uvCoord.x < 0. || uvCoord.y < 0.) {
                 return 0.;
             }
@@ -88,7 +91,7 @@ float depthTest2(float centerDepth, vec2[25] uv) {
 }
 
 
-float normalTest2(vec3 centerNormal, vec2[25] uv) {
+float normalTest2(vec3 centerNormal, vec2 uv, float pixelSizeX, float pixelSizeY) {
 
     const float threshold = 0.05;
     //     float f0 = 1.;
@@ -105,7 +108,7 @@ float normalTest2(vec3 centerNormal, vec2[25] uv) {
             if(idx == 12) {
                 continue;
             }
-            vec2 uvCoord = uv[idx];
+            vec2 uvCoord = getUvCoord(i, j, uv, pixelSizeX, pixelSizeY);
             if (uvCoord.x < 0. || uvCoord.y < 0.) {
                 return 0.;
             }
@@ -129,30 +132,12 @@ void main() {
     float centerDepth = uintBitsToFloat(texture(textures.pick, uv).w);
     vec3 centerNormal = unpackNormalAndDeviation(texture(textures.pick, uv).yz).xyz;
 
-    vec2[25] uvCoords = vec2[](
-        uv + vec2(-pixelSizeX*2., pixelSizeY*2.),   uv + vec2(-pixelSizeX, pixelSizeY*2.),  uv + vec2(0., pixelSizeY*2.),  uv + vec2(pixelSizeX, pixelSizeY*2.),  uv + vec2(pixelSizeX*2., pixelSizeY*2.),
-        uv + vec2(-pixelSizeX*2., pixelSizeY),      uv + vec2(-pixelSizeX, pixelSizeY),     uv + vec2(0., pixelSizeY),     uv + vec2(pixelSizeX, pixelSizeY),     uv + vec2(pixelSizeX*2., pixelSizeY),
-        uv + vec2(-pixelSizeX*2., 0.),              uv + vec2(-pixelSizeX, 0.),             uv + vec2(0., 0.),             uv + vec2(pixelSizeX, 0.),             uv + vec2(pixelSizeX*2., 0.),
-        uv + vec2(-pixelSizeX*2., -pixelSizeY),     uv + vec2(-pixelSizeX, -pixelSizeY),    uv + vec2(0., -pixelSizeY),    uv + vec2(pixelSizeX, -pixelSizeY),    uv + vec2(pixelSizeX*2., -pixelSizeY),
-        uv + vec2(-pixelSizeX*2., -pixelSizeY*2.),  uv + vec2(-pixelSizeX, -pixelSizeY*2.), uv + vec2(0., -pixelSizeY*2.), uv + vec2(pixelSizeX, -pixelSizeY*2.), uv + vec2(pixelSizeX*2., -pixelSizeY*2.)
-        );
-
     float normalEdge = 0.;
-    float depthEdge = depthTest2(centerDepth, uvCoords);
+    float depthEdge = depthTest2(centerDepth, uv, pixelSizeX , pixelSizeY);
      if(depthEdge < 0.8) {
-         normalEdge = normalTest2(centerNormal, uvCoords);
+         normalEdge = normalTest2(centerNormal, uv, pixelSizeX, pixelSizeY);
     }
     float edge = min(0.8, max(depthEdge, normalEdge));
-
-    // if ( edge < 0.2) {
-    // fragColor = vec4(0, 0, 0, 1);
-    // } 
-    // else if (edge > 0.7) {
-    // fragColor = vec4(1, 0, 0, 1);
-    // }
-    // else {
-    // fragColor = vec4(1, 1, 1, 1) * edge;
-    // }
 
     if ( edge < 0.3) {
         discard;
