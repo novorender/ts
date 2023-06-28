@@ -97,6 +97,7 @@ export class FlightController extends BaseController {
         }
         this.changed = false;
         this.input.callbacks = this;
+        this.input.usePointerLock = true;
     }
 
     override autoFit(center: ReadonlyVec3, radius: number): void {
