@@ -1,4 +1,4 @@
-import type { DerivedRenderState, RenderContext, RenderStateHighlightGroups, RGBATransform } from "core3d";
+import type { DerivedRenderState, RenderContext, RenderStateHighlightGroup, RenderStateHighlightGroups, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind, NodeGeometryKindMask } from "./node";
@@ -11,6 +11,7 @@ import { computeGradientColors, gradientRange } from "./gradient";
 // import { BufferFlags } from "@novorender/core3d/buffers";
 import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass } from "./module";
 import { createHighlightsMap } from "./highlights";
+import { Mutex } from "./mutex";
 
 const enum UBO { camera, clipping, scene, node };
 
@@ -41,9 +42,22 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     version: string = "";
     projectedSizeSplitThreshold = 1; // baseline node size split threshold = 50% of view height
     hidden = [false, false, false, false, false] as readonly [boolean, boolean, boolean, boolean, boolean];
+    readonly highlight;
 
     constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly uniforms: Uniforms, readonly resources: Resources) {
         this.loader = new NodeLoader(module.nodeLoaderOptions);
+        const maxByteLength = 10_000_004; // TODO: Get max size from device profile
+        //@ts-ignore (does not yet declare types for constructor options, although this is supported on both chrome and android)
+        const buffer = new SharedArrayBuffer(4, { maxByteLength });
+        this.highlight = {
+            buffer,
+            view: new Uint8Array(buffer, 4),
+            mutex: new Mutex(buffer),
+        } as const;
+    }
+
+    get highlights() {
+        return this.highlight.view;
     }
 
     update(state: DerivedRenderState) {
@@ -164,35 +178,55 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         if (renderContext.hasStateChanged({ highlights })) {
             const { groups } = highlights;
+            const numObjects = scene?.config.numObjects ?? 0;
+            const numBytes = numObjects + 4;
+            const { highlight } = this;
+            const { prevState } = renderContext;
 
             updateShaderCompileConstants({ highlight: groups.length > 0 });
 
+            const { values } = uniforms.scene;
+            values.applyDefaultHighlight = highlights.defaultHighlight != undefined;
+
             const transforms = [highlights.defaultHighlight, ...groups.map(g => g.rgbaTransform)];
-            const prevTransforms = renderContext.prevState ?
+            const prevTransforms = prevState ?
                 [
-                    renderContext.prevState.highlights.defaultHighlight,
-                    ...renderContext.prevState.highlights.groups.map(g => g.rgbaTransform)
+                    prevState.highlights.defaultHighlight,
+                    ...prevState.highlights.groups.map(g => g.rgbaTransform)
                 ] : [];
             if (!sequenceEqual(transforms, prevTransforms)) {
                 // update highlight matrices
                 const image = createColorTransforms(highlights);
                 glUpdateTexture(gl, resources.highlightTexture, { kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image });
             }
+
             const objectIds = groups.map(g => g.objectIds);
-            const prevObjectIds = renderContext.prevState?.highlights.groups.map(g => g.objectIds) ?? [];
-            if (!sequenceEqual(objectIds, prevObjectIds)) {
-                // update highlight vertex attributes
-                const nodes: OctreeNode[] = [];
-                for (const rootNode of Object.values(rootNodes)) {
-                    nodes.push(...iterateNodes(rootNode));
+            const prevObjectIds = prevState?.highlights.groups.map(g => g.objectIds) ?? [];
+            const objectIdsChanged = !sequenceEqual(objectIds, prevObjectIds);
+
+            // do async stuff below
+            (async () => {
+                await highlight.mutex.lockAsync();
+                if (highlight.buffer.byteLength != numBytes) {
+                    //@ts-ignore
+                    highlight.buffer.grow(numBytes);
                 }
-                const highlights = createHighlightsMap(groups, nodes);
-                for (const node of nodes) {
-                    node.applyHighlights(highlights);
+                updateHighlightBuffer(groups, highlight.view);
+
+                if (objectIdsChanged) {
+                    // update highlight vertex attributes
+                    const nodes: OctreeNode[] = [];
+                    for (const rootNode of Object.values(rootNodes)) {
+                        nodes.push(...iterateNodes(rootNode));
+                    }
+                    // const highlights = createHighlightsMap(groups, nodes);
+                    for (const node of nodes) {
+                        node.applyHighlights(highlight.view);
+                    }
                 }
-            }
-            const { values } = uniforms.scene;
-            values.applyDefaultHighlight = highlights.defaultHighlight != undefined;
+                highlight.mutex.unlock();
+                renderContext.changed = true; // notify of possible async changes
+            })();
         }
 
         if (renderContext.hasStateChanged({ clipping })) {
@@ -617,6 +651,19 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     }
 }
 
+function updateHighlightBuffer(groups: readonly RenderStateHighlightGroup[], buffer: Uint8Array) {
+    // TODO: do a more efficient delta update
+    buffer.fill(0);
+    let groupIndex = 1;
+    for (const group of groups) {
+        for (const objectId of group.objectIds) {
+            buffer[objectId] = groupIndex;
+        }
+        groupIndex++;
+    }
+}
+
+
 function* iterateNodes(node: OctreeNode | undefined): IterableIterator<OctreeNode> {
     if (node) {
         yield node;
@@ -649,7 +696,9 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
 
     // Copy transformation matrices
     const { defaultHighlight, groups } = highlights;
-    copyMatrix(0, defaultHighlight);
+    if (defaultHighlight) {
+        copyMatrix(0, defaultHighlight);
+    }
     for (let i = 0; i < groups.length; i++) {
         copyMatrix(i + 1, groups[i].rgbaTransform);
     }

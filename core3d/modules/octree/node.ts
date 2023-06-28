@@ -49,6 +49,7 @@ export interface OctreeContext {
     readonly debug: boolean;
     readonly localSpaceChanged: boolean;
     readonly hidden: readonly boolean[]; // corresponds to NodeGeometryKind
+    readonly highlights: Uint8Array;
 }
 
 export class OctreeNode {
@@ -347,9 +348,10 @@ export class OctreeNode {
     }
 
     applyHighlightGroups(groups: readonly RenderStateHighlightGroup[]) {
-        const { meshes } = this;
+        const { context, meshes } = this;
         if (meshes) {
-            const highlights = createHighlightsMap(groups, [this]);
+            // const highlights = createHighlightsMap(groups, [this]);
+            const { highlights } = context;
             const { gl } = this.context.renderContext;
             for (const mesh of meshes) {
                 updateMeshHighlights(gl, mesh, highlights);
@@ -357,7 +359,7 @@ export class OctreeNode {
         }
     }
 
-    applyHighlights(highlights: Map<number, number>) {
+    applyHighlights(highlights: Uint8Array | undefined) {
         const { context, meshes } = this;
         const { gl } = context.renderContext;
         for (const mesh of meshes) {

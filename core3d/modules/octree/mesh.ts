@@ -62,12 +62,16 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
     }
 }
 
-export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, highlights: Map<number, number>) {
+export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, highlights: Uint8Array | undefined) {
     if (mesh.highlightVB) {
         const highlightBuffer = new Uint8Array(mesh.numVertices);
-        for (const { objectId, beginVertex, endVertex } of mesh.objectRanges) {
-            const highlight = highlights.get(objectId) ?? 0;
-            highlightBuffer.fill(highlight, beginVertex, endVertex);
+        if (highlights) {
+            for (const { objectId, beginVertex, endVertex } of mesh.objectRanges) {
+                const highlight = highlights[objectId];
+                if (highlight) {
+                    highlightBuffer.fill(highlight, beginVertex, endVertex);
+                }
+            }
         }
         glUpdateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: highlightBuffer, targetBuffer: mesh.highlightVB });
     }

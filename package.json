@@ -21,6 +21,7 @@
     },
     "homepage": "https://github.com/novorender/ts#readme",
     "devDependencies": {
+        "@types/serviceworker": "^0.0.68",
         "esbuild": "^0.17.10",
         "esbuild-plugin-inline-worker": "^0.1.1",
         "ip": "^1.1.8",

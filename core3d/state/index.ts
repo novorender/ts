@@ -215,12 +215,12 @@ export interface RenderStateClipping {
 export type RGBATransform = FixedSizeArray<20, number>;
 
 export interface RenderStateHighlightGroup {
-    readonly rgbaTransform: RGBATransform | null; // null transform will hide group more effectively than using alpha=0
+    readonly rgbaTransform: RGBATransform | null; // null transform will hide group more efficiently than using alpha=0
     readonly objectIds: Iterable<number>; // must be sorted in ascending order!
 }
 
 export interface RenderStateHighlightGroups {
-    readonly defaultHighlight: RGBATransform;
+    readonly defaultHighlight: RGBATransform | undefined;
     readonly groups: readonly RenderStateHighlightGroup[];
 }
 
