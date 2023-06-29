@@ -2,10 +2,9 @@ import { mat4, type ReadonlyVec3, type ReadonlyVec4, vec3, vec4 } from "gl-matri
 import { glUBOProxy, glUpdateBuffer } from "webgl2";
 import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup } from "core3d";
 import { createMeshes, deleteMesh, type Mesh, meshPrimitiveCount, updateMeshHighlights } from "./mesh";
-import { NodeType, type NodeData } from "./parser";
+import { NodeType, type NodeData } from "./worker";
 import { NodeLoader } from "./loader";
 import { ResourceBin } from "core3d/resource";
-import { createHighlightsMap } from "./highlights";
 
 export const enum Visibility {
     undefined,
@@ -328,10 +327,10 @@ export class OctreeNode {
                     meshes.push(...createMeshes(resourceBin, geometry));
                     this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
                     glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
-                    const groups = renderContext.prevState?.highlights.groups;
-                    if (groups && groups.length) {
-                        this.applyHighlightGroups(groups);
-                    }
+                    // const groups = renderContext.prevState?.highlights.groups;
+                    // if (groups && groups.length) {
+                    //     this.applyHighlightGroups(groups);
+                    // }
                     renderContext.changed = true;
                 }
                 this.state = NodeState.ready;
@@ -347,17 +346,17 @@ export class OctreeNode {
         }
     }
 
-    applyHighlightGroups(groups: readonly RenderStateHighlightGroup[]) {
-        const { context, meshes } = this;
-        if (meshes) {
-            // const highlights = createHighlightsMap(groups, [this]);
-            const { highlights } = context;
-            const { gl } = this.context.renderContext;
-            for (const mesh of meshes) {
-                updateMeshHighlights(gl, mesh, highlights);
-            }
-        }
-    }
+    // applyHighlightGroups(groups: readonly RenderStateHighlightGroup[]) {
+    //     const { context, meshes } = this;
+    //     if (meshes) {
+    //         // const highlights = createHighlightsMap(groups, [this]);
+    //         const { highlights } = context;
+    //         const { gl } = this.context.renderContext;
+    //         for (const mesh of meshes) {
+    //             updateMeshHighlights(gl, mesh, highlights);
+    //         }
+    //     }
+    // }
 
     applyHighlights(highlights: Uint8Array | undefined) {
         const { context, meshes } = this;

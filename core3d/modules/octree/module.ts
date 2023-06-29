@@ -1,7 +1,6 @@
 import type { RenderContext } from "core3d";
 import type { RenderModule } from "..";
 import { glUBOProxy, type TextureParams2DUncompressed, type UniformTypes } from "webgl2";
-import { type NodeLoaderOptions } from "./loader";
 import { shaders } from "./shaders";
 import type { ResourceBin } from "core3d/resource";
 import { OctreeModuleContext } from "./context";
@@ -28,7 +27,6 @@ export class OctreeModule implements RenderModule {
     } as const satisfies Record<string, UniformTypes>;
 
     readonly gradientImageParams: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: Gradient.size, height: 2, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null };
-    readonly nodeLoaderOptions: NodeLoaderOptions = { useWorker: true }; // set to false for better debugging
     readonly maxHighlights = 8;
 
     static readonly textureNames = ["base_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients"] as const;

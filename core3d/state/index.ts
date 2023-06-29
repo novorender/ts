@@ -220,7 +220,7 @@ export interface RenderStateHighlightGroup {
 }
 
 export interface RenderStateHighlightGroups {
-    readonly defaultHighlight: RGBATransform | undefined;
+    readonly defaultHighlight: RGBATransform | null | undefined; // null = hide all objects not in a highlight gorup, undefined => no color transform
     readonly groups: readonly RenderStateHighlightGroup[];
 }
 

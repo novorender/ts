@@ -1,5 +1,5 @@
 import type { SceneConfig, RenderStateScene } from ".";
-import { NodeType, type NodeData } from "./modules/octree/parser";
+import { NodeType, type NodeData } from "./modules/octree/worker/parser";
 import { OctreeNode, type OctreeContext, NodeGeometryKind, NodeState } from "./modules/octree/node";
 import type { RootNodes } from "./modules/octree";
 

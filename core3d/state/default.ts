@@ -61,12 +61,13 @@ export function defaultRenderState(): RenderState {
             planes: [],
         },
         highlights: {
-            defaultHighlight: [
+            defaultHighlight: undefined,
+            /*[
                 1, 0, 0, 0, 0,
                 0, 1, 0, 0, 0,
                 0, 0, 1, 0, 0,
                 0, 0, 0, 1, 0,
-            ],
+            ],*/
             groups: [],
         },
         outlines: {

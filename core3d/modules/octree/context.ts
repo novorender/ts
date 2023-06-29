@@ -1,17 +1,17 @@
-import type { DerivedRenderState, RenderContext, RenderStateHighlightGroup, RenderStateHighlightGroups, RGBATransform } from "core3d";
+import type { DerivedRenderState, ObjectIdFilter, RenderContext, RenderStateHighlightGroups, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
-import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind, NodeGeometryKindMask } from "./node";
+import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
 import { glClear, glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
-import { MaterialType } from "./schema";
+import { MaterialType } from "./worker";
 import { getMultiDrawParams } from "./mesh";
 import { type ReadonlyVec3, vec3, vec4 } from "gl-matrix";
 import { NodeLoader } from "./loader";
 import { computeGradientColors, gradientRange } from "./gradient";
 // import { BufferFlags } from "@novorender/core3d/buffers";
 import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass } from "./module";
-import { createHighlightsMap } from "./highlights";
 import { Mutex } from "./mutex";
+import { useWorker } from "./worker";
 
 const enum UBO { camera, clipping, scene, node };
 
@@ -45,19 +45,21 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly highlight;
 
     constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly uniforms: Uniforms, readonly resources: Resources) {
-        this.loader = new NodeLoader(module.nodeLoaderOptions);
-        const maxByteLength = 10_000_004; // TODO: Get max size from device profile
-        //@ts-ignore (does not yet declare types for constructor options, although this is supported on both chrome and android)
+        this.loader = new NodeLoader({ useWorker });
+        const maxObjects = 10_000_000;// TODO: Get from device profile?
+        const maxByteLength = maxObjects + 4; // add four bytes for mutex
+        //@ts-ignore (TS does not yet declare types for constructor options, although this is supported on both chrome and safari)
         const buffer = new SharedArrayBuffer(4, { maxByteLength });
+        this.loader.setBuffer(buffer);
         this.highlight = {
             buffer,
-            view: new Uint8Array(buffer, 4),
+            indices: new Uint8Array(buffer, 4),
             mutex: new Mutex(buffer),
         } as const;
     }
 
     get highlights() {
-        return this.highlight.view;
+        return this.highlight.indices;
     }
 
     update(state: DerivedRenderState) {
@@ -144,6 +146,20 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 // update material atlas if url has changed
                 const url = scene?.url;
                 if (url != this.url) {
+                    const { highlight } = this;
+                    const numObjects = scene?.config.numObjects ?? 0;
+                    const numBytes = numObjects + 4; // add four bytes for mutex
+                    if (highlight.buffer.byteLength != numBytes) {
+                        highlight.mutex.lockSpin();
+                        if (numBytes > highlight.buffer.byteLength) {
+                            //@ts-ignore
+                            highlight.buffer.grow(numBytes);
+                        }
+                        type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+                        (highlight as Mutable<typeof highlight>).indices = new Uint8Array(highlight.buffer, 4, numObjects);
+                        updateHighlightBuffer(highlight.indices, state.highlights, scene?.filter);
+                        highlight.mutex.unlock();
+                    }
                     this.url = url;
                     if (url) {
                         const materialData = this.makeMaterialAtlas(state);
@@ -178,8 +194,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         if (renderContext.hasStateChanged({ highlights })) {
             const { groups } = highlights;
-            const numObjects = scene?.config.numObjects ?? 0;
-            const numBytes = numObjects + 4;
             const { highlight } = this;
             const { prevState } = renderContext;
 
@@ -205,28 +219,22 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const objectIdsChanged = !sequenceEqual(objectIds, prevObjectIds);
 
             // do async stuff below
-            (async () => {
-                await highlight.mutex.lockAsync();
-                if (highlight.buffer.byteLength != numBytes) {
-                    //@ts-ignore
-                    highlight.buffer.grow(numBytes);
-                }
-                updateHighlightBuffer(groups, highlight.view);
-
-                if (objectIdsChanged) {
-                    // update highlight vertex attributes
-                    const nodes: OctreeNode[] = [];
-                    for (const rootNode of Object.values(rootNodes)) {
-                        nodes.push(...iterateNodes(rootNode));
-                    }
-                    // const highlights = createHighlightsMap(groups, nodes);
-                    for (const node of nodes) {
-                        node.applyHighlights(highlight.view);
-                    }
-                }
+            if (objectIdsChanged) {
+                highlight.mutex.lockSpin(); // worker should not hold this lock for long, so we're fine spinning until it's available.
+                updateHighlightBuffer(highlight.indices, highlights, scene?.filter);
                 highlight.mutex.unlock();
-                renderContext.changed = true; // notify of possible async changes
-            })();
+
+                // update highlight vertex attributes
+                const nodes: OctreeNode[] = [];
+                for (const rootNode of Object.values(rootNodes)) {
+                    nodes.push(...iterateNodes(rootNode));
+                }
+                // const highlights = createHighlightsMap(groups, nodes);
+                for (const node of nodes) {
+                    node.applyHighlights(highlight.indices);
+                }
+                // renderContext.changed = true; // notify of changes, in case mutex lock went async
+            };
         }
 
         if (renderContext.hasStateChanged({ clipping })) {
@@ -651,13 +659,39 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     }
 }
 
-function updateHighlightBuffer(groups: readonly RenderStateHighlightGroup[], buffer: Uint8Array) {
-    // TODO: do a more efficient delta update
-    buffer.fill(0);
+const enum Highlight {
+    default = 0,
+    hidden = 0xfe,
+    filtered = 0xff,
+}
+
+function updateHighlightBuffer(buffer: Uint8Array, highlight: RenderStateHighlightGroups, filter?: ObjectIdFilter) {
+    const hideDefault = highlight.defaultHighlight === null;
+    if (filter) {
+        const { objectIds } = filter;
+        if (filter.mode == "exclude") {
+            buffer.fill(hideDefault ? Highlight.hidden : Highlight.default);
+            for (const objectId of objectIds) {
+                buffer[objectId] = Highlight.filtered;
+            }
+        }
+        else {
+            buffer.fill(Highlight.filtered);
+            for (const objectId of objectIds) {
+                buffer[objectId] = Highlight.default;
+            }
+        }
+    } else {
+        buffer.fill(hideDefault ? Highlight.hidden : Highlight.default);
+    }
+    // apply highlight groups
     let groupIndex = 1;
-    for (const group of groups) {
+    for (const group of highlight.groups) {
+        let idx = group.rgbaTransform ? groupIndex : Highlight.hidden;
         for (const objectId of group.objectIds) {
-            buffer[objectId] = groupIndex;
+            if (buffer[objectId] != Highlight.filtered) {
+                buffer[objectId] = idx;
+            }
         }
         groupIndex++;
     }
@@ -686,7 +720,7 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
         }
     }
 
-    function copyMatrix(index: number, rgbaTransform: RGBATransform | null) {
+    function copyMatrix(index: number, rgbaTransform: RGBATransform | null | undefined) {
         for (let col = 0; col < numColorMatrixCols; col++) {
             for (let row = 0; row < numColorMatrixRows; row++) {
                 colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform?.[col + row * numColorMatrixCols] ?? 0;
@@ -696,9 +730,7 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
 
     // Copy transformation matrices
     const { defaultHighlight, groups } = highlights;
-    if (defaultHighlight) {
-        copyMatrix(0, defaultHighlight);
-    }
+    copyMatrix(0, defaultHighlight);
     for (let i = 0; i < groups.length; i++) {
         copyMatrix(i + 1, groups[i].rgbaTransform);
     }

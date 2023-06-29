@@ -7,6 +7,16 @@ export class Mutex {
         this._view = new Int32Array(buffer, 0, 1);
     }
 
+    // will loop until lock is available, so be careful using this in main thread
+    lockSpin() {
+        const { _view } = this;
+        for (; ;) {
+            if (Atomics.compareExchange(_view, 0, State.unlocked, State.locked) == State.unlocked) {
+                return;
+            }
+        }
+    }
+
     // blocking call, use in workers only!
     lockSync() {
         console.assert(self.Worker != undefined);

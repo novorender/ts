@@ -1,6 +1,5 @@
 import { glUpdateBuffer, type DrawParams, type VertexAttribute, type DrawParamsArraysMultiDraw, type DrawParamsElementsMultiDraw } from "webgl2";
-import type { MeshDrawRange, MeshObjectRange, NodeGeometry, VertexAttributeData } from "./parser";
-import { MaterialType } from "./schema";
+import type { MaterialType, MeshDrawRange, MeshObjectRange, NodeGeometry, VertexAttributeData } from "./worker";
 import { ResourceBin } from "core3d/resource";
 
 export interface Mesh {
@@ -34,21 +33,22 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
         const ib = typeof indices != "number" ? resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
-        const { triangles, position, normal, material, objectId, texCoord, color, projectedPos, deviations } = vertexAttributes;
+        const { triangles, position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight } = vertexAttributes;
         function convertAttrib(a: VertexAttributeData | null) {
             return a ? { ...a, buffer: buffers[a.buffer] } as VertexAttribute : null;
         }
-        const attributes = [position, normal, material, objectId, texCoord, color, projectedPos, deviations].map(convertAttrib);
+        const attributes = [position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight].map(convertAttrib);
         const triangleAttributes = triangles ? triangles.map(convertAttrib) : null;
 
-        // add extra highlight vertex buffer and attribute
-        const highlightVB = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: subMesh.numVertices });
-        attributes.push({ kind: "UNSIGNED_INT", buffer: highlightVB, componentType: "UNSIGNED_BYTE" });
+        // // add extra highlight vertex buffer and attribute
+        // const highlightVB = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: subMesh.numVertices });
+        // attributes.push({ kind: "UNSIGNED_INT", buffer: highlightVB, componentType: "UNSIGNED_BYTE" });
+        const highlightVB = buffers[highlight!.buffer];
 
         const vao = resourceBin.createVertexArray({ attributes, indices: ib });
         const vaoPosOnly = position.buffer != 0 ? resourceBin.createVertexArray({ attributes: [attributes[0]], indices: ib }) : null;
         const vaoTriangles = triangleAttributes ? resourceBin.createVertexArray({ attributes: triangleAttributes }) : null;
-        resourceBin.subordinate(vao, ...buffers);
+        resourceBin.subordinate(vao, ...buffers.filter(buf => buf != highlightVB));
         if (ib) {
             resourceBin.subordinate(vao, ib);
         }
@@ -63,7 +63,8 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
 }
 
 export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, highlights: Uint8Array | undefined) {
-    if (mesh.highlightVB) {
+    const { highlightVB } = mesh;
+    if (highlightVB) {
         const highlightBuffer = new Uint8Array(mesh.numVertices);
         if (highlights) {
             for (const { objectId, beginVertex, endVertex } of mesh.objectRanges) {
@@ -73,7 +74,7 @@ export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, hig
                 }
             }
         }
-        glUpdateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: highlightBuffer, targetBuffer: mesh.highlightVB });
+        glUpdateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: highlightBuffer, targetBuffer: highlightVB });
     }
 }
 

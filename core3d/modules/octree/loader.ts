@@ -1,10 +1,8 @@
 ///@ts-ignore
-import createWorker from "./loader.worker.js"; // uses esbuild-plugin-inline-worker to inline worker code.
+import createWorker from "./worker/index.worker.js"; // uses esbuild-plugin-inline-worker to inline worker code.
 import type { RenderStateScene } from "core3d/state";
-import type { AbortAllMessage, AbortMessage, CloseMessage, FilteredMessage, FilterMessage, LoadMessage, MessageRequest, MessageResponse, NodePayload } from "./loader_handler";
-import { LoaderHandler } from "./loader_handler";
+import { LoaderHandler, type AbortAllMessage, type AbortMessage, type BufferMessage, type CloseMessage, type LoadMessage, type MessageRequest, type MessageResponse, type NodePayload } from "./worker";
 import { OctreeNode } from "./node.js";
-import { filterSortedExclude, filterSortedInclude } from "core3d/iterate.js";
 
 interface PayloadPromiseMethods { readonly resolve: (value: NodePayload | undefined) => void, readonly reject: (reason: string) => void };
 
@@ -29,6 +27,11 @@ export class NodeLoader {
             }
         }
         this.handler = new LoaderHandler(this.receive.bind(this));
+    }
+
+    setBuffer(buffer: SharedArrayBuffer) {
+        const msg: BufferMessage = { kind: "buffer", buffer };
+        this.send(msg);
     }
 
     init(state: RenderStateScene | undefined) {
@@ -59,12 +62,6 @@ export class NodeLoader {
             return;
         }
         const { id } = msg;
-        switch (msg.kind) {
-            case "filter":
-                this.filter(msg);
-                return;
-        }
-
         const { payloadPromises } = this;
         const payloadPromise = payloadPromises.get(id);
         if (payloadPromise) {
@@ -119,20 +116,5 @@ export class NodeLoader {
         return new Promise<NodePayload | undefined>((resolve, reject) => {
             payloadPromises.set(id, { resolve, reject });
         });
-    }
-
-    filter(filterMsg: FilterMessage) {
-        const { id } = filterMsg;
-        let { objectIds } = filterMsg;
-        const { state } = this;
-        if (state) {
-            const { filter } = state;
-            if (filter) {
-                const filterFunc = filter.mode == "include" ? filterSortedInclude : filterSortedExclude;
-                objectIds = new Uint32Array([...(filterFunc(objectIds, filter.objectIds))]);
-            }
-        }
-        const filteredMsg: FilteredMessage = { kind: "filtered", id, objectIds };
-        this.send(filteredMsg);
     }
 }
