@@ -45,7 +45,7 @@ export class FlightController extends BaseController {
         autoZoomSpeed: false,
         flightTime: 1,
         fieldOfView: 60,
-        pickDelay: 200
+        pickDelay: 200,
     };
 
     override kind: string = "flight" as const;
@@ -97,6 +97,7 @@ export class FlightController extends BaseController {
         }
         this.changed = false;
         this.input.callbacks = this;
+        this.input.usePointerLock = true;
     }
 
     override autoFit(center: ReadonlyVec3, radius: number): void {
@@ -162,25 +163,25 @@ export class FlightController extends BaseController {
         let scale = 20;
         if (proportionalCameraSpeed && recordedMoveBegin) {
             scale = vec3.dist(position, recordedMoveBegin) * Math.tan(((Math.PI / 180) * fov) / 2) * 2;
-            const mouseWheelModifier = clamp(scale / 3, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
+            const mouseWheelModifier = this.input.hasShift ? 0 : clamp(scale / 3, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const mousePanModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const touchMovementModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const pinchModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             return {
-                mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale
+                mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale: 20
             }
         }
         return {
-            mouseWheelModifier: scale, mousePanModifier: scale, touchMovementModifier: scale, pinchModifier: scale, scale
+            mouseWheelModifier: this.input.hasShift ? 0 : scale, mousePanModifier: scale, touchMovementModifier: scale, pinchModifier: scale, scale
         }
     }
 
     protected getTransformations(): CameraTransformations {
         const { axes } = this;
-        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_2_move_y;
-        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_2_move_x;
-        const pivotX = -axes.mouse_rmb_move_y + axes.touch_1_move_y;
-        const pivotY = -axes.mouse_rmb_move_x + axes.touch_1_move_x;
+        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_1_move_y;
+        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_1_move_x;
+        const pivotX = -axes.mouse_rmb_move_y + axes.touch_3_move_y;
+        const pivotY = -axes.mouse_rmb_move_x + axes.touch_3_move_x;
         const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
 
         const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();

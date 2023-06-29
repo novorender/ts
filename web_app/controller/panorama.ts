@@ -67,6 +67,8 @@ export class PanoramaController extends BaseController {
             this.fov = fovDegrees;
         }
         this.changed = false;
+        this.input.callbacks = this;
+        this.input.usePointerLock = true;
         this.attach();
     }
 

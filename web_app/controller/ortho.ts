@@ -11,6 +11,7 @@ export interface OrthoControllerParams {
     readonly rotation?: ReadonlyQuat;
     readonly fieldOfView?: number;
     readonly stepInterval?: number;
+    readonly usePointerLock?: boolean
 }
 
 export class OrthoController extends BaseController {
@@ -18,7 +19,8 @@ export class OrthoController extends BaseController {
         position: [0, 0, 0],
         rotation: [0, 0, 0, 1],
         fieldOfView: 45,
-        stepInterval: 1
+        stepInterval: 1,
+        usePointerLock: false,
     } as const;
 
     override kind = "ortho" as const;
@@ -46,6 +48,7 @@ export class OrthoController extends BaseController {
 
     override updateParams(params: RecursivePartial<OrthoControllerParams>) {
         this.params = mergeRecursive(this.params, params);
+        this.input.usePointerLock = this.params.usePointerLock;
     }
 
     override init(params: ControllerInitParams) {
@@ -63,6 +66,7 @@ export class OrthoController extends BaseController {
             this.fov = OrthoController.fovFromPerspective(fovDegrees, distance);
         }
         this.changed = true;
+        this.input.usePointerLock = this.params.usePointerLock;
         this.input.callbacks = this;
     }
 
