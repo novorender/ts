@@ -215,7 +215,7 @@ export class View {
             const cooldown = 3000;
             const now = performance.now();
             if (now > this.lastQualityAdjustTime + cooldown) { // add a cooldown period before changing anything
-                const resolutionTiers = [0.66, 0.75, 1];
+                const resolutionTiers = [0.4, 0.6, 1];
                 if (medianInterval > highFrameInterval) {
                     if (this.resolutionTier != 0) {
                         this.resolutionModifier = deviceProfile.renderResolution * resolutionTiers[--this.resolutionTier];
