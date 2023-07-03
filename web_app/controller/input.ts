@@ -198,7 +198,6 @@ export class ControllerInput {
     };
 
     private touchstart = async (event: TouchEvent) => {
-        event.stopPropagation();
         this.pointerTable = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
         const { pointerTable, _touchMovePrev } = this;
         this._fingers = event.touches.length;
@@ -221,7 +220,6 @@ export class ControllerInput {
     };
 
     private touchend = (event: TouchEvent) => {
-        event.stopPropagation();
         this.pointerTable = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
         const { pointerTable, _touchMovePrev } = this;
         this._fingers = event.touches.length;
@@ -245,7 +243,6 @@ export class ControllerInput {
 
     private touchcancel = (event: TouchEvent) => {
         event.preventDefault();
-        event.stopPropagation();
         this._fingers = event.touches.length;
         this.pointerTable = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
     };

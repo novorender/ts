@@ -48,7 +48,9 @@ export class OrthoController extends BaseController {
 
     override updateParams(params: RecursivePartial<OrthoControllerParams>) {
         this.params = mergeRecursive(this.params, params);
-        this.input.usePointerLock = this.params.usePointerLock;
+        if (this.input.callbacks == this) {
+            this.input.usePointerLock = this.params.usePointerLock;
+        }
     }
 
     override init(params: ControllerInitParams) {
