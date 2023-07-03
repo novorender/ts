@@ -495,9 +495,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const state = prevState!;
 
         for (const rootNode of Object.values(this.rootNodes)) {
-            if (rootNode.geometryKind == NodeGeometryKind.terrain && state.terrain.asBackground) {
-                continue;
-            }
             const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, rootNode);
             glState(gl, {
                 program: programs.pick,
@@ -534,6 +531,10 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         this.renderNodeClippingOutline(node, mask);
                     }
                 }
+            }
+
+            if (rootNode.geometryKind == NodeGeometryKind.terrain && state.terrain.asBackground) {
+                glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
             }
         }
     }
