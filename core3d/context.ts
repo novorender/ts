@@ -725,6 +725,7 @@ export class RenderContext {
         const samples: PickSample[] = [];
         const { isOrtho, viewClipMatrix, viewWorldMatrix, viewWorldMatrixNormal } = this;
         const f16Max = 65504;
+        const invNormalMatrix = mat3.invert(mat3.create(), viewWorldMatrixNormal);
 
         for (let iy = y0; iy < y1; iy++) {
             const dy = iy - py;
@@ -754,11 +755,11 @@ export class RenderContext {
 
                     // convert into world space.
                     const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrix);
-                    // const normal = vec3.transformMat3(vec3.create(), normalVS, viewWorldMatrixNormal);
                     const normal = vec3.fromValues(nx, ny, nz);
+                    const normalVS = vec3.transformMat3(vec3.create(), normal, invNormalMatrix);
                     vec3.normalize(normal, normal);
 
-                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, deviation, depth } as const;
+                    const sample = { x: ix - px, y: iy - py, position, normal, normalVS, objectId, deviation, depth } as const;
                     samples.push(sample);
                 }
             }
@@ -778,9 +779,11 @@ export interface PickSample {
     // position and normals are in world space.
     readonly position: ReadonlyVec3;
     readonly normal: ReadonlyVec3;
+    readonly normalVS: ReadonlyVec3;
     readonly objectId: number;
     readonly deviation?: number;
     readonly depth: number;
+    readonly isEdge?: boolean;
 };
 
 export interface AsyncProgramParams {

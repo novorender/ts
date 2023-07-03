@@ -1,5 +1,5 @@
 import { type ReadonlyVec3, vec3, type ReadonlyQuat } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample } from "core3d";
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
 import { flipState } from "./flip";
 
@@ -157,11 +157,18 @@ export abstract class View {
         if (context) {
             const samples = await context.pick(x, y, sampleDiscRadius);
             if (samples.length) {
-                const centerSample = samples.reduce((a, b) => a.depth < b.depth ? a : b);
+                let isEdge = false;
+                const centerSample = samples.reduce((a, b) => {
+                    if (!isEdge && vec3.dot(a.normal, b.normal) < 0.8) {
+                        isEdge = true;
+                    }
+                    return a.depth < b.depth ? a : b
+                });
                 const flippedSample = {
                     ...centerSample,
                     position: vec3.fromValues(centerSample.position[0], -centerSample.position[2], centerSample.position[1]),
-                    normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1])
+                    normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1]),
+                    isEdge
                 }
                 return flippedSample;
             }
