@@ -10,9 +10,3 @@ export type { DeviceProfile } from "core3d/device";
 export { getDeviceProfile };
 
 glMatrix.setMatrixArrayType(Array);
-
-
-export function createView(canvas: HTMLCanvasElement, options?: { deviceProfile?: DeviceProfile }) {
-    const deviceProfile = options?.deviceProfile ?? getDeviceProfile(0);
-    return new View(canvas, deviceProfile);
-}

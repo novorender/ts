@@ -3,9 +3,10 @@ import { downloadScene, type RenderState, type RenderStateChanges, type RenderSt
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
 import { flipState } from "./flip";
 
-export class View {
+export abstract class View {
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
-    readonly alternateUrl = new URL("http://192.168.1.129:9090/").toString();
+    readonly alternateUrl = new URL("https://blobs.novorender.com/").toString();
+    abstract getSasKey(sceneId: string): string | undefined; // sas key, sans "?"
     public renderContext: RenderContext | undefined;
     private _deviceProfile: DeviceProfile;
     private _setDeviceProfile: (value: DeviceProfile) => void;
