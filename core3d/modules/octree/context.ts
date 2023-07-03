@@ -1,4 +1,4 @@
-import type { DerivedRenderState, ObjectIdFilter, RenderContext, RenderStateHighlightGroups, RGBATransform } from "core3d";
+import type { DerivedRenderState, ObjectIdFilter, RenderContext, RenderState, RenderStateGroupAction, RenderStateHighlightGroups, RenderStateScene, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
@@ -33,6 +33,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
     currentProgramFlags = OctreeModule.defaultProgramFlags;
     debug = false;
+    suspendUpdates = false;
 
     localSpaceTranslation = vec3.create() as ReadonlyVec3;
     localSpaceChanged = false;
@@ -162,7 +163,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     }
                     this.url = url;
                     if (url) {
-                        const materialData = this.makeMaterialAtlas(state);
+                        const materialData = makeMaterialAtlas(state);
                         if (materialData) {
                             glUpdateTexture(gl, resources.materialTexture, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: materialData });
                         }
@@ -171,16 +172,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
                 // initiate loading of scene
                 if (scene) {
-                    const { config } = scene;
-                    const { version } = scene.config;
-                    this.version = version;
-                    this.loader.abortAllPromise.then(() => { // make sure we wait for any previous aborts to complete
-                        createSceneRootNodes(this, config).then(rootNodes => {
-                            if (rootNodes) {
-                                this.rootNodes = rootNodes;
-                            }
-                        });
-                    });
+                    this.version = scene.config.version;
+                    this.reloadScene(scene);
                 }
             }
         }
@@ -196,17 +189,29 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const { groups } = highlights;
             const { highlight } = this;
             const { prevState } = renderContext;
+            const prevGroups = prevState?.highlights.groups ?? [];
 
             updateShaderCompileConstants({ highlight: groups.length > 0 });
 
             const { values } = uniforms.scene;
-            values.applyDefaultHighlight = highlights.defaultHighlight != undefined;
+            values.applyDefaultHighlight = highlights.defaultAction != undefined;
 
-            const transforms = [highlights.defaultHighlight, ...groups.map(g => g.rgbaTransform)];
+            // are there any potential changes to filtering
+            if (scene) {
+                const n = Math.max(groups.length, prevGroups.length);
+                for (let i = 0; i < n; i++) {
+                    if (groups[i] != prevGroups[i] && (groups[i]?.action == "filter" || prevGroups[i]?.action == "filter")) {
+                        this.reloadScene(scene);
+                        break;
+                    }
+                }
+            }
+
+            const transforms = [highlights.defaultAction, ...groups.map(g => g.action)];
             const prevTransforms = prevState ?
                 [
-                    prevState.highlights.defaultHighlight,
-                    ...prevState.highlights.groups.map(g => g.rgbaTransform)
+                    prevState.highlights.defaultAction,
+                    ...prevState.highlights.groups.map(g => g.action)
                 ] : [];
             if (!sequenceEqual(transforms, prevTransforms)) {
                 // update highlight matrices
@@ -256,62 +261,63 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             });
         }
 
-        // TODO: double check that node root nodes actually work
-        const nodes: OctreeNode[] = [];
-        for (const rootNode of Object.values(rootNodes)) {
-            rootNode.update(state); // recursively update all nodes' visibility and projectedSize++
+        if (!this.suspendUpdates) {
+            const nodes: OctreeNode[] = [];
+            for (const rootNode of Object.values(rootNodes)) {
+                rootNode.update(state); // recursively update all nodes' visibility and projectedSize++
 
-            // collapse nodes
-            const preCollapseNodes = [...iterateNodes(rootNode)];
-            for (const node of preCollapseNodes) {
-                if (!node.shouldSplit(projectedSizeSplitThreshold * 0.98)) { // add a little "slack" before collapsing back again
-                    if (node.state != NodeState.collapsed) {
-                        node.dispose(); // collapse node
+                // collapse nodes
+                const preCollapseNodes = [...iterateNodes(rootNode)];
+                for (const node of preCollapseNodes) {
+                    if (!node.shouldSplit(projectedSizeSplitThreshold * 0.98)) { // add a little "slack" before collapsing back again
+                        if (node.state != NodeState.collapsed) {
+                            node.dispose(); // collapse node
+                        }
+                    }
+                }
+                nodes.push(...iterateNodes(rootNode));
+            }
+
+            nodes.sort((a, b) => b.projectedSize - a.projectedSize); // sort by descending projected size
+
+            const { maxGPUBytes } = deviceProfile.limits; // 1_000_000_000;
+            const { maxPrimitives } = deviceProfile.limits; // 2_000_000;
+            let gpuBytes = 0;
+            let primitives = 0; // # rendered primitives (points, lines and triangles)
+            for (const node of nodes) {
+                if (node.hasGeometry) {
+                    gpuBytes += node.data.gpuBytes;
+                    primitives += node.renderedPrimitives;
+                }
+                if (node.state == NodeState.requestDownload || node.state == NodeState.downloading) {
+                    // include projected resources in the budget
+                    primitives += node.data.primitivesDelta;
+                    gpuBytes += node.data.gpuBytes;
+                }
+            }
+
+            // split nodes based on camera orientation
+            for (const node of nodes) {
+                if (node.shouldSplit(projectedSizeSplitThreshold)) {
+                    if (node.state == NodeState.collapsed) {
+                        if (primitives + node.data.primitivesDelta <= maxPrimitives && gpuBytes + node.data.gpuBytes <= maxGPUBytes) {
+                            node.state = NodeState.requestDownload;
+                            primitives += node.data.primitivesDelta;
+                            gpuBytes += node.data.gpuBytes;
+                        }
                     }
                 }
             }
-            nodes.push(...iterateNodes(rootNode));
-        }
+            sessionStorage.setItem("gpu_bytes", gpuBytes.toLocaleString());
+            sessionStorage.setItem("primitives", primitives.toLocaleString());
 
-        nodes.sort((a, b) => b.projectedSize - a.projectedSize); // sort by descending projected size
-
-        const { maxGPUBytes } = deviceProfile.limits; // 1_000_000_000;
-        const { maxPrimitives } = deviceProfile.limits; // 2_000_000;
-        let gpuBytes = 0;
-        let primitives = 0; // # rendered primitives (points, lines and triangles)
-        for (const node of nodes) {
-            if (node.hasGeometry) {
-                gpuBytes += node.data.gpuBytes;
-                primitives += node.renderedPrimitives;
-            }
-            if (node.state == NodeState.requestDownload || node.state == NodeState.downloading) {
-                // include projected resources in the budget
-                primitives += node.data.primitivesDelta;
-                gpuBytes += node.data.gpuBytes;
-            }
-        }
-
-        // split nodes based on camera orientation
-        for (const node of nodes) {
-            if (node.shouldSplit(projectedSizeSplitThreshold)) {
-                if (node.state == NodeState.collapsed) {
-                    if (primitives + node.data.primitivesDelta <= maxPrimitives && gpuBytes + node.data.gpuBytes <= maxGPUBytes) {
-                        node.state = NodeState.requestDownload;
-                        primitives += node.data.primitivesDelta;
-                        gpuBytes += node.data.gpuBytes;
-                    }
+            const maxDownloads = 8;
+            let availableDownloads = maxDownloads - this.loader.activeDownloads;
+            for (const node of nodes) {
+                if (availableDownloads > 0 && node.state == NodeState.requestDownload) {
+                    node.downloadNode();
+                    availableDownloads--;
                 }
-            }
-        }
-        sessionStorage.setItem("gpu_bytes", gpuBytes.toLocaleString());
-        sessionStorage.setItem("primitives", primitives.toLocaleString());
-
-        const maxDownloads = 8;
-        let availableDownloads = maxDownloads - this.loader.activeDownloads;
-        for (const node of nodes) {
-            if (availableDownloads > 0 && node.state == NodeState.requestDownload) {
-                node.downloadNode();
-                availableDownloads--;
             }
         }
         const endTime = performance.now();
@@ -638,26 +644,38 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         this.rootNodes = {};
     }
 
-    makeMaterialAtlas(state: DerivedRenderState) {
-        const { scene } = state;
-        if (scene) {
-            const { config } = scene;
-            const { numMaterials } = config;
-            if (numMaterials) {
-                const { diffuse, opacity } = config.materialProperties;
-                console.assert(numMaterials <= 256);
-                function zeroes() { return new Uint8ClampedArray(numMaterials); };
-                function ones() { const a = new Uint8ClampedArray(numMaterials); a.fill(255); return a; };
-                const red = decodeBase64(diffuse.red) ?? zeroes();
-                const green = decodeBase64(diffuse.green) ?? zeroes();
-                const blue = decodeBase64(diffuse.blue) ?? zeroes();
-                const alpha = decodeBase64(opacity) ?? ones();
-                const srcData = interleaveRGBA(red, green, blue, alpha);
-                return srcData;
-            }
+    private async reloadScene(scene: RenderStateScene) {
+        this.suspendUpdates = true;
+        await this.loader.abortAllPromise; // make sure we wait for any previous aborts to complete
+        const rootNodes = await createSceneRootNodes(this, scene.config);
+        if (rootNodes) {
+            this.rootNodes = rootNodes;
+        }
+        this.suspendUpdates = false;
+        this.renderContext.changed = true;
+    }
+}
+
+function makeMaterialAtlas(state: DerivedRenderState) {
+    const { scene } = state;
+    if (scene) {
+        const { config } = scene;
+        const { numMaterials } = config;
+        if (numMaterials) {
+            const { diffuse, opacity } = config.materialProperties;
+            console.assert(numMaterials <= 256);
+            function zeroes() { return new Uint8ClampedArray(numMaterials); };
+            function ones() { const a = new Uint8ClampedArray(numMaterials); a.fill(255); return a; };
+            const red = decodeBase64(diffuse.red) ?? zeroes();
+            const green = decodeBase64(diffuse.green) ?? zeroes();
+            const blue = decodeBase64(diffuse.blue) ?? zeroes();
+            const alpha = decodeBase64(opacity) ?? ones();
+            const srcData = interleaveRGBA(red, green, blue, alpha);
+            return srcData;
         }
     }
 }
+
 
 const enum Highlight {
     default = 0,
@@ -666,7 +684,7 @@ const enum Highlight {
 }
 
 function updateHighlightBuffer(buffer: Uint8Array, highlight: RenderStateHighlightGroups, filter?: ObjectIdFilter) {
-    const hideDefault = highlight.defaultHighlight === null;
+    const hideDefault = highlight.defaultAction === null;
     if (filter) {
         const { objectIds } = filter;
         if (filter.mode == "exclude") {
@@ -687,7 +705,10 @@ function updateHighlightBuffer(buffer: Uint8Array, highlight: RenderStateHighlig
     // apply highlight groups
     let groupIndex = 1;
     for (const group of highlight.groups) {
-        let idx = group.rgbaTransform ? groupIndex : Highlight.hidden;
+        const idx =
+            group.action == "hide" ? Highlight.hidden :
+                group.action == "filter" ? Highlight.filtered :
+                    groupIndex;
         for (const objectId of group.objectIds) {
             if (buffer[objectId] != Highlight.filtered) {
                 buffer[objectId] = idx;
@@ -720,19 +741,19 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
         }
     }
 
-    function copyMatrix(index: number, rgbaTransform: RGBATransform | null | undefined) {
+    function copyMatrix(index: number, rgbaTransform: RGBATransform) {
         for (let col = 0; col < numColorMatrixCols; col++) {
             for (let row = 0; row < numColorMatrixRows; row++) {
-                colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform?.[col + row * numColorMatrixCols] ?? 0;
+                colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform[col + row * numColorMatrixCols];
             }
         }
     }
 
     // Copy transformation matrices
-    const { defaultHighlight, groups } = highlights;
-    copyMatrix(0, defaultHighlight);
+    const { defaultAction, groups } = highlights;
+    copyMatrix(0, getRGBATransform(defaultAction));
     for (let i = 0; i < groups.length; i++) {
-        copyMatrix(i + 1, groups[i].rgbaTransform);
+        copyMatrix(i + 1, getRGBATransform(groups[i].action));
     }
     return colorMatrices;
 }
@@ -773,6 +794,18 @@ function sequenceEqual(a: any[], b: any[]) {
         }
     }
     return true;
+}
+
+const defaultRGBATransform: RGBATransform = [
+    1, 0, 0, 0, 0,
+    0, 1, 0, 0, 0,
+    0, 0, 1, 0, 0,
+    0, 0, 0, 1, 0,
+];
+
+
+function getRGBATransform(action: RenderStateGroupAction | undefined): RGBATransform {
+    return (typeof action != "string" && Array.isArray(action)) ? action : defaultRGBATransform;
 }
 
 const enum VertexAttributeIds {

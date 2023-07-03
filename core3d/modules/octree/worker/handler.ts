@@ -1,4 +1,4 @@
-import { AbortableDownload, Downloader } from "../download";
+import { AbortableDownload, Downloader } from "./download";
 import { Mutex } from "../mutex";
 import { parseNode } from "./parser";
 import type { AbortAllMessage, AbortMessage, AbortedAllMessage, AbortedMessage, BufferMessage, ErrorMessage, LoadMessage, LoadedMessage, MessageRequest, MessageResponse } from "./types";
