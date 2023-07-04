@@ -1,11 +1,10 @@
-import type { RenderStateCamera, RenderStateChanges, RecursivePartial, BoundingSphere, PickSample } from "core3d";
+import type { RenderStateCamera, RenderStateChanges, RecursivePartial, BoundingSphere, PickSample, PickOptions } from "core3d";
 import { type ReadonlyVec3, type ReadonlyQuat, vec3 } from "gl-matrix";
 import { ControllerInput } from "./input";
 import type { FlightControllerParams } from "./flight";
 import type { OrbitControllerParams } from "./orbit";
 import type { OrthoControllerParams } from "./ortho";
 import type { PanoramaControllerParams } from "./panorama";
-import type { PickOptions } from "dist";
 
 export type ControllerParams = FlightControllerParams | OrthoControllerParams | PanoramaControllerParams | OrbitControllerParams;
 export interface Orientation {
