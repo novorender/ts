@@ -75,6 +75,9 @@ class GridModuleContext implements RenderModuleContext {
                     test: true,
                     writeMask: false,
                 },
+                sample: {
+                    alphaToCoverage: false
+                },
                 blend: {
                     enable: true,
                     srcRGB: "SRC_ALPHA",
