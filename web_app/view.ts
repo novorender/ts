@@ -282,7 +282,7 @@ export abstract class View {
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
                         wasIdle = true;
-                        if (pickRenderState) {
+                        if (pickRenderState && renderContext.isRendering()) {
                             renderContext.renderPickBuffers();
                             pickRenderState = undefined;
                         }
