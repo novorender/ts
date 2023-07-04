@@ -13,7 +13,8 @@ export class GridModule implements RenderModule {
         axisY: "vec3",
         size1: "float",
         size2: "float",
-        color: "vec3",
+        color1: "vec3",
+        color2: "vec3",
         distance: "float",
     } as const satisfies Record<string, UniformTypes>;
 
@@ -52,7 +53,8 @@ class GridModuleContext implements RenderModuleContext {
             values.origin = vec3.transformMat4(vec3.create(), origin, worldLocalMatrix);
             values.axisX = axisX;
             values.axisY = axisY;
-            values.color = grid.color;
+            values.color1 = grid.color1;
+            values.color2 = grid.color2;
             values.size1 = grid.size1;
             values.size2 = grid.size2;
             values.distance = grid.distance;

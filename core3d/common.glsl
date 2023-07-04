@@ -99,7 +99,8 @@ struct GridUniforms {
     vec3 axisY;
     float size1;
     float size2;
-    vec3 color;
+    vec3 color1;
+    vec3 color2;
     float distance;
 };
 
