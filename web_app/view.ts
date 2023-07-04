@@ -168,7 +168,7 @@ export abstract class View {
                     ...centerSample,
                     position: vec3.fromValues(centerSample.position[0], -centerSample.position[2], centerSample.position[1]),
                     normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1]),
-                    isEdge
+                    isEdge: samples.length > 1 ? isEdge : undefined
                 }
                 return flippedSample;
             }
