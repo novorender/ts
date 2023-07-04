@@ -5,6 +5,7 @@ import type { FlightControllerParams } from "./flight";
 import type { OrbitControllerParams } from "./orbit";
 import type { OrthoControllerParams } from "./ortho";
 import type { PanoramaControllerParams } from "./panorama";
+import type { PickOptions } from "dist";
 
 export type ControllerParams = FlightControllerParams | OrthoControllerParams | PanoramaControllerParams | OrbitControllerParams;
 export interface Orientation {
@@ -150,7 +151,7 @@ type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 export type MutableCameraState = Partial<Mutable<RenderStateCamera>>;
 
 export interface PickInterface {
-    pick: (x: number, y: number, sampleDiscRadius: number) => Promise<PickSample | undefined>;
+    pick: (x: number, y: number, options?: PickOptions) => Promise<PickSample | undefined>;
 }
 
 export interface ControllerInitParams {

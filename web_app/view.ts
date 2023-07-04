@@ -1,5 +1,5 @@
-import { type ReadonlyVec3, vec3, type ReadonlyQuat } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample } from "core3d";
+import { type ReadonlyVec3, vec3, type ReadonlyQuat, mat3 } from "gl-matrix";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions } from "core3d";
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
 import { flipState } from "./flip";
 
@@ -152,10 +152,10 @@ export abstract class View {
         return scene.config;
     }
 
-    async pick(x: number, y: number, sampleDiscRadius = 0) {
+    async pick(x: number, y: number, options?: PickOptions) {
         const context = this.renderContext;
         if (context) {
-            const samples = await context.pick(x, y, sampleDiscRadius);
+            const samples = await context.pick(x, y, options);
             if (samples.length) {
                 let isEdge = false;
                 const centerSample = samples.reduce((a, b) => {
@@ -164,11 +164,14 @@ export abstract class View {
                     }
                     return a.depth < b.depth ? a : b
                 });
+                const { viewWorldMatrixNormal } = context.getViewMatrices();
+                const invNormalMatrix = mat3.invert(mat3.create(), viewWorldMatrixNormal);
                 const flippedSample = {
                     ...centerSample,
                     position: vec3.fromValues(centerSample.position[0], -centerSample.position[2], centerSample.position[1]),
                     normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1]),
-                    isEdge: samples.length > 1 ? isEdge : undefined
+                    isEdge: samples.length > 1 ? isEdge : undefined,
+                    normalVS: vec3.transformMat3(vec3.create(), centerSample.normal, invNormalMatrix)
                 }
                 return flippedSample;
             }
