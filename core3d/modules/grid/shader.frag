@@ -21,8 +21,8 @@ void main() {
     float d = 1.0 - min(distance(cameraPosLS, varyings.posLS) / grid.distance, 1.0);
     float g1 = getGrid(varyings.posOS / grid.size1);
     float g2 = getGrid(varyings.posOS / grid.size2);
-    fragColor = vec4(g2 > 0.1 ? grid.color2 : grid.color1, mix(g2, g1, g1) * pow(d, 3.0));
-    fragColor.a = mix(0.5 * fragColor.a, fragColor.a, g2);
+    fragColor = vec4(g2 > 0.001 ? grid.color2 : grid.color1, max(g2, g1) * pow(d, 3.0));
+    fragColor.a = mix(0.5 * fragColor.a, fragColor.a, g2) * 1.5;
     if(fragColor.a <= 0.0)
         discard;
 }
