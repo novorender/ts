@@ -91,7 +91,8 @@ export interface RenderStateDebug {
 
 export interface RenderStateGrid {
     readonly enabled: boolean;
-    readonly color: RGB;
+    readonly color1: RGB;
+    readonly color2: RGB;
     readonly origin: ReadonlyVec3;
     readonly axisX: ReadonlyVec3;
     readonly axisY: ReadonlyVec3;
