@@ -262,7 +262,7 @@ export class FlightController extends BaseController {
         if (pickInterface) {
             const changes = event.buttons;
             if (changes & pivotButton) {
-                const sample = await pickInterface.pick(event.offsetX, event.offsetY, 0);
+                const sample = await pickInterface.pick(event.offsetX, event.offsetY, { async: false });
                 if (sample) {
                     this.setPivot(sample.position, true);
                 } else {
@@ -279,7 +279,7 @@ export class FlightController extends BaseController {
         if (pointerTable.length == pivotFingers && pickInterface) {
             const x = pointerTable.length > 1 ? Math.round((pointerTable[0].x + pointerTable[1].x) / 2) : pointerTable[0].x;
             const y = pointerTable.length > 1 ? Math.round((pointerTable[0].y + pointerTable[1].y) / 2) : pointerTable[0].y;
-            const sample = await pickInterface.pick(x, y, 0);
+            const sample = await pickInterface.pick(x, y, { async: false });
             if (sample) {
                 this.setPivot(sample.position, true);
             } else {
@@ -300,7 +300,7 @@ export class FlightController extends BaseController {
         }
         this.inMoveBegin = true;
         const setPickPosition = async (x: number, y: number) => {
-            const sample = await pickInterface.pick(x, y, 0);
+            const sample = await pickInterface.pick(x, y, { async: false });
             if (sample) {
                 this.recordedMoveBegin = this.lastRecordePoistion = sample.position;
                 this.lastUpdatedMoveBegin = performance.now();
