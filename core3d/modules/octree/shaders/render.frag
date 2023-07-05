@@ -28,8 +28,17 @@ layout(location = 1) out uvec4 fragPick;
 void main() {
     float linearDepth = -varyings.positionVS.z;
 #if defined(CLIP)
-    if(linearDepth < camera.near || clip(varyings.positionVS, clipping))
+    if(linearDepth < camera.near)
         discard;
+
+    float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
+    bool inside = clipping.mode == clippingModeIntersection ? clipping.numPlanes > 0U : true;
+    for(uint i = 0U; i < clipping.numPlanes; i++) {
+        inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.;
+    }
+    if (clipping.mode == clippingModeIntersection ? inside : !inside) {
+        discard;
+    }
 #endif
 
     vec4 baseColor;
