@@ -14,6 +14,8 @@ export abstract class View {
     protected renderStateCad: RenderState;
     protected prevRenderStateCad: RenderState | undefined;
     private stateChanges: RenderStateChanges | undefined;
+    private screenshot: string | undefined;
+    private requestScreenshot = false;
 
     //* @internal */
     controllers;
@@ -71,6 +73,18 @@ export abstract class View {
         const clone = structuredClone(state);
         flipState(clone, "GLToCAD");
         return clone;
+    }
+
+    async getScreenshot() {
+        this.screenshot = undefined;
+        this.requestScreenshot = true;
+        function delay(ms: number) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        while (this.screenshot == undefined) {
+            await delay(50);
+        }
+        return this.screenshot;
     }
 
     get renderState() {
@@ -310,11 +324,15 @@ export abstract class View {
                     this.stateChanges = undefined;
                 }
 
-                const { renderStateGL } = this;
-                if (prevState !== renderStateGL || renderContext.changed) {
+                const { renderStateGL, requestScreenshot } = this;
+                if (prevState !== renderStateGL || renderContext.changed || requestScreenshot) {
                     prevState = renderStateGL;
                     this.render?.(isIdleFrame);
                     const statsPromise = renderContext.render(renderStateGL);
+                    if (requestScreenshot) {
+                        this.screenshot = this.canvas.toDataURL();
+                        this.requestScreenshot = false;
+                    }
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
                     });
