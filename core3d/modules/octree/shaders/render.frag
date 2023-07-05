@@ -61,7 +61,26 @@ void main() {
     if(baseColor == vec4(0)) {
         rgba = texture(textures.base_color, varyings.texCoord0);
     } else {
-        vec4 diffuseOpacity = baseColor;
+        rgba = baseColor;
+    }
+#endif
+
+#if defined (HIGHLIGHT)
+    if(highlight != 0U || !scene.applyDefaultHighlight) {
+        float u = (float(highlight) + 0.5) / float(maxHighlights);
+        mat4 colorTransform;
+        colorTransform[0] = texture(textures.highlights, vec2(u, 0.5 / 5.0));
+        colorTransform[1] = texture(textures.highlights, vec2(u, 1.5 / 5.0));
+        colorTransform[2] = texture(textures.highlights, vec2(u, 2.5 / 5.0));
+        colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / 5.0));
+        vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / 5.0));
+        rgba = colorTransform * rgba + colorTranslation;
+    }
+#endif
+
+#if (MODE == MODE_TRIANGLES)
+    if(baseColor != vec4(0)) {
+        vec4 diffuseOpacity = rgba;
         diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
 
         vec4 specularShininess = vec4(mix(0.4, 0.1, baseColor.a)); // TODO: get from varyings instead
@@ -78,19 +97,6 @@ void main() {
 
         vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
         rgba = vec4(rgb, baseColor.a);
-    }
-#endif
-
-#if defined (HIGHLIGHT)
-    if(highlight != 0U || !scene.applyDefaultHighlight) {
-        float u = (float(highlight) + 0.5) / float(maxHighlights);
-        mat4 colorTransform;
-        colorTransform[0] = texture(textures.highlights, vec2(u, 0.5 / 5.0));
-        colorTransform[1] = texture(textures.highlights, vec2(u, 1.5 / 5.0));
-        colorTransform[2] = texture(textures.highlights, vec2(u, 2.5 / 5.0));
-        colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / 5.0));
-        vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / 5.0));
-        rgba = colorTransform * rgba + colorTranslation;
     }
 #endif
 
