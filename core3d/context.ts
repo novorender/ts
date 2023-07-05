@@ -778,8 +778,8 @@ export class RenderContext {
         } else {
             pickBufferPromise.then(({ pick }) => { this.currentPick = pick });
         }
-        const { currentPick } = this;
-        if (currentPick === undefined) {
+        const { currentPick, width, height } = this;
+        if (currentPick === undefined || width * height * 4 != currentPick.length) {
             return [];
         }
         return this.extractPick(currentPick, x, y, sampleDiscRadius, pickCameraPlane);
