@@ -17,6 +17,7 @@ export function getDeviceProfile(tier: GPUTier): DeviceProfile {
     const maxSamples = ([4, 4, 8, 16] as const)[tier]; // MSAA
     const iosShaderBug = false; // Older (<A15) IOS devices has a bug when using flat interpolation in complex shaders, which causes Safari to crash after a while. Update: Fixed with WEBGL_provoking_vertex extension!
     const detailBias = ([0.25, .5, .75, 1] as const)[tier];
+    const renderResolution = ([0.5, 0.75, 1, 1] as const)[tier]
 
     const coreProfile = {
         features: {
@@ -35,7 +36,7 @@ export function getDeviceProfile(tier: GPUTier): DeviceProfile {
 
     return {
         ...coreProfile,
-        renderResolution: 1, // adjust this by gpu tier?
+        renderResolution,
         framerateTarget: 30
     } as const;
 }

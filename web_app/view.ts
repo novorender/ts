@@ -291,7 +291,7 @@ export abstract class View {
 
                 if (isIdleFrame) { //increase resolution and detail bias on idleFrame
                     if (!wasIdle) {
-                        this.resolutionModifier = Math.min(deviceProfile.renderResolution * 2, 1);
+                        this.resolutionModifier = deviceProfile.renderResolution;
                         this.resize();
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
