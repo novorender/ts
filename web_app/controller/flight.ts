@@ -46,6 +46,7 @@ export class FlightController extends BaseController {
         flightTime: 1,
         fieldOfView: 60,
         pickDelay: 200,
+        proportionalCameraSpeed: { min: 0.2, max: 1000 }
     };
 
     override kind: string = "flight" as const;

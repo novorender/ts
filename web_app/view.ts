@@ -51,7 +51,6 @@ export abstract class View {
         } as const;
         this.activeController = this.controllers["flight"];
         this.activeController.attach();
-        this.activeController.updateParams({ proportionalCameraSpeed: { min: 0.2, max: 1000 } }); // TL: why?
 
         const resizeObserver = new ResizeObserver(() => { this.resize(); });
         resizeObserver.observe(canvas);
@@ -268,12 +267,12 @@ export abstract class View {
 
     async run() {
         let prevState: RenderState | undefined;
-        let pickRenderState: RenderState | undefined;
         let prevRenderTime = performance.now();
         let wasCameraMoving = false;
         let idleFrameTime = 0;
         let wasIdle = false;
         const frameIntervals: number[] = [];
+        let idleframeResetDelay = 0;
         for (; ;) {
             const { renderContext, activeController, deviceProfile } = this;
             const renderTime = await RenderContext.nextFrame(renderContext);
@@ -291,21 +290,22 @@ export abstract class View {
 
                 if (isIdleFrame) { //increase resolution and detail bias on idleFrame
                     if (!wasIdle) {
-                        this.resolutionModifier = deviceProfile.renderResolution;
+                        this.resolutionModifier = Math.min(1, deviceProfile.renderResolution * 2);
                         this.resize();
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
                         wasIdle = true;
-                        if (pickRenderState && renderContext.isRendering()) {
-                            renderContext.renderPickBuffers();
-                            pickRenderState = undefined;
-                        }
                     }
                 } else {
                     if (wasIdle) {
-                        this.resolutionModifier = deviceProfile.renderResolution;
-                        this.resolutionTier = 2;
-                        wasIdle = false;
+                        if (idleframeResetDelay < 10) { //Give some time for the pick buffer to finish using high res frame
+                            idleframeResetDelay++;
+                        } else {
+                            idleframeResetDelay = 0;
+                            this.resolutionModifier = deviceProfile.renderResolution;
+                            this.resolutionTier = 2;
+                            wasIdle = false;
+                        }
                     } else {
                         frameIntervals.push(frameTime);
                         this.dynamicResolutionScaling(frameIntervals);
@@ -336,7 +336,6 @@ export abstract class View {
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
                     });
-                    pickRenderState = renderStateGL;
                 }
             }
 
