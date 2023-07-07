@@ -84,10 +84,13 @@ void main() {
         colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / 5.0));
         vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / 5.0));
         rgba = colorTransform * rgba + colorTranslation;
+        #if PASS == PASS_PICK
+        rgba.a > 0. ? rgba.a = 1. : rgba.a = 0.;
+        #endif
     }
 #endif
 
-#if (MODE == MODE_TRIANGLES)
+#if (MODE == MODE_TRIANGLES && PASS != PASS_PICK)
     if(baseColor != vec4(0)) {
         vec4 diffuseOpacity = rgba;
         diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
