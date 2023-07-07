@@ -26,7 +26,8 @@ export function defaultRenderState(): RenderState {
         },
         grid: {
             enabled: false,
-            color: [2, 2, 2],
+            color1: [2, 2, 2],
+            color2: [0, 0, 0],
             origin: [0, 0, 0],
             axisX: [1, 0, 0],
             axisY: [0, 0, 1],

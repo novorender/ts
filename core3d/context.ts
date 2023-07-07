@@ -29,6 +29,7 @@ export class RenderContext {
     private readonly defaultResourceBin;
     private readonly iblResourceBin;
     private pickBuffersValid = false;
+    private currentPick: Uint32Array | undefined;
     private activeTimers = new Set<Timer>();
     private currentFrameTime = 0;
     private statistics = {
@@ -228,6 +229,10 @@ export class RenderContext {
 
     isContextLost() {
         return this.gl.isContextLost();
+    }
+
+    getViewMatrices() {
+        return { viewClipMatrix: this.viewClipMatrix, viewWorldMatrix: this.viewWorldMatrix, viewWorldMatrixNormal: this.viewWorldMatrixNormal };
     }
 
     //* @internal */
@@ -610,7 +615,6 @@ export class RenderContext {
                 // reset gl state
                 glState(gl, null);
             }
-
             this.pickBuffersValid = true;
         }
     }
@@ -696,20 +700,16 @@ export class RenderContext {
         }
     }
 
-    async pick(x: number, y: number, sampleDiscRadius = 0): Promise<PickSample[]> {
-        if (sampleDiscRadius < 0)
-            return [];
-        this.renderPickBuffers();
-        const { canvas, wasm, buffers, width, height } = this;
+    private extractPick(pickBuffer: Uint32Array, x: number, y: number, sampleDiscRadius: number, pickCameraPlane: boolean) {
+        const { canvas, wasm, width, height } = this;
         const rect = canvas.getBoundingClientRect(); // dim in css pixels
         const cssWidth = rect.width;
         const cssHeight = rect.height;
         // convert to pixel coords
-        const px = Math.round(x / cssWidth * width);
-        const py = Math.round((1 - (y + 0.5) / cssHeight) * height);
-        console.assert(px >= 0 && py >= 0 && px < width && py < height);
-        const { pick } = await buffers.pickBuffers();
-        const floats = new Float32Array(pick.buffer);
+        const px = Math.min(Math.max(0, Math.round(x / cssWidth * width)), width);
+        const py = Math.min(Math.max(0, Math.round((1 - (y + 0.5) / cssHeight) * height)), height);
+
+        const floats = new Float32Array(pickBuffer.buffer);
 
         // fetch sample rectangle from read buffers
         const r = Math.ceil(sampleDiscRadius);
@@ -733,10 +733,10 @@ export class RenderContext {
                 if (dx * dx + dy * dy > r2)
                     continue; // filter out samples that lie outside sample disc radius
                 const buffOffs = ix + iy * width;
-                const objectId = pick[buffOffs * 4];
+                const objectId = pickBuffer[buffOffs * 4];
                 if (objectId != 0xffffffff) {
-                    const depth = floats[buffOffs * 4 + 3];
-                    const [nx16, ny16, nz16, deviation16] = new Uint16Array(pick.buffer, buffOffs * 16 + 4, 4);
+                    const depth = pickCameraPlane ? 0 : floats[buffOffs * 4 + 3];
+                    const [nx16, ny16, nz16, deviation16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
                     const nx = wasm.float32(nx16);
                     const ny = wasm.float32(ny16);
                     const nz = wasm.float32(nz16);
@@ -754,7 +754,6 @@ export class RenderContext {
 
                     // convert into world space.
                     const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrix);
-                    // const normal = vec3.transformMat3(vec3.create(), normalVS, viewWorldMatrixNormal);
                     const normal = vec3.fromValues(nx, ny, nz);
                     vec3.normalize(normal, normal);
 
@@ -764,6 +763,26 @@ export class RenderContext {
             }
         }
         return samples;
+    }
+
+    async pick(x: number, y: number, options?: PickOptions): Promise<PickSample[]> {
+        const sampleDiscRadius = options?.sampleDiscRadius ?? 0;
+        const callAsync = options?.async ?? true;
+        const pickCameraPlane = options?.pickCameraPlane ?? false;
+        if (sampleDiscRadius < 0)
+            return [];
+        this.renderPickBuffers();
+        const pickBufferPromise = this.buffers.pickBuffers();
+        if (callAsync) {
+            this.currentPick = (await pickBufferPromise).pick;
+        } else {
+            pickBufferPromise.then(({ pick }) => { this.currentPick = pick });
+        }
+        const { currentPick, width, height } = this;
+        if (currentPick === undefined || width * height * 4 != currentPick.length) {
+            return [];
+        }
+        return this.extractPick(currentPick, x, y, sampleDiscRadius, pickCameraPlane);
     }
 }
 
@@ -778,10 +797,18 @@ export interface PickSample {
     // position and normals are in world space.
     readonly position: ReadonlyVec3;
     readonly normal: ReadonlyVec3;
+    readonly normalVS?: ReadonlyVec3;
     readonly objectId: number;
     readonly deviation?: number;
     readonly depth: number;
+    readonly isEdge?: boolean;
 };
+
+export interface PickOptions {
+    readonly sampleDiscRadius?: number,
+    readonly async?: boolean;
+    readonly pickCameraPlane?: boolean;
+}
 
 export interface AsyncProgramParams {
     readonly header?: Partial<ShaderHeaderParams>;

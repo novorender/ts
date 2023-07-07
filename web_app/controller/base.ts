@@ -1,4 +1,4 @@
-import type { RenderStateCamera, RenderStateChanges, RecursivePartial, BoundingSphere, PickSample } from "core3d";
+import type { RenderStateCamera, RenderStateChanges, RecursivePartial, BoundingSphere, PickSample, PickOptions } from "core3d";
 import { type ReadonlyVec3, type ReadonlyQuat, vec3 } from "gl-matrix";
 import { ControllerInput } from "./input";
 import type { FlightControllerParams } from "./flight";
@@ -150,7 +150,7 @@ type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 export type MutableCameraState = Partial<Mutable<RenderStateCamera>>;
 
 export interface PickInterface {
-    pick: (x: number, y: number, sampleDiscRadius: number) => Promise<PickSample | undefined>;
+    pick: (x: number, y: number, options?: PickOptions) => Promise<PickSample | undefined>;
 }
 
 export interface ControllerInitParams {

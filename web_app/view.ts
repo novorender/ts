@@ -1,5 +1,5 @@
-import { type ReadonlyVec3, vec3, type ReadonlyQuat } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile } from "core3d";
+import { type ReadonlyVec3, vec3, type ReadonlyQuat, mat3 } from "gl-matrix";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions } from "core3d";
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
 import { flipState } from "./flip";
 
@@ -14,6 +14,8 @@ export abstract class View {
     protected renderStateCad: RenderState;
     protected prevRenderStateCad: RenderState | undefined;
     private stateChanges: RenderStateChanges | undefined;
+    private screenshot: string | undefined;
+    private requestScreenshot = false;
 
     //* @internal */
     controllers;
@@ -49,7 +51,6 @@ export abstract class View {
         } as const;
         this.activeController = this.controllers["flight"];
         this.activeController.attach();
-        this.activeController.updateParams({ proportionalCameraSpeed: { min: 0.2, max: 1000 } }); // TL: why?
 
         const resizeObserver = new ResizeObserver(() => { this.resize(); });
         resizeObserver.observe(canvas);
@@ -71,6 +72,18 @@ export abstract class View {
         const clone = structuredClone(state);
         flipState(clone, "GLToCAD");
         return clone;
+    }
+
+    async getScreenshot() {
+        this.screenshot = undefined;
+        this.requestScreenshot = true;
+        function delay(ms: number) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        while (this.screenshot == undefined) {
+            await delay(50);
+        }
+        return this.screenshot;
     }
 
     get renderState() {
@@ -152,16 +165,26 @@ export abstract class View {
         return scene.config;
     }
 
-    async pick(x: number, y: number, sampleDiscRadius = 0) {
+    async pick(x: number, y: number, options?: PickOptions) {
         const context = this.renderContext;
         if (context) {
-            const samples = await context.pick(x, y, sampleDiscRadius);
+            const samples = await context.pick(x, y, options);
             if (samples.length) {
-                const centerSample = samples.reduce((a, b) => a.depth < b.depth ? a : b);
+                let isEdge = false;
+                const centerSample = samples.reduce((a, b) => {
+                    if (!isEdge && vec3.dot(a.normal, b.normal) < 0.8) {
+                        isEdge = true;
+                    }
+                    return a.depth < b.depth ? a : b
+                });
+                const { viewWorldMatrixNormal } = context.getViewMatrices();
+                const invNormalMatrix = mat3.invert(mat3.create(), viewWorldMatrixNormal);
                 const flippedSample = {
                     ...centerSample,
                     position: vec3.fromValues(centerSample.position[0], -centerSample.position[2], centerSample.position[1]),
-                    normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1])
+                    normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1]),
+                    isEdge: samples.length > 1 ? isEdge : undefined,
+                    normalVS: vec3.transformMat3(vec3.create(), centerSample.normal, invNormalMatrix)
                 }
                 return flippedSample;
             }
@@ -244,12 +267,12 @@ export abstract class View {
 
     async run() {
         let prevState: RenderState | undefined;
-        let pickRenderState: RenderState | undefined;
         let prevRenderTime = performance.now();
         let wasCameraMoving = false;
         let idleFrameTime = 0;
         let wasIdle = false;
         const frameIntervals: number[] = [];
+        let idleframeResetDelay = 0;
         for (; ;) {
             const { renderContext, activeController, deviceProfile } = this;
             const renderTime = await RenderContext.nextFrame(renderContext);
@@ -267,21 +290,22 @@ export abstract class View {
 
                 if (isIdleFrame) { //increase resolution and detail bias on idleFrame
                     if (!wasIdle) {
-                        this.resolutionModifier = Math.min(deviceProfile.renderResolution * 2, 1);
+                        this.resolutionModifier = Math.min(1, deviceProfile.renderResolution * 2);
                         this.resize();
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
                         wasIdle = true;
-                        if (pickRenderState) {
-                            renderContext.renderPickBuffers();
-                            pickRenderState = undefined;
-                        }
                     }
                 } else {
                     if (wasIdle) {
-                        this.resolutionModifier = deviceProfile.renderResolution;
-                        this.resolutionTier = 2;
-                        wasIdle = false;
+                        if (idleframeResetDelay < 10) { //Give some time for the pick buffer to finish using high res frame
+                            idleframeResetDelay++;
+                        } else {
+                            idleframeResetDelay = 0;
+                            this.resolutionModifier = deviceProfile.renderResolution;
+                            this.resolutionTier = 2;
+                            wasIdle = false;
+                        }
                     } else {
                         frameIntervals.push(frameTime);
                         this.dynamicResolutionScaling(frameIntervals);
@@ -300,15 +324,18 @@ export abstract class View {
                     this.stateChanges = undefined;
                 }
 
-                const { renderStateGL } = this;
-                if (prevState !== renderStateGL || renderContext.changed) {
+                const { renderStateGL, requestScreenshot } = this;
+                if (prevState !== renderStateGL || renderContext.changed || requestScreenshot) {
                     prevState = renderStateGL;
                     this.render?.(isIdleFrame);
                     const statsPromise = renderContext.render(renderStateGL);
+                    if (requestScreenshot) {
+                        this.screenshot = this.canvas.toDataURL();
+                        this.requestScreenshot = false;
+                    }
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
                     });
-                    pickRenderState = renderStateGL;
                 }
             }
 

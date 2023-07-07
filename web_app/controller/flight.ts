@@ -46,6 +46,7 @@ export class FlightController extends BaseController {
         flightTime: 1,
         fieldOfView: 60,
         pickDelay: 200,
+        proportionalCameraSpeed: { min: 0.2, max: 1000 }
     };
 
     override kind: string = "flight" as const;
@@ -59,9 +60,9 @@ export class FlightController extends BaseController {
     private pivot: Pivot | undefined;
     private fov: number;
 
+    private readonly resetPickDelay = 3000;
     private lastUpdatedMoveBegin: number = 0;
     private lastUpdate: number = 0;
-    private lastRecordePoistion: ReadonlyVec3 | undefined = undefined;
     private recordedMoveBegin: ReadonlyVec3 | undefined = undefined;
     private inMoveBegin = false;
 
@@ -262,7 +263,7 @@ export class FlightController extends BaseController {
         if (pickInterface) {
             const changes = event.buttons;
             if (changes & pivotButton) {
-                const sample = await pickInterface.pick(event.offsetX, event.offsetY, 0);
+                const sample = await pickInterface.pick(event.offsetX, event.offsetY);
                 if (sample) {
                     this.setPivot(sample.position, true);
                 } else {
@@ -279,7 +280,7 @@ export class FlightController extends BaseController {
         if (pointerTable.length == pivotFingers && pickInterface) {
             const x = pointerTable.length > 1 ? Math.round((pointerTable[0].x + pointerTable[1].x) / 2) : pointerTable[0].x;
             const y = pointerTable.length > 1 ? Math.round((pointerTable[0].y + pointerTable[1].y) / 2) : pointerTable[0].y;
-            const sample = await pickInterface.pick(x, y, 0);
+            const sample = await pickInterface.pick(x, y);
             if (sample) {
                 this.setPivot(sample.position, true);
             } else {
@@ -291,7 +292,7 @@ export class FlightController extends BaseController {
     }
 
     async moveBegin(event: TouchEvent | MouseEvent): Promise<void> {
-        const { pointerTable, pickInterface } = this;
+        const { pointerTable, pickInterface, resetPickDelay } = this;
 
         const deltaTime = this.lastUpdate - this.lastUpdatedMoveBegin;
 
@@ -300,11 +301,11 @@ export class FlightController extends BaseController {
         }
         this.inMoveBegin = true;
         const setPickPosition = async (x: number, y: number) => {
-            const sample = await pickInterface.pick(x, y, 0);
+            const sample = await pickInterface.pick(x, y, { async: false });
             if (sample) {
-                this.recordedMoveBegin = this.lastRecordePoistion = sample.position;
+                this.recordedMoveBegin = sample.position;
                 this.lastUpdatedMoveBegin = performance.now();
-            } else {
+            } else if (resetPickDelay < deltaTime) {
                 this.recordedMoveBegin = undefined;
                 this.lastUpdatedMoveBegin = performance.now();
             }

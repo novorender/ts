@@ -10,13 +10,17 @@ tier 3: Discrete GPU, mid to high end.
 */
 
 // A simple tier system is probably too simplistic. We may want to add info about OS and browser here as well.
-export function getDeviceProfile(tier: GPUTier): DeviceProfile {
+export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): DeviceProfile {
     const outline = tier > 2;
     const maxGPUBytes = ([500_000_000, 750_000_000, 2_000_000_000, 5_000_000_000] as const)[tier];
-    const maxPrimitives = ([5_000_000, 10_000_000, 20_000_000, 50_000_000] as const)[tier]; // this is not supposed to be used to regulate FPS, but rather avoid rendering taking so long it will crash the browser.
+    const maxPrimitives = ([20_000_000, 20_000_000, 20_000_000, 50_000_000] as const)[tier]; // this is not supposed to be used to regulate FPS, but rather avoid rendering taking so long it will crash the browser.
     const maxSamples = ([4, 4, 8, 16] as const)[tier]; // MSAA
     const iosShaderBug = false; // Older (<A15) IOS devices has a bug when using flat interpolation in complex shaders, which causes Safari to crash after a while. Update: Fixed with WEBGL_provoking_vertex extension!
-    const detailBias = ([0.25, .5, .75, 1] as const)[tier];
+    const detailBias = ([0.25, .50, .75, 1] as const)[tier];
+    let renderResolution = ([0.5, 0.75, 1, 1] as const)[tier];
+    if (resolutionScaling) {
+        renderResolution *= resolutionScaling;
+    }
 
     const coreProfile = {
         features: {
@@ -35,7 +39,7 @@ export function getDeviceProfile(tier: GPUTier): DeviceProfile {
 
     return {
         ...coreProfile,
-        renderResolution: 1, // adjust this by gpu tier?
+        renderResolution,
         framerateTarget: 30
     } as const;
 }

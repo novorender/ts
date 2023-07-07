@@ -54,7 +54,7 @@ void main() {
 
 #if (MODE == MODE_POINTS)
     deviation = vertexDeviations[scene.deviationIndex];
-    if(scene.deviationFactor > 0.) {
+    if(scene.deviationFactor > 0. && deviation != uintBitsToFloat(0x7f800000U)) {
         vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
         color = mix(vertexColor0, gradientColor, scene.deviationFactor);
     }
