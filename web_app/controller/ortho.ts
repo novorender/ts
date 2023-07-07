@@ -30,6 +30,7 @@ export class OrthoController extends BaseController {
     private position: ReadonlyVec3;
     private orientation = new PitchRollYawOrientation();
     private fov: number;
+    private mouseOrTouchMoving = false;
 
     constructor(input: ControllerInput, params?: OrthoControllerParams) {
         super(input);
@@ -84,6 +85,13 @@ export class OrthoController extends BaseController {
         this.changed = true;
     }
 
+    get moving() {
+        return this.input.isAnyGestureKeyPressed() || this.input.isScrolling() || this.mouseOrTouchMoving;
+    }
+
+    async moveEnd(event: TouchEvent | MouseEvent): Promise<void> {
+        this.mouseOrTouchMoving = false;
+    }
 
     override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void {
         const { orientation, position } = this;
@@ -146,6 +154,10 @@ export class OrthoController extends BaseController {
         const rz = axes.keyboard_qe;
         const zoom = (hasShift ? 0 : axes.mouse_wheel) + axes.touch_pinch2;
         const [zoomX, zoomY] = zoomPos;
+
+        if (!this.mouseOrTouchMoving) {
+            this.mouseOrTouchMoving = tx > 0.1 || ty > 0.1 || rz > 0.1;
+        }
 
         if (rz) {
             orientation.roll += rz * 0.2;

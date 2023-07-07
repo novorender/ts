@@ -31,7 +31,7 @@ export class ControllerInput {
     }
 
     get moving() {
-        return this.isAnyGestureKeyPressed() || this._mouseButtons != 0 || this._fingers != 0 || (performance.now() - this._mouseWheelLastActive) < 100;
+        return this.isAnyGestureKeyPressed() || this._mouseButtons != 0 || this._fingers != 0 || this.isScrolling();
     }
 
     get width() {
@@ -120,8 +120,12 @@ export class ControllerInput {
         return ControllerInput._gestureKeys.indexOf(code) != -1;
     }
 
-    private isAnyGestureKeyPressed() {
+    public isAnyGestureKeyPressed() {
         return [...this._keys].some(key => ControllerInput.isGestureKey(key));
+    }
+
+    public isScrolling() {
+        return (performance.now() - this._mouseWheelLastActive) < 100
     }
 
     private keydown = (e: KeyboardEvent) => {
@@ -160,11 +164,12 @@ export class ControllerInput {
         }
     };
 
-    private mouseup = (e: MouseEvent) => {
+    private mouseup = async (e: MouseEvent) => {
         e.preventDefault();
         this._mouseButtons = e.buttons;
         if ("exitPointerLock" in document) document.exitPointerLock();
         this.callbacks?.mouseButtonChanged?.(e);
+        await this.callbacks?.moveEnd?.(e);
         this._mouseButtonDown = false;
     };
 
@@ -219,11 +224,12 @@ export class ControllerInput {
         await this.callbacks?.moveBegin?.(event);
     };
 
-    private touchend = (event: TouchEvent) => {
+    private touchend = async (event: TouchEvent) => {
         this.pointerTable = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
         const { pointerTable, _touchMovePrev } = this;
         this._fingers = event.touches.length;
         this.callbacks?.touchChanged?.(event);
+        await this.callbacks?.moveEnd?.(event);
         switch (pointerTable.length) {
             case 0:
                 break;
@@ -383,5 +389,6 @@ export interface ContollerInputContext {
     mouseButtonChanged(event: MouseEvent): Promise<void> | void;
     touchChanged(event: TouchEvent): Promise<void> | void;
     moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void
+    moveEnd(event: TouchEvent | MouseEvent): Promise<void> | void
 }
 
