@@ -1,4 +1,4 @@
-import type { DerivedRenderState, ObjectIdFilter, RenderContext, RenderState, RenderStateGroupAction, RenderStateHighlightGroups, RenderStateScene, RGBATransform } from "core3d";
+import type { DerivedRenderState, RenderContext, RenderState, RenderStateGroupAction, RenderStateHighlightGroups, RenderStateScene, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
@@ -135,8 +135,10 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
 
-            if (scene?.url != this.url || scene?.filter != prevState?.scene?.filter) {
-                this.loader.init(scene); // abort any pending downloads for previous scene
+            if (scene?.url != this.url) {
+                if (this.url) {
+                    this.loader.abortAll(); // abort any pending downloads for previous scene
+                }
 
                 // delete existing scene
                 for (const rootNode of Object.values(this.rootNodes)) {
@@ -158,7 +160,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         }
                         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
                         (highlight as Mutable<typeof highlight>).indices = new Uint8Array(highlight.buffer, 4, numObjects);
-                        updateHighlightBuffer(highlight.indices, state.highlights, scene?.filter);
+                        updateHighlightBuffer(highlight.indices, state.highlights);
                         highlight.mutex.unlock();
                     }
                     this.url = url;
@@ -199,11 +201,21 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             // are there any potential changes to filtering
             if (scene) {
                 const n = Math.max(groups.length, prevGroups.length);
-                for (let i = 0; i < n; i++) {
-                    if (groups[i] != prevGroups[i] && (groups[i]?.action == "filter" || prevGroups[i]?.action == "filter")) {
-                        this.reloadScene(scene);
-                        break;
+                let reload = false;
+                const prevDefaultAction = prevState?.highlights.defaultAction;
+                const currDefaultAction = state.highlights.defaultAction;
+                if (prevDefaultAction != currDefaultAction && prevDefaultAction == "filter" || currDefaultAction == "filter") {
+                    reload = true;
+                } else {
+                    for (let i = 0; i < n; i++) {
+                        if (groups[i] != prevGroups[i] && (groups[i]?.action == "filter" || prevGroups[i]?.action == "filter")) {
+                            reload = true;
+                            break;
+                        }
                     }
+                }
+                if (reload) {
+                    this.reloadScene(scene);
                 }
             }
 
@@ -226,7 +238,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             // do async stuff below
             if (objectIdsChanged) {
                 highlight.mutex.lockSpin(); // worker should not hold this lock for long, so we're fine spinning until it's available.
-                updateHighlightBuffer(highlight.indices, highlights, scene?.filter);
+                updateHighlightBuffer(highlight.indices, highlights);
                 highlight.mutex.unlock();
 
                 // update highlight vertex attributes
@@ -684,36 +696,19 @@ const enum Highlight {
     filtered = 0xff,
 }
 
-function updateHighlightBuffer(buffer: Uint8Array, highlight: RenderStateHighlightGroups, filter?: ObjectIdFilter) {
-    const hideDefault = highlight.defaultAction === null;
-    if (filter) {
-        const { objectIds } = filter;
-        if (filter.mode == "exclude") {
-            buffer.fill(hideDefault ? Highlight.hidden : Highlight.default);
-            for (const objectId of objectIds) {
-                buffer[objectId] = Highlight.filtered;
-            }
-        }
-        else {
-            buffer.fill(Highlight.filtered);
-            for (const objectId of objectIds) {
-                buffer[objectId] = Highlight.default;
-            }
-        }
-    } else {
-        buffer.fill(hideDefault ? Highlight.hidden : Highlight.default);
+function updateHighlightBuffer(buffer: Uint8Array, highlight: RenderStateHighlightGroups) {
+    const { defaultAction, groups } = highlight;
+    function getIndex(action: RenderStateGroupAction | undefined, value: number) {
+        return action == "hide" ? Highlight.hidden : action == "filter" ? Highlight.filtered : value;
     }
+    const defaultValue = getIndex(defaultAction, Highlight.default);
+    buffer.fill(defaultValue);
     // apply highlight groups
     let groupIndex = 1;
-    for (const group of highlight.groups) {
-        const idx =
-            group.action == "hide" ? Highlight.hidden :
-                group.action == "filter" ? Highlight.filtered :
-                    groupIndex;
+    for (const group of groups) {
+        const idx = getIndex(group.action, groupIndex);
         for (const objectId of group.objectIds) {
-            if (buffer[objectId] != Highlight.filtered) {
-                buffer[objectId] = idx;
-            }
+            buffer[objectId] = idx;
         }
         groupIndex++;
     }

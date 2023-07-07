@@ -3,16 +3,8 @@ import type { ReadonlyVec3, ReadonlyMat4 } from "gl-matrix";
 export interface RenderStateScene {
     readonly url: string;
     readonly config: SceneConfig;
-    /** @deprecated Use highlight groups "filter" action instead. */
-    readonly filter?: ObjectIdFilter;
     readonly hide?: RenderStateStaticGeometryKinds;
 }
-
-export interface ObjectIdFilter {
-    readonly mode: "include" | "exclude";
-    /** Sorted (ascending) list of unique object ids to filter. */
-    readonly objectIds: Iterable<number>;
-};
 
 /** Axis-aligned bounding box */
 export interface AABB {

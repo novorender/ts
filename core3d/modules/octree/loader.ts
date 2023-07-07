@@ -14,7 +14,6 @@ export class NodeLoader {
     readonly worker: Worker | undefined;
     readonly handler;
     readonly payloadPromises = new Map<string, PayloadPromiseMethods>();
-    private state: RenderStateScene | undefined;
     abortAllPromise: Promise<void> = Promise.resolve();
     private resolveAbortAll: (() => void) | undefined;
     aborted = false;
@@ -32,13 +31,6 @@ export class NodeLoader {
     setBuffer(buffer: SharedArrayBuffer) {
         const msg: BufferMessage = { kind: "buffer", buffer };
         this.send(msg);
-    }
-
-    init(state: RenderStateScene | undefined) {
-        if (this.state && state != this.state) {
-            this.abortAll();
-        }
-        this.state = state;
     }
 
     get activeDownloads() {
@@ -106,7 +98,7 @@ export class NodeLoader {
         url.pathname += node.path;
         const { byteSize } = data;
         const enableOutlines = deviceProfile.features.outline;
-        const applyFilter = this.state?.filter != undefined;
+        const applyFilter = true;
         const loadMsg: LoadMessage = { kind: "load", id, version, url: url.toString(), byteSize, separatePositionsBuffer: true, enableOutlines, applyFilter };
         console.assert(byteSize != 0);
         const abortMsg: AbortMessage = { kind: "abort", id };
