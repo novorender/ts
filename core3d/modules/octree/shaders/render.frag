@@ -105,7 +105,7 @@ void main() {
         vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb;
 
         vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
-        rgba = vec4(rgb, baseColor.a);
+        rgba = vec4(rgb, rgba.a);
     }
 #endif
 
