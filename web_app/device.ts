@@ -15,12 +15,35 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
     const maxGPUBytes = ([500_000_000, 750_000_000, 2_000_000_000, 5_000_000_000] as const)[tier];
     const maxPrimitives = ([20_000_000, 20_000_000, 20_000_000, 50_000_000] as const)[tier]; // this is not supposed to be used to regulate FPS, but rather avoid rendering taking so long it will crash the browser.
     const maxSamples = ([4, 4, 8, 16] as const)[tier]; // MSAA
-    const iosShaderBug = false; // Older (<A15) IOS devices has a bug when using flat interpolation in complex shaders, which causes Safari to crash after a while. Update: Fixed with WEBGL_provoking_vertex extension!
     const detailBias = ([0.25, .50, .75, 1] as const)[tier];
     let renderResolution = ([0.5, 0.75, 1, 1] as const)[tier];
     if (resolutionScaling) {
         renderResolution *= resolutionScaling;
     }
+
+    let adreno600 = false;
+    let slowShaderRecompile = false;
+
+    const canvas: HTMLCanvasElement = document.createElement("canvas") as HTMLCanvasElement;
+    canvas.width = 1;
+    canvas.height = 1;
+    document.body.appendChild(canvas);
+    const gl = canvas.getContext("webgl", { failIfMajorPerformanceCaveat: true });
+    canvas.remove();
+
+    if (gl) {
+        const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+        const renderer = debugInfo
+            ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+            : gl.getParameter(gl?.VERSION);
+        if (RegExp("Adreno.+6[0-9][0-9]").test(renderer)) {
+            adreno600 = true;
+        }
+        else if (RegExp("Apple M1 Pro").test(renderer)) {
+            slowShaderRecompile = true;
+        }
+    }
+
 
     const coreProfile = {
         features: {
@@ -32,7 +55,8 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
             maxSamples,
         },
         quirks: {
-            iosShaderBug,
+            adreno600,
+            slowShaderRecompile
         },
         detailBias,
     };

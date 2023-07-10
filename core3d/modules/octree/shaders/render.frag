@@ -136,6 +136,8 @@ void main() {
 
 #if (PASS != PASS_PICK)
     fragColor = rgba;
+#elif defined (ADRENO600)
+    fragPick = uvec4(objectId, 0u, 0u, floatBitsToUint(linearDepth));
 #else
     fragPick = uvec4(objectId, packNormalAndDeviation(geometricNormalWS, varyings.deviation), floatBitsToUint(linearDepth));
 #endif
