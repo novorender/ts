@@ -75,6 +75,9 @@ void main() {
 #endif
 
 #if defined (HIGHLIGHT)
+    if(highlight == 254U) {
+        discard;
+    }
     if(highlight != 0U || !scene.applyDefaultHighlight) {
         float u = (float(highlight) + 0.5) / float(maxHighlights);
         mat4 colorTransform;
