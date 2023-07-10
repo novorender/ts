@@ -2,6 +2,7 @@ import {  build} from "esbuild";
 import * as tsup from "tsup";
 import * as path from 'path';
 import inlineWorkerPlugin from 'esbuild-plugin-inline-worker';
+import packageJson from './web_app/package.json' assert { type: 'json' };
 
 
 const production = false;
@@ -24,6 +25,9 @@ const production = false;
 const buildOptions = {
     entryPoints: {
         main: 'web_app/index.ts',
+    },
+    define: {
+        'process.env.NPM_PACKAGE_VERSION': `"${packageJson.version}"`
     },
     sourcemap: !production,
     minify: production,

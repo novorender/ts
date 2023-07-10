@@ -8,5 +8,6 @@ export * from "./controller";
 export * from "./serviceWorker";
 export type { DeviceProfile } from "core3d/device";
 export { getDeviceProfile };
+export const packageVersion = process.env.NPM_PACKAGE_VERSION ?? '';
 
 glMatrix.setMatrixArrayType(Array);
