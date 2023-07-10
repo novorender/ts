@@ -148,8 +148,9 @@ export class OrthoController extends BaseController {
             return;
         }
 
-        let tx = -axes.keyboard_ad + axes.mouse_lmb_move_x + axes.touch_1_move_x;
-        let ty = -axes.keyboard_ws + axes.mouse_lmb_move_y + axes.touch_1_move_y;
+
+        let tx = -axes.keyboard_ad + axes.mouse_lmb_move_x + axes.mouse_rmb_move_x + axes.mouse_mmb_move_x + axes.touch_1_move_x;
+        let ty = -axes.keyboard_ws + axes.mouse_lmb_move_y + axes.mouse_rmb_move_y + axes.mouse_mmb_move_y + axes.touch_1_move_y;
         const tz = (axes.mouse_navigate * this.params.stepInterval) + (axes.touch_pinch3 * 0.1) + (hasShift ? axes.mouse_wheel * 0.01 : 0);
         const rz = axes.keyboard_qe;
         const zoom = (hasShift ? 0 : axes.mouse_wheel) + axes.touch_pinch2;
