@@ -39,7 +39,7 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
         if (RegExp("Adreno.+6[0-9][0-9]").test(renderer)) {
             adreno600 = true;
         }
-        else if (RegExp("Apple M1 Pro").test(renderer)) {
+        else if (RegExp("Apple M1").test(renderer) || RegExp("Iris").test(renderer)) {
             slowShaderRecompile = true;
         }
     }
