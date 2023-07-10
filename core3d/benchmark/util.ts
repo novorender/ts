@@ -53,13 +53,14 @@ function waitSync(gl: WebGL2RenderingContext, sync: WebGLSync) {
     gl.flush();
     let resolve: (value: number) => void = undefined!;
     const promise = new Promise<number>((res) => { resolve = res; });
-    (function checkSync() {
+    (function checkSync(): void {
         const flags = 0; // gl.SYNC_FLUSH_COMMANDS_BIT
         const timeout = 0; // gl.MAX_CLIENT_WAIT_TIMEOUT_WEBGL
         const status = gl.clientWaitSync(sync, flags, timeout);
         switch (status) {
             case gl.TIMEOUT_EXPIRED:
-                return setTimeout(checkSync);
+                setTimeout(checkSync);
+                return;
             case gl.WAIT_FAILED:
                 throw new Error('GPU Sync error!');
         }
