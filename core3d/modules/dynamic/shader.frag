@@ -220,12 +220,12 @@ void main() {
         color = mix(color, color * ao, material.occlusionStrength);
     }
 
-    outColor.rgb = color;
+    outColor.rgb = materialInfo.albedoColor;
     outColor.a = baseColor.a;
 
 #else
 
-    outColor = material.baseColorFactor * varyings.color0;
+    outColor = baseColor;
 
 #endif
 

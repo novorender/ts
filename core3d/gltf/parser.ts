@@ -149,6 +149,7 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
 
     const defaultMaterial: RenderStateDynamicMaterialGGX = { kind: "ggx" };
     const materials = gltf.materials?.map((m, i) => {
+        const isUnlit = m.extensions && "KHR_materials_unlit" in m.extensions;
         const { pbrMetallicRoughness, normalTexture, occlusionTexture, emissiveTexture, emissiveFactor, alphaMode, alphaCutoff, doubleSided } = m;
         function getTexInfo(texInfo?: GLTF.TextureInfo | GLTF.MaterialNormalTextureInfo | GLTF.MaterialOcclusionTextureInfo) {
             if (texInfo) {
@@ -175,29 +176,32 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
                 } as RenderStateDynamicTextureReference;
             }
         }
-        // return {
-        //     kind: "unlit",
-        //     doubleSided: doubleSided,
-        //     alphaMode: alphaMode as "OPAQUE" | "MASK" | "BLEND" | undefined,
-        //     alphaCutoff: alphaCutoff,
-        //     baseColorFactor: pbrMetallicRoughness?.baseColorFactor as RGBA | undefined,
-        //     baseColorTexture: getTexInfo(pbrMetallicRoughness?.baseColorTexture),
-        // } as RenderStateDynamicMaterialUnlit;
-        return {
-            kind: "ggx",
-            doubleSided: doubleSided,
-            alphaMode: alphaMode as "OPAQUE" | "MASK" | "BLEND" | undefined,
-            alphaCutoff: alphaCutoff,
-            baseColorFactor: pbrMetallicRoughness?.baseColorFactor as RGBA | undefined,
-            metallicFactor: pbrMetallicRoughness?.metallicFactor,
-            roughnessFactor: pbrMetallicRoughness?.roughnessFactor,
-            emissiveFactor: emissiveFactor as RGB | undefined,
-            baseColorTexture: getTexInfo(pbrMetallicRoughness?.baseColorTexture),
-            metallicRoughnessTexture: getTexInfo(pbrMetallicRoughness?.metallicRoughnessTexture),
-            normalTexture: getTexInfo(normalTexture),
-            occlusionTexture: getTexInfo(occlusionTexture),
-            emissiveTexture: getTexInfo(emissiveTexture),
-        } as RenderStateDynamicMaterialGGX;
+        if (isUnlit) {
+            return {
+                kind: "unlit",
+                doubleSided: doubleSided,
+                alphaMode: alphaMode as "OPAQUE" | "MASK" | "BLEND" | undefined,
+                alphaCutoff: alphaCutoff,
+                baseColorFactor: pbrMetallicRoughness?.baseColorFactor as RGBA | undefined,
+                baseColorTexture: getTexInfo(pbrMetallicRoughness?.baseColorTexture),
+            } as RenderStateDynamicMaterialUnlit;
+        } else {
+            return {
+                kind: "ggx",
+                doubleSided: doubleSided,
+                alphaMode: alphaMode as "OPAQUE" | "MASK" | "BLEND" | undefined,
+                alphaCutoff: alphaCutoff,
+                baseColorFactor: pbrMetallicRoughness?.baseColorFactor as RGBA | undefined,
+                metallicFactor: pbrMetallicRoughness?.metallicFactor,
+                roughnessFactor: pbrMetallicRoughness?.roughnessFactor,
+                emissiveFactor: emissiveFactor as RGB | undefined,
+                baseColorTexture: getTexInfo(pbrMetallicRoughness?.baseColorTexture),
+                metallicRoughnessTexture: getTexInfo(pbrMetallicRoughness?.metallicRoughnessTexture),
+                normalTexture: getTexInfo(normalTexture),
+                occlusionTexture: getTexInfo(occlusionTexture),
+                emissiveTexture: getTexInfo(emissiveTexture),
+            } as RenderStateDynamicMaterialGGX;
+        }
     }) ?? [];
 
     const meshes = gltf.meshes?.map(m => {

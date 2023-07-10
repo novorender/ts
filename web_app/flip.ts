@@ -1,4 +1,4 @@
-import type { RenderStateClippingPlane } from "core3d";
+import type { RenderStateClippingPlane, RenderStateDynamicInstance, RenderStateDynamicObject } from "core3d";
 import { quat, vec3, vec4, type ReadonlyVec4 } from "gl-matrix";
 
 const transforms = {
@@ -11,11 +11,11 @@ export function flipState(changes: any, transform: "GLToCAD" | "CADToGL") {
 }
 
 
-function flipFuncs(swapVecFunc: (v: number[]) => number[], swapQuadFunc: (q: quat) => quat) {
+function flipFuncs(swapVecFunc: (v: number[]) => number[], swapQuatFunc: (q: quat) => quat) {
     const state = {
         camera: {
             position: swapVecFunc,
-            rotation: swapQuadFunc,
+            rotation: swapQuatFunc,
             pivot: swapVecFunc,
         },
         grid: {
@@ -45,6 +45,9 @@ function flipFuncs(swapVecFunc: (v: number[]) => number[], swapQuadFunc: (q: qua
                     max: swapVecFunc
                 }
             }
+        },
+        dynamic: {
+            objects: flipDynaicObjects(swapVecFunc, swapQuatFunc)
         }
     } as const;
     return state;
@@ -105,7 +108,21 @@ export function flipGLtoCadQuat(b: quat) {
         aw * bw - ax * bx);
 }
 
-
+function flipDynaicObjects(swapVecFunc: (v: number[]) => number[], swapQuatFunc: (q: quat) => quat) {
+    return function (ar: RenderStateDynamicObject[]) {
+        const flippedObjects: RenderStateDynamicObject[] = [];
+        for (const obj of ar) {
+            const flippedInstances: RenderStateDynamicInstance[] = [];
+            for (const inst of obj.instances) {
+                flippedInstances.push({
+                    position: swapVecFunc(inst.position as any) as vec3, rotation: inst.rotation ? swapQuatFunc(inst.rotation as any) : undefined
+                });
+            }
+            flippedObjects.push({ mesh: obj.mesh, instances: flippedInstances, baseObjectId: obj.baseObjectId });
+        }
+        return flippedObjects;
+    }
+}
 
 function flipArray(swapFunc: (v: number[]) => number[]) {
     return function (ar: RenderStateClippingPlane[]) {

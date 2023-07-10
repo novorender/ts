@@ -83,10 +83,9 @@ void main() {
         colorTransform[2] = texture(textures.highlights, vec2(u, 2.5 / 5.0));
         colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / 5.0));
         vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / 5.0));
-        #if (PASS != PASS_PICK)
         rgba = colorTransform * rgba + colorTranslation;
-        #else
-        rgba = vec4((colorTransform * rgba + colorTranslation).rgb, rgba.a);
+        #if PASS == PASS_PICK
+        rgba.a > 0. ? rgba.a = 1. : rgba.a = 0.;
         #endif
     }
 #endif
@@ -112,7 +111,6 @@ void main() {
         rgba = vec4(rgb, rgba.a);
     }
 #endif
-
 
     // we put discards here (late) to avoid problems with derivative functions
 #if (MODE == MODE_POINTS)
