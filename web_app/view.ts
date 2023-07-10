@@ -277,7 +277,6 @@ export abstract class View {
             const { renderContext, activeController, deviceProfile } = this;
             const renderTime = await RenderContext.nextFrame(renderContext);
             const frameTime = renderTime - prevRenderTime;
-            this.resize();
             const cameraChanges = activeController.renderStateChanges(this.renderStateCad.camera, renderTime - prevRenderTime);
             if (cameraChanges) {
                 this.modifyRenderState(cameraChanges);
