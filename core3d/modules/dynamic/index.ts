@@ -121,6 +121,11 @@ class DynamicModuleContext implements RenderModuleContext {
 
         const { objects, geometries, materials } = this;
         const meshes: { readonly material: MaterialAsset; readonly geometry: GeometryAsset; readonly object: ObjectAsset }[] = [];
+        let numPrimitives = 0;
+        state.dynamic.objects.forEach((p => { numPrimitives += p.mesh.primitives.length }));
+        if (numPrimitives != geometries.size) {// happens to objects that are deleted the next frame when using pickbuffers as they are using previous state.
+            return;
+        }
         for (const obj of state.dynamic.objects) {
             const objAsset = objects.get(obj)!;
             for (const primitive of obj.mesh.primitives) {
@@ -145,6 +150,7 @@ class DynamicModuleContext implements RenderModuleContext {
         let currentObject: ObjectAsset = undefined!;
 
         for (const { material, object, geometry } of meshes) {
+
             if (currentMaterial != material) {
                 currentMaterial = material;
                 gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, material.uniformsBuffer);
