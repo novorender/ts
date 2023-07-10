@@ -74,7 +74,7 @@ export abstract class View {
         return clone;
     }
 
-    async getScreenshot() {
+    async getScreenshot(): Promise<string> {
         this.screenshot = undefined;
         this.requestScreenshot = true;
         function delay(ms: number) {
