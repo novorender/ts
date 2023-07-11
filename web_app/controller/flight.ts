@@ -358,8 +358,8 @@ function isTouchEvent(event: MouseEvent | TouchEvent): event is TouchEvent {
     return "TouchEvent" in globalThis && event instanceof TouchEvent;
 }
 
-export class CadFlightController extends FlightController {
-    override kind = "cad" as const;
+export class CadMiddlePanController extends FlightController {
+    override kind = "cadMiddlePan" as const;
 
     constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
         super(pickInterface, input);
@@ -378,6 +378,62 @@ export class CadFlightController extends FlightController {
         const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
         const tx = (axes.keyboard_ad * scale) - (axes.mouse_mmb_move_x * mousePanModifier) - (axes.touch_2_move_x * touchMovementModifier);
         const ty = (axes.keyboard_qe * scale) - (axes.mouse_mmb_move_y * mousePanModifier) - (axes.touch_2_move_y * touchMovementModifier);
+        const tz = (axes.keyboard_ws * scale) + (axes.mouse_wheel * mouseWheelModifier) + (axes.touch_pinch2 * pinchModifier);
+        const rx = shouldPivot ? pivotX : rotX;
+        const ry = shouldPivot ? pivotY : rotY;
+
+        return { tx, ty, tz, rx, ry, shouldPivot };
+    }
+}
+
+export class CadRightPanController extends FlightController {
+    override kind = "cadRightPan" as const;
+
+    constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
+        super(pickInterface, input);
+        this.pivotButton = MouseButtons.left;
+        this.pivotFingers = 1;
+    }
+
+    override getTransformations(): CameraTransformations {
+        const { axes } = this;
+        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_mmb_move_y + axes.touch_3_move_y;
+        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_mmb_move_x + axes.touch_3_move_x;
+        const pivotX = -axes.mouse_lmb_move_y + -axes.touch_1_move_y;
+        const pivotY = -axes.mouse_lmb_move_x + -axes.touch_1_move_x;
+        const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
+
+        const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
+        const tx = (axes.keyboard_ad * scale) - (axes.mouse_rmb_move_x * mousePanModifier) - (axes.touch_2_move_x * touchMovementModifier);
+        const ty = (axes.keyboard_qe * scale) - (axes.mouse_rmb_move_y * mousePanModifier) - (axes.touch_2_move_y * touchMovementModifier);
+        const tz = (axes.keyboard_ws * scale) + (axes.mouse_wheel * mouseWheelModifier) + (axes.touch_pinch2 * pinchModifier);
+        const rx = shouldPivot ? pivotX : rotX;
+        const ry = shouldPivot ? pivotY : rotY;
+
+        return { tx, ty, tz, rx, ry, shouldPivot };
+    }
+}
+
+export class SpecialFlightController extends FlightController {
+    override kind = "special" as const;
+
+    constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
+        super(pickInterface, input);
+        this.pivotButton = MouseButtons.right;
+        this.pivotFingers = 1;
+    }
+
+    override getTransformations(): CameraTransformations {
+        const { axes } = this;
+        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_mmb_move_y + axes.touch_3_move_y;
+        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_mmb_move_x + axes.touch_3_move_x;
+        const pivotX = -axes.mouse_rmb_move_y + -axes.touch_1_move_y;
+        const pivotY = -axes.mouse_rmb_move_x + -axes.touch_1_move_x;
+        const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
+
+        const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
+        const tx = (axes.keyboard_ad * scale) - (axes.mouse_lmb_move_x * mousePanModifier) - (axes.touch_2_move_x * touchMovementModifier);
+        const ty = (axes.keyboard_qe * scale) - (axes.mouse_lmb_move_y * mousePanModifier) - (axes.touch_2_move_y * touchMovementModifier);
         const tz = (axes.keyboard_ws * scale) + (axes.mouse_wheel * mouseWheelModifier) + (axes.touch_pinch2 * pinchModifier);
         const rx = shouldPivot ? pivotX : rotX;
         const ry = shouldPivot ? pivotY : rotY;

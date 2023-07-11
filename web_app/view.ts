@@ -1,6 +1,6 @@
 import { type ReadonlyVec3, vec3, type ReadonlyQuat, mat3 } from "gl-matrix";
 import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions } from "core3d";
-import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
+import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadMiddlePanController, CadRightPanController, SpecialFlightController } from "./controller";
 import { flipState } from "./flip";
 
 export abstract class View {
@@ -47,7 +47,9 @@ export abstract class View {
             orbit: new OrbitController(input),
             ortho: new OrthoController(input),
             panorama: new PanoramaController(input),
-            cad: new CadFlightController(this, input),
+            cadMiddlePan: new CadMiddlePanController(this, input),
+            cadRightPan: new CadRightPanController(this, input),
+            special: new SpecialFlightController(this, input),
         } as const;
         this.activeController = this.controllers["flight"];
         this.activeController.attach();
@@ -194,6 +196,7 @@ export abstract class View {
 
     async switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }) {
         function isControllerKind(kind: string, controllers: Object): kind is keyof View["controllers"] {
+            console.log(controllers);
             return kind in controllers;
         }
         if (!isControllerKind(kind, this.controllers))
