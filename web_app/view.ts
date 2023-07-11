@@ -1,6 +1,6 @@
 import { type ReadonlyVec3, vec3, type ReadonlyQuat, mat3 } from "gl-matrix";
 import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions } from "core3d";
-import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadFlightController } from "./controller";
+import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadMiddlePanController, CadRightPanController, SpecialFlightController } from "./controller";
 import { flipState } from "./flip";
 
 export abstract class View {
@@ -47,7 +47,9 @@ export abstract class View {
             orbit: new OrbitController(input),
             ortho: new OrthoController(input),
             panorama: new PanoramaController(input),
-            cad: new CadFlightController(this, input),
+            cadMiddlePan: new CadMiddlePanController(this, input),
+            cadRightPan: new CadRightPanController(this, input),
+            special: new SpecialFlightController(this, input),
         } as const;
         this.activeController = this.controllers["flight"];
         this.activeController.attach();
@@ -74,7 +76,7 @@ export abstract class View {
         return clone;
     }
 
-    async getScreenshot() {
+    async getScreenshot(): Promise<string> {
         this.screenshot = undefined;
         this.requestScreenshot = true;
         function delay(ms: number) {
@@ -267,17 +269,16 @@ export abstract class View {
 
     async run() {
         let prevState: RenderState | undefined;
+        let pickRenderState: RenderState | undefined;
         let prevRenderTime = performance.now();
         let wasCameraMoving = false;
         let idleFrameTime = 0;
         let wasIdle = false;
         const frameIntervals: number[] = [];
-        let idleframeResetDelay = 0;
         for (; ;) {
             const { renderContext, activeController, deviceProfile } = this;
             const renderTime = await RenderContext.nextFrame(renderContext);
             const frameTime = renderTime - prevRenderTime;
-            this.resize();
             const cameraChanges = activeController.renderStateChanges(this.renderStateCad.camera, renderTime - prevRenderTime);
             if (cameraChanges) {
                 this.modifyRenderState(cameraChanges);
@@ -295,17 +296,16 @@ export abstract class View {
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
                         wasIdle = true;
+                        if (pickRenderState && renderContext.isRendering()) {
+                            renderContext.renderPickBuffers();
+                            pickRenderState = undefined;
+                        }
                     }
                 } else {
                     if (wasIdle) {
-                        if (idleframeResetDelay < 10) { //Give some time for the pick buffer to finish using high res frame
-                            idleframeResetDelay++;
-                        } else {
-                            idleframeResetDelay = 0;
-                            this.resolutionModifier = deviceProfile.renderResolution;
-                            this.resolutionTier = 2;
-                            wasIdle = false;
-                        }
+                        this.resolutionModifier = deviceProfile.renderResolution;
+                        this.resolutionTier = 2;
+                        wasIdle = false;
                     } else {
                         frameIntervals.push(frameTime);
                         this.dynamicResolutionScaling(frameIntervals);
@@ -336,6 +336,7 @@ export abstract class View {
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
                     });
+                    pickRenderState = renderStateGL;
                 }
             }
 

@@ -106,7 +106,7 @@ export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParam
         }
     } else {
         const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
-        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format!, type!, params.image as TexImageSource);
+        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format!, type!, params.image as TextureImageSource);
         if (generateMipMaps && isPowerOf2(width) && isPowerOf2(height)) {
             gl.generateMipmap(target);
         }
@@ -210,7 +210,7 @@ export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGL
     } else {
         const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format!, type!, params.image as TexImageSource);
+        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format!, type!, params.image as TextureImageSource);
         if (generateMipMaps && isPowerOf2(width) && isPowerOf2(height)) {
             gl.generateMipmap(target);
         }
@@ -254,15 +254,17 @@ export type TextureParams =
 
 export type TextureTargetString = TextureParams["kind"];
 
+export type TextureImageSource = ImageBitmap | ImageData | HTMLImageElement | HTMLCanvasElement | HTMLVideoElement | OffscreenCanvas;
+
 // 2D
 export type TextureParams2DUncompressedImage = Uncompressed & Partial<Size2D> & GenMipMap & {
     readonly kind: "TEXTURE_2D";
-    readonly image: TexImageSource;
+    readonly image: TextureImageSource;
 };
 
 export type TextureParams2DUncompressed = Uncompressed & Size2D & GenMipMap & {
     readonly kind: "TEXTURE_2D";
-    readonly image: BufferSource | TexImageSource | null;
+    readonly image: BufferSource | TextureImageSource | null;
 };
 
 export interface TextureParams2DCompressed extends Compressed, Size2D {

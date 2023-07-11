@@ -1,4 +1,4 @@
-import type { RenderContext } from "core3d";
+import type { DeviceProfile, RenderContext } from "core3d";
 import type { RenderModule } from "..";
 import { glUBOProxy, type TextureParams2DUncompressed, type UniformTypes } from "webgl2";
 import { shaders } from "./shaders";
@@ -101,10 +101,10 @@ export class OctreeModule implements RenderModule {
         highlight: false as boolean,
     } as const;
 
-    static shaderConstants(pass: ShaderPass, mode: ShaderMode, programFlags = OctreeModule.defaultProgramFlags) {
+    static shaderConstants(deviceProfile: DeviceProfile, pass: ShaderPass, mode: ShaderMode, programFlags = OctreeModule.defaultProgramFlags) {
         const { clip, dither, highlight } = programFlags;
         const flags: string[] = [];
-        if (clip) {
+        if (clip || deviceProfile.quirks.slowShaderRecompile) { //Always complie in clip on devices with slow recomplie.
             flags.push("CLIP");
         }
         if (dither) {
@@ -112,6 +112,9 @@ export class OctreeModule implements RenderModule {
         }
         if (highlight) {
             flags.push("HIGHLIGHT");
+        }
+        if (deviceProfile.quirks.adreno600) {
+            flags.push("ADRENO600");
         }
         const defines = [
             { name: "PASS", value: pass.toString() },
@@ -126,7 +129,7 @@ export class OctreeModule implements RenderModule {
         for (const pass of OctreeModule.passes) {
             const modes = (programs[pass] ??= {} as ModePrograms) as Mutable<ModePrograms>;
             for (const mode of OctreeModule.modes) {
-                const promise = context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(pass, mode, programFlags) });
+                const promise = context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(context.deviceProfile, pass, mode, programFlags) });
                 const compiledPromise = promise.then(program => {
                     modes[mode] = program;
                 });

@@ -1,7 +1,7 @@
 import { CoordSpace, TonemappingMode, createDefaultModules } from "./";
 import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState } from "./";
 import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits, } from "webgl2";
-import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "webgl2";
+import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics, TextureImageSource } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
@@ -75,7 +75,7 @@ export class RenderContext {
     isIdleFrame = false;
 
 
-    constructor(readonly deviceProfile: DeviceProfile, readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TexImageSource, options?: WebGLContextAttributes) {
+    constructor(readonly deviceProfile: DeviceProfile, readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TextureImageSource, options?: WebGLContextAttributes) {
         // init gl context
         const gl = canvas.getContext("webgl2", options);
         if (!gl)

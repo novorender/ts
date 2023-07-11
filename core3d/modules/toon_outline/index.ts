@@ -45,6 +45,9 @@ class ToonModuleContext implements RenderModuleContext {
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
+        if (context.deviceProfile.quirks.adreno600) { //Normals are 0 and converting depht does not work on adreno 600 series
+            return;
+        }
         const { uniforms } = resources;
         const { toonOutline, localSpaceTranslation } = state;
         if (context.hasStateChanged({ toonOutline, localSpaceTranslation })) {
@@ -59,6 +62,9 @@ class ToonModuleContext implements RenderModuleContext {
 
     render(state: DerivedRenderState) {
         const { context, resources } = this;
+        if (context.deviceProfile.quirks.adreno600) { //Normals are 0 and converting depht does not work on adreno 600 series
+            return;
+        }
         const { program, uniforms, sampler } = resources;
         const { gl, cameraUniforms } = context;
         const { textures } = context.buffers;

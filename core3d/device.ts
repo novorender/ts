@@ -20,5 +20,6 @@ export interface DeviceLimits {
 }
 
 export interface DeviceQuirks {
-    readonly iosShaderBug: boolean; // Older (<A15) IOS devices has a bug when using flat interpolation in complex shaders, which causes Safari to crash after a while.
+    readonly adreno600: boolean; //Packing of 2 32 bit floats to unit os broken on andreno 600 series, normals in the picking buffer will be 0. Conversion from 32 bit uint to 32float does also not work so toonshading will be off. 
+    readonly slowShaderRecompile: boolean; //Disable agressive recomplie of shaders on devices where it is slow.
 }

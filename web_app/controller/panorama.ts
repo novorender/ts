@@ -2,7 +2,7 @@
 import { type ReadonlyVec3, vec3, type ReadonlyQuat, glMatrix, quat } from "gl-matrix";
 import { BaseController, type ControllerInitParams, type MutableCameraState } from "./base";
 import { type RenderStateScene, type RenderStateCamera, type RenderState, mergeRecursive, type RecursivePartial } from "core3d";
-import { PitchRollYawOrientation } from "./orientation";
+import { PitchRollYawOrientation, decomposeRotation } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 
 /** Ortho type camera motion controller */
@@ -81,8 +81,41 @@ export class PanoramaController extends BaseController {
         this.position = vec3.add(vec3.create(), center, dir)
     }
 
+    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void {
+        const { orientation, position } = this;
+        if (flyTime) {
+            let targetPitch = orientation.pitch;
+            let targetYaw = orientation.yaw;
+            if (rotation) {
+                const { pitch, yaw } = decomposeRotation(rotation)
+                targetPitch = pitch / Math.PI * 180;
+                targetYaw = yaw / Math.PI * 180;
+            }
+
+            this.setFlyTo({
+                totalFlightTime: flyTime,
+                end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
+                begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+            });
+        }
+        else {
+            this.position = targetPosition;
+            if (rotation) {
+                this.orientation.decomposeRotation(rotation);
+            }
+            this.changed = true;
+        }
+    }
+
     override update(): void {
-        const { axes, orientation, params, height, fov } = this;
+        const { axes, orientation, params, height, fov, currentFlyTo } = this;
+        if (currentFlyTo) {
+            this.position = vec3.clone(currentFlyTo.pos);
+            orientation.pitch = currentFlyTo.pitch;
+            orientation.yaw = currentFlyTo.yaw;
+            this.changed = true;
+            return;
+        }
         const tz = axes.keyboard_ws + axes.mouse_wheel + axes.touch_pinch2;
         const rx = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_1_move_y;
         const ry = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_1_move_x;

@@ -1,9 +1,9 @@
 import type { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glDraw, glState, type UniformTypes, type VertexArrayParams, type VertexAttribute, type DrawParamsElements, type DrawParamsArrays, type StateParams, type DrawParamsArraysInstanced, type DrawParamsElementsInstanced } from "webgl2";
+import { glUBOProxy, glDraw, glState, type UniformTypes, type VertexArrayParams, type VertexAttribute, type DrawParamsElements, type DrawParamsArrays, type StateParams, type DrawParamsArraysInstanced, type DrawParamsElementsInstanced, glUpdateBuffer } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { mat3, mat4, vec3 } from "gl-matrix";
+import { mat3, mat4, vec3, type ReadonlyVec3 } from "gl-matrix";
 import { BufferFlags } from "core3d/buffers";
 import { ResourceBin } from "core3d/resource";
 
@@ -121,6 +121,11 @@ class DynamicModuleContext implements RenderModuleContext {
 
         const { objects, geometries, materials } = this;
         const meshes: { readonly material: MaterialAsset; readonly geometry: GeometryAsset; readonly object: ObjectAsset }[] = [];
+        let numPrimitives = 0;
+        state.dynamic.objects.forEach((p => { numPrimitives += p.mesh.primitives.length }));
+        if (numPrimitives != geometries.size) {// happens to objects that are deleted the next frame when using pickbuffers as they are using previous state.
+            return;
+        }
         for (const obj of state.dynamic.objects) {
             const objAsset = objects.get(obj)!;
             for (const primitive of obj.mesh.primitives) {
@@ -145,6 +150,7 @@ class DynamicModuleContext implements RenderModuleContext {
         let currentObject: ObjectAsset = undefined!;
 
         for (const { material, object, geometry } of meshes) {
+
             if (currentMaterial != material) {
                 currentMaterial = material;
                 gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, material.uniformsBuffer);
@@ -301,7 +307,7 @@ class ObjectAsset {
     readonly uniformsBuffer: WebGLBuffer;
     readonly instancesBuffer: WebGLBuffer;
 
-    constructor(bin: ResourceBin, context: RenderContext, data: RenderStateDynamicObject, state: DerivedRenderState) {
+    constructor(bin: ResourceBin, context: RenderContext, readonly data: RenderStateDynamicObject, state: DerivedRenderState) {
         const uniformsDesc = {
             worldLocalMatrix: "mat4",
             baseObjectId: "uint",
@@ -312,27 +318,40 @@ class ObjectAsset {
         this.uniformsBuffer = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: this.uniforms.buffer });
         const { instances } = data;
         this.numInstances = instances.length;
-        this.instancesBuffer = ObjectAsset.createInstancesBuffer(bin, instances);
+        this.instancesBuffer = ObjectAsset.createInstancesBuffer(bin, instances, state.localSpaceTranslation);
         this.update(context, state);
     }
 
-    static createInstancesBuffer(bin: ResourceBin, instances: readonly RenderStateDynamicInstance[]) {
+    static createInstancesBuffer(bin: ResourceBin, instances: readonly RenderStateDynamicInstance[], localSpaceTranslation: ReadonlyVec3) {
+        const srcData = ObjectAsset.computeInstanceMatrices(instances, localSpaceTranslation);
+        return bin.createBuffer({ kind: "ARRAY_BUFFER", srcData });
+    }
+
+    static computeInstanceMatrices(instances: readonly RenderStateDynamicInstance[], localSpaceTranslation: ReadonlyVec3) {
         const srcData = new Float32Array(instances.length * 12);
         for (let i = 0; i < instances.length; i++) {
             const { position, rotation } = instances[i];
-            const transform = rotation ? mat4.fromRotationTranslation(mat4.create(), rotation, position) : mat4.fromTranslation(mat4.create(), position);
+            const translatedPos = vec3.sub(vec3.create(), position, localSpaceTranslation);
+            const transform = rotation ? mat4.fromRotationTranslation(mat4.create(), rotation, translatedPos) : mat4.fromTranslation(mat4.create(), translatedPos);
             const [e00, e01, e02, e03, e10, e11, e12, e13, e20, e21, e22, e23, e30, e31, e32, e33] = transform;
             const elems4x3 = [e00, e01, e02, e10, e11, e12, e20, e21, e22, e30, e31, e32];
             srcData.set(elems4x3, i * elems4x3.length);
             // srcData.set(transform, i * 16);
         }
-        return bin.createBuffer({ kind: "ARRAY_BUFFER", srcData });
+        return srcData;
     }
 
     update(context: RenderContext, state: DerivedRenderState) {
-        const { uniforms, uniformsBuffer } = this;
+        const { uniforms, uniformsBuffer, data, instancesBuffer } = this;
+        const { localSpaceTranslation } = state;
         const { values } = uniforms;
         values.worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), state.localSpaceTranslation));
+
+        if (context.hasStateChanged({ localSpaceTranslation })) {
+            const srcData = ObjectAsset.computeInstanceMatrices(data.instances, localSpaceTranslation);
+            glUpdateBuffer(context.gl, { kind: "ARRAY_BUFFER", srcData, targetBuffer: instancesBuffer });
+        }
+
         context.updateUniformBuffer(uniformsBuffer, uniforms);
     }
 

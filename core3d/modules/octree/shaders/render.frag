@@ -75,6 +75,9 @@ void main() {
 #endif
 
 #if defined (HIGHLIGHT)
+    if(highlight == 254U) {
+        discard;
+    }
     if(highlight != 0U || !scene.applyDefaultHighlight) {
         float u = (float(highlight) + 0.5) / float(maxHighlights);
         mat4 colorTransform;
@@ -84,10 +87,13 @@ void main() {
         colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / 5.0));
         vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / 5.0));
         rgba = colorTransform * rgba + colorTranslation;
+        #if PASS == PASS_PICK
+        rgba.a > 0. ? rgba.a = 1. : rgba.a = 0.;
+        #endif
     }
 #endif
 
-#if (MODE == MODE_TRIANGLES)
+#if (MODE == MODE_TRIANGLES && PASS != PASS_PICK)
     if(baseColor != vec4(0)) {
         vec4 diffuseOpacity = rgba;
         diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
@@ -105,7 +111,7 @@ void main() {
         vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb;
 
         vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
-        rgba = vec4(rgb, baseColor.a);
+        rgba = vec4(rgb, rgba.a);
     }
 #endif
 
@@ -133,6 +139,8 @@ void main() {
 
 #if (PASS != PASS_PICK)
     fragColor = rgba;
+#elif defined (ADRENO600)
+    fragPick = uvec4(objectId, 0u, 0u, floatBitsToUint(linearDepth));
 #else
     fragPick = uvec4(objectId, packNormalAndDeviation(geometricNormalWS, varyings.deviation), floatBitsToUint(linearDepth));
 #endif

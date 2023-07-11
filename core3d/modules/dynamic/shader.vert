@@ -26,12 +26,12 @@ layout(location = 6) in mat4x3 vertexInstanceMatrix;
 void main() {
     mat4 instanceMatrix = mat4(vertexInstanceMatrix);
     mat3 instanceMatrixNormal = mat3(instanceMatrix); // TODO: normalize?
-    vec4 posVS = camera.localViewMatrix * object.worldLocalMatrix * instanceMatrix * vertexPosition;
+    vec4 posVS = camera.localViewMatrix * instanceMatrix * vertexPosition;
     gl_Position = camera.viewClipMatrix * posVS;
     vec3 normalLS = instanceMatrixNormal * vertexNormal;
     vec3 tangentLS = instanceMatrixNormal * vertexTangent.xyz;
     vec3 cameraPosLS = camera.viewLocalMatrix[3].xyz;
-    vec3 vertexPosLS = (object.worldLocalMatrix * instanceMatrix * vertexPosition).xyz;
+    vec3 vertexPosLS = (instanceMatrix * vertexPosition).xyz;
     vec3 bitangentLS = cross(normalLS, tangentLS.xyz) * vertexTangent.w;
     varyings.tbn = mat3(tangentLS, bitangentLS, normalLS);
 
