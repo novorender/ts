@@ -257,8 +257,9 @@ export class OctreeNode {
             this.projectedSize = 0;
         } else if (camera.kind == "pinhole") {
             const distance = Math.max(0.001, viewDistance - radius); // we subtract radius to get the projection size at the extremity nearest the camera
-            const distanceBias = 3; //Scale the prioritization of nodes that is closer to the camera.
-            this.projectedSize = (this.size * projection[5]) / ((-distance * distanceBias) * projection[11]);
+            this.projectedSize = (this.size * projection[5]) / (-distance * projection[11]);
+            // const exp = 2; //Scale the prioritization of nodes that is closer to the camera.
+            // this.projectedSize = (this.size * projection[5]) / (-distance * Math.pow(-distance, exp) / Math.pow(10, exp) * projection[11]);
         } else {
             this.projectedSize = this.size * projection[5];
         }
