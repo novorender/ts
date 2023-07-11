@@ -24,23 +24,13 @@ export async function createSceneRootNodes(context: OctreeContext, config: Scene
         return;
     const { childInfos } = result;
     const rootNodes: Mutable<RootNodes> = {};
-    const promises: Promise<void>[] = [];
-    const children: OctreeNode[] = [];
+    let hasNodes = false;
     for (const childInfo of childInfos) {
         const geometryKind = childInfo.childIndex as NodeGeometryKind;
         const child = new OctreeNode(context, childInfo, geometryKind);
         rootNodes[childInfo.childIndex as keyof RootNodes] = child;
-        const promise = child.downloadNode();
-        promises.push(promise);
-        children.push(child);
+        hasNodes = true;
     }
-    await Promise.all(promises);
-    for (const child of children) {
-        if (child.state != NodeState.ready) {
-            return undefined;
-        }
-    }
-    const hasNodes = Object.getOwnPropertyNames(rootNodes).length > 0;
     return hasNodes ? rootNodes : undefined;
 }
 
