@@ -196,7 +196,6 @@ export abstract class View {
 
     async switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }) {
         function isControllerKind(kind: string, controllers: Object): kind is keyof View["controllers"] {
-            console.log(controllers);
             return kind in controllers;
         }
         if (!isControllerKind(kind, this.controllers))
