@@ -7,15 +7,23 @@ export interface BufferMessage {
     readonly buffer: SharedArrayBuffer;
 }
 
-export interface LoadMessage {
-    readonly kind: "load";
+export interface ParseParams {
     readonly id: string;
     readonly version: string;
-    readonly url: string;
-    readonly byteSize: number;
     readonly separatePositionsBuffer: boolean;
     readonly enableOutlines: boolean;
     readonly applyFilter: boolean;
+}
+
+export interface ParseMessage extends ParseParams {
+    readonly kind: "parse";
+    readonly buffer: ArrayBuffer;
+}
+
+export interface LoadMessage extends ParseParams {
+    readonly kind: "load";
+    readonly url: string;
+    readonly byteSize: number;
 }
 
 export interface AbortMessage {
@@ -42,8 +50,8 @@ export interface NodePayload {
     readonly geometry: NodeGeometry;
 }
 
-export interface LoadedMessage extends NodePayload {
-    readonly kind: "loaded";
+export interface ReadyMessage extends NodePayload {
+    readonly kind: "ready";
     readonly id: string;
 }
 
@@ -58,5 +66,5 @@ export interface ErrorMessage {
     readonly error: any;
 }
 
-export type MessageRequest = BufferMessage | LoadMessage | AbortMessage | AbortAllMessage | CloseMessage;
-export type MessageResponse = LoadedMessage | AbortedMessage | AbortedAllMessage | ErrorMessage;
+export type MessageRequest = BufferMessage | ParseMessage | LoadMessage | AbortMessage | AbortAllMessage | CloseMessage;
+export type MessageResponse = ReadyMessage | AbortedMessage | AbortedAllMessage | ErrorMessage;

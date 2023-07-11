@@ -2,7 +2,7 @@ import { mat4, type ReadonlyVec3, type ReadonlyVec4, vec3, vec4 } from "gl-matri
 import { glUBOProxy, glUpdateBuffer } from "webgl2";
 import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup } from "core3d";
 import { createMeshes, deleteMesh, type Mesh, meshPrimitiveCount, updateMeshHighlights } from "./mesh";
-import { NodeType, type NodeData } from "./worker";
+import type { NodeData } from "./worker";
 import { NodeLoader } from "./loader";
 import { ResourceBin } from "core3d/resource";
 
@@ -21,13 +21,11 @@ export const enum NodeState {
 }
 
 export const enum NodeGeometryKind {
-    none = -1,
     terrain,
     triangles,
     lines,
     points,
     documents,
-    numberOf,
 };
 
 export const enum NodeGeometryKindMask {
@@ -53,6 +51,7 @@ export interface OctreeContext {
 
 export class OctreeNode {
     readonly id: string;
+    readonly parent: OctreeNode | undefined;
     readonly resourceBin: ResourceBin
     readonly center: ReadonlyVec3;
     readonly radius: number;
@@ -71,13 +70,16 @@ export class OctreeNode {
     viewDistance = 0;
     projectedSize = 0;
     static readonly errorModifiers = {
-        [NodeType.Mixed]: 0.5,
-        [NodeType.Geometry]: 1,
-        [NodeType.Points]: .15,
-        [NodeType.Textured]: .08,
+        [NodeGeometryKind.terrain]: .08,
+        [NodeGeometryKind.triangles]: 1,
+        [NodeGeometryKind.lines]: .5,
+        [NodeGeometryKind.points]: .15,
+        [NodeGeometryKind.documents]: .08,
     };
 
-    constructor(readonly context: OctreeContext, readonly data: NodeData, readonly parent: OctreeNode | undefined) {
+    constructor(readonly context: OctreeContext, readonly data: NodeData, parent: OctreeNode | NodeGeometryKind) {
+        const geometryKind = this.geometryKind = typeof parent == "object" ? parent.geometryKind : parent;
+        this.parent = typeof parent == "object" ? parent : undefined;
         // create uniform buffer
         const { sphere, box } = data.bounds;
         const { center, radius } = sphere;
@@ -99,7 +101,8 @@ export class OctreeNode {
             vec4.fromValues(x1, y1, z1, 1),
         ];
 
-        const errorModifier = OctreeNode.errorModifiers[data.type]; // TODO: clean this up using NodeGeometryType instead!
+
+        const errorModifier = OctreeNode.errorModifiers[geometryKind];
 
         // const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         // this.size = Math.pow(2, data.tolerance) * toleranceScale;
@@ -113,8 +116,7 @@ export class OctreeNode {
             max: "vec3",
         });
         this.uniformsData.values.tolerance = Math.pow(2, data.tolerance);
-        const { id } = data;
-        this.geometryKind = id.length >= 2 ? (id.charCodeAt(1) - "0".charCodeAt(0)) as NodeGeometryKind : parent?.geometryKind ?? NodeGeometryKind.none;
+
     }
 
     dispose() {
@@ -143,7 +145,7 @@ export class OctreeNode {
     }
 
     get path() {
-        return this.id.length == 0 ? "root" : this.id;
+        return this.id;
     }
 
     get isSplit() {
@@ -257,15 +259,13 @@ export class OctreeNode {
             this.projectedSize = 0;
         } else if (camera.kind == "pinhole") {
             const distance = Math.max(0.001, viewDistance - radius); // we subtract radius to get the projection size at the extremity nearest the camera
-            const distanceBias = 20; //Scale the prioritization of nodes that is closer to the camera.
-            this.projectedSize = ((this.size * projection[5]) / ((-distance * distanceBias) * projection[11])) * distanceBias;
+            this.projectedSize = (this.size * projection[5]) / (-distance * projection[11]);
         } else {
             this.projectedSize = this.size * projection[5];
         }
 
         if (context.localSpaceChanged || !this.hasValidModelLocalMatrix) {
             let { offset, scale } = data;
-            // scale *= 2;
             const [ox, oy, oz] = offset;
             const [tx, ty, tz] = state.localSpaceTranslation;
             const modelLocalMatrix = mat4.fromValues(
@@ -292,9 +292,6 @@ export class OctreeNode {
                 case NodeState.downloading: r = 1; break;
                 case NodeState.ready: b = 1; break;
             }
-            // const { offset, scale } = data;
-            // const modelWorldMatrix = mat4.fromTranslation(mat4.create(), offset);
-            // const worldModelMatrix = mat4.invert(mat4.create(), modelWorldMatrix);
             const worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), state.localSpaceTranslation));
             const { min, max } = data.bounds.box;
             const { values } = uniformsData;
@@ -312,52 +309,26 @@ export class OctreeNode {
         }
     }
 
-    async downloadNode(useGeometry = true) {
-        try {
-            const { context, children, meshes, resourceBin } = this;
-            const { renderContext, loader, version } = context;
-            this.state = NodeState.downloading;
-            const payload = await loader.loadNode(this, version); // do actual downloading and parsing in worker
-            if (payload) {
-                const { childInfos, geometry } = payload;
-                for (const data of childInfos) {
-                    const child = new OctreeNode(context, data, useGeometry ? this : undefined);
-                    children.push(child);
-                }
-                if (useGeometry) {
-                    meshes.push(...createMeshes(resourceBin, geometry));
-                    this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
-                    glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
-                    // const groups = renderContext.prevState?.highlights.groups;
-                    // if (groups && groups.length) {
-                    //     this.applyHighlightGroups(groups);
-                    // }
-                    renderContext.changed = true;
-                }
-                this.state = NodeState.ready;
-            } else {
-                this.state = NodeState.collapsed;
+    async downloadNode() {
+        const { context, children, meshes, resourceBin } = this;
+        const { renderContext, loader, version } = context;
+        this.state = NodeState.downloading;
+        const payload = await loader.loadNode(this, version); // do actual downloading and parsing in worker
+        if (payload) {
+            const { childInfos, geometry } = payload;
+            for (const data of childInfos) {
+                const child = new OctreeNode(context, data, this);
+                children.push(child);
             }
-        } catch (error: any) {
-            if (error.name != "AbortError") {
-                console.error(error);
-            } else {
-                console.info(`abort ${this.id}`);
-            }
+            meshes.push(...createMeshes(resourceBin, geometry));
+            this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
+            glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
+            renderContext.changed = true;
+            this.state = NodeState.ready;
+        } else {
+            this.state = NodeState.collapsed;
         }
     }
-
-    // applyHighlightGroups(groups: readonly RenderStateHighlightGroup[]) {
-    //     const { context, meshes } = this;
-    //     if (meshes) {
-    //         // const highlights = createHighlightsMap(groups, [this]);
-    //         const { highlights } = context;
-    //         const { gl } = this.context.renderContext;
-    //         for (const mesh of meshes) {
-    //             updateMeshHighlights(gl, mesh, highlights);
-    //         }
-    //     }
-    // }
 
     applyHighlights(highlights: Uint8Array | undefined) {
         const { context, meshes } = this;

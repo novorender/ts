@@ -1,6 +1,6 @@
 import { type ReadonlyVec3, vec3 } from "gl-matrix";
 import type { AABB, BoundingSphere } from "core3d/state";
-import { type Double3, type Float3, MaterialType, OptionalVertexAttribute, PrimitiveType, readSchema, type Schema, type SubMeshProjection, TextureSemantic } from "./schema";
+import { type Double3, type Float3, MaterialType, OptionalVertexAttribute, PrimitiveType, readSchema, type Schema, type SubMeshProjection, TextureSemantic } from "./schema_2_0";
 import { BufferReader, Float16Array } from "./util";
 import type { ComponentType, ShaderAttributeType, TextureParams } from "webgl2";
 import { parseKTX } from "core3d/ktx";
@@ -32,18 +32,14 @@ export interface NodeBounds {
     readonly sphere: BoundingSphere;
 };
 
-export const enum NodeType { Mixed, Geometry, Points, Textured };
-
 // node data contains everything needed to create a new node, except its geometry and textures
 // this data comes from the parent node and is used to determine visibility and whether to load node geometry or not
 export interface NodeData {
     readonly id: string;
-    readonly type: NodeType;
     readonly childIndex: number; // octant # (not mask, but index)
     readonly childMask: number; // 32-bit mask for what child indices (octants) have geometry
     readonly tolerance: number;
     readonly byteSize: number; // uncompressed byte size of node file
-    readonly nodeSize: number; // node extent in meters, for use with LOD projection error.
     readonly offset: ReadonlyVec3;
     readonly scale: number;
     readonly bounds: NodeBounds;
@@ -230,38 +226,25 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
     return { primitives, gpuBytes } as const;
 }
 
+function toHex(bytes: Uint8Array) {
+    return Array.prototype.map.call(bytes, x => ('00' + x.toString(16)).slice(-2)).join('');
+}
+
 export function getChildren(parentId: string, schema: Schema, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean): NodeData[] {
-    const { childInfo } = schema;
-    var children: NodeData[] = [];
+    const { childInfo, hashBytes } = schema;
+    const children: NodeData[] = [];
+
 
     // compute parent/current mesh primitive counts per child partition
     const parentPrimitiveCounts: number[] = [];
-    const nodeTypes: NodeType[] = [];
-    for (const mesh of getSubMeshes(schema, predicate)) {
-        const { childIndex, indexRange, vertexRange, primitiveType, materialIndex } = mesh;
-        const numIndices = indexRange[1] - indexRange[0];
-        const numVertices = vertexRange[1] - vertexRange[0];
-        const n = numIndices ? numIndices : numVertices;
-        let count = parentPrimitiveCounts[childIndex] ?? 0;
-        count += computePrimitiveCount(mesh.primitiveType, n) ?? 0;
-        parentPrimitiveCounts[childIndex] = count;
-        if (nodeTypes[childIndex] != NodeType.Mixed) {
-            const nodeType = primitiveType == PrimitiveType.points ? NodeType.Points : materialIndex == 0xff ? NodeType.Textured : NodeType.Geometry;
-            if (nodeTypes[childIndex] == undefined) {
-                nodeTypes[childIndex] = nodeType;
-            } else if (nodeTypes[childIndex] != nodeType) {
-                nodeTypes[childIndex] = NodeType.Mixed;
-            }
-        }
-    }
 
     for (let i = 0; i < childInfo.length; i++) {
         const childIndex = childInfo.childIndex[i];
         const childMask = childInfo.childMask[i];
-        const type = nodeTypes[childIndex] ?? NodeType.Mixed;
-        const id = parentId + childIndex.toString(32); // use radix 32 (0-9, a-v) encoding, which allows for max 32 children per node
+        const [hashBegin, hashEnd] = getRange(childInfo.hash, i);
+        const hash = hashBytes.slice(hashBegin, hashEnd);
+        const id = toHex(hash); // parentId + childIndex.toString(32); // use radix 32 (0-9, a-v) encoding, which allows for max 32 children per node
         const tolerance = childInfo.tolerance[i];
-        const nodeSize = childInfo.nodeSize[i];
         const byteSize = childInfo.totalByteSize[i];
         const offset = getVec3(childInfo.offset, i);
         const scale = childInfo.scale[i];
@@ -281,14 +264,12 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
         vec3.add(box.min as vec3, box.min, offset);
         vec3.add(box.max as vec3, box.max, offset);
 
-        // const primitiveType = childInfo.primitiveType[i] as Exclude<PrimitiveType, PrimitiveType.undefined>;
-        // const optionalAttributes = childInfo.attributes[i];
         const subMeshProjectionRange = getRange(childInfo.subMeshes, i);
         const parentPrimitives = parentPrimitiveCounts[childIndex];
         const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshProjectionRange, separatePositionBuffer, predicate);
         const primitivesDelta = primitives - (parentPrimitives ?? 0);
         // console.assert(parentId == "0" || primitivesDelta >= 0, "negative primitive delta");
-        children.push({ id, type, childIndex, childMask, tolerance, nodeSize, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
+        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
     }
     return children;
 }
@@ -312,19 +293,6 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
         }
     }
 }
-
-export function* getObjectIds(schema: Schema) {
-    const { subMesh, subMeshProjection } = schema;
-    for (let i = 0; i < subMesh.length; i++) {
-        const objectId = subMesh.objectId[i];
-        yield objectId;
-    }
-    for (let i = 0; i < subMeshProjection.length; i++) {
-        const objectId = subMeshProjection.objectId[i];
-        yield objectId;
-    }
-}
-
 type TypedArray = Uint8Array | Uint16Array | Uint32Array | Int8Array | Int16Array | Int32Array | Float32Array | Float64Array;
 
 // Candidates for wasm implementation?
@@ -638,7 +606,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
 }
 
 export function parseNode(id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, highlights: Highlights, applyFilter: boolean) {
-    console.assert(version == "1.7");
+    console.assert(version == "2.0");
     // const begin = performance.now();
     const r = new BufferReader(buffer);
     var schema = readSchema(r);

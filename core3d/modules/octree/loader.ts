@@ -1,8 +1,9 @@
 ///@ts-ignore
 import createWorker from "./worker/index.worker.js"; // uses esbuild-plugin-inline-worker to inline worker code.
 import type { RenderStateScene } from "core3d/state";
-import { LoaderHandler, type AbortAllMessage, type AbortMessage, type BufferMessage, type CloseMessage, type LoadMessage, type MessageRequest, type MessageResponse, type NodePayload } from "./worker";
+import { LoaderHandler, type AbortAllMessage, type AbortMessage, type BufferMessage, type CloseMessage, type LoadMessage, type MessageRequest, type MessageResponse, type NodePayload, type ParseMessage } from "./worker";
 import { OctreeNode } from "./node.js";
+import type { DeviceProfile } from "core3d/device.js";
 
 interface PayloadPromiseMethods { readonly resolve: (value: NodePayload | undefined) => void, readonly reject: (reason: string) => void };
 
@@ -60,7 +61,7 @@ export class NodeLoader {
             payloadPromises.delete(id);
             const { resolve, reject } = payloadPromise;
             switch (msg.kind) {
-                case "loaded":
+                case "ready":
                     resolve(msg);
                     break;
                 case "aborted":
@@ -85,6 +86,18 @@ export class NodeLoader {
     dispose() {
         const msg: CloseMessage = { kind: "close" };
         this.send(msg);
+    }
+
+    parseNode(buffer: ArrayBuffer, id: string, deviceProfile: DeviceProfile, version: string): Promise<NodePayload | undefined> {
+        const { payloadPromises } = this;
+        const enableOutlines = deviceProfile.features.outline;
+        const applyFilter = true;
+        const parseMsg: ParseMessage = { kind: "parse", buffer, id, version, separatePositionsBuffer: true, enableOutlines, applyFilter };
+        const promise = new Promise<NodePayload | undefined>((resolve, reject) => {
+            payloadPromises.set(id, { resolve, reject });
+        });
+        this.send(parseMsg);
+        return promise;
     }
 
     loadNode(node: OctreeNode, version: string): Promise<NodePayload | undefined> {

@@ -64,4 +64,5 @@ export interface SceneConfig {
     readonly modelWorldMatrix?: ReadonlyMat4; // model -> world space transformation matrix
     readonly subtrees?: ("" | "terrain" | "triangles" | "lines" | "points" | "documents")[];
     readonly variants?: ("deviation" | "intensity")[];
+    readonly root: Base64String;
 }

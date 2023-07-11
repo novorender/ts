@@ -1,7 +1,7 @@
 import { AbortableDownload, Downloader } from "./download";
 import { Mutex } from "../mutex";
 import { parseNode } from "./parser";
-import type { AbortAllMessage, AbortMessage, AbortedAllMessage, AbortedMessage, BufferMessage, ErrorMessage, LoadMessage, LoadedMessage, MessageRequest, MessageResponse } from "./types";
+import type { AbortAllMessage, AbortMessage, AbortedAllMessage, AbortedMessage, BufferMessage, ParseMessage, ErrorMessage, LoadMessage, ReadyMessage, MessageRequest, MessageResponse, ParseParams } from "./messages";
 
 export interface HighlightsBuffer {
     readonly buffer: SharedArrayBuffer;
@@ -21,6 +21,9 @@ export class LoaderHandler {
         switch (msg.kind) {
             case "buffer":
                 this.setBuffer(msg);
+                break;
+            case "parse":
+                this.parse(msg);
                 break;
             case "load":
                 this.load(msg);
@@ -44,25 +47,40 @@ export class LoaderHandler {
         this.highlights = { buffer, indices, mutex };
     }
 
+    private parseBuffer(buffer: ArrayBuffer, params: ParseParams) {
+        const { highlights } = this;
+        const { id, version, separatePositionsBuffer, enableOutlines, applyFilter } = params;
+        const { childInfos, geometry } = parseNode(id, separatePositionsBuffer, enableOutlines, version, buffer, highlights, applyFilter);
+        const readyMsg: ReadyMessage = { kind: "ready", id, childInfos, geometry };
+        const transfer: Transferable[] = [];
+        for (const { vertexBuffers, indices } of geometry.subMeshes) {
+            transfer.push(...vertexBuffers);
+            if (typeof indices != "number") {
+                transfer.push(indices.buffer);
+            }
+        }
+        this.send(readyMsg, transfer);
+    }
+
+    private async parse(params: ParseMessage) {
+        const { id, buffer } = params;
+        try {
+            this.parseBuffer(buffer, params);
+        } catch (error) {
+            this.error(id, error);
+        }
+    }
+
     private async load(params: LoadMessage) {
-        const { downloader, downloads, highlights } = this;
-        const { url, id, version, byteSize, separatePositionsBuffer, enableOutlines, applyFilter } = params;
+        const { downloader, downloads } = this;
+        const { url, id, byteSize } = params;
         try {
             const download = downloader.downloadArrayBufferAbortable(url, new ArrayBuffer(byteSize));
             downloads.set(id, download);
             const buffer = await download.result;
             downloads.delete(id);
             if (buffer) {
-                const { childInfos, geometry } = parseNode(id, separatePositionsBuffer, enableOutlines, version, buffer, highlights, applyFilter);
-                const loadedMsg: LoadedMessage = { kind: "loaded", id, childInfos, geometry };
-                const transfer: Transferable[] = [];
-                for (const { vertexBuffers, indices } of geometry.subMeshes) {
-                    transfer.push(...vertexBuffers);
-                    if (typeof indices != "number") {
-                        transfer.push(indices.buffer);
-                    }
-                }
-                this.send(loadedMsg, transfer);
+                this.parseBuffer(buffer, params);
             } else {
                 const abortedMsg: AbortedMessage = { kind: "aborted", id };
                 this.send(abortedMsg);

@@ -33,6 +33,9 @@ export const enum TextureSemantic {
     baseColor = 0,
 };
 
+// Hash bytes
+export interface HashRange { readonly start: U32; readonly count: U32; };
+
 // Range into submesh projection.
 export interface SubMeshProjectionRange { readonly start: U32; readonly count: U32; };
 
@@ -51,10 +54,10 @@ export interface PixelRange { readonly start: U32; readonly count: U32; };
 // Information about child nodes.
 export interface ChildInfo {
     readonly length: number;
+    readonly hash: HashRange; // Byte range into Hash bytes array. The hash, formatted as hex, is used for the filename of the child node.
     readonly childIndex: U8;
     readonly childMask: U32; // Set of bits (max 32) for which child indices are referenced by geometry.
     readonly tolerance: I8; // A power of two exponent describing the error tolerance of this node, which is used to determine LOD.
-    readonly nodeSize: F32; // Used to determine LOD based on projected size of node.
     readonly totalByteSize: U32; // # uncompressed bytes total for child binary file.
     readonly offset: Double3; // Model -> world space translation vector.
     readonly scale: F32; // Model -> world space uniform scale factor (from unit [-1,1] vectors).
@@ -198,19 +201,19 @@ export interface Deviations {
 // Mesh triangles
 export interface Triangle {
     readonly length: number;
-    readonly topologyFlags?: U8; // Bits [0-2] are edge flags (vertex pairs ab, bc, ca), [3-5] corner flags. True = edge/corner is a "hard", or true topological feature and should be rendered and/or snapped to.
+    readonly topologyFlags?: U8; // Bits [0-2] are edge flags (vertex pairs ab, bc, ca), and [3-5] are corner flags. True = edge/corner is a "hard", or true topological feature and should be rendered and/or snapped to.
 };
 
 export function readSchema(r: BufferReader) {
-    const sizes = r.u32(8);
+    const sizes = r.u32(9);
     const flags = r.u8(10);
     const schema = {
         childInfo: {
             length: sizes[0],
+            hash: { start: r.u32(sizes[0]), count: r.u32(sizes[0]) } as HashRange,
             childIndex: r.u8(sizes[0]),
             childMask: r.u32(sizes[0]),
             tolerance: r.i8(sizes[0]),
-            nodeSize: r.f32(sizes[0]),
             totalByteSize: r.u32(sizes[0]),
             offset: {
                 length: sizes[0],
@@ -249,94 +252,95 @@ export function readSchema(r: BufferReader) {
             } as Bounds,
             subMeshes: { start: r.u32(sizes[0]), count: r.u32(sizes[0]) } as SubMeshProjectionRange,
         } as ChildInfo,
+        hashBytes: r.u8(sizes[1]),
         subMeshProjection: {
-            length: sizes[1],
-            objectId: r.u32(sizes[1]),
-            primitiveType: r.u8(sizes[1]) as EnumArray<PrimitiveType>,
-            attributes: r.u8(sizes[1]) as EnumArray<OptionalVertexAttribute>,
-            numDeviations: r.u8(sizes[1]),
-            numIndices: r.u32(sizes[1]),
-            numVertices: r.u32(sizes[1]),
-            numTextureBytes: r.u32(sizes[1]),
-        } as SubMeshProjection,
-        subMesh: {
             length: sizes[2],
-            childIndex: r.u8(sizes[2]),
             objectId: r.u32(sizes[2]),
-            materialIndex: r.u8(sizes[2]),
             primitiveType: r.u8(sizes[2]) as EnumArray<PrimitiveType>,
-            materialType: r.u8(sizes[2]) as EnumArray<MaterialType>,
             attributes: r.u8(sizes[2]) as EnumArray<OptionalVertexAttribute>,
             numDeviations: r.u8(sizes[2]),
-            vertices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexRange,
-            primitiveVertexIndices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexIndexRange,
-            edgeVertexIndices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexIndexRange,
-            cornerVertexIndices: { start: r.u32(sizes[2]), count: r.u32(sizes[2]) } as VertexIndexRange,
-            textures: { start: r.u8(sizes[2]), count: r.u8(sizes[2]) } as TextureInfoRange,
+            numIndices: r.u32(sizes[2]),
+            numVertices: r.u32(sizes[2]),
+            numTextureBytes: r.u32(sizes[2]),
+        } as SubMeshProjection,
+        subMesh: {
+            length: sizes[3],
+            childIndex: r.u8(sizes[3]),
+            objectId: r.u32(sizes[3]),
+            materialIndex: r.u8(sizes[3]),
+            primitiveType: r.u8(sizes[3]) as EnumArray<PrimitiveType>,
+            materialType: r.u8(sizes[3]) as EnumArray<MaterialType>,
+            attributes: r.u8(sizes[3]) as EnumArray<OptionalVertexAttribute>,
+            numDeviations: r.u8(sizes[3]),
+            vertices: { start: r.u32(sizes[3]), count: r.u32(sizes[3]) } as VertexRange,
+            primitiveVertexIndices: { start: r.u32(sizes[3]), count: r.u32(sizes[3]) } as VertexIndexRange,
+            edgeVertexIndices: { start: r.u32(sizes[3]), count: r.u32(sizes[3]) } as VertexIndexRange,
+            cornerVertexIndices: { start: r.u32(sizes[3]), count: r.u32(sizes[3]) } as VertexIndexRange,
+            textures: { start: r.u8(sizes[3]), count: r.u8(sizes[3]) } as TextureInfoRange,
         } as SubMesh,
         textureInfo: {
-            length: sizes[3],
-            semantic: r.u8(sizes[3]) as EnumArray<TextureSemantic>,
+            length: sizes[4],
+            semantic: r.u8(sizes[4]) as EnumArray<TextureSemantic>,
             transform: {
-                length: sizes[3],
-                e00: r.f32(sizes[3]),
-                e01: r.f32(sizes[3]),
-                e02: r.f32(sizes[3]),
-                e10: r.f32(sizes[3]),
-                e11: r.f32(sizes[3]),
-                e12: r.f32(sizes[3]),
-                e20: r.f32(sizes[3]),
-                e21: r.f32(sizes[3]),
-                e22: r.f32(sizes[3]),
+                length: sizes[4],
+                e00: r.f32(sizes[4]),
+                e01: r.f32(sizes[4]),
+                e02: r.f32(sizes[4]),
+                e10: r.f32(sizes[4]),
+                e11: r.f32(sizes[4]),
+                e12: r.f32(sizes[4]),
+                e20: r.f32(sizes[4]),
+                e21: r.f32(sizes[4]),
+                e22: r.f32(sizes[4]),
             } as Float3x3,
-            pixelRange: { start: r.u32(sizes[3]), count: r.u32(sizes[3]) } as PixelRange,
+            pixelRange: { start: r.u32(sizes[4]), count: r.u32(sizes[4]) } as PixelRange,
         } as TextureInfo,
         vertex: {
-            length: sizes[4],
+            length: sizes[5],
             position: {
-                length: sizes[4],
-                x: r.i16(sizes[4]),
-                y: r.i16(sizes[4]),
-                z: r.i16(sizes[4]),
+                length: sizes[5],
+                x: r.i16(sizes[5]),
+                y: r.i16(sizes[5]),
+                z: r.i16(sizes[5]),
             } as Int16_3,
             normal: !flags[0] ? undefined : {
-                length: sizes[4],
-                x: r.i8(sizes[4]),
-                y: r.i8(sizes[4]),
-                z: r.i8(sizes[4]),
+                length: sizes[5],
+                x: r.i8(sizes[5]),
+                y: r.i8(sizes[5]),
+                z: r.i8(sizes[5]),
             } as Int8_3,
             color: !flags[1] ? undefined : {
-                length: sizes[4],
-                red: r.u8(sizes[4]),
-                green: r.u8(sizes[4]),
-                blue: r.u8(sizes[4]),
-                alpha: r.u8(sizes[4]),
+                length: sizes[5],
+                red: r.u8(sizes[5]),
+                green: r.u8(sizes[5]),
+                blue: r.u8(sizes[5]),
+                alpha: r.u8(sizes[5]),
             } as RGBA_U8,
             texCoord: !flags[2] ? undefined : {
-                length: sizes[4],
-                x: r.f16(sizes[4]),
-                y: r.f16(sizes[4]),
+                length: sizes[5],
+                x: r.f16(sizes[5]),
+                y: r.f16(sizes[5]),
             } as Half2,
             projectedPos: !flags[3] ? undefined : {
-                length: sizes[4],
-                x: r.i16(sizes[4]),
-                y: r.i16(sizes[4]),
-                z: r.i16(sizes[4]),
+                length: sizes[5],
+                x: r.i16(sizes[5]),
+                y: r.i16(sizes[5]),
+                z: r.i16(sizes[5]),
             } as Int16_3,
             deviations: {
-                length: sizes[4],
-                a: !flags[4] ? undefined : r.f16(sizes[4]),
-                b: !flags[5] ? undefined : r.f16(sizes[4]),
-                c: !flags[6] ? undefined : r.f16(sizes[4]),
-                d: !flags[7] ? undefined : r.f16(sizes[4]),
+                length: sizes[5],
+                a: !flags[4] ? undefined : r.f16(sizes[5]),
+                b: !flags[5] ? undefined : r.f16(sizes[5]),
+                c: !flags[6] ? undefined : r.f16(sizes[5]),
+                d: !flags[7] ? undefined : r.f16(sizes[5]),
             } as Deviations,
         } as Vertex,
         triangle: {
-            length: sizes[5],
-            topologyFlags: !flags[8] ? undefined : r.u8(sizes[5]),
+            length: sizes[6],
+            topologyFlags: !flags[8] ? undefined : r.u8(sizes[6]),
         } as Triangle,
-        vertexIndex: !flags[9] ? undefined : r.u16(sizes[6]),
-        texturePixels: r.u8(sizes[7]),
+        vertexIndex: !flags[9] ? undefined : r.u16(sizes[7]),
+        texturePixels: r.u8(sizes[8]),
     } as const;
     console.assert(r.eof);
     return schema;

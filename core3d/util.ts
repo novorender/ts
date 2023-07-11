@@ -1,5 +1,21 @@
 import { mat4, vec3, type ReadonlyMat4, type ReadonlyVec4 } from "gl-matrix";
 
+export function decodeBase64(base64: string, type?: Uint8ArrayConstructor): Uint8Array;
+export function decodeBase64(base64: string, type: Uint8ClampedArrayConstructor): Uint8ClampedArray;
+export function decodeBase64(base64: string | undefined, type?: Uint8ArrayConstructor): Uint8Array | undefined;
+export function decodeBase64(base64: string | undefined, type: Uint8ClampedArrayConstructor): Uint8ClampedArray | undefined;
+export function decodeBase64(base64: string | undefined, type: Uint8ArrayConstructor | Uint8ClampedArrayConstructor = Uint8Array) {
+    if (base64) {
+        var binaryString = atob(base64);
+        var len = binaryString.length;
+        const bytes = new type(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+    }
+}
+
 export function othoNormalBasisMatrixFromPlane(plane: ReadonlyVec4): ReadonlyMat4 {
     const [nx, ny, nz, offs] = plane;
     const axisZ = vec3.fromValues(nx, ny, nz);

@@ -12,6 +12,7 @@ import { computeGradientColors, gradientRange } from "./gradient";
 import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass } from "./module";
 import { Mutex } from "./mutex";
 import { useWorker } from "./worker";
+import { decodeBase64 } from "core3d/util";
 
 const enum UBO { camera, clipping, scene, node };
 
@@ -660,7 +661,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     private async reloadScene(scene: RenderStateScene) {
         this.suspendUpdates = true;
         await this.loader.abortAllPromise; // make sure we wait for any previous aborts to complete
-        const rootNodes = await createSceneRootNodes(this, scene.config);
+        const rootNodes = await createSceneRootNodes(this, scene.config, this.renderContext.deviceProfile);
         if (rootNodes) {
             this.rootNodes = rootNodes;
         }
@@ -679,10 +680,10 @@ function makeMaterialAtlas(state: DerivedRenderState) {
             console.assert(numMaterials <= 256);
             function zeroes() { return new Uint8ClampedArray(numMaterials); };
             function ones() { const a = new Uint8ClampedArray(numMaterials); a.fill(255); return a; };
-            const red = decodeBase64(diffuse.red) ?? zeroes();
-            const green = decodeBase64(diffuse.green) ?? zeroes();
-            const blue = decodeBase64(diffuse.blue) ?? zeroes();
-            const alpha = decodeBase64(opacity) ?? ones();
+            const red = decodeBase64(diffuse.red, Uint8ClampedArray) ?? zeroes();
+            const green = decodeBase64(diffuse.green, Uint8ClampedArray) ?? zeroes();
+            const blue = decodeBase64(diffuse.blue, Uint8ClampedArray) ?? zeroes();
+            const alpha = decodeBase64(opacity, Uint8ClampedArray) ?? ones();
             const srcData = interleaveRGBA(red, green, blue, alpha);
             return srcData;
         }
@@ -752,18 +753,6 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
         copyMatrix(i + 1, getRGBATransform(groups[i].action));
     }
     return colorMatrices;
-}
-
-function decodeBase64(base64: string | undefined): Uint8ClampedArray | undefined {
-    if (base64) {
-        var binaryString = atob(base64);
-        var len = binaryString.length;
-        var bytes = new Uint8ClampedArray(len);
-        for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-        return bytes;
-    }
 }
 
 function interleaveRGBA(r: Uint8ClampedArray, g: Uint8ClampedArray, b: Uint8ClampedArray, a: Uint8ClampedArray) {
