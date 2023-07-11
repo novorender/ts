@@ -334,7 +334,6 @@ class ObjectAsset {
             const translatedPos = vec3.sub(vec3.create(), position, localSpaceTranslation);
             const transform = rotation ? mat4.fromRotationTranslation(mat4.create(), rotation, translatedPos) : mat4.fromTranslation(mat4.create(), translatedPos);
             const [e00, e01, e02, e03, e10, e11, e12, e13, e20, e21, e22, e23, e30, e31, e32, e33] = transform;
-            console.log(e30, e31, e32);
             const elems4x3 = [e00, e01, e02, e10, e11, e12, e20, e21, e22, e30, e31, e32];
             srcData.set(elems4x3, i * elems4x3.length);
             // srcData.set(transform, i * 16);
