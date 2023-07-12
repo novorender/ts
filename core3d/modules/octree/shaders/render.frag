@@ -74,6 +74,12 @@ void main() {
     }
 #endif
 
+#if (PASS == PASS_PICK)
+    if(rgba.a < scene.pickOpacityThreshold)
+        discard;
+#endif
+
+
 #if defined (HIGHLIGHT)
     if(highlight == 254U) {
         discard;
@@ -87,9 +93,6 @@ void main() {
         colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / 5.0));
         vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / 5.0));
         rgba = colorTransform * rgba + colorTranslation;
-        #if PASS == PASS_PICK
-        rgba.a > 0. ? rgba.a = 1. : rgba.a = 0.;
-        #endif
     }
 #endif
 
@@ -124,10 +127,7 @@ void main() {
 #if (PASS == PASS_PRE)
     if(rgba.a < 1.)
         discard;
-#elif (PASS == PASS_PICK)
-    if(rgba.a < scene.pickOpacityThreshold)
-        discard;
-#else
+#elif (PASS != PASS_PICK)
     if(rgba.a <= 0.)
         discard;
 #endif
