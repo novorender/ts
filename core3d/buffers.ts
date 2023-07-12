@@ -1,5 +1,6 @@
 import { glBlit, glInvalidateFrameBuffer, glReadPixels } from "webgl2";
 import { ResourceBin } from "./resource";
+import { stat } from "fs";
 
 export const enum BufferFlags {
     color = 0x01,
@@ -108,10 +109,15 @@ export class RenderBuffers {
             this.pickFence = { sync, promises: [] };
         }
         if (this.pickFence) {
-            const { promises } = this.pickFence;
+            const { gl } = this;
+            const { promises, sync } = this.pickFence;
             const promise = new Promise<void>((resolve, reject) => {
                 promises.push({ resolve, reject });
             });
+            const status = gl.clientWaitSync(sync, gl.SYNC_FLUSH_COMMANDS_BIT, 0);
+            if (status == gl.TIMEOUT_EXPIRED) { // pick buffer timed out return old arrays
+                return this.typedArrays;
+            }
             await promise;
             return this.typedArrays;
         } else {
