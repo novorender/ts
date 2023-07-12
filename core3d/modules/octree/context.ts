@@ -259,7 +259,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
 
         if (renderContext.hasStateChanged({ output })) {
-            updateShaderCompileConstants({ dither: output.samplesMSAA == 1 });
+            updateShaderCompileConstants({ dither: output.samplesMSAA <= 1 });
         }
 
         renderContext.updateUniformBuffer(resources.sceneUniforms, uniforms.scene);
