@@ -720,7 +720,7 @@ export class RenderContext {
         if (x0 < 0) x0 = 0;
         if (x1 > width) x1 = width;
         if (y0 < 0) y0 = 0;
-        if (y1 > width) y1 = width;
+        if (y1 > height) y1 = height;
         const samples: PickSample[] = [];
         const { isOrtho, viewClipMatrix, viewWorldMatrix, viewWorldMatrixNormal } = this;
         const f16Max = 65504;
