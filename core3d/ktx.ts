@@ -143,7 +143,7 @@ function parseHeader(ktx: Uint8Array) {
         }
     }
 
-    // load the rese of the header in native 32 bit uint
+    // load the rest of the header in native 32 bit uint
     const dataSize = Uint32Array.BYTES_PER_ELEMENT;
     const headerDataView = new DataView(ktx.buffer, 12 + ktx.byteOffset, 13 * dataSize);
     const endianness = headerDataView.getUint32(0, true);

@@ -227,7 +227,7 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
 }
 
 function toHex(bytes: Uint8Array) {
-    return Array.prototype.map.call(bytes, x => ('00' + x.toString(16)).slice(-2)).join('');
+    return Array.prototype.map.call(bytes, x => ('00' + x.toString(16).toUpperCase()).slice(-2)).join('');
 }
 
 export function getChildren(parentId: string, schema: Schema, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean): NodeData[] {

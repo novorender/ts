@@ -5,7 +5,6 @@ import { glUBOProxy, glClear, glDraw, glState } from "webgl2";
 import { type TextureParams, type UniformTypes, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { BufferFlags } from "core3d/buffers";
 
 export class BackgroundModule implements RenderModule {
     readonly kind = "background";
@@ -33,7 +32,7 @@ export class BackgroundModule implements RenderModule {
     }
 
     async createResources(context: RenderContext, uniformsProxy: Uniforms) {
-        const bin = context.resourceBin("Clipping");
+        const bin = context.resourceBin("Background");
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
         const uniformBufferBlocks = ["Camera", "Background"];
         const textureUniforms = ["textures.skybox", "textures.ibl.specular"];

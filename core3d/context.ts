@@ -74,7 +74,6 @@ export class RenderContext {
     };
     isIdleFrame = false;
 
-
     constructor(readonly deviceProfile: DeviceProfile, readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TextureImageSource, options?: WebGLContextAttributes) {
         // init gl context
         const gl = canvas.getContext("webgl2", options);
@@ -270,7 +269,7 @@ export class RenderContext {
                 diffuse: iblResourceBin.createTexture(this.defaultIBLTextureParams),
                 specular: iblResourceBin.createTexture(this.defaultIBLTextureParams),
                 numMipMaps: 1,
-                default: false,
+                default: true,
             };
         }
     }
