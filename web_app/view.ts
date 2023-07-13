@@ -14,8 +14,7 @@ export abstract class View {
     protected renderStateCad: RenderState;
     protected prevRenderStateCad: RenderState | undefined;
     private stateChanges: RenderStateChanges | undefined;
-    private screenshot: string | undefined;
-    private requestScreenshot = false;
+    private screenshot: string | undefined | null = null;
 
     //* @internal */
     controllers;
@@ -78,11 +77,10 @@ export abstract class View {
 
     async getScreenshot(): Promise<string> {
         this.screenshot = undefined;
-        this.requestScreenshot = true;
         function delay(ms: number) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
-        while (this.screenshot == undefined) {
+        while (this.screenshot === undefined) {
             await delay(50);
         }
         return this.screenshot;
@@ -194,7 +192,8 @@ export abstract class View {
         return undefined;
     }
 
-    async switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }) {
+    async switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }, options?: { autoInit?: boolean }) {
+        const autoInit = options?.autoInit ?? false;
         function isControllerKind(kind: string, controllers: Object): kind is keyof View["controllers"] {
             return kind in controllers;
         }
@@ -206,7 +205,7 @@ export abstract class View {
 
         // find minimum renderered distance
         let distance: number | undefined;
-        if (renderContext && renderContext.prevState) {
+        if (autoInit && renderContext && renderContext.prevState) {
             renderContext.renderPickBuffers();
             const pick = (await renderContext.buffers.pickBuffers()).pick;
             const depths = await renderContext.getLinearDepths(pick);
@@ -218,7 +217,6 @@ export abstract class View {
 
         // transfer what state we can from previous controller
         const prevState = activeController.serialize(true /* include derived properties as well */);
-        const prevController = this.activeController;
         activeController = this.activeController = controllers[kind];
         const { position, rotation, pivot, fovDegrees, fovMeters } = prevState;
 
@@ -324,14 +322,13 @@ export abstract class View {
                     this.stateChanges = undefined;
                 }
 
-                const { renderStateGL, requestScreenshot } = this;
-                if (prevState !== renderStateGL || renderContext.changed || requestScreenshot) {
+                const { renderStateGL, screenshot } = this;
+                if (prevState !== renderStateGL || renderContext.changed || screenshot === undefined) {
                     prevState = renderStateGL;
                     this.render?.(isIdleFrame);
                     const statsPromise = renderContext.render(renderStateGL);
-                    if (requestScreenshot) {
+                    if (screenshot === undefined) {
                         this.screenshot = this.canvas.toDataURL();
-                        this.requestScreenshot = false;
                     }
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };

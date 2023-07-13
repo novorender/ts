@@ -112,8 +112,7 @@ export class RenderBuffers {
             const promise = new Promise<void>((resolve, reject) => {
                 promises.push({ resolve, reject });
             });
-            await Promise.any([promise, new Promise(resolve => setTimeout(resolve, 100))]); //Sometimes it will never poll so set timeout, especially during setup
-            //await promise;
+            await promise;
             return this.typedArrays;
         } else {
             return Promise.resolve(this.typedArrays);

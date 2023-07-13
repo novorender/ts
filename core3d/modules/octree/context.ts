@@ -581,7 +581,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         gl.enable(gl.CULL_FACE);
                     }
                 }
-                if (pass == ShaderPass.color) {
+                if (pass == ShaderPass.color || pass == ShaderPass.pick) {
                     gl.bindTexture(gl.TEXTURE_2D, mesh.baseColorTexture ?? resources.defaultBaseColorTexture);
                 }
                 if (mask == data.childMask) {
