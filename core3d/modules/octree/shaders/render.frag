@@ -71,6 +71,25 @@ void main() {
         rgba = texture(textures.base_color, varyings.texCoord0);
     } else {
         rgba = baseColor;
+#if (PASS != PASS_PICK)
+        vec4 diffuseOpacity = rgba;
+        diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
+
+        vec4 specularShininess = vec4(mix(0.4f, 0.1f, baseColor.a)); // TODO: get from varyings instead
+        specularShininess.rgb = sRGBToLinear(specularShininess.rgb);
+
+        vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
+        vec3 N = normalize(normalWS);
+
+        vec3 irradiance = texture(textures.ibl.diffuse, N).rgb;
+        float perceptualRoughness = clamp((1.0f - specularShininess.a), 0.0f, 1.0f);
+        perceptualRoughness *= perceptualRoughness;
+        float lod = perceptualRoughness * (scene.iblMipCount - 1.0f);
+        vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb;
+
+        vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
+        rgba = vec4(rgb, rgba.a);
+#endif
     }
 #endif
 
@@ -78,7 +97,6 @@ void main() {
     if(rgba.a < scene.pickOpacityThreshold)
         discard;
 #endif
-
 
 #if defined (HIGHLIGHT)
     if(highlight == 254U) {
@@ -96,27 +114,7 @@ void main() {
     }
 #endif
 
-#if (MODE == MODE_TRIANGLES && PASS != PASS_PICK)
-    if(baseColor != vec4(0)) {
-        vec4 diffuseOpacity = rgba;
-        diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
 
-        vec4 specularShininess = vec4(mix(0.4, 0.1, baseColor.a)); // TODO: get from varyings instead
-        specularShininess.rgb = sRGBToLinear(specularShininess.rgb);
-
-        vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
-        vec3 N = normalize(normalWS);
-
-        vec3 irradiance = texture(textures.ibl.diffuse, N).rgb;
-        float perceptualRoughness = clamp((1.0 - specularShininess.a), 0.0, 1.0);
-        perceptualRoughness *= perceptualRoughness;
-        float lod = perceptualRoughness * (scene.iblMipCount - 1.0);
-        vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb;
-
-        vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
-        rgba = vec4(rgb, rgba.a);
-    }
-#endif
 
     // we put discards here (late) to avoid problems with derivative functions
 #if (MODE == MODE_POINTS)
