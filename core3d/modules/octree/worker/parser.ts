@@ -278,11 +278,15 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
     const { subMesh } = schema;
     for (let i = 0; i < subMesh.length; i++) {
         const objectId = subMesh.objectId[i];
+        const primitive = subMesh.primitiveType[i];
         if (predicate?.(objectId) ?? true) {
             const childIndex = subMesh.childIndex[i];
             const objectId = subMesh.objectId[i];
             const materialIndex = subMesh.materialIndex[i];
-            const materialType = materialIndex == 0xff && subMesh.textures.count[i] == 0 ? MaterialType.elevation : subMesh.materialType[i];
+            const materialType = materialIndex ==
+                0xff && subMesh.textures.count[i] == 0 && (primitive == PrimitiveType.triangle_strip) || (primitive == PrimitiveType.triangles) ?
+                MaterialType.elevation :
+                subMesh.materialType[i];
             const primitiveType = subMesh.primitiveType[i];
             const attributes = subMesh.attributes[i];
             const deviations = subMesh.numDeviations[i] as DeviationsCount;
