@@ -327,7 +327,6 @@ export class OctreeNode {
             // check if highlights buffer has changed since the node was parsed
             if (context.highlightGeneration != highlightGeneration) {
                 OctreeNode.updateHighlights(context, meshes);
-                console.log("update");
             }
             this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
             glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });

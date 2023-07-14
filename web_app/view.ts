@@ -37,9 +37,10 @@ export abstract class View {
     private recalcBaseRenderResolution() {
         const { deviceProfile } = this;
         if (deviceProfile.tier < 2) {
-            const maxRes = deviceProfile.tier == 0 ? 720 * 1280 : 1080 * 1920;
+            const maxRes = deviceProfile.tier == 0 ? 720 * 1280 : 1440 * 2560;
             let baseRenderResolution = deviceProfile.renderResolution / devicePixelRatio;
-            let idleRes = baseRenderResolution * 2 * this.canvas.width * this.canvas.height;
+            const { width, height } = this.canvas.getBoundingClientRect();
+            let idleRes = baseRenderResolution * 2 * width * height;
             if (idleRes > maxRes) {
                 baseRenderResolution *= maxRes / idleRes;
             }
@@ -131,9 +132,9 @@ export abstract class View {
     private useDeviceProfile(deviceProfile: DeviceProfile) {
         this.resolutionModifier = deviceProfile.renderResolution;
         this.baseRenderResolution = deviceProfile.renderResolution;
+        this.recalcBaseRenderResolution();
         this.drsHighInterval = (1000 / deviceProfile.framerateTarget) * 1.2;
         this.drsLowInterval = (1000 / deviceProfile.framerateTarget) * 0.9;
-        this.recalcBaseRenderResolution();
     }
 
     private resize() {
