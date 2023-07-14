@@ -284,7 +284,7 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
             const objectId = subMesh.objectId[i];
             const materialIndex = subMesh.materialIndex[i];
             const materialType = materialIndex ==
-                0xff && subMesh.textures.count[i] == 0 && (primitive == PrimitiveType.triangle_strip) || (primitive == PrimitiveType.triangles) ?
+                0xff && subMesh.textures.count[i] == 0 && (primitive == PrimitiveType.triangle_strip || primitive == PrimitiveType.triangles) ?
                 MaterialType.elevation :
                 subMesh.materialType[i];
             const primitiveType = subMesh.primitiveType[i];
