@@ -45,6 +45,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     projectedSizeSplitThreshold = 1; // baseline node size split threshold = 50% of view height
     hidden = [false, false, false, false, false] as readonly [boolean, boolean, boolean, boolean, boolean];
     readonly highlight;
+    highlightGeneration = 0;
 
     constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly uniforms: Uniforms, readonly resources: Resources) {
         this.loader = new NodeLoader({ useWorker });
@@ -162,6 +163,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
                         (highlight as Mutable<typeof highlight>).indices = new Uint8Array(highlight.buffer, 4, numObjects);
                         updateHighlightBuffer(highlight.indices, state.highlights);
+                        this.highlightGeneration++;
                         highlight.mutex.unlock();
                     }
                     this.url = url;
@@ -236,22 +238,23 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const prevObjectIds = prevState?.highlights.groups.map(g => g.objectIds) ?? [];
             const objectIdsChanged = !sequenceEqual(objectIds, prevObjectIds);
 
-            // do async stuff below
-            if (objectIdsChanged) {
+            const actions = groups.map(g => typeof g.action == "string" ? g.action : undefined);
+            const prevActions = prevState?.highlights.groups.map(g => typeof g.action == "string" ? g.action : undefined) ?? [];
+            const actionsChanged = !sequenceEqual(actions, prevActions);
+
+            if (objectIdsChanged || actionsChanged) {
                 highlight.mutex.lockSpin(); // worker should not hold this lock for long, so we're fine spinning until it's available.
                 updateHighlightBuffer(highlight.indices, highlights);
+                this.highlightGeneration++;
                 highlight.mutex.unlock();
-
                 // update highlight vertex attributes
                 const nodes: OctreeNode[] = [];
                 for (const rootNode of Object.values(rootNodes)) {
                     nodes.push(...iterateNodes(rootNode));
                 }
-                // const highlights = createHighlightsMap(groups, nodes);
                 for (const node of nodes) {
                     node.applyHighlights(highlight.indices);
                 }
-                // renderContext.changed = true; // notify of changes, in case mutex lock went async
             };
         }
 
