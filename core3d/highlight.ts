@@ -71,10 +71,10 @@ function normalizeLinearTransform(transform: LinearTransform | number | undefine
     let scale = 1;
     let offset = 0;
     if (isLinearTransform(transform)) {
-        if (transform.scale) {
+        if (transform.scale != undefined) {
             scale = transform.scale;
         }
-        if (transform.offset) {
+        if (transform.offset != undefined) {
             offset = transform.offset;
         }
     } else if (typeof transform == "number") {

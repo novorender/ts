@@ -8,6 +8,6 @@ export * from "./controller";
 export * from "./serviceWorker";
 export type { DeviceProfile } from "core3d/device";
 export { getDeviceProfile };
-export const packageVersion = "beta";//process.env.NPM_PACKAGE_VERSION ?? '';
+export const packageVersion = import.meta.env.NPM_PACKAGE_VERSION ?? "beta";
 
 glMatrix.setMatrixArrayType(Array);

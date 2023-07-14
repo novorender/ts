@@ -1,0 +1,21 @@
+{
+    "name": "@novorender/web_app",
+    "version": "0.1.18",
+    "description": "",
+    "main": "./index.js",
+    "typings": "./index.d.ts",
+    "type": "module",
+    "scripts": {
+        "prepublishOnly": "(cd .. && ENV=production VERSION=$npm_package_version npm run build:webapp)"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/novorender/ts.git"
+    },
+    "author": "",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/novorender/ts/issues"
+    },
+    "homepage": "https://github.com/novorender/ts#readme"
+}

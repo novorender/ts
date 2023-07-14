@@ -2,10 +2,9 @@ import {  build} from "esbuild";
 import * as tsup from "tsup";
 import * as path from 'path';
 import inlineWorkerPlugin from 'esbuild-plugin-inline-worker';
-import packageJson from './web_app/package.json' assert { type: 'json' };
 
 
-const production = false;
+const production = process.env.ENV === 'production';
 
 // const buildOptionsIIFE = {
 //     entryPoints: {
@@ -27,15 +26,14 @@ const buildOptions = {
         main: 'web_app/index.ts',
     },
     define: {
-        'process.env.NPM_PACKAGE_VERSION': `"${packageJson.version}"`
+        'import.meta.env.NPM_PACKAGE_VERSION': `"${process.env.VERSION ?? process.env.npm_package_version}"`
     },
-    sourcemap: !production,
+    sourcemap: true,
     minify: production,
     bundle: true,
     platform: "browser",
     target: ["esnext"],
     format: "esm",
-    external: ["./node_modules/*"],
     loader: {
         ".wasm": "binary",
         ".bin": "binary",
