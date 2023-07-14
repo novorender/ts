@@ -47,6 +47,7 @@ export interface OctreeContext {
     readonly localSpaceChanged: boolean;
     readonly hidden: readonly boolean[]; // corresponds to NodeGeometryKind
     readonly highlights: Uint8Array;
+    readonly highlightGeneration: number;
 }
 
 export class OctreeNode {
@@ -313,7 +314,7 @@ export class OctreeNode {
 
     async downloadNode() {
         const { context, children, meshes, resourceBin } = this;
-        const { renderContext, loader, version } = context;
+        const { renderContext, loader, version, highlightGeneration } = context;
         this.state = NodeState.downloading;
         const payload = await loader.loadNode(this, version); // do actual downloading and parsing in worker
         if (payload) {
@@ -323,6 +324,11 @@ export class OctreeNode {
                 children.push(child);
             }
             meshes.push(...createMeshes(resourceBin, geometry));
+            // check if highlights buffer has changed since the node was parsed
+            if (context.highlightGeneration != highlightGeneration) {
+                OctreeNode.updateHighlights(context, meshes);
+                console.log("update");
+            }
             this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
             glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
             renderContext.changed = true;
@@ -335,6 +341,14 @@ export class OctreeNode {
     applyHighlights(highlights: Uint8Array | undefined) {
         const { context, meshes } = this;
         const { gl } = context.renderContext;
+        for (const mesh of meshes) {
+            updateMeshHighlights(gl, mesh, highlights);
+        }
+    }
+
+    static updateHighlights(context: OctreeContext, meshes: readonly Mesh[]) {
+        const { renderContext, highlights } = context;
+        const { gl } = renderContext;
         for (const mesh of meshes) {
             updateMeshHighlights(gl, mesh, highlights);
         }
