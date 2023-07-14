@@ -26,12 +26,28 @@ export abstract class View {
 
     // dynamic resolution scaling
     private resolutionModifier = 1;
+    private baseRenderResolution = 1;
     private drsHighInterval = 50;
     private drsLowInterval = 100;
     private lastQualityAdjustTime = 0;
     private resolutionTier: 0 | 1 | 2 = 2;
 
     private currentDetailBias: number = 1;
+
+    private recalcBaseRenderResolution() {
+        const { deviceProfile } = this;
+        if (deviceProfile.tier < 2) {
+            const maxRes = deviceProfile.tier == 0 ? 720 * 1280 : 1080 * 1920;
+            let baseRenderResolution = deviceProfile.renderResolution / devicePixelRatio;
+            let idleRes = baseRenderResolution * 2 * this.canvas.width * this.canvas.height;
+            if (idleRes > maxRes) {
+                baseRenderResolution *= maxRes / idleRes;
+            }
+            this.baseRenderResolution = baseRenderResolution;
+            this.resolutionModifier = baseRenderResolution;
+        }
+        this.resize();
+    }
 
     constructor(readonly canvas: HTMLCanvasElement, deviceProfile: DeviceProfile) {
         this._deviceProfile = deviceProfile;
@@ -53,7 +69,9 @@ export abstract class View {
         this.activeController = this.controllers["flight"];
         this.activeController.attach();
 
-        const resizeObserver = new ResizeObserver(() => { this.resize(); });
+        const resizeObserver = new ResizeObserver(() => {
+            this.recalcBaseRenderResolution();
+        });
         resizeObserver.observe(canvas);
     }
 
@@ -112,8 +130,10 @@ export abstract class View {
 
     private useDeviceProfile(deviceProfile: DeviceProfile) {
         this.resolutionModifier = deviceProfile.renderResolution;
+        this.baseRenderResolution = deviceProfile.renderResolution;
         this.drsHighInterval = (1000 / deviceProfile.framerateTarget) * 1.2;
         this.drsLowInterval = (1000 / deviceProfile.framerateTarget) * 0.9;
+        this.recalcBaseRenderResolution();
     }
 
     private resize() {
@@ -242,14 +262,14 @@ export abstract class View {
                 const resolutionTiers = [0.4, 0.6, 1];
                 if (medianInterval > highFrameInterval) {
                     if (this.resolutionTier != 0) {
-                        this.resolutionModifier = deviceProfile.renderResolution * resolutionTiers[--this.resolutionTier];
+                        this.resolutionModifier = this.baseRenderResolution * resolutionTiers[--this.resolutionTier];
                         this.resize();
                     }
                     this.lastQualityAdjustTime = now; // reset cooldown whenever we encounter a slow frame so we don't change back to high res too eagerly
                     return;
                 } else if (medianInterval < lowFrameInterval) {
                     if (this.resolutionTier != 2) {
-                        this.resolutionModifier = deviceProfile.renderResolution * resolutionTiers[++this.resolutionTier];
+                        this.resolutionModifier = this.baseRenderResolution * resolutionTiers[++this.resolutionTier];
                         this.lastQualityAdjustTime = now; // reset cooldown whenever we encounter a slow frame so we don't change back to high res too eagerly
                         this.resize();
                     }
@@ -289,7 +309,7 @@ export abstract class View {
 
                 if (isIdleFrame) { //increase resolution and detail bias on idleFrame
                     if (!wasIdle) {
-                        this.resolutionModifier = Math.min(1, deviceProfile.renderResolution * 2);
+                        this.resolutionModifier = Math.min(1, this.baseRenderResolution * 2);
                         this.resize();
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
@@ -301,7 +321,7 @@ export abstract class View {
                     }
                 } else {
                     if (wasIdle) {
-                        this.resolutionModifier = deviceProfile.renderResolution;
+                        this.resolutionModifier = this.baseRenderResolution;
                         this.resolutionTier = 2;
                         wasIdle = false;
                     } else {
