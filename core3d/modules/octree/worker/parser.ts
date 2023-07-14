@@ -282,7 +282,7 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
             const childIndex = subMesh.childIndex[i];
             const objectId = subMesh.objectId[i];
             const materialIndex = subMesh.materialIndex[i];
-            const materialType = subMesh.materialType[i];
+            const materialType = materialIndex == 0xff && subMesh.textures.count[i] == 0 ? MaterialType.elevation : subMesh.materialType[i];
             const primitiveType = subMesh.primitiveType[i];
             const attributes = subMesh.attributes[i];
             const deviations = subMesh.numDeviations[i] as DeviationsCount;
