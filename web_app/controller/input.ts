@@ -169,7 +169,6 @@ export class ControllerInput {
         this._mouseButtons = e.buttons;
         if ("exitPointerLock" in document) document.exitPointerLock();
         this.callbacks?.mouseButtonChanged?.(e);
-        await this.callbacks?.moveEnd?.(e);
         this._mouseButtonDown = false;
     };
 
@@ -229,7 +228,6 @@ export class ControllerInput {
         const { pointerTable, _touchMovePrev } = this;
         this._fingers = event.touches.length;
         this.callbacks?.touchChanged?.(event);
-        await this.callbacks?.moveEnd?.(event);
         switch (pointerTable.length) {
             case 0:
                 break;
@@ -389,6 +387,5 @@ export interface ContollerInputContext {
     mouseButtonChanged(event: MouseEvent): Promise<void> | void;
     touchChanged(event: TouchEvent): Promise<void> | void;
     moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void
-    moveEnd(event: TouchEvent | MouseEvent): Promise<void> | void
 }
 

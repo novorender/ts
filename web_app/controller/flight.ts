@@ -211,9 +211,7 @@ export class FlightController extends BaseController {
         }
         this.lastUpdate = performance.now();
         let { tx, ty, tz, rx, ry, shouldPivot } = this.getTransformations();
-        if (!this.mouseOrTouchMoving) {
-            this.mouseOrTouchMoving = tx > 0.1 || ty > 0.1 || rx > 0.1 || ry > 0.1;
-        }
+        this.mouseOrTouchMoving = tx > 0.1 || ty > 0.1 || rx > 0.1 || ry > 0.1;
         orientation.roll = 0;
         const [zoomX, zoomY] = zoomPos;
 
@@ -302,10 +300,6 @@ export class FlightController extends BaseController {
 
     get moving() {
         return this.input.isAnyGestureKeyPressed() || this.input.isScrolling() || this.mouseOrTouchMoving;
-    }
-
-    async moveEnd(event: TouchEvent | MouseEvent): Promise<void> {
-        this.mouseOrTouchMoving = false;
     }
 
     async moveBegin(event: TouchEvent | MouseEvent): Promise<void> {

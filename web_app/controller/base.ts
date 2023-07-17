@@ -125,7 +125,6 @@ export abstract class BaseController {
     mouseButtonChanged(event: MouseEvent): Promise<void> | void { }
     touchChanged(event: TouchEvent): Promise<void> | void { }
     moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void { }
-    moveEnd(event: TouchEvent | MouseEvent): Promise<void> | void { }
     moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat): void { }
     zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void { }
 

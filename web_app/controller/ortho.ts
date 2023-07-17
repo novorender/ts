@@ -89,10 +89,6 @@ export class OrthoController extends BaseController {
         return this.input.isAnyGestureKeyPressed() || this.input.isScrolling() || this.mouseOrTouchMoving;
     }
 
-    async moveEnd(event: TouchEvent | MouseEvent): Promise<void> {
-        this.mouseOrTouchMoving = false;
-    }
-
     override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void {
         const { orientation, position } = this;
         if (flyTime) {
@@ -156,9 +152,7 @@ export class OrthoController extends BaseController {
         const zoom = (hasShift ? 0 : axes.mouse_wheel) + axes.touch_pinch2 - axes.keyboard_qe;
         const [zoomX, zoomY] = zoomPos;
 
-        if (!this.mouseOrTouchMoving) {
-            this.mouseOrTouchMoving = tx > 0.1 || ty > 0.1 || rz > 0.1;
-        }
+        this.mouseOrTouchMoving = tx > 0.1 || ty > 0.1 || rz > 0.1;
 
         if (rz) {
             orientation.roll += rz * 0.2;
