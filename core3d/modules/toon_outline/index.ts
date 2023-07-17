@@ -43,7 +43,7 @@ function isEnabled(context: RenderContext, state: DerivedRenderState) {
 class ToonModuleContext implements RenderModuleContext {
     constructor(readonly context: RenderContext, readonly module: ToonModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
-    update(state: DerivedRenderState) {
+    async update(state: DerivedRenderState) {
         const { context, resources } = this;
         if (context.deviceProfile.quirks.adreno600) { //Normals are 0 and converting depht does not work on adreno 600 series
             return;
@@ -56,7 +56,7 @@ class ToonModuleContext implements RenderModuleContext {
             context.updateUniformBuffer(uniforms, this.uniforms);
         }
         if (context.isRendering() && !context.isPickBuffersValid() && isEnabled(context, state)) {
-            context.renderPickBuffers();
+            await context.renderPickBuffers();
         }
     }
 
