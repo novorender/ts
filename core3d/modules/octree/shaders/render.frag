@@ -74,6 +74,7 @@ void main() {
     }
 #endif
 #if (PASS != PASS_PICK && MODE != MODE_POINTS)
+if (baseColor != vec4(0)) {
     vec4 diffuseOpacity = rgba;
     diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
 
@@ -91,6 +92,8 @@ void main() {
 
     vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
     rgba = vec4(rgb, rgba.a);
+}
+
 #endif
 
 #if (PASS == PASS_PICK)
