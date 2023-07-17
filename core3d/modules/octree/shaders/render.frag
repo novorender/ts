@@ -65,7 +65,7 @@ void main() {
 #if (MODE == MODE_POINTS)
     rgba = baseColor;
 #elif (MODE == MODE_TERRAIN)
-    rgba = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange);
+    rgba = baseColor = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange); //Modify base color to get 
 #elif (MODE == MODE_TRIANGLES)
     if(baseColor == vec4(0)) {
         rgba = texture(textures.base_color, varyings.texCoord0);
