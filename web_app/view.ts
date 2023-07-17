@@ -239,9 +239,8 @@ export abstract class View {
         // transfer what state we can from previous controller
         const prevState = activeController.serialize(true /* include derived properties as well */);
         activeController = this.activeController = controllers[kind];
-        const { position, rotation, pivot, fovDegrees, fovMeters } = prevState;
-
-        activeController.init({ kind, position: initState?.position ?? position, rotation: initState?.rotation ?? rotation, pivot, distance, fovDegrees, fovMeters: initState?.fov ?? fovMeters });
+        const { position, rotation, pivot, fovMeters } = prevState;
+        activeController.init({ kind, position: initState?.position ?? position, rotation: initState?.rotation ?? rotation, pivot, distance, fovMeters: initState?.fov ?? kind != "panorama" ? fovMeters : undefined });
         const changes = activeController.stateChanges();
         this.modifyRenderState({ camera: changes });
     }
