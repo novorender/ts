@@ -11,7 +11,7 @@ import { mat3, mat4, vec3, vec4 } from "gl-matrix";
 import commonShaderCore from "./common.glsl";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
-import { othoNormalBasisMatrixFromPlane } from "./util";
+import { orthoNormalBasisMatrixFromPlane } from "./util";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
@@ -688,7 +688,7 @@ export class RenderContext {
             // compute plane projection matrices
             // const localPlaneMatrix = othoNormalBasisMatrixFromPlane(planeLS);
             // const planeLocalMatrix = mat4.invert(mat4.create(), localPlaneMatrix);
-            const planeLocalMatrix = othoNormalBasisMatrixFromPlane(planeLS);
+            const planeLocalMatrix = orthoNormalBasisMatrixFromPlane(planeLS);
             const localPlaneMatrix = mat4.invert(mat4.create(), planeLocalMatrix);
             // set uniform values
             const { values } = outlinesUniformsData;

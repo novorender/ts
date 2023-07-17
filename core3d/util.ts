@@ -16,10 +16,10 @@ export function decodeBase64(base64: string | undefined, type: Uint8ArrayConstru
     }
 }
 
-export function othoNormalBasisMatrixFromPlane(plane: ReadonlyVec4): ReadonlyMat4 {
+export function orthoNormalBasisMatrixFromPlane(plane: ReadonlyVec4): ReadonlyMat4 {
     const [nx, ny, nz, offs] = plane;
     const axisZ = vec3.fromValues(nx, ny, nz);
-    const minI = nx < ny && nx < nz ? 0 : ny < nz ? 1 : 2;
+    const minI = Math.abs(nx) < Math.abs(ny) && Math.abs(nx) < Math.abs(nz) ? 0 : Math.abs(ny) < Math.abs(nz) ? 1 : 2;
     const axisY = vec3.fromValues(0, 0, 0);
     axisY[minI] = 1;
     const axisX = vec3.cross(vec3.create(), axisY, axisZ);
