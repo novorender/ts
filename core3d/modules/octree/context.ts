@@ -536,7 +536,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             if (state.outlines.enabled && deviceProfile.features.outline) {
                 // render clipping outlines
                 glState(gl, {
-                    uniformBuffers: [cameraUniforms, outlineUniforms, null],
+                    uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
                     depth: {
                         test: false,
                         writeMask: false
