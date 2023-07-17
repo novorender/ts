@@ -15,7 +15,7 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
     const maxGPUBytes = ([500_000_000, 750_000_000, 2_000_000_000, 5_000_000_000] as const)[tier];
     const maxPrimitives = ([20_000_000, 20_000_000, 20_000_000, 50_000_000] as const)[tier]; // this is not supposed to be used to regulate FPS, but rather avoid rendering taking so long it will crash the browser.
     const maxSamples = ([4, 4, 8, 16] as const)[tier]; // MSAA
-    const detailBias = ([0.4, .50, .75, 1] as const)[tier];
+    const detailBias = ([0.3, .50, .75, 1] as const)[tier];
     let renderResolution = ([0.5, 0.75, 1, 1] as const)[tier];
     if (resolutionScaling) {
         renderResolution *= resolutionScaling;
