@@ -516,6 +516,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 program: programs.pick,
                 uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
                 cull: { enable: true, },
+                depth: { test: true },
                 textures: [
                     { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // basecolor - will be overridden by nodes that have textures, e.g. terrain nodes.
                     { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerNearest },
