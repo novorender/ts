@@ -462,13 +462,14 @@ export class RenderContext {
         derivedState.effectiveSamplesMSAA = effectiveSamplesMSAA;
         if (resized || state.camera !== prevState?.camera) {
             const snapDist = 1024; // make local space roughly within 1KM of camera
-            const dist = Math.max(...vec3.sub(vec3.create(), state.camera.position, this.localSpaceTranslation).map(c => Math.abs(c)));
+            const dir = vec3.sub(vec3.create(), state.camera.position, this.localSpaceTranslation).map(c => Math.abs(c));
+            const dist = Math.max(dir[0], dir[2]) //Skip Y as we will not get an issue with large Y offset and we elevations internally in shader.
             // don't change localspace unless camera is far enough away. we want to avoid flipping back and forth across snap boundaries.
             if (dist >= snapDist) {
                 function snap(v: number) {
                     return Math.round(v / snapDist) * snapDist;
                 }
-                this.localSpaceTranslation = vec3.fromValues(...(state.camera.position.map(v => snap(v)) as [number, number, number]))
+                this.localSpaceTranslation = vec3.fromValues(snap(state.camera.position[0]), 0, snap(state.camera.position[2]));
             }
 
             derivedState.localSpaceTranslation = this.localSpaceTranslation; // update the object reference to indicate that values have changed
