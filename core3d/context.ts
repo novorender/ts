@@ -37,6 +37,7 @@ export class RenderContext {
         lines: 0,
         triangles: 0,
         drawCalls: 0,
+        primitives: 0,
     };
     private prevFrame: {
         readonly time: number;
@@ -350,12 +351,13 @@ export class RenderContext {
         });
     }
 
-    private resetRenderStatistics() {
+    private resetStatistics() {
         const { statistics } = this;
         statistics.points = 0;
         statistics.lines = 0;
         statistics.triangles = 0;
         statistics.drawCalls = 0;
+        this.statistics.primitives = 0;
     }
 
     //* @internal */
@@ -365,6 +367,10 @@ export class RenderContext {
         statistics.lines += stats.lines;
         statistics.triangles += stats.triangles;
         statistics.drawCalls += drawCalls;
+    }
+
+    protected addLoadStatistics(numPrimitives: number) {
+        this.statistics.primitives += numPrimitives;
     }
 
     //* @internal */
@@ -436,7 +442,7 @@ export class RenderContext {
         this.changed = false;
         this.pickBuffersValid = false;
 
-        this.resetRenderStatistics();
+        this.resetStatistics();
 
         const drawTimer = this.beginTimer();
 

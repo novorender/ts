@@ -324,8 +324,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     }
                 }
             }
-            sessionStorage.setItem("gpu_bytes", gpuBytes.toLocaleString());
-            sessionStorage.setItem("primitives", primitives.toLocaleString());
+
+            renderContext["addLoadStatistics"](primitives);
 
             const maxDownloads = 8;
             let availableDownloads = maxDownloads - this.loader.activeDownloads;
@@ -336,8 +336,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
         }
-        const endTime = performance.now();
-        // console.log(endTime - beginTime);
     }
 
     applyDefaultAttributeValues() {
