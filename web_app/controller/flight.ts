@@ -168,7 +168,7 @@ export class FlightController extends BaseController {
             scale = vec3.dist(position, recordedMoveBegin) * Math.tan(((Math.PI / 180) * fov) / 2) * 2;
             const siceMoveDelay = performance.now() - this.moveBeginDelay;
             if (siceMoveDelay < 400) {  //Delay proportinal speed for better feeling on bad devices
-                scale = Math.max(scale, 60 + (siceMoveDelay * 0.5));
+                scale = Math.min(scale, 60 + (siceMoveDelay * 0.5));
             }
             const mouseWheelModifier = this.input.hasShift ? 0 : clamp(scale / 3, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const mousePanModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
@@ -211,7 +211,7 @@ export class FlightController extends BaseController {
         }
         this.lastUpdate = performance.now();
         let { tx, ty, tz, rx, ry, shouldPivot } = this.getTransformations();
-        this.mouseOrTouchMoving = tx > 0.1 || ty > 0.1 || rx > 0.1 || ry > 0.1;
+        this.mouseOrTouchMoving = Math.abs(tx) > 0.1 || Math.abs(ty) > 0.1 || Math.abs(rx) > 0.1 || Math.abs(ry) > 0.1;
         orientation.roll = 0;
         const [zoomX, zoomY] = zoomPos;
 
