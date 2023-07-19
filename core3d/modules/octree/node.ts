@@ -71,7 +71,7 @@ export class OctreeNode {
     viewDistance = 0;
     projectedSize = 0;
     static readonly errorModifiersPinhole = {
-        [NodeGeometryKind.terrain]: .3,
+        [NodeGeometryKind.terrain]: .05,
         [NodeGeometryKind.triangles]: 1,
         [NodeGeometryKind.lines]: .5,
         [NodeGeometryKind.points]: .15,
