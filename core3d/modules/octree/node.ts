@@ -70,16 +70,23 @@ export class OctreeNode {
     visibility = Visibility.undefined;
     viewDistance = 0;
     projectedSize = 0;
-    static readonly errorModifiers = {
+    static readonly errorModifiersPinhole = {
         [NodeGeometryKind.terrain]: .3,
         [NodeGeometryKind.triangles]: 1,
         [NodeGeometryKind.lines]: .5,
         [NodeGeometryKind.points]: .15,
         [NodeGeometryKind.documents]: .08,
     };
+    static readonly errorModifiersOrtho = {
+        [NodeGeometryKind.terrain]: .25,
+        [NodeGeometryKind.triangles]: 5,
+        [NodeGeometryKind.lines]: 2.5,
+        [NodeGeometryKind.points]: .75,
+        [NodeGeometryKind.documents]: .4,
+    };
 
     constructor(readonly context: OctreeContext, readonly data: NodeData, parent: OctreeNode | NodeGeometryKind) {
-        const geometryKind = this.geometryKind = typeof parent == "object" ? parent.geometryKind : parent;
+        this.geometryKind = typeof parent == "object" ? parent.geometryKind : parent;
         this.parent = typeof parent == "object" ? parent : undefined;
         // create uniform buffer
         const { sphere, box } = data.bounds;
@@ -103,11 +110,9 @@ export class OctreeNode {
         ];
 
 
-        const errorModifier = OctreeNode.errorModifiers[geometryKind];
-
         // const toleranceScale = 128; // an approximate scale for tolerance to projected pixels
         // this.size = Math.pow(2, data.tolerance) * toleranceScale;
-        this.size = Math.max(box.max[0] - box.min[0], Math.max(box.max[1] - box.min[1], box.max[2] - box.min[2])) * 4 * errorModifier;
+        this.size = Math.max(box.max[0] - box.min[0], Math.max(box.max[1] - box.min[1], box.max[2] - box.min[2])) * 4;
         // this.size = data.nodeSize * errorModifier;
         this.uniformsData = glUBOProxy({
             modelLocalMatrix: "mat4",
@@ -256,15 +261,16 @@ export class OctreeNode {
         const imagePlane = viewFrustum.image;
         const projection = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
         const viewDistance = this.viewDistance = vec4.dot(imagePlane, center4);
+
         if (visibility <= Visibility.none) {
             this.projectedSize = 0;
         } else if (camera.kind == "pinhole") {
             const distance = Math.max(0.001, viewDistance - radius); // we subtract radius to get the projection size at the extremity nearest the camera
-            this.projectedSize = (this.size * projection[5]) / (-distance * projection[11]);
+            this.projectedSize = (this.size * OctreeNode.errorModifiersPinhole[this.geometryKind] * projection[5]) / (-distance * projection[11]);
             // const exp = 2; //Scale the prioritization of nodes that is closer to the camera.
             // this.projectedSize = (this.size * projection[5]) / (-distance * Math.pow(-distance, exp) / Math.pow(10, exp) * projection[11]);
         } else {
-            this.projectedSize = this.size * projection[5];
+            this.projectedSize = this.size * OctreeNode.errorModifiersOrtho[this.geometryKind] * projection[5];
         }
 
         if (context.localSpaceChanged || !this.hasValidModelLocalMatrix) {
