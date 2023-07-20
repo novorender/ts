@@ -28,6 +28,7 @@ export abstract class BaseController {
     abstract readonly projection: RenderStateCamera["kind"];
     abstract readonly changed: boolean;
     private flyTo: FlyToExt | undefined;
+    private isMoving = false;
 
     constructor(readonly input: ControllerInput) {
         // this.connect();
@@ -44,7 +45,7 @@ export abstract class BaseController {
     }
 
     get moving() {
-        return this.input.moving;
+        return this.isMoving;
     }
 
     get width() {
@@ -130,8 +131,10 @@ export abstract class BaseController {
 
     renderStateChanges(state: RenderStateCamera, elapsedTime: number): RenderStateChanges | undefined {
         if (this.input.axesEmpty() && this.currentFlyTo == undefined) {
+            this.isMoving = false;
             return;
         }
+        this.isMoving = true;
         this.animate(elapsedTime);
         if (Object.values(this.input.axes).some(v => v != 0) || this.currentFlyTo || this.changed) { // check if anything has changed
             this.update();

@@ -66,7 +66,6 @@ export class FlightController extends BaseController {
     private moveBeginDelay = 0;
     private recordedMoveBegin: ReadonlyVec3 | undefined = undefined;
     private inMoveBegin = false;
-    private mouseOrTouchMoving = false;
 
     constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
         super(input);
@@ -211,7 +210,6 @@ export class FlightController extends BaseController {
         }
         this.lastUpdate = performance.now();
         let { tx, ty, tz, rx, ry, shouldPivot } = this.getTransformations();
-        this.mouseOrTouchMoving = Math.abs(tx) > 0.1 || Math.abs(ty) > 0.1 || Math.abs(rx) > 0.1 || Math.abs(ry) > 0.1;
         orientation.roll = 0;
         const [zoomX, zoomY] = zoomPos;
 
@@ -296,10 +294,6 @@ export class FlightController extends BaseController {
         } else {
             this.resetPivot(false);
         }
-    }
-
-    get moving() {
-        return this.input.isAnyGestureKeyPressed() || this.input.isScrolling() || this.mouseOrTouchMoving;
     }
 
     async moveBegin(event: TouchEvent | MouseEvent): Promise<void> {
