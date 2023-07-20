@@ -129,6 +129,9 @@ export abstract class BaseController {
     zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void { }
 
     renderStateChanges(state: RenderStateCamera, elapsedTime: number): RenderStateChanges | undefined {
+        if (this.input.axesEmpty() && this.currentFlyTo == undefined) {
+            return;
+        }
         this.animate(elapsedTime);
         if (Object.values(this.input.axes).some(v => v != 0) || this.currentFlyTo || this.changed) { // check if anything has changed
             this.update();
