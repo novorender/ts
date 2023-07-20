@@ -13,7 +13,7 @@ tier 3: Discrete GPU, mid to high end.
 export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): DeviceProfile {
     const outline = tier >= 1;
     let maxGPUBytes = [500_000_000, 750_000_000, 2_000_000_000, 5_000_000_000][tier];
-    const maxPrimitives = ([6_000_000, 12_000_000, 20_000_000, 60_000_000] as const)[tier]; // this is not supposed to be used to regulate FPS, but rather avoid rendering taking so long it will crash the browser.
+    const maxPrimitives = ([6_000_000, 12_000_000, 20_000_000, 30_000_000] as const)[tier]; // this is not supposed to be used to regulate FPS, but rather avoid rendering taking so long it will crash the browser.
     const maxSamples = ([4, 4, 8, 16] as const)[tier]; // MSAA
     const detailBias = ([0.1, 0.35, 0.75, 1] as const)[tier];
     let renderResolution = ([0.5, 0.75, 1, 1] as const)[tier];
