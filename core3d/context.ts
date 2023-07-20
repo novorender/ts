@@ -54,6 +54,9 @@ export class RenderContext {
     private viewWorldMatrix = mat4.create();
     private viewWorldMatrixNormal = mat3.create();
 
+    private viewClipMatrixLastPoll = mat4.create();
+    private viewWorldMatrixLastPoll = mat4.create();
+
     // constant gl resources
     readonly cameraUniforms: WebGLBuffer;
     readonly clippingUniforms: WebGLBuffer;
@@ -397,6 +400,8 @@ export class RenderContext {
 
     public poll() {
         this.buffers?.pollPickFence();
+        this.viewClipMatrixLastPoll = mat4.clone(this.viewClipMatrix);
+        this.viewWorldMatrixLastPoll = mat4.clone(this.viewWorldMatrix);
         this.pollTimers();
     }
 
@@ -729,7 +734,7 @@ export class RenderContext {
         if (y0 < 0) y0 = 0;
         if (y1 > height) y1 = height;
         const samples: PickSample[] = [];
-        const { isOrtho, viewClipMatrix, viewWorldMatrix, viewWorldMatrixNormal } = this;
+        const { isOrtho, viewClipMatrixLastPoll, viewWorldMatrixLastPoll } = this;
         const f16Max = 65504;
 
         for (let iy = y0; iy < y1; iy++) {
@@ -756,10 +761,11 @@ export class RenderContext {
 
                     // compute view space position and normal
                     const scale = isOrtho ? 1 : depth;
-                    const posVS = vec3.fromValues((xCS / viewClipMatrix[0]) * scale, (yCS / viewClipMatrix[5]) * scale, -depth);
+
+                    const posVS = vec3.fromValues((xCS / viewClipMatrixLastPoll[0]) * scale, (yCS / viewClipMatrixLastPoll[5]) * scale, -depth);
 
                     // convert into world space.
-                    const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrix);
+                    const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrixLastPoll);
                     const normal = vec3.fromValues(nx, ny, nz);
                     vec3.normalize(normal, normal);
 

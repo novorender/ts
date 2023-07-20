@@ -311,7 +311,7 @@ export class FlightController extends BaseController {
         }
         this.inMoveBegin = true;
         const setPickPosition = async (x: number, y: number) => {
-            const sample = await pickInterface.pick(x, y, { async: false });
+            const sample = await pickInterface.pick(x, y, { async: true });
             if (sample) {
                 if (performance.now() - this.lastUpdatedMoveBegin > 2000) { //Delay proportinal speed for better feeling on bad devices
                     this.moveBeginDelay = performance.now();
