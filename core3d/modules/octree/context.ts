@@ -532,21 +532,22 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
 
-            if (state.outlines.enabled && deviceProfile.features.outline) {
-                // render clipping outlines
-                glState(gl, {
-                    uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
-                    depth: {
-                        test: false,
-                        writeMask: false
-                    },
-                });
-                for (const { mask, node } of renderNodes) {
-                    if (node.intersectsPlane(state.viewFrustum.near)) {
-                        this.renderNodeClippingOutline(node, mask);
-                    }
-                }
-            }
+            //Remove outline drawing to pick buffer as the object ids are currently broken
+            // if (state.outlines.enabled && deviceProfile.features.outline) {
+            //     // render clipping outlines
+            //     glState(gl, {
+            //         uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
+            //         depth: {
+            //             test: false,
+            //             writeMask: false
+            //         },
+            //     });
+            //     for (const { mask, node } of renderNodes) {
+            //         if (node.intersectsPlane(state.viewFrustum.near)) {
+            //             this.renderNodeClippingOutline(node, mask);
+            //         }
+            //     }
+            // }
 
             if (rootNode.geometryKind == NodeGeometryKind.terrain && state.terrain.asBackground) {
                 glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
