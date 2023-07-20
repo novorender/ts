@@ -27,8 +27,14 @@ layout(location = 0) out vec4 fragColor;
 layout(location = 1) out uvec4 fragPick;
 
 void main() {
-    // if(clipOutlines(varyings.positionVS, clipping))
-    //     discard;
+    float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
+    bool inside = clipping.mode == clippingModeIntersection ? clipping.numPlanes > 0U : true;
+    for(uint i = 0U; i < clipping.numPlanes; i++) {
+        inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.0001f; //We need to give it some slack as the outline is likely rendered exactly on top of one of the clipping planes
+    }
+    if(clipping.mode == clippingModeIntersection ? inside : !inside) {
+        discard;
+    }
 
     fragColor = vec4(outline.color, varyings.opacity);
     float linearDepth = -varyings.positionVS.z;
