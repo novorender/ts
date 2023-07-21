@@ -17,6 +17,8 @@ export interface MeshObjectRange {
     readonly objectId: number;
     readonly beginVertex: number;
     readonly endVertex: number;
+    readonly beginTriangle: number;
+    readonly endTriangle: number;
 }
 
 export interface Highlights {
@@ -69,9 +71,17 @@ export interface VertexAttributes {
     readonly color: VertexAttributeData | null;
     readonly projectedPos: VertexAttributeData | null;
     readonly deviations: VertexAttributeData | null;
-    readonly triangles: readonly [VertexAttributeData, VertexAttributeData, VertexAttributeData, VertexAttributeData] | null;
+    readonly triangles0: VertexAttributeData | null;
+    readonly triangles1: VertexAttributeData | null;
+    readonly triangles2: VertexAttributeData | null;
+    readonly trianglesObjId: VertexAttributeData | null;
     readonly highlight: VertexAttributeData | null;
+    readonly highlightTri: VertexAttributeData | null;
 }
+
+export const enum VertexAttribIndex {
+    triangles, position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight, highlightTri
+};
 
 export interface NodeSubMesh {
     readonly materialType: MaterialType;
@@ -388,9 +398,11 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
         const vertexBuffer = new ArrayBuffer(numVertices * vertexStride);
         let trianglePosBuffer: Int16Array | undefined;
         let triangleObjectIdBuffer: Uint32Array | undefined;
+        let highlightBufferTri: Uint8Array | undefined;
         if (enableOutlines && primitiveType == PrimitiveType.triangles) { // TODO: support triangle strips and fans too
             trianglePosBuffer = new Int16Array(new ArrayBuffer(numTriangles * trianglePosStride));
             triangleObjectIdBuffer = new Uint32Array(numTriangles);
+            highlightBufferTri = new Uint8Array(numTriangles);
         }
         const positionBuffer = separatePositionBuffer ? new ArrayBuffer(numVertices * positionStride) : undefined;
         let indexBuffer: Uint32Array | Uint16Array | undefined;
@@ -400,8 +412,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
         const highlightBuffer = new Uint8Array(numVertices);
         let indexOffset = 0;
         let vertexOffset = 0;
-        let trianglePosOffset = 0;
-        let triangleObjectIdOffset = 0;
+        let triangleOffset = 0;
         let drawRanges: MeshDrawRange[] = [];
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
         const objectRanges: Mutable<MeshObjectRange>[] = [];
@@ -429,7 +440,8 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
             highlight: highlightBuffer?.buffer,
             pos: positionBuffer,
             triPos: trianglePosBuffer?.buffer,
-            triId: trianglePosBuffer?.buffer,
+            triId: triangleObjectIdBuffer?.buffer,
+            highlightTri: highlightBufferTri?.buffer,
         });
 
         for (const childIndex of childIndices) {
@@ -467,29 +479,29 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
                 }
 
                 // initialize triangle vertex buffer for clipping intersection
+                let numTrianglesInSubMesh = 0;
                 if (trianglePosBuffer && triangleObjectIdBuffer) {
                     const { x, y, z } = vertex.position;
-                    let numTriangles = 0;
+                    let j = triangleOffset * 3 * 3;
                     if (vertexIndex && indexBuffer) {
-                        numTriangles = (endIdx - beginIdx) / 3;
+                        numTrianglesInSubMesh = (endIdx - beginIdx) / 3;
                         for (let i = beginIdx; i < endIdx; i++) {
                             // TODO: Add support for triangle strips and fans as well...
                             const idx = vertexIndex[i] + beginVtx;
-                            trianglePosBuffer[trianglePosOffset++] = x[idx];
-                            trianglePosBuffer[trianglePosOffset++] = y[idx];
-                            trianglePosBuffer[trianglePosOffset++] = z[idx];
+                            trianglePosBuffer[j++] = x[idx];
+                            trianglePosBuffer[j++] = y[idx];
+                            trianglePosBuffer[j++] = z[idx];
                         }
                     } else {
-                        numTriangles = (endVtx - beginVtx) / 3;
+                        numTrianglesInSubMesh = (endVtx - beginVtx) / 3;
                         for (let i = beginVtx; i < endVtx; i++) {
                             const idx = i;
-                            trianglePosBuffer[trianglePosOffset++] = x[idx];
-                            trianglePosBuffer[trianglePosOffset++] = y[idx];
-                            trianglePosBuffer[trianglePosOffset++] = z[idx];
+                            trianglePosBuffer[j++] = x[idx];
+                            trianglePosBuffer[j++] = y[idx];
+                            trianglePosBuffer[j++] = z[idx];
                         }
                     }
-                    triangleObjectIdBuffer.fill(objectId, triangleObjectIdOffset, triangleObjectIdOffset + numTriangles);
-                    triangleObjectIdOffset += numTriangles;
+                    triangleObjectIdBuffer.fill(objectId, triangleOffset, triangleOffset + numTrianglesInSubMesh);
                 }
 
                 if (positionBuffer) {
@@ -507,21 +519,25 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
                     }
                 }
 
+                const endVertex = vertexOffset + (endVtx - beginVtx);
+                const endTriangle = triangleOffset + triangleOffset + (endIdx - beginIdx) / 3;
                 // initialize highlight buffer
                 const highlightIndex = highlights.indices[objectId] ?? 0;
                 if (highlightIndex) {
-                    highlightBuffer.fill(highlightIndex, vertexOffset, vertexOffset + (endVtx - beginVtx));
+                    highlightBuffer.fill(highlightIndex, vertexOffset, endVertex);
+                    highlightBufferTri?.fill(highlightIndex, triangleOffset, endTriangle);
                 }
 
                 // update object ranges
                 const prev = objectRanges.length - 1;
-                const endVertex = vertexOffset + endVtx - beginVtx;
                 if (prev >= 0 && objectRanges[prev].objectId == objectId) {
-                    objectRanges[prev].endVertex = endVertex; // merge with previous entry
+                    // merge with previous entry
+                    objectRanges[prev].endVertex = endVertex;
+                    objectRanges[prev].endTriangle = endTriangle;
                 } else {
-                    objectRanges.push({ objectId, beginVertex: vertexOffset, endVertex });
+                    objectRanges.push({ objectId, beginVertex: vertexOffset, endVertex, beginTriangle: triangleOffset, endTriangle });
                 }
-
+                triangleOffset += numTrianglesInSubMesh;
                 vertexOffset += endVtx - beginVtx;
             }
 
@@ -533,8 +549,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
 
         console.assert(vertexOffset == numVertices);
         console.assert(indexOffset == numIndices);
-        console.assert(trianglePosOffset == (trianglePosBuffer?.length ?? 0));
-        console.assert(triangleObjectIdOffset == (triangleObjectIdBuffer?.length ?? 0));
+        console.assert(triangleOffset == (triangleObjectIdBuffer?.length ?? 0));
         const indices = indexBuffer ?? numVertices;
 
         const [beginTexture, endTexture] = groupMeshes[0].textureRange;
@@ -558,13 +573,12 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
             color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["color"], byteStride: stride } : null,
             projectedPos: (attributes & OptionalVertexAttribute.projectedPos) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: attribOffsets["projectedPos"], byteStride: stride } : null,
             deviations: deviations != 0 ? { kind: deviationsKind, buffer: bufIdx.primary, componentCount: deviations, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["deviations"], byteStride: stride } : null,
-            triangles: trianglePosBuffer ? [
-                { kind: "FLOAT_VEC4", buffer: bufIdx.triPos, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 0, byteStride: 18 },
-                { kind: "FLOAT_VEC4", buffer: bufIdx.triPos, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 6, byteStride: 18 },
-                { kind: "FLOAT_VEC4", buffer: bufIdx.triPos, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 12, byteStride: 18 },
-                { kind: "UNSIGNED_INT", buffer: bufIdx.triId, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, byteOffset: 0, byteStride: 4 },
-            ] : null,
+            triangles0: trianglePosBuffer ? { kind: "FLOAT_VEC4", buffer: bufIdx.triPos, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 0, byteStride: 18 } : null,
+            triangles1: trianglePosBuffer ? { kind: "FLOAT_VEC4", buffer: bufIdx.triPos, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 6, byteStride: 18 } : null,
+            triangles2: trianglePosBuffer ? { kind: "FLOAT_VEC4", buffer: bufIdx.triPos, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 12, byteStride: 18 } : null,
+            trianglesObjId: trianglePosBuffer ? { kind: "UNSIGNED_INT", buffer: bufIdx.triId, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, byteOffset: 0, byteStride: 4 } : null,
             highlight: { kind: "UNSIGNED_INT", buffer: bufIdx.highlight, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, byteOffset: 0, byteStride: 0 },
+            highlightTri: { kind: "UNSIGNED_INT", buffer: bufIdx.highlightTri, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, byteOffset: 0, byteStride: 0 },
         } as const satisfies VertexAttributes;
 
         objectRanges.sort((a, b) => (a.objectId - b.objectId));

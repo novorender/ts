@@ -23,7 +23,7 @@ layout(location = 0) in vec4 vertexPos0;
 layout(location = 1) in vec4 vertexPos1;
 layout(location = 2) in vec4 vertexPos2;
 layout(location = 3) in uint vertexObjectId;
-
+layout(location = 4) in uint vertexHighlight;
 flat out vec4 line_vertices;
 out float opacity;
 flat out uint object_id;
@@ -41,7 +41,7 @@ void main() {
     int i = 0;
     vec2 line[3];
     // does triangle straddle clipping plane?
-    if(any(gt) && any(lt)) {
+    if(any(gt) && any(lt) && vertexHighlight < 0xfeU) {
         // find intersecting edges
         if(any(gt.xy) && any(lt.xy)) {
             line[i++] = intersectEdge(pos0, pos1);

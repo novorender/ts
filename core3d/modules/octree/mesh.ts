@@ -1,5 +1,5 @@
 import { glUpdateBuffer, type DrawParams, type VertexAttribute, type DrawParamsArraysMultiDraw, type DrawParamsElementsMultiDraw } from "webgl2";
-import type { MaterialType, MeshDrawRange, MeshObjectRange, NodeGeometry, VertexAttributeData } from "./worker";
+import { VertexAttribIndex, type MaterialType, type MeshDrawRange, type MeshObjectRange, type NodeGeometry, type Vertex, type VertexAttributeData, type VertexAttributes } from "./worker";
 import { ResourceBin } from "core3d/resource";
 
 export interface Mesh {
@@ -8,12 +8,26 @@ export interface Mesh {
     readonly vaoPosOnly: WebGLVertexArrayObject | null;
     readonly vaoTriangles: WebGLVertexArrayObject | null;
     readonly highlightVB: WebGLBuffer | null;
+    readonly highlightTriVB: WebGLBuffer | null;
     readonly numVertices: number;
     readonly numTriangles: number;
     readonly drawParams: DrawParams;
     readonly drawRanges: readonly MeshDrawRange[];
     readonly objectRanges: readonly MeshObjectRange[];
     readonly baseColorTexture: WebGLTexture | null;
+}
+
+
+function convertAttributes(attributes: VertexAttributes, buffers: readonly WebGLBuffer[]) {
+    const ret: any = {};
+    function convertAttrib(a: VertexAttributeData | null) {
+        return a ? { ...a, buffer: buffers[a.buffer] } as VertexAttribute : null;
+    }
+    for (const [key, value] of Object.entries(attributes)) {
+        ret[key] = convertAttrib(value);
+    }
+    type ConvAttr<T> = T extends null ? VertexAttribute | null : VertexAttribute;
+    return ret as { [P in keyof VertexAttributes]: ConvAttr<VertexAttributes[P]> };
 }
 
 export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) {
@@ -33,22 +47,19 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
         const ib = typeof indices != "number" ? resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
-        const { triangles, position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight } = vertexAttributes;
-        function convertAttrib(a: VertexAttributeData | null) {
-            return a ? { ...a, buffer: buffers[a.buffer] } as VertexAttribute : null;
-        }
-        const attributes = [position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight].map(convertAttrib);
-        const triangleAttributes = triangles ? triangles.map(convertAttrib) : null;
-
+        const { triangles0, triangles1, triangles2, trianglesObjId, position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight, highlightTri } = convertAttributes(vertexAttributes, buffers);
+        const triangleAttributes = [triangles0, triangles1, triangles2, trianglesObjId, highlightTri];
+        const renderAttributes = [position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight];
         // // add extra highlight vertex buffer and attribute
         // const highlightVB = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: subMesh.numVertices });
         // attributes.push({ kind: "UNSIGNED_INT", buffer: highlightVB, componentType: "UNSIGNED_BYTE" });
-        const highlightVB = buffers[highlight!.buffer];
+        const highlightVB = buffers[vertexAttributes.highlight!.buffer];
+        const highlightTriVB = triangles0 ? buffers[vertexAttributes.highlightTri!.buffer] : null;
 
-        const vao = resourceBin.createVertexArray({ attributes, indices: ib });
-        const vaoPosOnly = position.buffer != 0 ? resourceBin.createVertexArray({ attributes: [attributes[0]], indices: ib }) : null;
+        const vao = resourceBin.createVertexArray({ attributes: renderAttributes, indices: ib });
+        const vaoPosOnly = position.buffer != 0 ? resourceBin.createVertexArray({ attributes: [position], indices: ib }) : null;
         const vaoTriangles = triangleAttributes ? resourceBin.createVertexArray({ attributes: triangleAttributes }) : null;
-        resourceBin.subordinate(vao, ...buffers.filter(buf => buf != highlightVB));
+        resourceBin.subordinate(vao, ...buffers.filter(buf => buf != highlightVB && buf != highlightTriVB));
         if (ib) {
             resourceBin.subordinate(vao, ib);
         }
@@ -58,12 +69,12 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
             { kind: "arrays", mode: subMesh.primitiveType, count };
         const baseColorTextureIndex = subMesh.baseColorTexture as number;
         const baseColorTexture = textures[baseColorTextureIndex] ?? null;
-        yield { vao, vaoPosOnly, vaoTriangles, highlightVB, drawParams, drawRanges, numVertices, numTriangles, objectRanges, materialType, baseColorTexture } as const satisfies Mesh;
+        yield { vao, vaoPosOnly, vaoTriangles, highlightVB, highlightTriVB, drawParams, drawRanges, numVertices, numTriangles, objectRanges, materialType, baseColorTexture } as const satisfies Mesh;
     }
 }
 
 export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, highlights: Uint8Array | undefined) {
-    const { highlightVB } = mesh;
+    const { highlightVB, highlightTriVB } = mesh;
     if (highlightVB) {
         const highlightBuffer = new Uint8Array(mesh.numVertices);
         if (highlights) {
@@ -76,11 +87,24 @@ export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, hig
         }
         glUpdateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: highlightBuffer, targetBuffer: highlightVB });
     }
+
+    if (highlightTriVB) {
+        const highlightTriBuffer = new Uint8Array(mesh.numTriangles);
+        if (highlights) {
+            for (const { objectId, beginTriangle, endTriangle } of mesh.objectRanges) {
+                const highlight = highlights[objectId];
+                if (highlight) {
+                    highlightTriBuffer.fill(highlight, beginTriangle, endTriangle);
+                }
+            }
+        }
+        glUpdateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: highlightTriBuffer, targetBuffer: highlightTriVB });
+    }
 }
 
 export function deleteMesh(resourceBin: ResourceBin, mesh: Mesh) {
-    const { vao, vaoPosOnly, vaoTriangles, highlightVB, baseColorTexture } = mesh;
-    resourceBin.delete(vao, vaoPosOnly, vaoTriangles, highlightVB, baseColorTexture);
+    const { vao, vaoPosOnly, vaoTriangles, highlightVB, highlightTriVB, baseColorTexture } = mesh;
+    resourceBin.delete(vao, vaoPosOnly, vaoTriangles, highlightVB, highlightTriVB, baseColorTexture);
 }
 
 export function getMultiDrawParams(mesh: Mesh, childMask: number): DrawParamsArraysMultiDraw | DrawParamsElementsMultiDraw | undefined {
