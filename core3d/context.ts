@@ -145,6 +145,7 @@ export class RenderContext {
             localPlaneMatrix: "mat4",
             planeLocalMatrix: "mat4",
             color: "vec3",
+            planeIndex: "int",
         });
         this.outlineUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.outlinesUniformsData.buffer.byteLength });
     }
@@ -687,10 +688,11 @@ export class RenderContext {
     }
 
     private updateOutlinesUniforms(state: DerivedRenderState) {
-        const { outlines, matrices } = state;
+        const { outlines, matrices, clipping } = state;
         if (this.hasStateChanged({ outlines, matrices })) {
             const { outlineUniforms, outlinesUniformsData } = this;
             const { color, plane } = outlines;
+            const planeIndex = clipping.planes.findIndex((cp) => vec4.exactEquals(cp.normalOffset, plane));
             // transform outline plane into local space
             const [x, y, z, offset] = plane;
             const normal = vec3.fromValues(x, y, z);
@@ -707,6 +709,7 @@ export class RenderContext {
             values.planeLocalMatrix = planeLocalMatrix;
             values.localPlaneMatrix = localPlaneMatrix;
             values.color = color;
+            values.planeIndex = planeIndex;
             this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
         }
     }
