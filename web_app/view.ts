@@ -14,7 +14,7 @@ export abstract class View {
     protected renderStateCad: RenderState;
     protected prevRenderStateCad: RenderState | undefined;
     private stateChanges: RenderStateChanges | undefined;
-    private screenshot: string | undefined | null = null;
+    private screenshot: ((img: string) => void) | undefined;
 
     //* @internal */
     controllers;
@@ -95,14 +95,9 @@ export abstract class View {
     }
 
     async getScreenshot(): Promise<string> {
-        this.screenshot = undefined;
-        function delay(ms: number) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
-        while (this.screenshot === undefined) {
-            await delay(50);
-        }
-        return this.screenshot;
+        return new Promise((resolve) => {
+            this.screenshot = resolve;
+        })
     }
 
     get renderState() {
@@ -343,12 +338,13 @@ export abstract class View {
                 }
 
                 const { renderStateGL, screenshot } = this;
-                if (prevState !== renderStateGL || renderContext.changed || screenshot === undefined) {
+                if (prevState !== renderStateGL || renderContext.changed || screenshot) {
                     prevState = renderStateGL;
                     this.render?.(isIdleFrame);
                     const statsPromise = renderContext.render(renderStateGL);
-                    if (screenshot === undefined) {
-                        this.screenshot = this.canvas.toDataURL();
+                    if (screenshot) {
+                        this.screenshot = undefined;
+                        screenshot(this.canvas.toDataURL());
                     }
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
