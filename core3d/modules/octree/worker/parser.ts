@@ -520,7 +520,7 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
                 }
 
                 const endVertex = vertexOffset + (endVtx - beginVtx);
-                const endTriangle = triangleOffset + triangleOffset + (endIdx - beginIdx) / 3;
+                const endTriangle = triangleOffset + (endIdx - beginIdx) / 3;
                 // initialize highlight buffer
                 const highlightIndex = highlights.indices[objectId] ?? 0;
                 if (highlightIndex) {
