@@ -14,7 +14,7 @@ export abstract class View {
     protected renderStateCad: RenderState;
     protected prevRenderStateCad: RenderState | undefined;
     private stateChanges: RenderStateChanges | undefined;
-    private screenshot: string | undefined | null = null;
+    private screenshot: ((img: string) => void) | undefined;
 
     //* @internal */
     controllers;
@@ -26,12 +26,29 @@ export abstract class View {
 
     // dynamic resolution scaling
     private resolutionModifier = 1;
+    private baseRenderResolution = 1;
     private drsHighInterval = 50;
     private drsLowInterval = 100;
     private lastQualityAdjustTime = 0;
     private resolutionTier: 0 | 1 | 2 = 2;
 
     private currentDetailBias: number = 1;
+
+    private recalcBaseRenderResolution() {
+        const { deviceProfile } = this;
+        if (deviceProfile.tier < 2) {
+            const maxRes = deviceProfile.tier == 0 ? 720 * 1280 : 1440 * 2560;
+            let baseRenderResolution = deviceProfile.renderResolution / devicePixelRatio;
+            const { width, height } = this.canvas.getBoundingClientRect();
+            let idleRes = baseRenderResolution * 2 * width * height;
+            if (idleRes > maxRes) {
+                baseRenderResolution *= maxRes / idleRes;
+            }
+            this.baseRenderResolution = baseRenderResolution;
+            this.resolutionModifier = baseRenderResolution;
+        }
+        this.resize();
+    }
 
     constructor(readonly canvas: HTMLCanvasElement, deviceProfile: DeviceProfile) {
         this._deviceProfile = deviceProfile;
@@ -53,7 +70,9 @@ export abstract class View {
         this.activeController = this.controllers["flight"];
         this.activeController.attach();
 
-        const resizeObserver = new ResizeObserver(() => { this.resize(); });
+        const resizeObserver = new ResizeObserver(() => {
+            this.recalcBaseRenderResolution();
+        });
         resizeObserver.observe(canvas);
     }
 
@@ -76,14 +95,9 @@ export abstract class View {
     }
 
     async getScreenshot(): Promise<string> {
-        this.screenshot = undefined;
-        function delay(ms: number) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
-        while (this.screenshot === undefined) {
-            await delay(50);
-        }
-        return this.screenshot;
+        return new Promise((resolve) => {
+            this.screenshot = resolve;
+        })
     }
 
     get renderState() {
@@ -112,6 +126,8 @@ export abstract class View {
 
     private useDeviceProfile(deviceProfile: DeviceProfile) {
         this.resolutionModifier = deviceProfile.renderResolution;
+        this.baseRenderResolution = deviceProfile.renderResolution;
+        this.recalcBaseRenderResolution();
         this.drsHighInterval = (1000 / deviceProfile.framerateTarget) * 1.2;
         this.drsLowInterval = (1000 / deviceProfile.framerateTarget) * 0.9;
     }
@@ -218,9 +234,8 @@ export abstract class View {
         // transfer what state we can from previous controller
         const prevState = activeController.serialize(true /* include derived properties as well */);
         activeController = this.activeController = controllers[kind];
-        const { position, rotation, pivot, fovDegrees, fovMeters } = prevState;
-
-        activeController.init({ kind, position: initState?.position ?? position, rotation: initState?.rotation ?? rotation, pivot, distance, fovDegrees, fovMeters: initState?.fov ?? fovMeters });
+        const { position, rotation, pivot, fovMeters } = prevState;
+        activeController.init({ kind, position: initState?.position ?? position, rotation: initState?.rotation ?? rotation, pivot, distance, fovMeters: initState?.fov ?? (kind != "panorama" ? fovMeters : undefined)});
         const changes = activeController.stateChanges();
         this.modifyRenderState({ camera: changes });
     }
@@ -242,14 +257,14 @@ export abstract class View {
                 const resolutionTiers = [0.4, 0.6, 1];
                 if (medianInterval > highFrameInterval) {
                     if (this.resolutionTier != 0) {
-                        this.resolutionModifier = deviceProfile.renderResolution * resolutionTiers[--this.resolutionTier];
+                        this.resolutionModifier = this.baseRenderResolution * resolutionTiers[--this.resolutionTier];
                         this.resize();
                     }
                     this.lastQualityAdjustTime = now; // reset cooldown whenever we encounter a slow frame so we don't change back to high res too eagerly
                     return;
                 } else if (medianInterval < lowFrameInterval) {
                     if (this.resolutionTier != 2) {
-                        this.resolutionModifier = deviceProfile.renderResolution * resolutionTiers[++this.resolutionTier];
+                        this.resolutionModifier = this.baseRenderResolution * resolutionTiers[++this.resolutionTier];
                         this.lastQualityAdjustTime = now; // reset cooldown whenever we encounter a slow frame so we don't change back to high res too eagerly
                         this.resize();
                     }
@@ -289,7 +304,7 @@ export abstract class View {
 
                 if (isIdleFrame) { //increase resolution and detail bias on idleFrame
                     if (!wasIdle) {
-                        this.resolutionModifier = Math.min(1, deviceProfile.renderResolution * 2);
+                        this.resolutionModifier = Math.min(1, this.baseRenderResolution * 2);
                         this.resize();
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
@@ -301,7 +316,7 @@ export abstract class View {
                     }
                 } else {
                     if (wasIdle) {
-                        this.resolutionModifier = deviceProfile.renderResolution;
+                        this.resolutionModifier = this.baseRenderResolution;
                         this.resolutionTier = 2;
                         wasIdle = false;
                     } else {
@@ -323,12 +338,13 @@ export abstract class View {
                 }
 
                 const { renderStateGL, screenshot } = this;
-                if (prevState !== renderStateGL || renderContext.changed || screenshot === undefined) {
+                if (prevState !== renderStateGL || renderContext.changed || screenshot) {
                     prevState = renderStateGL;
                     this.render?.(isIdleFrame);
                     const statsPromise = renderContext.render(renderStateGL);
-                    if (screenshot === undefined) {
-                        this.screenshot = this.canvas.toDataURL();
+                    if (screenshot) {
+                        this.screenshot = undefined;
+                        screenshot(this.canvas.toDataURL());
                     }
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };

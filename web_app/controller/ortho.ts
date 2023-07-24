@@ -30,7 +30,6 @@ export class OrthoController extends BaseController {
     private position: ReadonlyVec3;
     private orientation = new PitchRollYawOrientation();
     private fov: number;
-    private mouseOrTouchMoving = false;
 
     constructor(input: ControllerInput, params?: OrthoControllerParams) {
         super(input);
@@ -83,14 +82,6 @@ export class OrthoController extends BaseController {
         this.orientation.roll = 0;
         this.fov = radius * 2;
         this.changed = true;
-    }
-
-    get moving() {
-        return this.input.isAnyGestureKeyPressed() || this.input.isScrolling() || this.mouseOrTouchMoving;
-    }
-
-    async moveEnd(event: TouchEvent | MouseEvent): Promise<void> {
-        this.mouseOrTouchMoving = false;
     }
 
     override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void {
@@ -151,14 +142,10 @@ export class OrthoController extends BaseController {
 
         let tx = -axes.keyboard_ad + axes.mouse_lmb_move_x + axes.mouse_rmb_move_x + axes.mouse_mmb_move_x + axes.touch_1_move_x;
         let ty = -axes.keyboard_ws + axes.mouse_lmb_move_y + axes.mouse_rmb_move_y + axes.mouse_mmb_move_y + axes.touch_1_move_y;
-        const tz = (axes.mouse_navigate * this.params.stepInterval) + (axes.touch_pinch3 * 0.1) + (hasShift ? axes.mouse_wheel * 0.01 : 0);
-        const rz = axes.keyboard_qe;
-        const zoom = (hasShift ? 0 : axes.mouse_wheel) + axes.touch_pinch2;
+        const tz = (axes.touch_pinch3 * 0.1) + (hasShift ? axes.mouse_wheel * 0.01 : 0);
+        const rz = -axes.keyboard_arrow_left_right / 2;
+        const zoom = (hasShift ? 0 : axes.mouse_wheel) + axes.touch_pinch2 - axes.keyboard_qe;
         const [zoomX, zoomY] = zoomPos;
-
-        if (!this.mouseOrTouchMoving) {
-            this.mouseOrTouchMoving = tx > 0.1 || ty > 0.1 || rz > 0.1;
-        }
 
         if (rz) {
             orientation.roll += rz * 0.2;

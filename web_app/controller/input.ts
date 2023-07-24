@@ -169,7 +169,6 @@ export class ControllerInput {
         this._mouseButtons = e.buttons;
         if ("exitPointerLock" in document) document.exitPointerLock();
         this.callbacks?.mouseButtonChanged?.(e);
-        await this.callbacks?.moveEnd?.(e);
         this._mouseButtonDown = false;
     };
 
@@ -229,7 +228,6 @@ export class ControllerInput {
         const { pointerTable, _touchMovePrev } = this;
         this._fingers = event.touches.length;
         this.callbacks?.touchChanged?.(event);
-        await this.callbacks?.moveEnd?.(event);
         switch (pointerTable.length) {
             case 0:
                 break;
@@ -347,6 +345,32 @@ export class ControllerInput {
         axes.touch_pinch2 = 0;
         axes.touch_pinch3 = 0;
     }
+
+    axesEmpty() {
+        const { axes } = this;
+        return axes.keyboard_ad == 0 &&
+            axes.keyboard_ws == 0 &&
+            axes.keyboard_qe == 0 &&
+            axes.keyboard_arrow_left_right == 0 &&
+            axes.keyboard_arrow_up_down == 0 &&
+            axes.mouse_lmb_move_x == 0 &&
+            axes.mouse_lmb_move_y == 0 &&
+            axes.mouse_rmb_move_x == 0 &&
+            axes.mouse_rmb_move_y == 0 &&
+            axes.mouse_mmb_move_x == 0 &&
+            axes.mouse_mmb_move_y == 0 &&
+            axes.mouse_navigate == 0 &&
+            axes.mouse_navigate == 0 &&
+            axes.mouse_wheel == 0 &&
+            axes.touch_1_move_x == 0 &&
+            axes.touch_1_move_y == 0 &&
+            axes.touch_2_move_x == 0 &&
+            axes.touch_2_move_y == 0 &&
+            axes.touch_3_move_x == 0 &&
+            axes.touch_3_move_y == 0 &&
+            axes.touch_pinch2 == 0 &&
+            axes.touch_pinch3 == 0;
+    }
 }
 
 export enum MouseButtons {
@@ -389,6 +413,5 @@ export interface ContollerInputContext {
     mouseButtonChanged(event: MouseEvent): Promise<void> | void;
     touchChanged(event: TouchEvent): Promise<void> | void;
     moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void
-    moveEnd(event: TouchEvent | MouseEvent): Promise<void> | void
 }
 

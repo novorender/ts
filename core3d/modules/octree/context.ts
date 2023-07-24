@@ -324,8 +324,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     }
                 }
             }
-            sessionStorage.setItem("gpu_bytes", gpuBytes.toLocaleString());
-            sessionStorage.setItem("primitives", primitives.toLocaleString());
+
+            renderContext["addLoadStatistics"](primitives);
 
             const maxDownloads = 8;
             let availableDownloads = maxDownloads - this.loader.activeDownloads;
@@ -336,8 +336,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
         }
-        const endTime = performance.now();
-        // console.log(endTime - beginTime);
     }
 
     applyDefaultAttributeValues() {
@@ -516,6 +514,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 program: programs.pick,
                 uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
                 cull: { enable: true, },
+                depth: { test: true, writeMask: true },
                 textures: [
                     { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // basecolor - will be overridden by nodes that have textures, e.g. terrain nodes.
                     { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerNearest },
@@ -533,21 +532,22 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
 
-            if (state.outlines.enabled && deviceProfile.features.outline) {
-                // render clipping outlines
-                glState(gl, {
-                    uniformBuffers: [cameraUniforms, outlineUniforms, null],
-                    depth: {
-                        test: false,
-                        writeMask: false
-                    },
-                });
-                for (const { mask, node } of renderNodes) {
-                    if (node.intersectsPlane(state.viewFrustum.near)) {
-                        this.renderNodeClippingOutline(node, mask);
-                    }
-                }
-            }
+            //Remove outline drawing to pick buffer as the object ids are currently broken
+            // if (state.outlines.enabled && deviceProfile.features.outline) {
+            //     // render clipping outlines
+            //     glState(gl, {
+            //         uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
+            //         depth: {
+            //             test: false,
+            //             writeMask: false
+            //         },
+            //     });
+            //     for (const { mask, node } of renderNodes) {
+            //         if (node.intersectsPlane(state.viewFrustum.near)) {
+            //             this.renderNodeClippingOutline(node, mask);
+            //         }
+            //     }
+            // }
 
             if (rootNode.geometryKind == NodeGeometryKind.terrain && state.terrain.asBackground) {
                 glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });

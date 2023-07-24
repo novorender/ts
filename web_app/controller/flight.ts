@@ -63,9 +63,9 @@ export class FlightController extends BaseController {
     private readonly resetPickDelay = 3000;
     private lastUpdatedMoveBegin: number = 0;
     private lastUpdate: number = 0;
+    private moveBeginDelay = 0;
     private recordedMoveBegin: ReadonlyVec3 | undefined = undefined;
     private inMoveBegin = false;
-    private mouseOrTouchMoving = false;
 
     constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
         super(input);
@@ -165,6 +165,10 @@ export class FlightController extends BaseController {
         let scale = 20;
         if (proportionalCameraSpeed && recordedMoveBegin) {
             scale = vec3.dist(position, recordedMoveBegin) * Math.tan(((Math.PI / 180) * fov) / 2) * 2;
+            const siceMoveDelay = performance.now() - this.moveBeginDelay;
+            if (siceMoveDelay < 400) {  //Delay proportinal speed for better feeling on bad devices
+                scale = Math.min(scale, 60 + (siceMoveDelay * 0.5));
+            }
             const mouseWheelModifier = this.input.hasShift ? 0 : clamp(scale / 3, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const mousePanModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const touchMovementModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
@@ -206,9 +210,6 @@ export class FlightController extends BaseController {
         }
         this.lastUpdate = performance.now();
         let { tx, ty, tz, rx, ry, shouldPivot } = this.getTransformations();
-        if (!this.mouseOrTouchMoving) {
-            this.mouseOrTouchMoving = tx > 0.1 || ty > 0.1 || rx > 0.1 || ry > 0.1;
-        }
         orientation.roll = 0;
         const [zoomX, zoomY] = zoomPos;
 
@@ -295,26 +296,20 @@ export class FlightController extends BaseController {
         }
     }
 
-    get moving() {
-        return this.input.isAnyGestureKeyPressed() || this.input.isScrolling() || this.mouseOrTouchMoving;
-    }
-
-    async moveEnd(event: TouchEvent | MouseEvent): Promise<void> {
-        this.mouseOrTouchMoving = false;
-    }
-
     async moveBegin(event: TouchEvent | MouseEvent): Promise<void> {
         const { pointerTable, pickInterface, resetPickDelay } = this;
 
         const deltaTime = this.lastUpdate - this.lastUpdatedMoveBegin;
-
         if (pickInterface == undefined || deltaTime < this.params.pickDelay || this.inMoveBegin) {
             return;
         }
         this.inMoveBegin = true;
         const setPickPosition = async (x: number, y: number) => {
-            const sample = await pickInterface.pick(x, y, { async: false });
+            const sample = await pickInterface.pick(x, y, { async: true });
             if (sample) {
+                if (performance.now() - this.lastUpdatedMoveBegin > 2000) { //Delay proportinal speed for better feeling on bad devices
+                    this.moveBeginDelay = performance.now();
+                }
                 this.recordedMoveBegin = sample.position;
                 this.lastUpdatedMoveBegin = performance.now();
             } else if (resetPickDelay < deltaTime) {

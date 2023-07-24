@@ -65,6 +65,7 @@ struct OutlineUniforms {
     mat4 localPlaneMatrix;
     mat4 planeLocalMatrix;
     vec3 color;
+    int planeIndex;
 };
 
 bool clipOutlines(vec3 point, ClippingUniforms clipping) {

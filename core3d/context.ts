@@ -11,7 +11,7 @@ import { mat3, mat4, vec3, vec4 } from "gl-matrix";
 import commonShaderCore from "./common.glsl";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
-import { othoNormalBasisMatrixFromPlane } from "./util";
+import { orthoNormalBasisMatrixFromPlane } from "./util";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
@@ -37,6 +37,7 @@ export class RenderContext {
         lines: 0,
         triangles: 0,
         drawCalls: 0,
+        primitives: 0,
     };
     private prevFrame: {
         readonly time: number;
@@ -52,6 +53,9 @@ export class RenderContext {
     private viewClipMatrix = mat4.create();
     private viewWorldMatrix = mat4.create();
     private viewWorldMatrixNormal = mat3.create();
+
+    private viewClipMatrixLastPoll = mat4.create();
+    private viewWorldMatrixLastPoll = mat4.create();
 
     // constant gl resources
     readonly cameraUniforms: WebGLBuffer;
@@ -141,6 +145,7 @@ export class RenderContext {
             localPlaneMatrix: "mat4",
             planeLocalMatrix: "mat4",
             color: "vec3",
+            planeIndex: "int",
         });
         this.outlineUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.outlinesUniformsData.buffer.byteLength });
     }
@@ -350,12 +355,13 @@ export class RenderContext {
         });
     }
 
-    private resetRenderStatistics() {
+    private resetStatistics() {
         const { statistics } = this;
         statistics.points = 0;
         statistics.lines = 0;
         statistics.triangles = 0;
         statistics.drawCalls = 0;
+        this.statistics.primitives = 0;
     }
 
     //* @internal */
@@ -365,6 +371,10 @@ export class RenderContext {
         statistics.lines += stats.lines;
         statistics.triangles += stats.triangles;
         statistics.drawCalls += drawCalls;
+    }
+
+    protected addLoadStatistics(numPrimitives: number) {
+        this.statistics.primitives += numPrimitives;
     }
 
     //* @internal */
@@ -391,6 +401,8 @@ export class RenderContext {
 
     public poll() {
         this.buffers?.pollPickFence();
+        this.viewClipMatrixLastPoll = mat4.clone(this.viewClipMatrix);
+        this.viewWorldMatrixLastPoll = mat4.clone(this.viewWorldMatrix);
         this.pollTimers();
     }
 
@@ -436,7 +448,7 @@ export class RenderContext {
         this.changed = false;
         this.pickBuffersValid = false;
 
-        this.resetRenderStatistics();
+        this.resetStatistics();
 
         const drawTimer = this.beginTimer();
 
@@ -462,13 +474,14 @@ export class RenderContext {
         derivedState.effectiveSamplesMSAA = effectiveSamplesMSAA;
         if (resized || state.camera !== prevState?.camera) {
             const snapDist = 1024; // make local space roughly within 1KM of camera
-            const dist = Math.max(...vec3.sub(vec3.create(), state.camera.position, this.localSpaceTranslation).map(c => Math.abs(c)));
+            const dir = vec3.sub(vec3.create(), state.camera.position, this.localSpaceTranslation).map(c => Math.abs(c));
+            const dist = Math.max(dir[0], dir[2]) //Skip Y as we will not get an issue with large Y offset and we elevations internally in shader.
             // don't change localspace unless camera is far enough away. we want to avoid flipping back and forth across snap boundaries.
             if (dist >= snapDist) {
                 function snap(v: number) {
                     return Math.round(v / snapDist) * snapDist;
                 }
-                this.localSpaceTranslation = vec3.fromValues(...(state.camera.position.map(v => snap(v)) as [number, number, number]))
+                this.localSpaceTranslation = vec3.fromValues(snap(state.camera.position[0]), 0, snap(state.camera.position[2]));
             }
 
             derivedState.localSpaceTranslation = this.localSpaceTranslation; // update the object reference to indicate that values have changed
@@ -675,10 +688,11 @@ export class RenderContext {
     }
 
     private updateOutlinesUniforms(state: DerivedRenderState) {
-        const { outlines, matrices } = state;
+        const { outlines, matrices, clipping } = state;
         if (this.hasStateChanged({ outlines, matrices })) {
             const { outlineUniforms, outlinesUniformsData } = this;
             const { color, plane } = outlines;
+            const planeIndex = clipping.planes.findIndex((cp) => vec4.exactEquals(cp.normalOffset, plane));
             // transform outline plane into local space
             const [x, y, z, offset] = plane;
             const normal = vec3.fromValues(x, y, z);
@@ -688,13 +702,14 @@ export class RenderContext {
             // compute plane projection matrices
             // const localPlaneMatrix = othoNormalBasisMatrixFromPlane(planeLS);
             // const planeLocalMatrix = mat4.invert(mat4.create(), localPlaneMatrix);
-            const planeLocalMatrix = othoNormalBasisMatrixFromPlane(planeLS);
+            const planeLocalMatrix = orthoNormalBasisMatrixFromPlane(planeLS);
             const localPlaneMatrix = mat4.invert(mat4.create(), planeLocalMatrix);
             // set uniform values
             const { values } = outlinesUniformsData;
             values.planeLocalMatrix = planeLocalMatrix;
             values.localPlaneMatrix = localPlaneMatrix;
             values.color = color;
+            values.planeIndex = planeIndex;
             this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
         }
     }
@@ -722,7 +737,7 @@ export class RenderContext {
         if (y0 < 0) y0 = 0;
         if (y1 > height) y1 = height;
         const samples: PickSample[] = [];
-        const { isOrtho, viewClipMatrix, viewWorldMatrix, viewWorldMatrixNormal } = this;
+        const { isOrtho, viewClipMatrixLastPoll, viewWorldMatrixLastPoll } = this;
         const f16Max = 65504;
 
         for (let iy = y0; iy < y1; iy++) {
@@ -749,10 +764,11 @@ export class RenderContext {
 
                     // compute view space position and normal
                     const scale = isOrtho ? 1 : depth;
-                    const posVS = vec3.fromValues((xCS / viewClipMatrix[0]) * scale, (yCS / viewClipMatrix[5]) * scale, -depth);
+
+                    const posVS = vec3.fromValues((xCS / viewClipMatrixLastPoll[0]) * scale, (yCS / viewClipMatrixLastPoll[5]) * scale, -depth);
 
                     // convert into world space.
-                    const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrix);
+                    const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrixLastPoll);
                     const normal = vec3.fromValues(nx, ny, nz);
                     vec3.normalize(normal, normal);
 

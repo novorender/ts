@@ -1,3 +1,4 @@
+import type { GPUTier } from "web_app/device";
 
 export interface DeviceProfile {
     readonly features: DeviceFeatures;
@@ -7,6 +8,7 @@ export interface DeviceProfile {
     readonly detailBias: number;
     readonly renderResolution: number;
     readonly framerateTarget: number;
+    readonly tier: GPUTier;
 }
 
 export interface DeviceFeatures {

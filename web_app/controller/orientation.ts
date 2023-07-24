@@ -127,12 +127,29 @@ export function clamp(v: number, min: number, max: number) {
     return v;
 }
 
-export function rotationFromDirection(dir: ReadonlyVec3) {
+export function rotationFromDirection(dir: ReadonlyVec3, snapToAxis?: quat) {
     const up = glMatrix.equals(Math.abs(vec3.dot(vec3.fromValues(0, 0, 1), dir)), 1)
         ? vec3.fromValues(0, 1, 0)
         : vec3.fromValues(0, 0, 1);
+    if (snapToAxis) {
+        vec3.transformQuat(up, up, snapToAxis);
+    }
 
     const right = vec3.cross(vec3.create(), up, dir);
+    if (snapToAxis) {
+        const [x, y, z] = right;
+        right[0] = right[1] = right[2] = 0;
+        const ax = Math.abs(x);
+        const ay = Math.abs(y);
+        const az = Math.abs(z);
+        if (ax > ay && ax > az) {
+            right[0] = Math.sign(x);
+        } else if (ay > az) {
+            right[1] = Math.sign(y);
+        } else {
+            right[2] = Math.sign(z);
+        }
+    }
 
     vec3.cross(up, dir, right);
     vec3.normalize(up, up);
