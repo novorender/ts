@@ -56,11 +56,10 @@ export class OctreeModule implements RenderModule {
         const highlightTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image: null });
         const gradientsTexture = bin.createTexture(this.gradientImageParams);
 
-        const { outline } = context.deviceProfile.features;
         const transformFeedback = bin.createTransformFeedback()!;
         let vb_line: WebGLBuffer | null = null;
         let vao_line: WebGLVertexArrayObject | null = null;
-        if (outline) {
+        if (context.deviceProfile.features.outline) {
             vb_line = bin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: this.maxLines * 24, usage: "STATIC_DRAW" });
             vao_line = bin.createVertexArray({
                 attributes: [

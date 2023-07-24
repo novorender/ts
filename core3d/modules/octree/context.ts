@@ -5,7 +5,7 @@ import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind
 import { glClear, glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
 import { MaterialType } from "./worker";
 import { getMultiDrawParams } from "./mesh";
-import { type ReadonlyVec3, vec3, vec4 } from "gl-matrix";
+import { type ReadonlyVec3, vec3, vec4, type ReadonlyVec4 } from "gl-matrix";
 import { NodeLoader } from "./loader";
 import { computeGradientColors, gradientRange } from "./gradient";
 // import { BufferFlags } from "@novorender/core3d/buffers";
@@ -13,6 +13,7 @@ import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, Shad
 import { Mutex } from "./mutex";
 import { useWorker } from "./worker";
 import { decodeBase64 } from "core3d/util";
+import type { RGB } from "dist";
 
 const enum UBO { camera, clipping, scene, node };
 
@@ -442,23 +443,37 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         gl.bindTexture(gl.TEXTURE_2D, null);
 
-        if (state.outlines.enabled && deviceProfile.features.outline) {
+        if (deviceProfile.features.outline) {
             // transform outline plane into local space
             const [x, y, z, offset] = state.outlines.plane;
-            const plane = vec4.fromValues(x, y, z, -offset);
+            const defaultPlane = vec4.fromValues(x, y, z, -offset);
 
-            // render clipping outlines
-            glState(gl, {
-                uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
-                depth: {
-                    test: false,
-                    writeMask: false
-                },
-            });
-            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
-            for (const { mask, node } of renderNodes) {
-                if (node.intersectsPlane(plane)) {
-                    this.renderNodeClippingOutline(node, mask);
+            const renderOutlines = (plane: ReadonlyVec4, color: RGB, planeIndex = -1) => {
+                renderContext.updateOutlinesUniforms(plane, color, planeIndex);
+                // render clipping outlines
+                glState(gl, {
+                    uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
+                    depth: {
+                        test: false,
+                        writeMask: false
+                    },
+                });
+                const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
+                for (const { mask, node } of renderNodes) {
+                    if (node.intersectsPlane(plane)) {
+                        this.renderNodeClippingOutline(node, mask);
+                    }
+                }
+            }
+            if (state.outlines.enabled) {
+                renderOutlines(defaultPlane, state.outlines.color);
+            }
+            if (state.clipping.enabled) {
+                for (let i = 0; i < state.clipping.planes.length; ++i) {
+                    const { normalOffset, outline } = state.clipping.planes[i];
+                    if (outline?.enabled) {
+                        renderOutlines(normalOffset, outline.color ?? state.outlines.color, i)
+                    }
                 }
             }
         }

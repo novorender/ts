@@ -6,12 +6,13 @@ import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
 import type { WasmInstance } from "./wasm";
-import type { ReadonlyVec3 } from "gl-matrix";
+import type { ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
 import { mat3, mat4, vec3, vec4 } from "gl-matrix";
 import commonShaderCore from "./common.glsl";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
 import { orthoNormalBasisMatrixFromPlane } from "./util";
+import type { RGB } from "dist";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
@@ -490,7 +491,6 @@ export class RenderContext {
         }
         this.updateCameraUniforms(derivedState);
         this.updateClippingUniforms(derivedState);
-        this.updateOutlinesUniforms(derivedState);
 
         // update internal state
         this.isOrtho = derivedState.camera.kind == "orthographic";
@@ -687,31 +687,27 @@ export class RenderContext {
         }
     }
 
-    private updateOutlinesUniforms(state: DerivedRenderState) {
-        const { outlines, matrices, clipping } = state;
-        if (this.hasStateChanged({ outlines, matrices })) {
-            const { outlineUniforms, outlinesUniformsData } = this;
-            const { color, plane } = outlines;
-            const planeIndex = clipping.planes.findIndex((cp) => vec4.exactEquals(cp.normalOffset, plane));
-            // transform outline plane into local space
-            const [x, y, z, offset] = plane;
-            const normal = vec3.fromValues(x, y, z);
-            const distance = offset - vec3.dot(this.localSpaceTranslation, normal);
-            // const margin = 0.001; // add a tiny margin so that these lines aren't clipped by the clipping plane itself
-            const planeLS = vec4.fromValues(normal[0], normal[1], normal[2], -distance);
-            // compute plane projection matrices
-            // const localPlaneMatrix = othoNormalBasisMatrixFromPlane(planeLS);
-            // const planeLocalMatrix = mat4.invert(mat4.create(), localPlaneMatrix);
-            const planeLocalMatrix = orthoNormalBasisMatrixFromPlane(planeLS);
-            const localPlaneMatrix = mat4.invert(mat4.create(), planeLocalMatrix);
-            // set uniform values
-            const { values } = outlinesUniformsData;
-            values.planeLocalMatrix = planeLocalMatrix;
-            values.localPlaneMatrix = localPlaneMatrix;
-            values.color = color;
-            values.planeIndex = planeIndex;
-            this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
-        }
+
+    updateOutlinesUniforms(plane: ReadonlyVec4, color: RGB, planeIndex: number) {
+        const { outlineUniforms, outlinesUniformsData } = this;
+        // transform outline plane into local space
+        const [x, y, z, offset] = plane;
+        const normal = vec3.fromValues(x, y, z);
+        const distance = offset - vec3.dot(this.localSpaceTranslation, normal);
+        // const margin = 0.001; // add a tiny margin so that these lines aren't clipped by the clipping plane itself
+        const planeLS = vec4.fromValues(normal[0], normal[1], normal[2], -distance);
+        // compute plane projection matrices
+        // const localPlaneMatrix = othoNormalBasisMatrixFromPlane(planeLS);
+        // const planeLocalMatrix = mat4.invert(mat4.create(), localPlaneMatrix);
+        const planeLocalMatrix = orthoNormalBasisMatrixFromPlane(planeLS);
+        const localPlaneMatrix = mat4.invert(mat4.create(), planeLocalMatrix);
+        // set uniform values
+        const { values } = outlinesUniformsData;
+        values.planeLocalMatrix = planeLocalMatrix;
+        values.localPlaneMatrix = localPlaneMatrix;
+        values.color = color;
+        values.planeIndex = planeIndex;
+        this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
     }
 
     private extractPick(pickBuffer: Uint32Array, x: number, y: number, sampleDiscRadius: number, pickCameraPlane: boolean) {

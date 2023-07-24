@@ -190,7 +190,8 @@ export enum ClippingId { // object_id's for picking
 
 export interface RenderStateClippingPlane {
     readonly normalOffset: ReadonlyVec4,
-    readonly color?: RGBA;
+    readonly color?: RGBA,
+    readonly outline?: { enabled: boolean, color?: RGB }
 }
 
 export interface RenderStateClipping {
@@ -236,9 +237,6 @@ export enum TonemappingMode {
     deviation,
     zbuffer,
 };
-
-export interface RenderStateOutlinesNearClipping {
-}
 
 export interface RenderStateOutlines {
     readonly enabled: boolean;
