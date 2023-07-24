@@ -128,7 +128,10 @@ function flipArray(swapFunc: (v: number[]) => number[]) {
     return function (ar: RenderStateClippingPlane[]) {
         const flippedPlanes: RenderStateClippingPlane[] = [];
         for (const plane of ar) {
-            flippedPlanes.push({ color: plane.color, normalOffset: swapFunc(plane.normalOffset as any as number[]) as any as ReadonlyVec4 });
+            flippedPlanes.push({
+                color: plane.color, outline: plane.outline,
+                normalOffset: swapFunc(plane.normalOffset as any as number[]) as any as ReadonlyVec4
+            });
         }
         return flippedPlanes;
     }

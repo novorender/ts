@@ -1,4 +1,4 @@
-import { CoordSpace, TonemappingMode, createDefaultModules } from "./";
+import { CoordSpace, TonemappingMode, createDefaultModules, type RGB } from "./";
 import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState } from "./";
 import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits, } from "webgl2";
 import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics, TextureImageSource } from "webgl2";
@@ -12,7 +12,6 @@ import commonShaderCore from "./common.glsl";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
 import { orthoNormalBasisMatrixFromPlane } from "./util";
-import type { RGB } from "dist";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 export class RenderContext {
