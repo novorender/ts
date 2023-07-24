@@ -446,9 +446,9 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             // transform outline plane into local space
 
             const renderOutlines = (plane: ReadonlyVec4, color: RGB, planeIndex = -1) => {
-                renderContext.updateOutlinesUniforms(plane, color, planeIndex);
                 const [x, y, z, offset] = plane;
                 const p = vec4.fromValues(x, y, z, -offset);
+                renderContext.updateOutlinesUniforms(p, color, planeIndex);
 
                 // render clipping outlines
                 glState(gl, {

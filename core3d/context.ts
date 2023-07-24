@@ -692,7 +692,7 @@ export class RenderContext {
         // transform outline plane into local space
         const [x, y, z, offset] = plane;
         const normal = vec3.fromValues(x, y, z);
-        const distance = offset - vec3.dot(this.localSpaceTranslation, normal);
+        const distance = -offset - vec3.dot(this.localSpaceTranslation, normal);
         // const margin = 0.001; // add a tiny margin so that these lines aren't clipped by the clipping plane itself
         const planeLS = vec4.fromValues(normal[0], normal[1], normal[2], -distance);
         // compute plane projection matrices
