@@ -200,6 +200,7 @@ export class FlightController extends BaseController {
     }
 
     override update(): void {
+        this.changed = false;
         const { multiplier, orientation, params, height, pivot, zoomPos, currentFlyTo } = this;
         if (currentFlyTo) {
             this.position = vec3.clone(currentFlyTo.pos);

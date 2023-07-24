@@ -130,7 +130,7 @@ export class OrthoController extends BaseController {
 
     override update() {
         const { axes, zoomPos, height, position, orientation, hasShift, currentFlyTo } = this;
-
+        this.changed = false;
         if (currentFlyTo) {
             this.position = vec3.clone(currentFlyTo.pos);
             orientation.pitch = currentFlyTo.pitch;

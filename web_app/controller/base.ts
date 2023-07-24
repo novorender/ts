@@ -131,7 +131,7 @@ export abstract class BaseController {
 
     renderStateChanges(state: RenderStateCamera, elapsedTime: number): RenderStateChanges | undefined {
         this.animate(elapsedTime);
-        if (this.input.axesEmpty() && this.currentFlyTo == undefined) {
+        if (this.input.axesEmpty() && this.currentFlyTo == undefined && !this.changed) {
             this.isMoving = false;
             return;
         }
