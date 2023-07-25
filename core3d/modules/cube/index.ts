@@ -129,7 +129,7 @@ class CubeModuleContext implements RenderModuleContext {
                 vertexArrayObject: vao_render,
             });
             const stats = glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
-            context["addRenderStatistics"](stats);
+            context.addRenderStatistics(stats);
 
             if (state.outlines.enabled && deviceProfile.features.outline) {
                 const planeIndex = state.clipping.planes.findIndex((cp) => vec4.exactEquals(cp.normalOffset, plane));
@@ -161,7 +161,7 @@ class CubeModuleContext implements RenderModuleContext {
                 });
                 // const stats = glDraw(gl, { kind: "arrays", mode: "LINES", count: 12 * 2 });
                 const stats = glDraw(gl, { kind: "arrays_instanced", mode: "LINES", count: 2, instanceCount: 12 });
-                context["addRenderStatistics"](stats);
+                context.addRenderStatistics(stats);
             }
         }
     }

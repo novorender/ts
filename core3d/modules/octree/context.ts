@@ -325,7 +325,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
 
-            renderContext["addLoadStatistics"](primitives);
+            renderContext.addLoadStatistics(primitives);
 
             const maxDownloads = 8;
             let availableDownloads = maxDownloads - this.loader.activeDownloads;
@@ -442,38 +442,23 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         gl.bindTexture(gl.TEXTURE_2D, null);
 
-        if (deviceProfile.features.outline) {
+        if (state.outlines.enabled && deviceProfile.features.outline) {
             // transform outline plane into local space
+            const [x, y, z, offset] = state.outlines.plane;
+            const plane = vec4.fromValues(x, y, z, -offset);
 
-            const renderOutlines = (plane: ReadonlyVec4, color: RGB, planeIndex = -1) => {
-                const [x, y, z, offset] = plane;
-                const p = vec4.fromValues(x, y, z, -offset);
-                renderContext.updateOutlinesUniforms(p, color, planeIndex);
-
-                // render clipping outlines
-                glState(gl, {
-                    uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
-                    depth: {
-                        test: false,
-                        writeMask: false
-                    },
-                });
-                const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
-                for (const { mask, node } of renderNodes) {
-                    if (node.intersectsPlane(p)) {
-                        this.renderNodeClippingOutline(node, mask);
-                    }
-                }
-            }
-            if (state.outlines.enabled) {
-                renderOutlines(state.outlines.plane, state.outlines.color);
-            }
-            if (state.clipping.enabled) {
-                for (let i = 0; i < state.clipping.planes.length; ++i) {
-                    const { normalOffset, outline } = state.clipping.planes[i];
-                    if (outline?.enabled) {
-                        renderOutlines(normalOffset, outline.color ?? state.outlines.color, i)
-                    }
+            // render clipping outlines
+            glState(gl, {
+                uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
+                depth: {
+                    test: false,
+                    writeMask: false
+                },
+            });
+            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
+            for (const { mask, node } of renderNodes) {
+                if (node.intersectsPlane(plane)) {
+                    this.renderNodeClippingOutline(node, mask);
                 }
             }
         }
@@ -603,13 +588,13 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
                 if (mask == data.childMask) {
                     const stats = glDraw(gl, mesh.drawParams);
-                    renderContext["addRenderStatistics"](stats);
+                    renderContext.addRenderStatistics(stats);
                 } else {
                     // determine which portions of the parent node must be rendered based on what children currently don't render themselves
                     const multiDrawParams = getMultiDrawParams(mesh, mask);
                     if (multiDrawParams) {
                         const stats = glDraw(gl, multiDrawParams);
-                        renderContext["addRenderStatistics"](stats);
+                        renderContext.addRenderStatistics(stats);
                     }
                 }
             }
@@ -642,7 +627,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                                 vertexArrayObject: vao_line,
                             });
                             const stats = glDraw(gl, { kind: "arrays_instanced", mode: "LINES", count: 2, instanceCount: count });
-                            renderContext["addRenderStatistics"](stats);
+                            renderContext.addRenderStatistics(stats);
                         }
                     }
                 }
@@ -657,7 +642,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         if (node.renderedChildMask && node.uniforms) {
             gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms ?? null);
             const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLES", count: 8 * 12 });
-            renderContext["addRenderStatistics"](stats);
+            renderContext.addRenderStatistics(stats);
         }
     }
 
