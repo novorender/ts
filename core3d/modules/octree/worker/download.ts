@@ -1,3 +1,4 @@
+/** @internal */
 export class AbortableDownload {
     result: Promise<ArrayBuffer | undefined> = Promise.resolve(undefined);
     aborted = false;
@@ -14,6 +15,7 @@ export class AbortableDownload {
     }
 }
 
+/** @internal */
 export class Downloader {
     activeDownloads = 0;
     completeResolve: (() => void) | undefined;

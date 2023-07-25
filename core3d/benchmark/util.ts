@@ -1,3 +1,4 @@
+/** @internal */
 export function waitFrame() {
     return new Promise<number>((resolve) => {
         function animate(time: number) {
@@ -7,6 +8,7 @@ export function waitFrame() {
     });
 }
 
+/** @internal */
 export async function measure(action: (iteration: number) => void) {
     const elapsed: number[] = [];
     let prevTime: number | undefined;

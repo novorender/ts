@@ -6,6 +6,7 @@ import intersect_vert from "./intersect.vert";
 
 type Shaders = { readonly [P in string]: { readonly vertexShader: string; readonly fragmentShader?: string; } };
 
+/** @internal */
 export const shaders = {
     render: {
         vertexShader: render_vert,

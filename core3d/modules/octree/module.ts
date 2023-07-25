@@ -5,10 +5,14 @@ import { shaders } from "./shaders";
 import type { ResourceBin } from "core3d/resource";
 import { OctreeModuleContext } from "./context";
 
+/** @internal */
 export const enum ShaderPass { color, pick, pre };
+/** @internal */
 export const enum ShaderMode { triangles, points, terrain };
+/** @internal */
 export const enum Gradient { size = 1024 };
 
+/** @internal */
 export class OctreeModule implements RenderModule {
     readonly kind = "octree";
     readonly sceneUniforms = {
@@ -142,10 +146,13 @@ export class OctreeModule implements RenderModule {
 }
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+/** @internal */
 export type Uniforms = ReturnType<OctreeModule["createUniforms"]>;
+/** @internal */
 export type Resources = Awaited<ReturnType<OctreeModule["createResources"]>>;
 type PassPrograms = { readonly [P in keyof typeof ShaderPass]: ModePrograms };
 type ModePrograms = { readonly [P in keyof typeof ShaderMode]: WebGLProgram };
+/** @internal */
 export interface Programs extends PassPrograms {
     readonly intersect: WebGLProgram;
     readonly line: WebGLProgram;

@@ -4,6 +4,7 @@ import { glUBOProxy, glDraw, glState, type UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
+/** @internal */
 export class TonemapModule implements RenderModule {
     readonly kind = "tonemap";
     readonly uniforms = {

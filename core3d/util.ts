@@ -16,6 +16,7 @@ export function decodeBase64(base64: string | undefined, type: Uint8ArrayConstru
     }
 }
 
+/** @internal */
 export function orthoNormalBasisMatrixFromPlane(plane: ReadonlyVec4): ReadonlyMat4 {
     const [nx, ny, nz, offs] = plane;
     const axisZ = vec3.fromValues(nx, ny, nz);

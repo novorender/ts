@@ -7,10 +7,12 @@ import type { DeviceProfile } from "core3d/device.js";
 
 interface PayloadPromiseMethods { readonly resolve: (value: NodePayload | undefined) => void, readonly reject: (reason: string) => void };
 
+/** @internal */
 export interface NodeLoaderOptions {
     readonly useWorker: boolean;
 }
 
+/** @internal */
 export class NodeLoader {
     readonly worker: Worker | undefined;
     readonly handler;

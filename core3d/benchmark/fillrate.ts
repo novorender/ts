@@ -3,16 +3,25 @@ import { measure } from "./util";
 import { Benchmark } from "./benchmark";
 import { shaders } from "./shaders";
 
+/** A basic GPU fill rate profiler. */
 export class FillrateProfiler {
     readonly program;
     readonly uniforms;
 
+    /** Create GPU resources using the gl context from the specified benchmark instance. */
     constructor(readonly benchmark: Benchmark) {
         const { gl } = this.benchmark;
         this.program = glCreateProgram(gl, shaders.fillrate);
         this.uniforms = glUniformLocations(gl, this.program, ["seed"]);
     }
 
+    /**
+     * Measure fill rate by rendering a series of noisy, semi-transparent quads.
+     * @returns Fill rate estimate in pixels/second.
+     * @remarks
+     * This test is quite inaccurate and does not match close to the nominal fill rate of a GPU, particularly on tile based mobile GPUs.
+     * The result should only serve as a rough estimate.
+     */
     async measure() {
         const { benchmark, program, uniforms } = this;
         const { gl } = benchmark;

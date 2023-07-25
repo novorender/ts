@@ -6,6 +6,7 @@ import { type TextureParams, type UniformTypes, type TextureParamsCubeUncompress
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 
+/** @internal */
 export class BackgroundModule implements RenderModule {
     readonly kind = "background";
     private abortController: AbortController | undefined;

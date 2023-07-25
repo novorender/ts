@@ -3,16 +3,26 @@ import { waitFrame, measure } from "./util";
 import { Benchmark } from "./benchmark";
 import { shaders } from "./shaders";
 
+/** A basic GPU point rate profiler. */
 export class PointrateProfiler {
     readonly program;
     readonly uniforms;
 
+    /** Create GPU resources using the gl context from the specified benchmark instance. */
     constructor(readonly benchmark: Benchmark) {
         const { gl } = this.benchmark;
         this.program = glCreateProgram(gl, shaders.pointrate);
         this.uniforms = glUniformLocations(gl, this.program, ["color"]);
     }
 
+    /**
+     * Measure fill rate by rendering a series of noisy, semi-transparent point primitives.
+     * @returns Primitive/point rate estimate in primitives/second.
+     * @remarks
+     * This test is quite inaccurate and does not match close to the nominal primitive/triangle rate of a GPU, particularly on tile based mobile GPUs.
+     * Points are being used instead of triangles since they more closely reflect the maximum theoretical primitive rate of most GPUs.
+     * The result should only serve as a rough estimate.
+     */
     async measure() {
         const { benchmark, program, uniforms } = this;
         const { gl } = benchmark;

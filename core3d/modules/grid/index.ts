@@ -5,6 +5,7 @@ import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
 import { mat4, vec3 } from "gl-matrix";
 
+/** @internal */
 export class GridModule implements RenderModule {
     readonly kind = "grid";
     readonly uniforms = {

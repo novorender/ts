@@ -7,6 +7,7 @@ import { mat3, mat4, vec3, type ReadonlyVec3 } from "gl-matrix";
 import { BufferFlags } from "core3d/buffers";
 import { ResourceBin } from "core3d/resource";
 
+/** @internal */
 export class DynamicModule implements RenderModule {
     readonly kind = "dynamic";
     readonly materialUniforms = {

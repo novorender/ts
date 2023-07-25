@@ -8,6 +8,7 @@ import debug_frag from "./debug.frag";
 
 type Shaders = { readonly [P in string]: { readonly vertexShader: string; readonly fragmentShader?: string; } };
 
+/** @internal */
 export const shaders = {
     render: {
         vertexShader: render_vert,

@@ -2,9 +2,9 @@ import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState, glTransformFeedback, type UniformTypes } from "webgl2";
 import { mat4, vec3, type ReadonlyVec3, vec4 } from "gl-matrix";
-import { BufferFlags } from "core3d/buffers";
 import { shaders } from "./shaders";
 
+/** @internal */
 export class CubeModule implements RenderModule {
     readonly kind = "cube";
     readonly cubeUniforms = {

@@ -1,9 +1,11 @@
+/** A basic GPU benchmark helper class. */
 export class Benchmark {
     readonly canvas;
     readonly gl;
     static readonly size = 1024;
     static readonly numPixels = Benchmark.size * Benchmark.size;
 
+    /** Create a new instance with a HTML canvas and webgl2 render context. */
     constructor() {
         const options: WebGLContextAttributes = {
             alpha: true,
@@ -36,6 +38,7 @@ export class Benchmark {
         this.gl = gl;
     }
 
+    /** Dispose of created GPU resources. */
     dispose() {
         const { gl, canvas } = this;
         document.body.removeChild(canvas);

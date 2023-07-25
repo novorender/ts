@@ -1,5 +1,6 @@
 const enum State { unlocked, locked };
 
+/** @internal */
 export class Mutex {
     readonly _view: Int32Array;
 

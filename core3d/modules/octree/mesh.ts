@@ -2,6 +2,7 @@ import { glUpdateBuffer, type DrawParams, type VertexAttribute, type DrawParamsA
 import { VertexAttribIndex, type MaterialType, type MeshDrawRange, type MeshObjectRange, type NodeGeometry, type Vertex, type VertexAttributeData, type VertexAttributes } from "./worker";
 import { ResourceBin } from "core3d/resource";
 
+/** @internal */
 export interface Mesh {
     readonly materialType: MaterialType;
     readonly vao: WebGLVertexArrayObject;
@@ -30,6 +31,7 @@ function convertAttributes(attributes: VertexAttributes, buffers: readonly WebGL
     return ret as { [P in keyof VertexAttributes]: ConvAttr<VertexAttributes[P]> };
 }
 
+/** @internal */
 export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) {
     const textures = geometry.textures.map(ti => {
         if (ti) {
@@ -73,6 +75,7 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
     }
 }
 
+/** @internal */
 export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, highlights: Uint8Array | undefined) {
     const { highlightVB, highlightTriVB } = mesh;
     if (highlightVB) {
@@ -102,11 +105,13 @@ export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, hig
     }
 }
 
+/** @internal */
 export function deleteMesh(resourceBin: ResourceBin, mesh: Mesh) {
     const { vao, vaoPosOnly, vaoTriangles, highlightVB, highlightTriVB, baseColorTexture } = mesh;
     resourceBin.delete(vao, vaoPosOnly, vaoTriangles, highlightVB, highlightTriVB, baseColorTexture);
 }
 
+/** @internal */
 export function getMultiDrawParams(mesh: Mesh, childMask: number): DrawParamsArraysMultiDraw | DrawParamsElementsMultiDraw | undefined {
     // determine which draw ranges this parent node must render based on what children will render their own mesh
     const drawRanges = mesh.drawRanges.filter(r => ((1 << r.childIndex) & childMask) != 0);
@@ -142,6 +147,7 @@ export function getMultiDrawParams(mesh: Mesh, childMask: number): DrawParamsArr
     }
 }
 
+/** @internal */
 export function meshPrimitiveCount(mesh: Mesh, renderedChildMask: number) {
     let numPrimitives = 0;
     const primitiveType = mesh.drawParams.mode ?? "TRIANGLES";

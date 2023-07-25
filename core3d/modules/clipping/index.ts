@@ -3,8 +3,8 @@ import type { RenderModuleContext, RenderModule } from "..";
 import { glDraw, glState, glUBOProxy, type UniformTypes } from "webgl2";
 import vertexShader from "./shader.vert";
 import fragmentShader from "./shader.frag";
-import { ResourceBin } from "core3d/resource";
 
+/** @internal */
 export class ClippingModule implements RenderModule {
     readonly kind = "clipping";
     readonly uniforms = {

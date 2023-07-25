@@ -1,12 +1,14 @@
 import type { RenderStateColorGradient, RGB, RGBA } from "core3d";
 import { vec4 } from "gl-matrix";
 
+/** @internal */
 export function gradientRange(gradient: RenderStateColorGradient<RGB | RGBA>) {
     if (gradient.knots.length == 0)
         return [0, 0] as const;
     return [gradient.knots[0].position, gradient.knots[gradient.knots.length - 1].position] as const;
 }
 
+/** @internal */
 export function computeGradientColors(size: number, gradient: RenderStateColorGradient<RGB | RGBA>): Uint8ClampedArray {
     const { knots } = gradient;
     const n = knots.length;

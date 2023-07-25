@@ -21,6 +21,7 @@ interface RenderNode {
     readonly node: OctreeNode;
 };
 
+/** @internal */
 export interface RootNodes {
     readonly [NodeGeometryKind.terrain]?: OctreeNode;
     readonly [NodeGeometryKind.triangles]?: OctreeNode;
@@ -29,6 +30,7 @@ export interface RootNodes {
     readonly [NodeGeometryKind.documents]?: OctreeNode;
 }
 
+/** @internal */
 export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     readonly loader: NodeLoader;
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);

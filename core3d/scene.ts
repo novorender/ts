@@ -1,10 +1,19 @@
-import type { SceneConfig, RenderStateScene, DeviceProfile } from ".";
-import { OctreeNode, type OctreeContext, NodeState, NodeGeometryKind } from "./modules/octree/node";
+import type { SceneConfig, RenderState, RenderStateScene, DeviceProfile } from ".";
+import { OctreeNode, type OctreeContext, NodeGeometryKind } from "./modules/octree/node";
 import type { RootNodes } from "./modules/octree";
 import { decodeBase64 } from "./util";
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
+/**
+ * Download scene from url.
+ * @param url Url of scene Root folder, e.g. `https://blobs.novorender.com/<sceneid>/`
+ * @param abortController Optional abort controller.
+ * @returns A render state scene ready to be assign to {@link RenderState.scene}.
+ * @remarks
+ * The loaded state does not contain any geometry, only the data required to start geometry streaming.
+ * It may take several frames for any geometry to appear, and several seconds for it to fully resolve.
+ */
 export async function downloadScene(url: string, abortController?: AbortController): Promise<RenderStateScene> {
     if (!abortController)
         abortController = new AbortController();

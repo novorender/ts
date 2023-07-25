@@ -6,6 +6,7 @@ import type { NodeData } from "./worker";
 import { NodeLoader } from "./loader";
 import { ResourceBin } from "core3d/resource";
 
+/** @internal */
 export const enum Visibility {
     undefined,
     none,
@@ -13,6 +14,7 @@ export const enum Visibility {
     full,
 };
 
+/** @internal */
 export const enum NodeState {
     collapsed,
     requestDownload,
@@ -20,6 +22,7 @@ export const enum NodeState {
     ready,
 }
 
+/** @internal */
 export const enum NodeGeometryKind {
     terrain,
     triangles,
@@ -28,6 +31,7 @@ export const enum NodeGeometryKind {
     documents,
 };
 
+/** @internal */
 export const enum NodeGeometryKindMask {
     none = 0,
     terrain = 1 << NodeGeometryKind.terrain,
@@ -38,6 +42,7 @@ export const enum NodeGeometryKindMask {
     all = terrain | triangles | lines | points | documents,
 };
 
+/** @internal */
 export interface OctreeContext {
     readonly renderContext: RenderContext;
     readonly loader: NodeLoader;
@@ -50,6 +55,7 @@ export interface OctreeContext {
     readonly highlightGeneration: number;
 }
 
+/** @internal */
 export class OctreeNode {
     readonly id: string;
     readonly parent: OctreeNode | undefined;

@@ -8,7 +8,7 @@ export interface HighlightsBuffer {
     readonly indices: Uint8Array;
     readonly mutex: Mutex;
 }
-
+/** @internal */
 export class LoaderHandler {
     readonly downloader = new Downloader();
     readonly downloads = new Map<string, AbortableDownload>();

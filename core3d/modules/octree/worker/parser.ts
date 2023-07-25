@@ -6,6 +6,7 @@ import type { ComponentType, ShaderAttributeType, TextureParams } from "webgl2";
 import { parseKTX } from "core3d/ktx";
 import type { Mutex } from "../mutex";
 
+/** @internal */
 export interface MeshDrawRange {
     readonly childIndex: number;
     readonly byteOffset: number; // in bytes
@@ -13,6 +14,7 @@ export interface MeshDrawRange {
     readonly count: number; // # indices
 }
 
+/** @internal */
 export interface MeshObjectRange {
     readonly objectId: number;
     readonly beginVertex: number;
@@ -21,14 +23,17 @@ export interface MeshObjectRange {
     readonly endTriangle: number;
 }
 
+/** @internal */
 export interface Highlights {
     readonly indices: Uint8Array;
     readonly mutex: Mutex;
 }
 
 const primitiveTypeStrings = ["POINTS", "LINES", "LINE_LOOP", "LINE_STRIP", "TRIANGLES", "TRIANGLE_STRIP", "TRIANGLE_FAN"] as const;
+/** @internal */
 export type PrimitiveTypeString = typeof primitiveTypeStrings[number];
 
+/** @internal */
 export interface NodeBounds {
     readonly box: AABB;
     readonly sphere: BoundingSphere;
@@ -36,6 +41,7 @@ export interface NodeBounds {
 
 // node data contains everything needed to create a new node, except its geometry and textures
 // this data comes from the parent node and is used to determine visibility and whether to load node geometry or not
+/** @internal */
 export interface NodeData {
     readonly id: string;
     readonly childIndex: number; // octant # (not mask, but index)
@@ -52,6 +58,7 @@ export interface NodeData {
     readonly gpuBytes: number;
 }
 
+/** @internal */
 export interface VertexAttributeData {
     readonly kind: ShaderAttributeType;
     readonly componentType: ComponentType;
@@ -62,6 +69,7 @@ export interface VertexAttributeData {
     readonly byteOffset?: number;
 };
 
+/** @internal */
 export interface VertexAttributes {
     readonly position: VertexAttributeData;
     readonly normal: VertexAttributeData | null;
@@ -79,10 +87,12 @@ export interface VertexAttributes {
     readonly highlightTri: VertexAttributeData | null;
 }
 
+/** @internal */
 export const enum VertexAttribIndex {
     triangles, position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight, highlightTri
 };
 
+/** @internal */
 export interface NodeSubMesh {
     readonly materialType: MaterialType;
     readonly primitiveType: PrimitiveTypeString;
@@ -97,6 +107,7 @@ export interface NodeSubMesh {
     readonly baseColorTexture: number | undefined; // texture index
 }
 
+/** @internal */
 export interface NodeTexture {
     readonly semantic: TextureSemantic;
     readonly transform: readonly number[]; // 3x3 matrix
@@ -104,6 +115,7 @@ export interface NodeTexture {
 }
 
 // node geometry and textures
+/** @internal */
 export interface NodeGeometry {
     readonly subMeshes: readonly NodeSubMesh[];
     readonly textures: readonly (NodeTexture | undefined)[];
@@ -197,6 +209,7 @@ function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, devia
     return attribNames;
 }
 
+/** @internal */
 export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection, range: Range, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean) {
     let primitives = 0;
     let totalTextureBytes = 0;
@@ -240,6 +253,7 @@ function toHex(bytes: Uint8Array) {
     return Array.prototype.map.call(bytes, x => ('00' + x.toString(16).toUpperCase()).slice(-2)).join('');
 }
 
+/** @internal */
 export function getChildren(parentId: string, schema: Schema, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean): NodeData[] {
     const { childInfo, hashBytes } = schema;
     const children: NodeData[] = [];
@@ -284,6 +298,7 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
     return children;
 }
 
+/** @internal */
 export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => boolean) {
     const { subMesh } = schema;
     for (let i = 0; i < subMesh.length; i++) {
