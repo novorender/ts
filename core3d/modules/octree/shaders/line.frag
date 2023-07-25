@@ -30,7 +30,11 @@ void main() {
     float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
     bool inside = clipping.mode == clippingModeIntersection ? (clipping.numPlanes + (outline.planeIndex >= 0 ? 1u : 0u) ) > 0U : true;
     for(uint i = 0u; i < clipping.numPlanes; i++) {
-            inside = inside && int(i) != outline.planeIndex && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
+        if (int(i) == outline.planeIndex) {
+            inside = inside && clipping.mode != clippingModeIntersection;
+        } else {
+            inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
+        }
     }
     if(clipping.mode == clippingModeIntersection ? inside : !inside) {
         discard;
