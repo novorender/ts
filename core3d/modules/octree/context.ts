@@ -444,23 +444,38 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         gl.bindTexture(gl.TEXTURE_2D, null);
 
-        if (state.outlines.enabled && deviceProfile.features.outline) {
+        if (deviceProfile.features.outline) {
             // transform outline plane into local space
-            const [x, y, z, offset] = state.outlines.plane;
-            const plane = vec4.fromValues(x, y, z, -offset);
 
-            // render clipping outlines
-            glState(gl, {
-                uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
-                depth: {
-                    test: false,
-                    writeMask: false
-                },
-            });
-            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
-            for (const { mask, node } of renderNodes) {
-                if (node.intersectsPlane(plane)) {
-                    this.renderNodeClippingOutline(node, mask);
+            const renderOutlines = (plane: ReadonlyVec4, color: RGB, planeIndex = -1) => {
+                const [x, y, z, offset] = plane;
+                const p = vec4.fromValues(x, y, z, -offset);
+                renderContext.updateOutlinesUniforms(p, color, planeIndex);
+
+                // render clipping outlines
+                glState(gl, {
+                    uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
+                    depth: {
+                        test: false,
+                        writeMask: false
+                    },
+                });
+                const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
+                for (const { mask, node } of renderNodes) {
+                    if (node.intersectsPlane(p)) {
+                        this.renderNodeClippingOutline(node, mask);
+                    }
+                }
+            }
+            if (state.outlines.enabled) {
+                renderOutlines(state.outlines.plane, state.outlines.color);
+            }
+            if (state.clipping.enabled) {
+                for (let i = 0; i < state.clipping.planes.length; ++i) {
+                    const { normalOffset, outline } = state.clipping.planes[i];
+                    if (outline?.enabled) {
+                        renderOutlines(normalOffset, outline.color ?? state.outlines.color, i)
+                    }
                 }
             }
         }
@@ -534,20 +549,37 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
 
-            if (state.outlines.enabled && deviceProfile.features.outline) {
-                // render clipping outlines
-                glState(gl, {
-                    uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
-                    depth: {
-                        test: false,
-                        writeMask: false
-                    },
-                });
-                for (const { mask, node } of renderNodes) {
-                    if (node.intersectsPlane(state.viewFrustum.near)) {
-                        this.renderNodeClippingOutline(node, mask);
+            if (deviceProfile.features.outline) {
+                const renderOutlines = (plane: ReadonlyVec4, color: RGB, planeIndex = -1) => {
+                    const [x, y, z, offset] = plane;
+                    const p = vec4.fromValues(x, y, z, -offset);
+                    renderContext.updateOutlinesUniforms(p, color, planeIndex);
+                    glState(gl, {
+                        uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
+                        depth: {
+                            test: false,
+                            writeMask: false
+                        },
+                    });
+                    for (const { mask, node } of renderNodes) {
+                        if (node.intersectsPlane(state.viewFrustum.near)) {
+                            this.renderNodeClippingOutline(node, mask);
+                        }
                     }
                 }
+                if (state.outlines.enabled) {
+                    renderOutlines(state.outlines.plane, state.outlines.color);
+                }
+                if (state.clipping.enabled) {
+                    for (let i = 0; i < state.clipping.planes.length; ++i) {
+                        const { normalOffset, outline } = state.clipping.planes[i];
+                        if (outline?.enabled) {
+                            renderOutlines(normalOffset, outline.color ?? state.outlines.color, i)
+                        }
+                    }
+                }
+                // render clipping outlines
+
             }
 
             if (rootNode.geometryKind == NodeGeometryKind.terrain && state.terrain.asBackground) {
