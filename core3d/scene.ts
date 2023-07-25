@@ -16,6 +16,7 @@ export async function downloadScene(url: string, abortController?: AbortControll
     return { url: url.toString(), config } as const;
 }
 
+/** @internal */
 export async function createSceneRootNodes(context: OctreeContext, config: SceneConfig, deviceProfile: DeviceProfile): Promise<RootNodes | undefined> {
     const { buffer } = decodeBase64(config.root);
     const { loader } = context;

@@ -200,6 +200,7 @@ function* getImages(header: Header, ktx: Uint8Array, littleEndian: boolean) {
     console.assert(dataOffset == ktx.byteLength);
 }
 
+/** @internal */
 export function parseKTX(ktx: Uint8Array): TextureParams {
     const header = parseHeader(ktx);
     const { littleEndian } = header;

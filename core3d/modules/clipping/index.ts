@@ -80,7 +80,7 @@ class ClippingModuleContext implements RenderModuleContext {
                 },
             });
             const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
-            context["addRenderStatistics"](stats);
+            context.addRenderStatistics(stats);
         }
     }
 

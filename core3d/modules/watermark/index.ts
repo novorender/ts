@@ -107,7 +107,7 @@ class WatermarkModuleContext implements RenderModuleContext {
             },
         });
         const stats = glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: WatermarkModule.numIndices });
-        context["addRenderStatistics"](stats);
+        context.addRenderStatistics(stats);
     }
 
     contextLost(): void {

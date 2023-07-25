@@ -1,5 +1,8 @@
 import type { AtLeastOne, RGB, RGBA, RGBATransform } from "./state";
 
+/** 
+ * Create a highlight color transform that doesn't change colors.
+ */
 export function createNeutralHighlight(): RGBATransform {
     return [
         1, 0, 0, 0, 0,
@@ -9,6 +12,10 @@ export function createNeutralHighlight(): RGBATransform {
     ] as const
 }
 
+/** 
+ * Create a highlight color transform that replaces material opacity.
+ * @param opacity New material opacity between 0 and 1, where 0 is 100% transparent and 1.0 is 100% opaque.
+ */
 export function createTransparentHighlight(opacity: number): RGBATransform {
     return [
         1, 0, 0, 0, 0,
@@ -18,6 +25,10 @@ export function createTransparentHighlight(opacity: number): RGBATransform {
     ] as const
 }
 
+/** 
+ * Create a highlight color transform that replaces material colors.
+ * @param color New material color or color modifier with optional alpha to be used uniformly across selection.
+ */
 export function createColorSetHighlight(color: RGB | RGBA): RGBATransform {
     const [r, g, b, a] = color;
     return [
@@ -28,6 +39,12 @@ export function createColorSetHighlight(color: RGB | RGBA): RGBATransform {
     ] as const
 }
 
+/** 
+ * Create a highlight color transform that modifies material colors.
+ * @param color New material color or color modifier with optional alpha.
+ * @remarks
+ * Colors can either be replaced or modified using the {@link LinearTransform}.
+ */
 export function createRGBATransformHighlight(options: AtLeastOne<RGBAOptions>): RGBATransform {
     const r = normalizeLinearTransform(options.red);
     const g = normalizeLinearTransform(options.green);
@@ -41,6 +58,10 @@ export function createRGBATransformHighlight(options: AtLeastOne<RGBAOptions>): 
     ] as const
 }
 
+/** 
+ * Create a highlight color transform that modifies material colors using hue, saturation and lightness.
+ * @param color New material hue, saturation and lightness modifier with optional alpha.
+ */
 export function createHSLATransformHighlight(options: AtLeastOne<HSLAOptions>): RGBATransform {
     const [ls, lo] = normalizeLinearTransform(options.lightness);
     const [as, ao] = normalizeLinearTransform(options.opacity);

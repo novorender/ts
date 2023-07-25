@@ -135,7 +135,7 @@ class BackgroundModuleContext implements RenderModuleContext {
                 },
             });
             const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
-            context["addRenderStatistics"](stats);
+            context.addRenderStatistics(stats);
         } else {
             glClear(gl, { kind: "COLOR", drawBuffer: 0, color: clearColor });
         }

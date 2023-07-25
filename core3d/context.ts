@@ -14,17 +14,27 @@ import type { DeviceProfile } from "./device";
 import { orthoNormalBasisMatrixFromPlane } from "./util";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
+/** The view specific context for rendering and picking.
+ * 
+ * 
+ */
+
+
 export class RenderContext {
+    /** WebGL2 render context associated with this object. */
+    readonly gl: WebGL2RenderingContext;
+    /** WebGL common GLSL code header used across shaders. */
+    readonly commonChunk: string;
+    /** WebGL basic fallback IBL textures to use while loading proper IBL textures. */
+    readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
+
     private static defaultModules: readonly RenderModule[] | undefined;
     private modules: readonly RenderModuleContext[] | undefined;
     private cameraUniformsData;
     private clippingUniformsData;
     private outlinesUniformsData;
-    protected localSpaceTranslation = vec3.create() as ReadonlyVec3;
+    private localSpaceTranslation = vec3.create() as ReadonlyVec3;
     private readonly asyncPrograms: AsyncProgramInfo[] = [];
-    readonly gl: WebGL2RenderingContext;
-    readonly commonChunk: string;
-    readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
     private readonly resourceBins = new Set<ResourceBin>();
     private readonly defaultResourceBin;
     private readonly iblResourceBin;
@@ -58,26 +68,56 @@ export class RenderContext {
     private viewWorldMatrixLastPoll = mat4.create();
 
     // constant gl resources
+    /** WebGL uniform buffer for camera related uniforms. */
     readonly cameraUniforms: WebGLBuffer;
+    /** WebGL uniform buffer for clipping related uniforms. */
     readonly clippingUniforms: WebGLBuffer;
+    /** WebGL uniform buffer for outline related uniforms. */
     readonly outlineUniforms: WebGLBuffer;
+    /** WebGL GGX/PBR shading lookup table texture. */
     readonly lut_ggx: WebGLTexture;
+    /** WebGL Sampler used to sample mipmapped diffuse IBL texture. */
     readonly samplerMip: WebGLSampler; // use to read diffuse texture
+    /** WebGL Sampler used to sample other, non-mipmapped IBL textures. */
     readonly samplerSingle: WebGLSampler; // use to read the other textures
 
     // shared mutable state
+    /** {@link RenderState} used to render the previous frame, if any. */
     prevState: DerivedRenderState | undefined;
-    changed = true; // flag to force a re-render when internal render module state has changed, e.g. on download complete.
+    /** Set to true to force a re-render when state not contained in {@link RenderState} has changed, e.g. download complete etc. */
+    changed = true;
+    /** @internal */
     pause = false; // true to freeze all module updates, e.g. downloading of new geometry etc.
-    buffers: RenderBuffers = undefined!; // output render buffers. will be set on first render as part of resize.
+    /** WebGL render and pick buffers
+     * @remarks
+     * Note that these buffers will be recreated whenever the {@link RenderState.output} size changes.
+     */
+    buffers: RenderBuffers = undefined!;
+
+    /** WebGL textures used for image based lighting ({@link https://en.wikipedia.org/wiki/Image-based_lighting | IBL}).
+     * @remarks
+     * Note that these buffers will be changed by the background module when download of the specified {@link RenderState.background.url} IBL textures completes.
+     * 
+     * The process to create the textures are similar to that of {@link https://github.com/KhronosGroup/glTF-IBL-Sampler}/
+     */
     iblTextures: { // these are changed by the background module, once download is complete
-        readonly diffuse: WebGLTexture; // irradiance cubemap
-        readonly specular: WebGLTexture; // radiance cubemap
-        readonly numMipMaps: number; // # of radiance/specular mip map levels.
+        /** WebGL cubemap texture containing the irradiance/diffuse values of current IBL environment. */
+        readonly diffuse: WebGLTexture;
+        /** WebGL cubemap texture containing the radiance/specular values of current IBL environment. */
+        readonly specular: WebGLTexture;
+        /** # mip maps in current specular texture. */
+        readonly numMipMaps: number;
+        /** # True if these are the default IBL textures. */
         readonly default: boolean;
     };
+    /** Flag to indicate an idle frame.
+     * @remarks
+     * Idle frames occurs after the camera stops moving.
+     * Setting this flag to true is used to increase render quality when frame rate is not as important.
+     */
     isIdleFrame = false;
 
+    /** @internal */
     constructor(readonly deviceProfile: DeviceProfile, readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TextureImageSource, options?: WebGLContextAttributes) {
         // init gl context
         const gl = canvas.getContext("webgl2", options);
@@ -150,6 +190,13 @@ export class RenderContext {
         this.outlineUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.outlinesUniformsData.buffer.byteLength });
     }
 
+    /** Initialize render context with specified render modules.
+     * @remarks
+     * The default/built-in render modules can be retrieved using {@link createDefaultModules}.
+     * These will be used if no modules are specified.
+     * Developers may introduce their own render modules here.
+     * Note that the order of the modules matters, as this is the order by which they will be rendered.
+     */
     async init(modules?: readonly RenderModule[]) {
         // initialize modules
         if (!modules) {
@@ -196,6 +243,12 @@ export class RenderContext {
         pollAsyncPrograms();
     }
 
+    /**
+     * Dispose of the GPU resources used by this context, effectively destroying it and freeing up memory.
+     * @remarks
+     * Calling this method is optional as the garbage collection of the underlying WebGL render context will do the same thing.
+     * This may take some time, however, so calling this function is recommended if you plan to create a new context shortly thereafter.
+     */
     dispose() {
         const { buffers, modules, activeTimers, defaultResourceBin, iblResourceBin } = this;
         this.poll(); // finish async stuff
@@ -215,31 +268,43 @@ export class RenderContext {
         console.assert(this.resourceBins.size == 0);
     }
 
+    /** Return the current pixel width of the drawing buffer. */
     get width() {
         return this.gl.drawingBufferWidth;
     }
 
+    /** Return the current pixel height of the drawing buffer. */
     get height() {
         return this.gl.drawingBufferHeight;
     }
 
+    /** Query if pick buffers are valid.
+     * @remarks This could be useful for optimistic/non-async picking.
+     */
     isPickBuffersValid() {
         return this.pickBuffersValid;
     }
 
+    /** @internal */
     isRendering() {
         return this.prevState != undefined;
     }
 
+    /** Query whether the underlying WebGL render context is currently lost.
+     * @remarks
+     * This could occur when too many resources are allocated or when browser window is dragged across screens.
+     * Loss and restoration of WebGL contexts is supported by this API automatically.
+     */
     isContextLost() {
         return this.gl.isContextLost();
     }
 
+    /** Retrieve the current view related transformation matrices. */
     getViewMatrices() {
-        return { viewClipMatrix: this.viewClipMatrix, viewWorldMatrix: this.viewWorldMatrix, viewWorldMatrixNormal: this.viewWorldMatrixNormal };
+        return { viewClipMatrix: this.viewClipMatrix, viewWorldMatrix: this.viewWorldMatrix, viewWorldMatrixNormal: this.viewWorldMatrixNormal } as const;
     }
 
-    //* @internal */
+    /** @internal */
     drawBuffers(buffers: BufferFlags = (BufferFlags.all)): readonly (ColorAttachment | "NONE")[] {
         const activeBuffers = buffers; // & this.drawBuffersMask;
         return [
@@ -248,7 +313,7 @@ export class RenderContext {
         ] as const;
     }
 
-    //* @internal */
+    /** Helper function to update WebGL uniform buffer from proxies. */
     updateUniformBuffer(uniformBuffer: WebGLBuffer, proxy: UniformsProxy) {
         if (!proxy.dirtyRange.isEmpty) {
             const { begin, end } = proxy.dirtyRange;
@@ -257,7 +322,7 @@ export class RenderContext {
         }
     }
 
-    //* @internal */
+    /** Explicitly update WebGL IBL textures from specified parameters. */
     updateIBLTextures(params: { readonly diffuse: TextureParamsCubeUncompressed, readonly specular: TextureParamsCubeUncompressedMipMapped } | null) {
         const { iblResourceBin } = this;
         iblResourceBin.deleteAll();
@@ -279,7 +344,7 @@ export class RenderContext {
         }
     }
 
-    //* @internal */
+    /** Helper function to check for changes in render state. */
     hasStateChanged(state: Partial<DerivedRenderState>) {
         const { prevState } = this;
         let changed = false;
@@ -294,12 +359,12 @@ export class RenderContext {
         return changed;
     }
 
-    //* @internal */
+    /** Create a new named resource bin. */
     resourceBin(name: string) {
         return ResourceBin["create"](this.gl, name, this.resourceBins);
     }
 
-    //* @internal */
+    /** Compile WebGL/GLSL shader program asynchronously. */
     makeProgramAsync(resourceBin: ResourceBin, params: AsyncProgramParams) {
         const { gl, commonChunk } = this;
         const { vertexShader, fragmentShader } = params;
@@ -361,11 +426,11 @@ export class RenderContext {
         statistics.lines = 0;
         statistics.triangles = 0;
         statistics.drawCalls = 0;
-        this.statistics.primitives = 0;
+        statistics.primitives = 0;
     }
 
-    //* @internal */
-    protected addRenderStatistics(stats: DrawStatistics, drawCalls = 1) {
+    /** @internal */
+    addRenderStatistics(stats: DrawStatistics, drawCalls = 1) {
         const { statistics } = this;
         statistics.points += stats.points;
         statistics.lines += stats.lines;
@@ -373,12 +438,13 @@ export class RenderContext {
         statistics.drawCalls += drawCalls;
     }
 
-    protected addLoadStatistics(numPrimitives: number) {
+    /** @internal */
+    addLoadStatistics(numPrimitives: number) {
         this.statistics.primitives += numPrimitives;
     }
 
-    //* @internal */
-    protected contextLost() {
+    /** @internal */
+    contextLost() {
         const { modules } = this;
         if (modules) {
             for (const module of modules) {
@@ -387,7 +453,7 @@ export class RenderContext {
         }
     }
 
-    //* @internal */
+    /** @internal */
     emulateLostContext(value: "lose" | "restore") {
         const ext = glExtensions(this.gl).loseContext;
         if (ext) {
@@ -399,6 +465,7 @@ export class RenderContext {
         }
     }
 
+    /** Poll the status of WebGL pick fences and timers and resolve associated promises when possible. */
     public poll() {
         this.buffers?.pollPickFence();
         this.viewClipMatrixLastPoll = mat4.clone(this.viewClipMatrix);
@@ -423,6 +490,10 @@ export class RenderContext {
         }
     }
 
+    /** Wait for the next frame to be ready for rendering.
+     * @param context render context to wait for, if any.
+     * @remarks Use this function instead of requestAnimationFrame()!
+     */
     public static nextFrame(context: RenderContext | undefined): Promise<number> {
         return new Promise<number>((resolve) => {
             requestAnimationFrame((time) => {
@@ -439,7 +510,12 @@ export class RenderContext {
         });
     }
 
-    public async render(state: RenderState) {
+    /**
+     * Render a new frame using the specified render state.
+     * @param state An object describing what the frame should look like.
+     * @returns A promise to the performance related statistics involved in rendering this frame.
+     */
+    public async render(state: RenderState): Promise<RenderStatistics> {
         if (!this.modules) {
             throw new Error("Context has not been initialized!");
         }
@@ -584,7 +660,7 @@ export class RenderContext {
             },
             frameInterval,
             ...stats
-        } as const;
+        } as const satisfies RenderStatistics;
     }
 
     //* @internal */
@@ -775,6 +851,13 @@ export class RenderContext {
         return samples;
     }
 
+    /**
+     * Pick information about underlying object and geometry.
+     * @param x Center x coordinate in CSS pixels.
+     * @param y Center y coordinate in CSS pixels.
+     * @param options More details of pick operation.
+     * @returns A set of pick samples of the specified sample disc.
+     */
     async pick(x: number, y: number, options?: PickOptions): Promise<PickSample[]> {
         const sampleDiscRadius = options?.sampleDiscRadius ?? 0;
         const callAsync = options?.async ?? true;
@@ -800,37 +883,63 @@ function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
 }
 
+/**
+ * Pick Sample information 
+ */
 export interface PickSample {
-    // relative x/y pixel (not css pixel) coordinate from pick center.
+    /** relative x pixel offset (not css pixel) from pick center. */
     readonly x: number;
+    /** relative y pixel offset (not css pixel) from pick center. */
     readonly y: number;
-    // position and normals are in world space.
+    /** World space position of underlying pixel. */
     readonly position: ReadonlyVec3;
+    /** World space normal of underlying pixel. */
     readonly normal: ReadonlyVec3;
-    readonly normalVS?: ReadonlyVec3;
+    /** The object id/index of underlying pixel. */
     readonly objectId: number;
+    /** The spatial deviation of underlying pixel, if any.
+     * @remarks This only applies to point clouds with precomputed deviation data.
+     */
     readonly deviation?: number;
+    /** The depth/distance from the view plane. */
     readonly depth: number;
-    readonly isEdge?: boolean;
+
+    // Sigve: Please don't pollute this interface with derived properties. Use "extends" in a new interface!
+    // readonly normalVS?: ReadonlyVec3;
+    // readonly isEdge?: boolean;
 };
 
+/** Extra pick options. */
 export interface PickOptions {
+    /** The radius of the sample disc (0 yields a single pixel). */
     readonly sampleDiscRadius?: number,
+    /** True to wait for the pick buffers to be available, false to return whatever is in the current pick buffer synchronously.
+     * @remarks The latter option is more error prone, but useful for e.g. mouse hover operations.
+     */
     readonly async?: boolean;
+    /** @internal (related to adreno bug?) */
     readonly pickCameraPlane?: boolean;
 }
 
+/** Parameters for asynchronous shader compilation and linking. */
 export interface AsyncProgramParams {
+    /** Common GLSL header information to be inserted before the body code. */
     readonly header?: Partial<ShaderHeaderParams>;
+    /** The vertex shader. */
     readonly vertexShader: string;
+    /** The fragment shader (optional with transform feedback shaders). */
     readonly fragmentShader?: string;
-    // pre-link bindings
+    /** The names of the vertex attributes to be bound prior to linking using gl.bindAttribLocation(). */
     readonly attributes?: readonly string[]; // The names of the vertex attributes to be bound using gl.bindAttribLocation().
-    readonly uniformBufferBlocks?: readonly string[]; // The names of the shader uniform blocks, which will be bound to the index in which the name appears in this array using gl.uniformBlockBinding().
-    // post-link bindings
+    /** The names of the shader uniform blocks to be bound prior to linking using gl.uniformBlockBinding(), in the order which they appear */
+    readonly uniformBufferBlocks?: readonly string[];
+    /** Texture uniforms to be bound post-linking. */
     readonly textureUniforms?: readonly string[]; // Texture uniforms will be bound to the index in which they appear in the name array.
+    /** Transform feedback buffers to be bound post-linking. */
     readonly transformFeedback?: {
+        /** Should output attributes be written into a single interleaved buffer or separate buffers? */
         readonly bufferMode: "INTERLEAVED_ATTRIBS" | "SEPARATE_ATTRIBS";
+        /** Name of output attribute names (varyings). */
         readonly varyings: readonly string[];
     };
 }
@@ -843,4 +952,32 @@ interface AsyncProgramInfo {
     readonly reject: (reason: any) => void;
 }
 
-export type RenderStatistics = Awaited<ReturnType<RenderContext["render"]>>;
+/** Render frame performance and resource usage statistics. */
+export interface RenderStatistics {
+    /** Estimated # bytes used by WebGL buffers for this frame. */
+    readonly bufferBytes: number;
+    /** Estimated # bytes uses by WebGL textures for this frame. */
+    readonly textureBytes: number;
+    /** # of points drawn in this frame. */
+    readonly points: number;
+    /** # of lines drawn in this frame. */
+    readonly lines: number;
+    /** # of triangles drawn in this frame. */
+    readonly triangles: number;
+    /** # of draw calls in this frame. */
+    readonly drawCalls: number;
+    /** # of primitives (points+lines+triangles) drawn by static geometry for this frame. */
+    readonly primitives: number;
+    /** Time spent in the main thread. */
+    readonly cpuTime: {
+        /** # CPU milliseconds spent rendering. */
+        readonly draw: number;
+    }
+    /** Time spent in the GPU. */
+    readonly gpuTime: {
+        /** # GPU milliseconds spent rendering, if supported by driver. */
+        readonly draw: number | undefined;
+    }
+    /** Effective interval in milliseconds since last frame was drawn. */
+    readonly frameInterval: number;
+};

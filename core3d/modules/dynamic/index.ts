@@ -174,7 +174,7 @@ class DynamicModuleContext implements RenderModuleContext {
             const params = { ...geometry.drawParams, kind, instanceCount: object.numInstances } as (DrawParamsArraysInstanced | DrawParamsElementsInstanced);
             const stats = glDraw(gl, params);
             gl.bindVertexArray(null);
-            context["addRenderStatistics"](stats);
+            context.addRenderStatistics(stats);
         }
 
         for (let i = 0; i < 4; i++) {

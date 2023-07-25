@@ -16,11 +16,23 @@ pick buffer layout
   linear_depth f32
 */
 
+
+/**
+ * Set of buffers uses for rendering and pick.
+ * @remarks
+ * These buffers are only useful for advanced developers who aim to extend this API with their own custom 3D module.
+ * 
+ */
 export class RenderBuffers {
+    /** Flag to indicate the CPU/read buffers needs to be updated. */
     readBuffersNeedUpdate = true;
+    /** Texture resources. */
     readonly textures;
+    /** Renderbuffer resources. */
     readonly renderBuffers;
+    /** Frame buffer resources. */
     readonly frameBuffers;
+    /** CPU/JS copy of pick buffers. */
     readonly readBuffers;
     private typedArrays;
     private pickFence: {
@@ -28,6 +40,7 @@ export class RenderBuffers {
         readonly promises: { readonly resolve: () => void, readonly reject: (reason: string) => void }[],
     } | undefined;
 
+    /** @internal */
     constructor(readonly gl: WebGL2RenderingContext, readonly width: number, readonly height: number, readonly samples: number, readonly resourceBin: ResourceBin) {
         const textures = this.textures = {
             // color: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "RGBA16F", type: "HALF_FLOAT", image: null }),
@@ -72,6 +85,7 @@ export class RenderBuffers {
         } as const;
     }
 
+    /** @internal */
     resolveMSAA() {
         const { gl, frameBuffers, width, height } = this;
         const { colorMSAA, color } = frameBuffers;
@@ -81,6 +95,7 @@ export class RenderBuffers {
         }
     }
 
+    /** @internal */
     invalidate(frameBuffer: keyof RenderBuffers["frameBuffers"], buffers: BufferFlags) {
         const { gl, frameBuffers } = this;
         var color = (buffers & BufferFlags.color) != 0;
@@ -99,6 +114,7 @@ export class RenderBuffers {
         });
     }
 
+    /** @internal */
     async pickBuffers() {
         if (this.readBuffersNeedUpdate && !this.pickFence) {
             const { gl } = this;
@@ -119,11 +135,13 @@ export class RenderBuffers {
         }
     }
 
+    /** @internal */
     dispose() {
         this.deletePickFence();
         this.resourceBin.dispose();
     }
 
+    /** @internal */
     pollPickFence() {
         const { gl, pickFence, readBuffers, typedArrays } = this;
         if (pickFence) {
@@ -149,6 +167,7 @@ export class RenderBuffers {
         }
     }
 
+    /** @internal */
     private deletePickFence() {
         this.gl.deleteSync(this.pickFence?.sync ?? null);
         this.pickFence = undefined;

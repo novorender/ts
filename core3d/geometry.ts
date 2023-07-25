@@ -15,6 +15,7 @@ const defaultInstance: RenderStateDynamicInstance = {
     position: vec3.create(),
 };
 
+/** @internal */
 export function createRandomInstances(count = 1, radius?: number) {
     const instances: RenderStateDynamicInstance[] = [];
     const r = radius ?? count <= 1 ? 0 : Math.pow(count, 1 / 3) * 2;
@@ -32,6 +33,7 @@ export function createRandomInstances(count = 1, radius?: number) {
     return instances;
 }
 
+/** @internal */
 export function createTestCube(): RenderStateDynamicObject {
     const vertices = createCubeVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
     const indices = createCubeIndices();
@@ -99,6 +101,7 @@ function createCubeIndices() {
     ]);
 }
 
+/** @internal */
 export function createTestSphere(detail = 0): RenderStateDynamicObject {
     const radius = 1;
     const { positionBuffer, normalBuffer, texCoordBuffer } = icosahedron(radius, detail);

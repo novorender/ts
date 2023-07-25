@@ -5,6 +5,7 @@ function index(from: CoordSpace, to: CoordSpace): number {
     return from * 3 + to;
 }
 
+/** @internal */
 export function matricesFromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }): Matrices {
     const { camera, output } = state;
     const { width, height } = output;
