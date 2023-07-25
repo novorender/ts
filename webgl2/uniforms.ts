@@ -119,7 +119,7 @@ export function glUBOProxy<const T extends Record<string, UniformTypes>>(values:
 
         const set =
             type == "bool" ? (value: boolean) => {
-                view[offsets[0]] = value ? 0 : -1;
+                view[offsets[0]] = value ? 1 : 0;
                 dirtyRange.expand(begin, end);
             } : type == "int" || type == "uint" || type == "float" ? (value: number) => {
                 validate(value);
