@@ -9,6 +9,23 @@ export type MutableGridState = Partial<Mutable<RenderStateGrid>>;
 
 // this function will create a copy where unchanged properties have same identity (=== operator yields true)
 // use this to quickly check for changes.
+
+/**
+ * Create a new copy of render state with specified modifications.
+ * @param state The baseline render state.
+ * @param changes The changes to apply to the baseline state.
+ * @returns A new render state with all the changes applied.
+ * @remarks
+ * This function helps you modify render state in an immutable fashion,
+ * which is key for correct and efficient render updates.
+ * More specifically, it leaves all the unchanged sub objects of the returned render state alone.
+ * This enables checking for changes using {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Strict_equality | strict equality}.
+ * Making unnecessary copies of unchanged sub objects will reduce render/update performance.
+ * 
+ * This function also performs some basic validation of the new state changes, at a slight performance cost.
+ * To mitigate this overhead, accumulating all the changes for a frame into a single object may be beneficial.
+ * The {@link mergeRecursive} function may be useful in for this.
+ */
 export function modifyRenderState(state: RenderState, changes: RenderStateChanges): RenderState {
     const newState = mergeRecursive(state, changes) as RenderState;
     if (changes.output) {
@@ -20,6 +37,14 @@ export function modifyRenderState(state: RenderState, changes: RenderStateChange
     return newState;
 }
 
+/**
+ * Utility function for merging the properties of two objects recursively
+ * @param original Original, baseline object.
+ * @param changes Changes to be applied to baseline object.
+ * @returns A clone of the original with all the changes applied.
+ * @remarks
+ * This function is similar to {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign | Object.assign}, only recursive.
+ */
 export function mergeRecursive(original: any, changes: any) {
     const clone = { ...original };
     for (const key in changes) {

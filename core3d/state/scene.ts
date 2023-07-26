@@ -1,16 +1,24 @@
 import type { ReadonlyVec3, ReadonlyMat4 } from "gl-matrix";
+import type { downloadScene } from "../scene";
 
+/** Static, streamable geometry render state.
+ * @remarks
+ * Any change to this state will trigger a complete reload of the streamable scene.
+ */
 export interface RenderStateScene {
+    /** Base url whence the scene was downloaded. */
     readonly url: string;
+    /** @internal. */
     readonly config: SceneConfig;
+    /** Flags for whether to hide/filter various kinds of geometry. */
     readonly hide?: RenderStateStaticGeometryKinds;
 }
 
 /** Axis-aligned bounding box */
 export interface AABB {
-    /** minimum coordinates */
+    /** Minimum coordinates. */
     readonly min: ReadonlyVec3;
-    /** maximum coordinates */
+    /** Maximum coordinates. */
     readonly max: ReadonlyVec3;
 }
 
@@ -22,8 +30,10 @@ export interface BoundingSphere {
     readonly radius: number;
 }
 
+/** @internal */
 export type Base64String = string;
 
+/** @internal */
 export interface MaterialProperties {
     readonly diffuse: {
         readonly red: Base64String;
@@ -39,14 +49,21 @@ export interface MaterialProperties {
     readonly shininess: Base64String;
 }
 
+/** Flags for what types of geometry to render or not. */
 export interface RenderStateStaticGeometryKinds {
+    /** Whether to render terrain geometry. */
     readonly terrain?: boolean,
+    /** Whether to render (non-terrain) triangles. */
     readonly triangles?: boolean,
+    /** Whether to render lines. */
     readonly lines?: boolean,
+    /** Whether to render point (clouds). */
     readonly points?: boolean,
+    /** Whether to render document geometry, e.g. rendered PDF. */
     readonly documents?: boolean,
 };
 
+/** @internal */
 export interface SceneConfig {
     readonly kind: "octree";
     readonly id: string;

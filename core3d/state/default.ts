@@ -1,5 +1,6 @@
 import { type RenderState, TonemappingMode } from ".";
 
+/** Create a default render state. */
 export function defaultRenderState(): RenderState {
     const state: RenderState = {
         output: {
