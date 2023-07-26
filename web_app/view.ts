@@ -112,6 +112,32 @@ export abstract class View {
         return this._statistics;
     }
 
+    isTopDown() {
+        const { stateChanges, renderState } = this;
+        const rot = (stateChanges?.camera?.rotation ?? renderState.camera.rotation) as ReadonlyQuat;
+        const mat = mat3.fromQuat(mat3.create(), rot);
+        return Math.abs(mat[8]) > 0.98;
+    }
+
+    worldPositionFromPixelPosition(x: number, y: number) {
+        const { renderContext, canvas } = this;
+        const { width, height } = this.renderState.output;
+        if (renderContext) {
+            const rect = canvas.getBoundingClientRect(); // dim in css pixels
+            const cssWidth = rect.width;
+            const cssHeight = rect.height;
+            const px = Math.min(Math.max(0, Math.round(x / cssWidth * width)), width);
+            const py = Math.min(Math.max(0, Math.round((1 - (y + 0.5) / cssHeight) * height)), height);
+            const xCS = ((px + 0.5) / width) * 2 - 1;
+            const yCS = ((py + 0.5) / height) * 2 - 1;
+            const { viewClipMatrix, viewWorldMatrix } = renderContext.getViewMatrices();
+            const posVS = vec3.fromValues((xCS / viewClipMatrix[0]), (yCS / viewClipMatrix[5]), 0);
+            const pos = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrix);
+            return vec3.fromValues(pos[0], -pos[2], pos[1]);
+        }
+        return undefined;
+    }
+
     // changing device profile will recreate the entire renderContext, so use with caution!
     get deviceProfile() { return this._deviceProfile; }
     set deviceProfile(value: DeviceProfile) {
@@ -235,7 +261,7 @@ export abstract class View {
         const prevState = activeController.serialize(true /* include derived properties as well */);
         activeController = this.activeController = controllers[kind];
         const { position, rotation, pivot, fovMeters } = prevState;
-        activeController.init({ kind, position: initState?.position ?? position, rotation: initState?.rotation ?? rotation, pivot, distance, fovMeters: initState?.fov ?? (kind != "panorama" ? fovMeters : undefined)});
+        activeController.init({ kind, position: initState?.position ?? position, rotation: initState?.rotation ?? rotation, pivot, distance, fovMeters: initState?.fov ?? (kind != "panorama" ? fovMeters : undefined) });
         const changes = activeController.stateChanges();
         this.modifyRenderState({ camera: changes });
     }
