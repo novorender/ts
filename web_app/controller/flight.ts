@@ -49,6 +49,8 @@ export class FlightController extends BaseController {
         proportionalCameraSpeed: { min: 0.2, max: 1000 }
     };
 
+    protected arrowKeyScale = 0.4;
+
     override kind = "flight";
     override projection = "pinhole" as const;
     override changed = false;
@@ -183,9 +185,9 @@ export class FlightController extends BaseController {
     }
 
     protected getTransformations(): CameraTransformations {
-        const { axes } = this;
-        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_1_move_y;
-        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_1_move_x;
+        const { axes, arrowKeyScale } = this;
+        const rotX = -axes.keyboard_arrow_up_down * arrowKeyScale - axes.mouse_lmb_move_y + axes.touch_1_move_y;
+        const rotY = -axes.keyboard_arrow_left_right * arrowKeyScale - axes.mouse_lmb_move_x + axes.touch_1_move_x;
         const pivotX = -axes.mouse_rmb_move_y + -axes.touch_3_move_y;
         const pivotY = -axes.mouse_rmb_move_x + -axes.touch_3_move_x;
         const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
@@ -364,9 +366,9 @@ export class CadMiddlePanController extends FlightController {
     }
 
     override getTransformations(): CameraTransformations {
-        const { axes } = this;
-        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_rmb_move_y + axes.touch_3_move_y;
-        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_rmb_move_x + axes.touch_3_move_x;
+        const { axes, arrowKeyScale } = this;
+        const rotX = -axes.keyboard_arrow_up_down * arrowKeyScale - axes.mouse_rmb_move_y + axes.touch_3_move_y;
+        const rotY = -axes.keyboard_arrow_left_right * arrowKeyScale - axes.mouse_rmb_move_x + axes.touch_3_move_x;
         const pivotX = -axes.mouse_lmb_move_y + -axes.touch_1_move_y;
         const pivotY = -axes.mouse_lmb_move_x + -axes.touch_1_move_x;
         const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
@@ -392,9 +394,9 @@ export class CadRightPanController extends FlightController {
     }
 
     override getTransformations(): CameraTransformations {
-        const { axes } = this;
-        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_mmb_move_y + axes.touch_3_move_y;
-        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_mmb_move_x + axes.touch_3_move_x;
+        const { axes, arrowKeyScale } = this;
+        const rotX = -axes.keyboard_arrow_up_down * arrowKeyScale - axes.mouse_mmb_move_y + axes.touch_3_move_y;
+        const rotY = -axes.keyboard_arrow_left_right * arrowKeyScale - axes.mouse_mmb_move_x + axes.touch_3_move_x;
         const pivotX = -axes.mouse_lmb_move_y + -axes.touch_1_move_y;
         const pivotY = -axes.mouse_lmb_move_x + -axes.touch_1_move_x;
         const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
@@ -420,9 +422,9 @@ export class SpecialFlightController extends FlightController {
     }
 
     override getTransformations(): CameraTransformations {
-        const { axes } = this;
-        const rotX = -axes.keyboard_arrow_up_down / 5 - axes.mouse_rmb_move_y + axes.touch_3_move_y;
-        const rotY = -axes.keyboard_arrow_left_right / 5 - axes.mouse_rmb_move_x + axes.touch_3_move_x;
+        const { axes, arrowKeyScale } = this;
+        const rotX = -axes.keyboard_arrow_up_down * arrowKeyScale - axes.mouse_rmb_move_y + axes.touch_3_move_y;
+        const rotY = -axes.keyboard_arrow_left_right * arrowKeyScale - axes.mouse_rmb_move_x + axes.touch_3_move_x;
         const pivotX = -axes.mouse_mmb_move_y + -axes.touch_1_move_y;
         const pivotY = -axes.mouse_mmb_move_x + -axes.touch_1_move_x;
         const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
