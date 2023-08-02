@@ -14,7 +14,6 @@ export abstract class View {
     protected renderStateCad: RenderState;
     protected prevRenderStateCad: RenderState | undefined;
     private stateChanges: RenderStateChanges | undefined;
-    private screenshot: ((img: string) => void) | undefined;
 
     //* @internal */
     controllers;
@@ -368,15 +367,11 @@ export abstract class View {
                     this.stateChanges = undefined;
                 }
 
-                const { renderStateGL, screenshot } = this;
-                if (prevState !== renderStateGL || renderContext.changed || screenshot) {
+                const { renderStateGL } = this;
+                if (prevState !== renderStateGL || renderContext.changed) {
                     prevState = renderStateGL;
                     this.render?.(isIdleFrame);
                     const statsPromise = renderContext.render(renderStateGL);
-                    if (screenshot) {
-                        this.screenshot = undefined;
-                        screenshot(this.canvas.toDataURL());
-                    }
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
                     });

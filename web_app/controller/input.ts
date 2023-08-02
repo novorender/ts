@@ -121,24 +121,18 @@ export class ControllerInput {
         return (performance.now() - this._mouseWheelLastActive) < 100
     }
 
-    private updateModifierKeys(e: ModiferKeyEvent, pressed: boolean) {
+    private updateModifierKeys(e: ModiferKeyEvent) {
         const { _keys } = this;
-        if (e.altKey) {
-            pressed ? _keys.add("Alt") : _keys.delete("Alt");
-        }
-        if (e.shiftKey) {
-            pressed ? _keys.add("Shift") : _keys.delete("Shift");
-        }
-        if (e.ctrlKey) {
-            pressed ? _keys.add("Control") : _keys.delete("Control");
-        }
+        e.altKey ? _keys.add("Alt") : _keys.delete("Alt");
+        e.shiftKey ? _keys.add("Shift") : _keys.delete("Shift");
+        e.ctrlKey ? _keys.add("Control") : _keys.delete("Control");
     }
 
     private keydown = (e: KeyboardEvent) => {
         if (ControllerInput.isGestureKey(e.code)) {
             e.preventDefault();
         }
-        this.updateModifierKeys(e, true);
+        this.updateModifierKeys(e);
         this._keys.add(e.code);
         this._zoomX = 0;
         this._zoomY = 0;
@@ -148,7 +142,7 @@ export class ControllerInput {
         if (ControllerInput.isGestureKey(e.code)) {
             e.preventDefault();
         }
-        this.updateModifierKeys(e, false);
+        this.updateModifierKeys(e);
         this._keys.delete(e.code);
     };
 
@@ -162,7 +156,7 @@ export class ControllerInput {
         this._mouseButtonDown = true;
         domElement.focus();
         e.preventDefault();
-        this.updateModifierKeys(e, true);
+        this.updateModifierKeys(e);
         this.callbacks?.mouseButtonChanged?.(e);
         await this.callbacks?.moveBegin?.(e);
         if (e.buttons & MouseButtons.forward) {
@@ -174,7 +168,7 @@ export class ControllerInput {
 
     private mouseup = async (e: MouseEvent) => {
         e.preventDefault();
-        this.updateModifierKeys(e, false);
+        this.updateModifierKeys(e);
         if ("exitPointerLock" in document) document.exitPointerLock();
         this.callbacks?.mouseButtonChanged?.(e);
         this._mouseButtonDown = false;
@@ -184,7 +178,7 @@ export class ControllerInput {
         const { axes } = this;
         this._zoomX = e.offsetX;
         this._zoomY = e.offsetY;
-        this.updateModifierKeys(e, true);
+        this.updateModifierKeys(e);
         await this.callbacks?.moveBegin?.(e);
         this._mouseWheelLastActive = performance.now();
         axes.mouse_wheel += e.deltaY;
@@ -193,7 +187,7 @@ export class ControllerInput {
     private mousemove = (e: MouseEvent) => {
         if (e.buttons < 1) return;
         if (Math.abs(e.movementX) > 100 || Math.abs(e.movementY) > 100) return;
-        this.updateModifierKeys(e, true);
+        this.updateModifierKeys(e);
         if (this._mouseButtonDown && this.usePointerLock) {
             (e.currentTarget as HTMLElement).requestPointerLock();
             this._mouseButtonDown = false;
