@@ -1,5 +1,5 @@
 import { glUpdateBuffer, type DrawParams, type VertexAttribute, type DrawParamsArraysMultiDraw, type DrawParamsElementsMultiDraw } from "webgl2";
-import { VertexAttribIndex, type MaterialType, type MeshDrawRange, type MeshObjectRange, type NodeGeometry, type Vertex, type VertexAttributeData, type VertexAttributes } from "./worker";
+import { type MaterialType, type MeshDrawRange, type MeshObjectRange, type NodeGeometry, type Vertex, type VertexAttributeData, type VertexAttributes } from "./worker";
 import { ResourceBin } from "core3d/resource";
 
 /** @internal */

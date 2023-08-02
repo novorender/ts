@@ -1,8 +1,6 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState, type UniformTypes } from "webgl2";
-import vertexShader from "./shader.vert";
-import fragmentShader from "./shader.frag";
 
 /** @internal */
 export class TonemapModule implements RenderModule {
@@ -24,6 +22,7 @@ export class TonemapModule implements RenderModule {
     }
 
     async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const { vertexShader, fragmentShader } = context.imports.shaders.tonemap.render;
         const bin = context.resourceBin("Tonemap");
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
         const sampler = bin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });

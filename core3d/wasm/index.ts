@@ -1,10 +1,5 @@
-import { float16Instance } from "./float16";
+import { type Float16Instance } from "./float16";
 
-export async function wasmInstance() {
-    const float16 = await float16Instance();
-    // other modules here...
-    const instance = { ...float16 };
-    return instance;
+/** The web assembly instance used by the render context. */
+export interface WasmInstance extends Float16Instance {
 }
-
-export type WasmInstance = Awaited<ReturnType<typeof wasmInstance>>;

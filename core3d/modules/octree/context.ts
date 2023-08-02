@@ -3,7 +3,7 @@ import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
 import { glClear, glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
-import { MaterialType } from "./worker";
+import { MaterialType } from "./worker/schema_2_0";
 import { getMultiDrawParams } from "./mesh";
 import { type ReadonlyVec3, vec3, vec4, type ReadonlyVec4 } from "gl-matrix";
 import { NodeLoader } from "./loader";
@@ -11,7 +11,6 @@ import { computeGradientColors, gradientRange } from "./gradient";
 // import { BufferFlags } from "@novorender/core3d/buffers";
 import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass } from "./module";
 import { Mutex } from "./mutex";
-import { useWorker } from "./worker";
 import { decodeBase64 } from "core3d/util";
 
 const enum UBO { camera, clipping, scene, node };
@@ -50,7 +49,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     highlightGeneration = 0;
 
     constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly uniforms: Uniforms, readonly resources: Resources) {
-        this.loader = new NodeLoader({ useWorker });
+        this.loader = new NodeLoader(renderContext.imports.loaderWorker);
         const maxObjects = 10_000_000;// TODO: Get from device profile?
         const maxByteLength = maxObjects + 4; // add four bytes for mutex
         //@ts-ignore (TS does not yet declare types for constructor options, although this is supported on both chrome and safari)

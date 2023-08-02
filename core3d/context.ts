@@ -1,25 +1,35 @@
-import { CoordSpace, TonemappingMode, createDefaultModules, type RGB } from "./";
-import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState } from "./";
-import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits, } from "webgl2";
-import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics, TextureImageSource } from "webgl2";
+import { CoordSpace, TonemappingMode, type RGB } from "./";
+import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports } from "./";
+import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits } from "webgl2";
+import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
 import type { WasmInstance } from "./wasm";
 import type { ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
 import { mat3, mat4, vec3, vec4 } from "gl-matrix";
-import commonShaderCore from "./common.glsl";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
 import { orthoNormalBasisMatrixFromPlane } from "./util";
+import { createDefaultModules } from "./modules/default";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
+
 /** The view specific context for rendering and picking.
+ * @remarks
+ * A render context describes a view into which a {@link RenderState} can be rendered.
+ * It is tightly bound to a HTML canvas and WebGL2RenderingContext.
+ * Consequently, it will be disposed if the gl context is lost and recreated when the gl context is restored.
  * 
+ * The render context must be {@link init | initialized} with an array of {@link RenderModule | render modules}.
+ * Unused modules may be removed and custom ones inserted here.
+ * Ordering the modules correctly is important as they are rendered in order.
+ * The {@link TonemapModule} should be last, as it will copy the HDR render buffers into the output canvas to make things visible.
  * 
+ * Features such as async picking and shader linking requires {@link poll} to be called at regular intervals,
+ * e.g. at the start of each frame.
+ * Otherwise the promises will never be resolved.
  */
-
-
 export class RenderContext {
     /** WebGL2 render context associated with this object. */
     readonly gl: WebGL2RenderingContext;
@@ -27,6 +37,8 @@ export class RenderContext {
     readonly commonChunk: string;
     /** WebGL basic fallback IBL textures to use while loading proper IBL textures. */
     readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
+    /** Web assembly instance. */
+    readonly wasm: WasmInstance;
 
     private static defaultModules: readonly RenderModule[] | undefined;
     private modules: readonly RenderModuleContext[] | undefined;
@@ -110,17 +122,19 @@ export class RenderContext {
         /** # True if these are the default IBL textures. */
         readonly default: boolean;
     };
-    /** Flag to indicate an idle frame.
-     * @remarks
-     * Idle frames occurs after the camera stops moving.
-     * Setting this flag to true is used to increase render quality when frame rate is not as important.
-     */
-    isIdleFrame = false;
 
     /** @internal */
-    constructor(readonly deviceProfile: DeviceProfile, readonly canvas: HTMLCanvasElement, readonly wasm: WasmInstance, lut_ggx: TextureImageSource, options?: WebGLContextAttributes) {
+    constructor(
+        /** The device profile use for this context. */
+        readonly deviceProfile: DeviceProfile,
+        /** The HTML canvas used for this context. */
+        readonly canvas: HTMLCanvasElement,
+        /** Imported resources. */
+        readonly imports: Core3DImports,
+        webGLOptions?: WebGLContextAttributes,
+    ) {
         // init gl context
-        const gl = canvas.getContext("webgl2", options);
+        const gl = canvas.getContext("webgl2", webGLOptions);
         if (!gl)
             throw new Error("Unable to create WebGL 2 context!");
         this.gl = gl;
@@ -132,11 +146,12 @@ export class RenderContext {
         if (provokingVertex) {
             provokingVertex.provokingVertexWEBGL(provokingVertex.FIRST_VERTEX_CONVENTION_WEBGL);
         }
-        this.commonChunk = commonShaderCore;
+        this.commonChunk = imports.shaders.common;
+        this.wasm = imports.wasmInstance;
 
         // ggx lookup texture and ibl samplers
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-        const lutParams = { kind: "TEXTURE_2D", internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: lut_ggx } as const;
+        const lutParams = { kind: "TEXTURE_2D", internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: imports.lutGGX } as const;
         this.lut_ggx = defaultBin.createTexture(lutParams);
         this.samplerSingle = defaultBin.createSampler({ minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         this.samplerMip = defaultBin.createSampler({ minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
@@ -285,11 +300,6 @@ export class RenderContext {
         return this.pickBuffersValid;
     }
 
-    /** @internal */
-    isRendering() {
-        return this.prevState != undefined;
-    }
-
     /** Query whether the underlying WebGL render context is currently lost.
      * @remarks
      * This could occur when too many resources are allocated or when browser window is dragged across screens.
@@ -297,11 +307,6 @@ export class RenderContext {
      */
     isContextLost() {
         return this.gl.isContextLost();
-    }
-
-    /** Retrieve the current view related transformation matrices. */
-    getViewMatrices() {
-        return { viewClipMatrix: this.viewClipMatrix, viewWorldMatrix: this.viewWorldMatrix, viewWorldMatrixNormal: this.viewWorldMatrixNormal } as const;
     }
 
     /** @internal */
@@ -361,7 +366,7 @@ export class RenderContext {
 
     /** Create a new named resource bin. */
     resourceBin(name: string) {
-        return ResourceBin["create"](this.gl, name, this.resourceBins);
+        return new ResourceBin(this.gl, name, this.resourceBins);
     }
 
     /** Compile WebGL/GLSL shader program asynchronously. */
@@ -904,7 +909,7 @@ export interface PickSample {
     /** The depth/distance from the view plane. */
     readonly depth: number;
 
-    // Sigve: Please don't pollute this interface with derived properties. Use "extends" in a new interface!
+    // Sigve: Please don't pollute this interface with derived properties. Extend this with a new interface!
     // readonly normalVS?: ReadonlyVec3;
     // readonly isEdge?: boolean;
 };
@@ -944,6 +949,7 @@ export interface AsyncProgramParams {
     };
 }
 
+/** @internal */
 interface AsyncProgramInfo {
     readonly program: WebGLProgram;
     readonly vertex: WebGLShader;

@@ -2,7 +2,6 @@ import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState, glTransformFeedback, type UniformTypes } from "webgl2";
 import { mat4, vec3, type ReadonlyVec3, vec4 } from "gl-matrix";
-import { shaders } from "./shaders";
 
 /** @internal */
 export class CubeModule implements RenderModule {
@@ -24,6 +23,7 @@ export class CubeModule implements RenderModule {
     }
 
     async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const shaders = context.imports.shaders.cube;
         const vertices = createVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
         const pos = createVertices((pos) => (pos));
         const indices = createIndices();

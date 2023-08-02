@@ -1,5 +1,5 @@
 import { glBlit, glInvalidateFrameBuffer, glReadPixels } from "webgl2";
-import { ResourceBin } from "./resource";
+import type { ResourceBin } from "./resource";
 
 export const enum BufferFlags {
     color = 0x01,
@@ -21,7 +21,6 @@ pick buffer layout
  * Set of buffers uses for rendering and pick.
  * @remarks
  * These buffers are only useful for advanced developers who aim to extend this API with their own custom 3D module.
- * 
  */
 export class RenderBuffers {
     /** Flag to indicate the CPU/read buffers needs to be updated. */

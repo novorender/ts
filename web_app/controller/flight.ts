@@ -49,7 +49,7 @@ export class FlightController extends BaseController {
         proportionalCameraSpeed: { min: 0.2, max: 1000 }
     };
 
-    override kind: string = "flight" as const;
+    override kind = "flight";
     override projection = "pinhole" as const;
     override changed = false;
     protected pivotButton: MouseButtons = MouseButtons.right;

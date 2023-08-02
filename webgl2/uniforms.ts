@@ -25,6 +25,15 @@ export function glGetUniformsInfo(gl: WebGL2RenderingContext, program: WebGLProg
     return uniformData as readonly UniformInfo[];
 }
 
+export function glGetUniformBlocks(gl: WebGL2RenderingContext, program: WebGLProgram) {
+    const numBlocks = gl.getProgramParameter(program, gl.ACTIVE_UNIFORM_BLOCKS);
+    const names: (string | null)[] = [];
+    for (let i = 0; i < numBlocks; i++) {
+        names[i] = gl.getActiveUniformBlockName(program, i);
+    }
+    return names;
+}
+
 export type UniformType =
     GL.FLOAT | GL.FLOAT_VEC2 | GL.FLOAT_VEC3 | GL.FLOAT_VEC4 |
     GL.INT | GL.INT_VEC2 | GL.INT_VEC3 | GL.INT_VEC4 |

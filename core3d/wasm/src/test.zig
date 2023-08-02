@@ -1,5 +1,5 @@
 const std = @import("std");
-const conv = @import("float16.zig");
+const conv = @import("main.zig");
 const testing = std.testing;
 
 test "float 16/32 conversions" {

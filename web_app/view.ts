@@ -1,5 +1,5 @@
 import { type ReadonlyVec3, vec3, type ReadonlyQuat, mat3 } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, type RenderStateClippingPlane, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports } from "core3d";
 import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadMiddlePanController, CadRightPanController, SpecialFlightController } from "./controller";
 import { flipState } from "./flip";
 
@@ -50,9 +50,9 @@ export abstract class View {
         this.resize();
     }
 
-    constructor(readonly canvas: HTMLCanvasElement, deviceProfile: DeviceProfile) {
+    public constructor(readonly canvas: HTMLCanvasElement, deviceProfile: DeviceProfile, imports: Core3DImports) {
         this._deviceProfile = deviceProfile;
-        this._setDeviceProfile = initCore3D(deviceProfile, canvas, this.setRenderContext);
+        this._setDeviceProfile = initCore3D(deviceProfile, canvas, imports, this.setRenderContext);
         this.renderStateGL = defaultRenderState();
         this.renderStateCad = this.createRenderState(this.renderStateGL);
 
@@ -81,7 +81,7 @@ export abstract class View {
         this.renderContext = undefined;
     }
 
-    updateChanges(changes: RenderStateChanges) {
+    private applyChanges(changes: RenderStateChanges) {
         this.prevRenderStateCad = this.renderStateCad;
         this.renderStateCad = mergeRecursive(this.renderStateCad, changes) as RenderState;
         flipState(changes, "CADToGL");
@@ -92,12 +92,6 @@ export abstract class View {
         const clone = structuredClone(state);
         flipState(clone, "GLToCAD");
         return clone;
-    }
-
-    async getScreenshot(): Promise<string> {
-        return new Promise((resolve) => {
-            this.screenshot = resolve;
-        })
     }
 
     get renderState() {
@@ -130,7 +124,8 @@ export abstract class View {
             const py = Math.min(Math.max(0, Math.round((1 - (y + 0.5) / cssHeight) * height)), height);
             const xCS = ((px + 0.5) / width) * 2 - 1;
             const yCS = ((py + 0.5) / height) * 2 - 1;
-            const { viewClipMatrix, viewWorldMatrix } = renderContext.getViewMatrices();
+            const viewClipMatrix = renderContext["viewClipMatrix"];
+            const viewWorldMatrix = renderContext["viewWorldMatrix"];
             const posVS = vec3.fromValues((xCS / viewClipMatrix[0]), (yCS / viewClipMatrix[5]), 0);
             const pos = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrix);
             return vec3.fromValues(pos[0], -pos[2], pos[1]);
@@ -145,7 +140,7 @@ export abstract class View {
         this._setDeviceProfile?.(value); // this will in turn trigger this.useDeviceProfile
     }
 
-    readonly setRenderContext = (context: RenderContext) => {
+    protected readonly setRenderContext = (context: RenderContext) => {
         this.renderContext = context;
         this.useDeviceProfile(this._deviceProfile);
     }
@@ -166,7 +161,7 @@ export abstract class View {
         height = Math.round(height * scale);
         const { output } = this.renderStateGL;
         if (width != output.width || height != output.height) {
-            this.updateChanges({ output: { width, height } });
+            this.applyChanges({ output: { width, height } });
         }
     }
 
@@ -207,6 +202,13 @@ export abstract class View {
         return scene.config;
     }
 
+    /**
+     * Query object and geometry information for given view coordinate.
+     * @param x Center x coordinate in css pixels.
+     * @param y Center y coordinate in css pixels.
+     * @param options Extra options.
+     * @returns 
+     */
     async pick(x: number, y: number, options?: PickOptions) {
         const context = this.renderContext;
         if (context) {
@@ -219,14 +221,13 @@ export abstract class View {
                     }
                     return a.depth < b.depth ? a : b
                 });
-                const { viewWorldMatrixNormal } = context.getViewMatrices();
-                const invNormalMatrix = mat3.invert(mat3.create(), viewWorldMatrixNormal);
+                const worldViewMatrixNormal = context.prevState?.matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World) ?? mat3.create();
                 const flippedSample = {
                     ...centerSample,
                     position: vec3.fromValues(centerSample.position[0], -centerSample.position[2], centerSample.position[1]),
                     normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1]),
                     isEdge: samples.length > 1 ? isEdge : undefined,
-                    normalVS: vec3.transformMat3(vec3.create(), centerSample.normal, invNormalMatrix)
+                    normalVS: vec3.transformMat3(vec3.create(), centerSample.normal, worldViewMatrixNormal)
                 }
                 return flippedSample;
             }
@@ -234,6 +235,12 @@ export abstract class View {
         return undefined;
     }
 
+    /**
+     * Switch to a new kind of camera controller.
+     * @param kind 
+     * @param initState 
+     * @param options 
+     */
     async switchCameraController(kind: string, initState?: { position?: ReadonlyVec3, rotation?: ReadonlyQuat, fov?: number }, options?: { autoInit?: boolean }) {
         const autoInit = options?.autoInit ?? false;
         function isControllerKind(kind: string, controllers: Object): kind is keyof View["controllers"] {
@@ -266,8 +273,7 @@ export abstract class View {
         this.modifyRenderState({ camera: changes });
     }
 
-    /** @internal */
-    dynamicResolutionScaling(frameIntervals: number[]) {
+    private dynamicResolutionScaling(frameIntervals: number[]) {
         const samples = 9;
         if (frameIntervals.length == samples) {
             const { deviceProfile } = this;
@@ -326,7 +332,6 @@ export abstract class View {
             const isIdleFrame = idleFrameTime > 500;
             if (renderContext && !renderContext.isContextLost()) {
                 renderContext.poll(); // poll for events, such as async reads and shader linking
-                renderContext.isIdleFrame = isIdleFrame;
 
                 if (isIdleFrame) { //increase resolution and detail bias on idleFrame
                     if (!wasIdle) {
@@ -335,7 +340,7 @@ export abstract class View {
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
                         wasIdle = true;
-                        if (pickRenderState && renderContext.isRendering()) {
+                        if (pickRenderState && renderContext.prevState != undefined) {
                             renderContext.renderPickBuffers();
                             pickRenderState = undefined;
                         }
@@ -359,7 +364,7 @@ export abstract class View {
                 this.animate?.(renderTime);
 
                 if (this.stateChanges) {
-                    this.updateChanges(this.stateChanges);
+                    this.applyChanges(this.stateChanges);
                     this.stateChanges = undefined;
                 }
 
@@ -396,9 +401,7 @@ export abstract class View {
     }
 }
 
-/** Background/IBL environment description
-  *  @public
-  */
+/** Background/IBL environment description */
 export interface EnvironmentDescription {
     /** Display name of environment */
     readonly name: string;
@@ -410,15 +413,18 @@ export interface EnvironmentDescription {
     readonly thumnbnailURL: string;
 }
 
-export interface AppState {
-    readonly msaa: number,
-    readonly quit: boolean,
-    controllerState: string
-}
-
+/** View related render statistics. */
 export interface ViewStatistics {
+    /** Effective resolution factor. */
     readonly resolution: number,
+
+    /** Effective detail bias factor. */
     readonly detailBias: number,
+
+    /** Effective frames per second, if available. */
     readonly fps?: number,
 }
+
+/** Type of camera controller. */
+export type CameraControllerType = keyof View["controllers"];
 

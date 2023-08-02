@@ -1,14 +1,5 @@
 import type { DerivedRenderState } from "../state";
-import { RenderContext } from "../context";
-import { BackgroundModule } from "./background";
-import { GridModule } from "./grid";
-import { OctreeModule } from "./octree";
-import { TonemapModule } from "./tonemap";
-import { CubeModule } from "./cube";
-import { ClippingModule } from "./clipping";
-import { WatermarkModule } from "./watermark";
-import { DynamicModule } from "./dynamic";
-import { ToonModule } from "./toon_outline";
+import type { RenderContext } from "../context";
 
 /** A render module factory object.
  * @remarks
@@ -59,19 +50,4 @@ export interface RenderModuleContext {
 
     /** Dispose of all GPU resources. */
     dispose(): void;
-}
-
-/** Return the default/built-in render modules in the order they should be rendered. */
-export function createDefaultModules() {
-    return [
-        new BackgroundModule(),
-        new CubeModule(),
-        new OctreeModule(),
-        new DynamicModule(),
-        new ToonModule(),
-        new GridModule(),
-        new ClippingModule(),
-        new WatermarkModule(),
-        new TonemapModule(),
-    ];
 }

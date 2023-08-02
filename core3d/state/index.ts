@@ -606,18 +606,17 @@ export interface RenderStateTonemapping {
  * @remarks
  * Toon shader is a deliberate misnomer of what is commonly referred to as {@link https://roystan.net/articles/outline-shader/ outline shader}.
  * It is a post-effect that is applied on the output pixels to help visualize geometric edges and contours.
- * Enabling it comes at a moderate to significant performance penalty, depending on your device.
- * It should thus be used sparingly, preferably only on idle frame, i.e. while the camera is not moving.
+ * Enabling it comes at a potentially significant performance penalty, depending on your device.
+ * It should thus be used sparingly, preferably only on idle frames, i.e. while the camera is not moving.
  */
 export interface RenderStateToonOutline {
     /** Whether to do render "toon" outlines or not. */
     readonly enabled: boolean;
     /** Color to use for edges and contours. */
     readonly color: RGB;
-    /** Only apply this shader when the camera is not moving. */
-    readonly onlyOnIdleFrame: boolean;
 }
 
+/** Pick related render state. */
 export interface RenderStatePick {
     /** The opacity/alpha minimum (inclusive) threshold at which to include a pixel in the pick output.
      * @public

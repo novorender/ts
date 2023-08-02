@@ -1,7 +1,7 @@
 import { glClear, glCreateProgram, glDraw, glState, glUniformLocations } from "webgl2";
 import { waitFrame, measure } from "./util";
 import { Benchmark } from "./benchmark";
-import { shaders } from "./shaders";
+import type { ShaderImports } from "core3d/shaders";
 
 /** A basic GPU point rate profiler. */
 export class PointrateProfiler {
@@ -9,7 +9,7 @@ export class PointrateProfiler {
     readonly uniforms;
 
     /** Create GPU resources using the gl context from the specified benchmark instance. */
-    constructor(readonly benchmark: Benchmark) {
+    constructor(readonly benchmark: Benchmark, shaders: ShaderImports["benchmark"]) {
         const { gl } = this.benchmark;
         this.program = glCreateProgram(gl, shaders.pointrate);
         this.uniforms = glUniformLocations(gl, this.program, ["color"]);

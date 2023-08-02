@@ -1,3 +1,4 @@
+import type { Shaders } from "../../shaders";
 import render_vert from "./render.vert";
 import render_frag from "./render.frag";
 import line_vert from "./line.vert";
@@ -6,10 +7,7 @@ import intersect_vert from "./intersect.vert";
 import debug_vert from "./debug.vert";
 import debug_frag from "./debug.frag";
 
-type Shaders = { readonly [P in string]: { readonly vertexShader: string; readonly fragmentShader?: string; } };
-
-/** @internal */
-export const shaders = {
+const shaders = {
     render: {
         vertexShader: render_vert,
         fragmentShader: render_frag,
@@ -26,3 +24,6 @@ export const shaders = {
         fragmentShader: debug_frag,
     },
 } as const satisfies Shaders;
+
+/** @internal */
+export default shaders;
