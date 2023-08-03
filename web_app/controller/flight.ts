@@ -304,7 +304,7 @@ export class FlightController extends BaseController {
             if (siceMoveDelay < 400) {  //Delay proportinal speed for better feeling on bad devices
                 scale = Math.min(scale, 60 + (siceMoveDelay * 0.5));
             }
-            const mouseWheelModifier = this.input.hasShift ? 0 : clamp(scale / 3, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
+            const mouseWheelModifier = this.input.hasShift ? 10 : clamp(scale / 3, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const mousePanModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const touchMovementModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
             const pinchModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
@@ -313,7 +313,7 @@ export class FlightController extends BaseController {
             }
         }
         return {
-            mouseWheelModifier: this.input.hasShift ? 0 : scale, mousePanModifier: scale, touchMovementModifier: scale, pinchModifier: scale, scale
+            mouseWheelModifier: this.input.hasShift ? 10 : scale, mousePanModifier: scale, touchMovementModifier: scale, pinchModifier: scale, scale
         }
     }
 
