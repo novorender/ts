@@ -1,6 +1,6 @@
 {
     "name": "@novorender/web_app",
-    "version": "0.1.33",
+    "version": "0.1.35",
     "description": "",
     "main": "./index.js",
     "typings": "./index.d.ts",

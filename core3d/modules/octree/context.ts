@@ -368,10 +368,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         }
                     }
                 }
-                if (mask) {
-                    rendered = true;
-                    nodes.push({ mask, node });
-                }
+                rendered = true;
+                nodes.push({ mask, node });
             }
             return rendered;
         }
@@ -595,7 +593,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { programs } = resources;
         const { data } = node;
         const prepass = pass == ShaderPass.pre;
-        if (mask && node.uniforms) {
+        if (node.uniforms) {
             gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms);
             for (const mesh of node.meshes) {
                 const { materialType } = mesh;
