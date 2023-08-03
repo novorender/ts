@@ -1,4 +1,4 @@
-import type { AtLeastOne, RGB, RGBA, RGBATransform } from "./state";
+import type { AtLeastOne, RGB, RGBA, RGBATransform } from "core3d/state";
 
 /** 
  * Create a highlight color transform that doesn't change colors.

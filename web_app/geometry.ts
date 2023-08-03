@@ -1,11 +1,11 @@
-import { mat4, type ReadonlyVec2, type ReadonlyVec3, vec2, vec3, quat } from "gl-matrix";
-import type { RenderStateDynamicGeometry, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicVertexAttributes } from "./state";
+import { type ReadonlyVec2, type ReadonlyVec3, vec2, vec3, quat } from "gl-matrix";
+import type { RenderState, RenderStateDynamicGeometry, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicVertexAttributes } from "core3d/state";
 
-const defaultMaterial: RenderStateDynamicMaterial = {
+const unlitMaterial: RenderStateDynamicMaterial = {
     kind: "unlit",
 };
 
-const testMaterial: RenderStateDynamicMaterial = {
+const defaultMaterial: RenderStateDynamicMaterial = {
     kind: "ggx",
     metallicFactor: 1,
     roughnessFactor: 0.1,
@@ -33,10 +33,20 @@ export function createRandomInstances(count = 1, radius?: number) {
     return instances;
 }
 
-/** @internal */
-export function createTestCube(): RenderStateDynamicObject {
+/**
+ * Create a simple cube mesh object.
+ * @param material The material to use, or undefined for default material.
+ * @example
+ * ```typescript
+ * const cube = createCubeObject();
+ * view.modifyRenderState({ dynamic: { objects: [cube] } });
+ * ```
+ * @beta
+ */
+export function createCubeObject(material?: RenderStateDynamicMaterial): RenderStateDynamicObject {
     const vertices = createCubeVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
     const indices = createCubeIndices();
+    material ??= defaultMaterial;
 
     const attributes = {
         position: { kind: "FLOAT_VEC3", buffer: vertices, byteStride: 36, byteOffset: 0 },
@@ -50,7 +60,7 @@ export function createTestCube(): RenderStateDynamicObject {
         indices,
     };
 
-    const primitive: RenderStateDynamicMeshPrimitive = { geometry, material: testMaterial };
+    const primitive: RenderStateDynamicMeshPrimitive = { geometry, material };
     const mesh: RenderStateDynamicMesh = { primitives: [primitive] };
     const instances = [defaultInstance];
     return { mesh, instances };
@@ -64,7 +74,6 @@ function createCubeVertices(pack: (position: ReadonlyVec3, normal: ReadonlyVec3,
             vec3[fx](pos, pos, x);
             vec3[fy](pos, pos, y);
             return pack(pos, normal, color);
-            // return [...pos, ...normal, ...color];
         }
         return [
             ...vert("sub", "sub"),
@@ -101,10 +110,23 @@ function createCubeIndices() {
     ]);
 }
 
-/** @internal */
-export function createTestSphere(detail = 0): RenderStateDynamicObject {
+
+/**
+ * Create a simple sphere mesh object.
+ * @param detail The level of tesselation, expressed as # subdivisions of the base icosahedron.
+ * @param material The material to use, or undefined for default material.
+ * @example
+ * ```typescript
+ * const sphere = createSphereObject();
+ * view.modifyRenderState({ dynamic: { objects: [sphere] } });
+ * ```
+ * @beta
+ */
+export function createSphereObject(detail = 5, material?: RenderStateDynamicMaterial): RenderStateDynamicObject {
     const radius = 1;
     const { positionBuffer, normalBuffer, texCoordBuffer } = icosahedron(radius, detail);
+
+    material ??= defaultMaterial;
 
     const attributes = {
         position: { kind: "FLOAT_VEC3", buffer: positionBuffer },
@@ -118,7 +140,7 @@ export function createTestSphere(detail = 0): RenderStateDynamicObject {
         indices: positionBuffer.length / 3,
     };
 
-    const primitive: RenderStateDynamicMeshPrimitive = { geometry, material: testMaterial };
+    const primitive: RenderStateDynamicMeshPrimitive = { geometry, material };
     const mesh: RenderStateDynamicMesh = { primitives: [primitive] };
     return { mesh, instances: [defaultInstance] };
 }
