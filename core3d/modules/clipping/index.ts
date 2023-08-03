@@ -1,8 +1,6 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glDraw, glState, glUBOProxy, type UniformTypes } from "webgl2";
-import vertexShader from "./shader.vert";
-import fragmentShader from "./shader.frag";
 
 /** @internal */
 export class ClippingModule implements RenderModule {
@@ -27,6 +25,7 @@ export class ClippingModule implements RenderModule {
     }
 
     async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const { vertexShader, fragmentShader } = context.imports.shaders.clipping.render;
         const bin = context.resourceBin("Clipping");
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
         const uniformBufferBlocks = ["Camera", "Clipping", "Colors"];

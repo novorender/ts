@@ -1,8 +1,6 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState, type UniformTypes } from "webgl2";
-import vertexShader from "./shader.vert";
-import fragmentShader from "./shader.frag";
 import { mat4, vec3 } from "gl-matrix";
 
 /** @internal */
@@ -30,6 +28,7 @@ export class GridModule implements RenderModule {
     }
 
     async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const { vertexShader, fragmentShader } = context.imports.shaders.grid.render;
         const bin = context.resourceBin("Grid");
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
         const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Grid"] })

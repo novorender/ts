@@ -3,8 +3,6 @@ import { parseKTX } from "core3d/ktx";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glClear, glDraw, glState } from "webgl2";
 import { type TextureParams, type UniformTypes, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped } from "webgl2";
-import vertexShader from "./shader.vert";
-import fragmentShader from "./shader.frag";
 
 /** @internal */
 export class BackgroundModule implements RenderModule {
@@ -33,6 +31,7 @@ export class BackgroundModule implements RenderModule {
     }
 
     async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const { vertexShader, fragmentShader } = context.imports.shaders.background.render;
         const bin = context.resourceBin("Background");
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
         const uniformBufferBlocks = ["Camera", "Background"];

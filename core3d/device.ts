@@ -12,16 +12,19 @@ import type { GPUTier } from "web_app/device";
 export interface DeviceProfile {
     /** What features should be enabled or disabled on this device. */
     readonly features: DeviceFeatures;
+
     /** What are the practical resource limitations of this device.
      * @remarks
      * Note these are also limited by the browser and other resources currently in use.
      */
     readonly limits: DeviceLimits;
+
     /** What particular quirks/bugs does this device have.
      * @remarks
      * Note these are also limited by the browser and other resources currently in use.
      */
     readonly quirks: DeviceQuirks;
+
     /** Geometry detail bias.
      * @remarks
      * A value of 1.0 is a reasonable default for mid-end devices and acts as a baseline.
@@ -31,6 +34,7 @@ export interface DeviceProfile {
      * `acceptable_geometric_error = geometry_max_error * detailBias`
      */
     readonly detailBias: number;
+
     /** Render resolution bias.
      * @remarks
      * A value of 1.0 is a reasonable default for mid-end devices and acts as a baseline.
@@ -40,6 +44,7 @@ export interface DeviceProfile {
      * `effective_resolution = default_resolution * renderResolution`
      */
     readonly renderResolution: number;
+
     /** Target framerate to aim for on this device.
      * @remarks
      * Most devices can display up to 60 FPS, which is perceived as nice and fluid.
@@ -48,6 +53,7 @@ export interface DeviceProfile {
      * Note that this value is merely a hint for automatic adjustments and does not guarantee the effective framerate.
      */
     readonly framerateTarget: number;
+
     /** General GPU tier for this device.
      * @remarks
      * 0 is weakest, while higher tiers represent more powerful GPUs.

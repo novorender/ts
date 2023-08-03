@@ -5,7 +5,7 @@ import { type RenderStateScene, type RenderStateCamera, type RenderState, mergeR
 import { PitchRollYawOrientation, decomposeRotation } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 
-/** Ortho type camera motion controller */
+/** Panorama type camera motion controller */
 export interface PanoramaControllerParams {
     position?: ReadonlyVec3;
     pitch?: number;
@@ -152,4 +152,32 @@ export class PanoramaController extends BaseController {
         }
         return changes;
     }
+}
+
+/** Panorama controller initialization parameters. */
+export interface PanoramaControllerParams {
+    /** The camera position.
+     * @defaultValue [0,0,0]
+     */
+    position?: ReadonlyVec3;
+
+    /** The camera pitch.
+     * @defaultValue -30
+     */
+    pitch?: number;
+
+    /** The camera yaw.
+     * @defaultValue 30
+     */
+    yaw?: number;
+
+    /** The camera rotational velocity factor.
+     * @defaultValue 1
+     */
+    rotationalVelocity?: number;
+
+    /** Field of view angle between top and bottom plane, in degrees.
+     * @defaultValue 60
+     */
+    fieldOfView?: number;
 }

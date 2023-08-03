@@ -1,7 +1,6 @@
 import type { DeviceProfile, RenderContext } from "core3d";
 import type { RenderModule } from "..";
 import { glUBOProxy, type TextureParams2DUncompressed, type UniformTypes } from "webgl2";
-import { shaders } from "./shaders";
 import type { ResourceBin } from "core3d/resource";
 import { OctreeModuleContext } from "./context";
 
@@ -52,6 +51,7 @@ export class OctreeModule implements RenderModule {
     }
 
     async createResources(context: RenderContext, uniforms: Uniforms) {
+        const shaders = context.imports.shaders.octree;
         const bin = context.resourceBin("Watermark");
         const sceneUniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: uniforms.scene.buffer });
         const samplerNearest = bin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
@@ -127,6 +127,7 @@ export class OctreeModule implements RenderModule {
     }
 
     static async compileShaders(context: RenderContext, bin: ResourceBin, programs: Mutable<Programs>, programFlags = OctreeModule.defaultProgramFlags): Promise<void> {
+        const shaders = context.imports.shaders.octree;
         const { textureUniforms, uniformBufferBlocks } = OctreeModule;
         const promises: Promise<void>[] = [];
         for (const pass of OctreeModule.passes) {

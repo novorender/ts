@@ -1,34 +1,20 @@
-///@ts-ignore
-import createWorker from "./worker/index.worker.js"; // uses esbuild-plugin-inline-worker to inline worker code.
-import type { RenderStateScene } from "core3d/state";
-import { LoaderHandler, type AbortAllMessage, type AbortMessage, type BufferMessage, type CloseMessage, type LoadMessage, type MessageRequest, type MessageResponse, type NodePayload, type ParseMessage } from "./worker";
+import type { AbortAllMessage, AbortMessage, BufferMessage, CloseMessage, LoadMessage, MessageRequest, MessageResponse, NodePayload, ParseMessage } from "./worker";
 import { OctreeNode } from "./node.js";
 import type { DeviceProfile } from "core3d/device.js";
 
 interface PayloadPromiseMethods { readonly resolve: (value: NodePayload | undefined) => void, readonly reject: (reason: string) => void };
 
 /** @internal */
-export interface NodeLoaderOptions {
-    readonly useWorker: boolean;
-}
-
-/** @internal */
 export class NodeLoader {
-    readonly worker: Worker | undefined;
-    readonly handler;
     readonly payloadPromises = new Map<string, PayloadPromiseMethods>();
     abortAllPromise: Promise<void> = Promise.resolve();
     private resolveAbortAll: (() => void) | undefined;
     aborted = false;
 
-    constructor(options: NodeLoaderOptions) {
-        if (options.useWorker) {
-            const worker = this.worker = createWorker() as Worker;
-            worker.onmessage = e => {
-                this.receive(e.data as MessageResponse);
-            }
+    constructor(readonly worker: Worker) {
+        worker.onmessage = e => {
+            this.receive(e.data as MessageResponse);
         }
-        this.handler = new LoaderHandler(this.receive.bind(this));
     }
 
     setBuffer(buffer: SharedArrayBuffer) {
@@ -41,12 +27,7 @@ export class NodeLoader {
     }
 
     private send(msg: MessageRequest) {
-        const { worker, handler } = this;
-        if (worker) {
-            worker.postMessage(msg);
-        } else {
-            handler.receive(msg);
-        }
+        this.worker.postMessage(msg);
     }
 
     private receive(msg: MessageResponse) {

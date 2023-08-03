@@ -1,40 +1,11 @@
 
-import { type ReadonlyVec3, vec3, glMatrix, quat, mat3 } from "gl-matrix";
-import { BaseController, type ControllerInitParams, type MutableCameraState, type PickInterface } from "./base";
+import { type ReadonlyVec3, vec3, glMatrix, quat } from "gl-matrix";
+import { BaseController, type ControllerInitParams, type MutableCameraState, type PickContext } from "./base";
 import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type BoundingSphere } from "core3d";
 import { PitchRollYawOrientation, clamp, decomposeRotation } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 
-export interface CameraTransformations {
-    tx: number,
-    ty: number,
-    tz: number,
-    rx: number,
-    ry: number,
-    shouldPivot: boolean
-}
-
-/** Ortho type camera motion controller */
-export interface FlightControllerParams {
-    position?: ReadonlyVec3;
-    pitch?: number;
-    yaw?: number;
-    linearVelocity?: number;
-    rotationalVelocity?: number;
-    autoZoomSpeed?: boolean;
-    flightTime?: number;
-    fieldOfView?: number;
-    pickDelay: number;
-    proportionalCameraSpeed?: { min: number, max: number; };
-}
-
-interface Pivot {
-    center: ReadonlyVec3;
-    offset: ReadonlyVec3;
-    distance: number;
-    active: boolean;
-}
-
+/** The flight controller mimics the behaviour of an etheral, hovering drone, allowing unconstrained movements through walls and obstacles. */
 export class FlightController extends BaseController {
     static readonly defaultParams = {
         position: [0, 0, 0],
@@ -42,20 +13,23 @@ export class FlightController extends BaseController {
         yaw: 30,
         linearVelocity: 1,
         rotationalVelocity: 1,
-        autoZoomSpeed: false,
-        flightTime: 1,
+        flightTime: 0,
         fieldOfView: 60,
         pickDelay: 200,
-        proportionalCameraSpeed: { min: 0.2, max: 1000 }
+        proportionalCameraSpeed: null, // { min: 0.2, max: 1000 }
     };
 
+    /** @internal */
     protected arrowKeyScale = 0.4;
+    /** @internal */
+    protected pivotButton: MouseButtons = MouseButtons.right;
+    /** @internal */
+    protected pivotFingers: number = 3;
 
-    override kind: string = "flight" as const;
+    override kind = "flight";
     override projection = "pinhole" as const;
     override changed = false;
-    protected pivotButton: MouseButtons = MouseButtons.right;
-    protected pivotFingers: number = 3;
+
     private params;
     private position: ReadonlyVec3 = vec3.create();
     private readonly orientation = new PitchRollYawOrientation();
@@ -69,7 +43,15 @@ export class FlightController extends BaseController {
     private recordedMoveBegin: ReadonlyVec3 | undefined = undefined;
     private inMoveBegin = false;
 
-    constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
+    /**
+     * @param pick The context used for pick queries.
+     * @param input The input source.
+     * @param params Optional initialization parameters.
+     */
+    constructor(
+        /** The context used for pick queries. */
+        readonly pick: PickContext,
+        input: ControllerInput, params?: FlightControllerParams) {
         super(input);
         this.params = { ...FlightController.defaultParams, ...params } as const;
         const { orientation } = this;
@@ -161,46 +143,6 @@ export class FlightController extends BaseController {
         }
     }
 
-    protected modifiers() {
-        const { params, recordedMoveBegin, position, fov } = this;
-        const { proportionalCameraSpeed } = params;
-        let scale = 20;
-        if (proportionalCameraSpeed && recordedMoveBegin) {
-            scale = vec3.dist(position, recordedMoveBegin) * Math.tan(((Math.PI / 180) * fov) / 2) * 2;
-            const siceMoveDelay = performance.now() - this.moveBeginDelay;
-            if (siceMoveDelay < 400) {  //Delay proportinal speed for better feeling on bad devices
-                scale = Math.min(scale, 60 + (siceMoveDelay * 0.5));
-            }
-            const mouseWheelModifier = this.input.hasShift ? 0 : clamp(scale / 3, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
-            const mousePanModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
-            const touchMovementModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
-            const pinchModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
-            return {
-                mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale: 20
-            }
-        }
-        return {
-            mouseWheelModifier: this.input.hasShift ? 0 : scale, mousePanModifier: scale, touchMovementModifier: scale, pinchModifier: scale, scale
-        }
-    }
-
-    protected getTransformations(): CameraTransformations {
-        const { axes, arrowKeyScale } = this;
-        const rotX = -axes.keyboard_arrow_up_down * arrowKeyScale - axes.mouse_lmb_move_y + axes.touch_1_move_y;
-        const rotY = -axes.keyboard_arrow_left_right * arrowKeyScale - axes.mouse_lmb_move_x + axes.touch_1_move_x;
-        const pivotX = -axes.mouse_rmb_move_y + -axes.touch_3_move_y;
-        const pivotY = -axes.mouse_rmb_move_x + -axes.touch_3_move_x;
-        const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
-
-        const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
-        const tx = (axes.keyboard_ad * scale) - (axes.mouse_mmb_move_x * mousePanModifier) - (axes.touch_2_move_x * touchMovementModifier);
-        const ty = (axes.keyboard_qe * scale) - (axes.mouse_mmb_move_y * mousePanModifier) - (axes.touch_2_move_y * touchMovementModifier);
-        const tz = (axes.keyboard_ws * scale) + (axes.mouse_wheel * mouseWheelModifier) + (axes.touch_pinch2 * pinchModifier);
-        const rx = shouldPivot ? pivotX : rotX;
-        const ry = shouldPivot ? pivotY : rotY;
-        return { tx, ty, tz, rx, ry, shouldPivot };
-    }
-
     override update(): void {
         this.changed = false;
         const { multiplier, orientation, params, height, pivot, zoomPos, currentFlyTo } = this;
@@ -267,11 +209,11 @@ export class FlightController extends BaseController {
     }
 
     override async mouseButtonChanged(event: MouseEvent): Promise<void> {
-        const { pickInterface, pivotButton } = this;
-        if (pickInterface) {
+        const { pick, pivotButton } = this;
+        if (pick) {
             const changes = event.buttons;
             if (changes & pivotButton) {
-                const sample = await pickInterface.pick(event.offsetX, event.offsetY);
+                const sample = await pick.pick(event.offsetX, event.offsetY);
                 if (sample) {
                     this.setPivot(sample.position, true);
                 } else {
@@ -284,11 +226,11 @@ export class FlightController extends BaseController {
     }
 
     override async touchChanged(event: TouchEvent): Promise<void> {
-        const { pointerTable, pickInterface, pivotFingers } = this;
-        if (pointerTable.length == pivotFingers && pickInterface) {
+        const { pointerTable, pick, pivotFingers } = this;
+        if (pointerTable.length == pivotFingers && pick) {
             const x = pointerTable.length > 1 ? Math.round((pointerTable[0].x + pointerTable[1].x) / 2) : pointerTable[0].x;
             const y = pointerTable.length > 1 ? Math.round((pointerTable[0].y + pointerTable[1].y) / 2) : pointerTable[0].y;
-            const sample = await pickInterface.pick(x, y);
+            const sample = await pick.pick(x, y);
             if (sample) {
                 this.setPivot(sample.position, true);
             } else {
@@ -300,15 +242,15 @@ export class FlightController extends BaseController {
     }
 
     async moveBegin(event: TouchEvent | MouseEvent): Promise<void> {
-        const { pointerTable, pickInterface, resetPickDelay } = this;
+        const { pointerTable, pick, resetPickDelay } = this;
 
         const deltaTime = this.lastUpdate - this.lastUpdatedMoveBegin;
-        if (pickInterface == undefined || deltaTime < this.params.pickDelay || this.inMoveBegin) {
+        if (pick == undefined || deltaTime < this.params.pickDelay || this.inMoveBegin) {
             return;
         }
         this.inMoveBegin = true;
         const setPickPosition = async (x: number, y: number) => {
-            const sample = await pickInterface.pick(x, y, { async: true });
+            const sample = await pick.pick(x, y, { async: true });
             if (sample) {
                 if (performance.now() - this.lastUpdatedMoveBegin > 2000) { //Delay proportinal speed for better feeling on bad devices
                     this.moveBeginDelay = performance.now();
@@ -350,17 +292,60 @@ export class FlightController extends BaseController {
         vec3.transformQuat(offset, offset, invRot)
         this.pivot = { center, offset, distance, active };
     }
+
+    /** @internal */
+    protected modifiers() {
+        const { params, recordedMoveBegin, position, fov } = this;
+        const { proportionalCameraSpeed } = params;
+        let scale = 20;
+        if (proportionalCameraSpeed && recordedMoveBegin) {
+            scale = vec3.dist(position, recordedMoveBegin) * Math.tan(((Math.PI / 180) * fov) / 2) * 2;
+            const siceMoveDelay = performance.now() - this.moveBeginDelay;
+            if (siceMoveDelay < 400) {  //Delay proportinal speed for better feeling on bad devices
+                scale = Math.min(scale, 60 + (siceMoveDelay * 0.5));
+            }
+            const mouseWheelModifier = this.input.hasShift ? 10 : clamp(scale / 3, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
+            const mousePanModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
+            const touchMovementModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
+            const pinchModifier = clamp(scale, proportionalCameraSpeed.min, proportionalCameraSpeed.max);
+            return {
+                mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale: 20
+            }
+        }
+        return {
+            mouseWheelModifier: this.input.hasShift ? 10 : scale, mousePanModifier: scale, touchMovementModifier: scale, pinchModifier: scale, scale
+        }
+    }
+
+    /** @internal */
+    protected getTransformations(): CameraTransformations {
+        const { axes, arrowKeyScale } = this;
+        const rotX = -axes.keyboard_arrow_up_down * arrowKeyScale - axes.mouse_lmb_move_y + axes.touch_1_move_y;
+        const rotY = -axes.keyboard_arrow_left_right * arrowKeyScale - axes.mouse_lmb_move_x + axes.touch_1_move_x;
+        const pivotX = -axes.mouse_rmb_move_y + -axes.touch_3_move_y;
+        const pivotY = -axes.mouse_rmb_move_x + -axes.touch_3_move_x;
+        const shouldPivot = Math.abs(rotX) + Math.abs(rotY) < Math.abs(pivotX) + Math.abs(pivotY);
+
+        const { mouseWheelModifier, mousePanModifier, touchMovementModifier, pinchModifier, scale } = this.modifiers();
+        const tx = (axes.keyboard_ad * scale) - (axes.mouse_mmb_move_x * mousePanModifier) - (axes.touch_2_move_x * touchMovementModifier);
+        const ty = (axes.keyboard_qe * scale) - (axes.mouse_mmb_move_y * mousePanModifier) - (axes.touch_2_move_y * touchMovementModifier);
+        const tz = (axes.keyboard_ws * scale) + (axes.mouse_wheel * mouseWheelModifier) + (axes.touch_pinch2 * pinchModifier);
+        const rx = shouldPivot ? pivotX : rotX;
+        const ry = shouldPivot ? pivotY : rotY;
+        return { tx, ty, tz, rx, ry, shouldPivot };
+    }
 }
 
 function isTouchEvent(event: MouseEvent | TouchEvent): event is TouchEvent {
     return "TouchEvent" in globalThis && event instanceof TouchEvent;
 }
 
+/** Variant of flight controller that uses middle mouse button for panning. */
 export class CadMiddlePanController extends FlightController {
     override kind = "cadMiddlePan" as const;
 
-    constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
-        super(pickInterface, input);
+    constructor(readonly pick: PickContext, input: ControllerInput, params?: FlightControllerParams) {
+        super(pick, input);
         this.pivotButton = MouseButtons.left;
         this.pivotFingers = 1;
     }
@@ -384,11 +369,12 @@ export class CadMiddlePanController extends FlightController {
     }
 }
 
+/** Variant of flight controller that uses right mouse button for panning. */
 export class CadRightPanController extends FlightController {
     override kind = "cadRightPan" as const;
 
-    constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
-        super(pickInterface, input);
+    constructor(readonly pick: PickContext, input: ControllerInput, params?: FlightControllerParams) {
+        super(pick, input);
         this.pivotButton = MouseButtons.left;
         this.pivotFingers = 1;
     }
@@ -412,11 +398,17 @@ export class CadRightPanController extends FlightController {
     }
 }
 
+/** Vassbakk's super special flight controller. */
 export class SpecialFlightController extends FlightController {
     override kind = "special" as const;
 
-    constructor(readonly pickInterface: PickInterface, input: ControllerInput, params?: FlightControllerParams) {
-        super(pickInterface, input);
+    /**
+     * @param pick 
+     * @param input 
+     * @param params 
+     */
+    constructor(readonly pick: PickContext, input: ControllerInput, params?: FlightControllerParams) {
+        super(pick, input);
         this.pivotButton = MouseButtons.middle;
         this.pivotFingers = 1;
     }
@@ -438,4 +430,72 @@ export class SpecialFlightController extends FlightController {
 
         return { tx, ty, tz, rx, ry, shouldPivot };
     }
+}
+
+/** Flight controller initialization parameters */
+export interface FlightControllerParams {
+    /** The camera position.
+     * @defaultValue [0,0,0]
+     */
+    position?: ReadonlyVec3;
+    /** The camera pitch.
+     * @defaultValue -30
+     */
+    pitch?: number;
+
+    /** The camera yaw.
+     * @defaultValue 30
+     */
+    yaw?: number;
+
+    /** The camera linear velocity factor.
+     * @defaultValue 1
+     */
+    linearVelocity?: number;
+
+    /** The camera rotational velocity factor.
+     * @defaultValue 1
+     */
+    rotationalVelocity?: number;
+
+    /** Default fly time in milliseconds.
+     * @defaultValue 0
+     */
+    flightTime?: number;
+
+    /** Field of view angle between top and bottom plane, in degrees.
+     * @defaultValue 60
+     */
+    fieldOfView?: number;
+
+    /** Delay for pick updates, in milliseconds.
+     * @defaultValue 200
+     */
+    pickDelay: number;
+
+    /** 
+     * When set, the controller will sample the distance to the pixel under the mouse cursor,
+     * or central pinch point, and move the camera with speed proportional to that distance.
+     * The min and max determines the bounds of how slow/fast it is allowed to move.
+     * 
+     * Setting this to `null` disables this feature, using a constant speed factor of 1.0.
+     * @defaultValue null
+     */
+    proportionalCameraSpeed?: { readonly min: number, readonly max: number; } | null;
+}
+
+interface CameraTransformations {
+    tx: number,
+    ty: number,
+    tz: number,
+    rx: number,
+    ry: number,
+    shouldPivot: boolean
+}
+
+interface Pivot {
+    center: ReadonlyVec3;
+    offset: ReadonlyVec3;
+    distance: number;
+    active: boolean;
 }

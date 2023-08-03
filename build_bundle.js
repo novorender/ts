@@ -1,10 +1,35 @@
-import {  build} from "esbuild";
-import * as tsup from "tsup";
-import * as path from 'path';
-import inlineWorkerPlugin from 'esbuild-plugin-inline-worker';
+import { build } from "esbuild";
+import path from "path";
+import fs from "fs";
+
+function copyFiles(target, paths) {
+    fs.mkdirSync(target, { recursive: true });
+    for (const filePath of paths) {
+        const fileName = path.basename(filePath);
+        fs.copyFileSync(filePath, `${target}/${fileName}`);
+    }
+}
+
+function copyDirs(target, paths) {
+    fs.mkdirSync(target, { recursive: true });
+    for (const dirPath of paths) {
+        const dirName = path.basename(dirPath);
+        fs.cpSync(dirPath, `${target}/${dirName}`, { recursive: true });
+    }
+}
 
 
-const production = process.env.ENV === 'production';
+// copy source files
+copyDirs("dist", ["web_app", "core3d", "webgl2"]);
+copyFiles("dist", ["tsconfig.json"]);
+
+// copy public files
+copyFiles("dist/public", ["core3d/wasm/main.wasm", "core3d/lut_ggx.png", "core3d/modules/watermark/logo.bin"]);
+
+// move web_app/package.json to root
+fs.renameSync("dist/web_app/package.json", "dist/package.json");
+
+// const production = process.env.ENV === 'production';
 
 // const buildOptionsIIFE = {
 //     entryPoints: {
@@ -23,13 +48,15 @@ const production = process.env.ENV === 'production';
 
 const buildOptions = {
     entryPoints: {
-        main: 'web_app/index.ts',
+        ["index"]: 'dist/web_app/index.ts',
+        ["public/loaderWorker"]: 'dist/core3d/modules/octree/worker/index.ts',
+        ["public/shaders"]: 'dist/core3d/imports/shaders.ts',
     },
     define: {
         'import.meta.env.NPM_PACKAGE_VERSION': `"${process.env.VERSION ?? process.env.npm_package_version}"`
     },
     sourcemap: true,
-    minify: production,
+    minify: true,
     bundle: true,
     platform: "browser",
     target: ["esnext"],
@@ -42,14 +69,14 @@ const buildOptions = {
         ".vert": "text",
         ".frag": "text"
     },
-    plugins: [inlineWorkerPlugin()],
-    outfile: './dist/index.js',
+    outdir: './dist/',
 }
 
 //await build(buildOptionsIIFE);
+
 await build(buildOptions);
 
-//tsup web_app/index.ts --dts-only 
+//tsup web_app/index.ts --dts-only
 
 // await tsup.build( {
 //   outDir:"dist",

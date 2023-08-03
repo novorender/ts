@@ -1,15 +1,21 @@
 import { glCreateBuffer, glCreateFrameBuffer, glCreateProgram, glCreateRenderbuffer, glCreateSampler, glCreateTexture, glCreateVertexArray, type WebGLResource, type BufferParams, type BufferTargetString, type FrameBufferParams, type ProgramParams, type RenderbufferParams, type SamplerParams, type TextureParams, type TextureTargetString, type VertexArrayParams, glCreateProgramAsync, type ProgramAsyncParams, glLimits } from "webgl2";
 
-/** @internal */
+/**
+ * A WebGL resource tracking helper class.
+ * @remarks
+ * Resource bins are used to track allocation of WebGL resources and assist with automatic disposal.
+ */
 export class ResourceBin {
     private readonly resourceMap = new Map<WebGLResource, ResourceInfo[]>();
 
-    private constructor(readonly gl: WebGL2RenderingContext, readonly name: string, private readonly collection: Set<ResourceBin>) {
+    /** @internal */
+    constructor(
+        /** The underlying WebGL2 rendering context. */
+        readonly gl: WebGL2RenderingContext,
+        /** The name of the resource bin. */
+        readonly name: string,
+        private readonly collection: Set<ResourceBin>) {
         this.collection.add(this);
-    }
-
-    protected static create(gl: WebGL2RenderingContext, name: string, collection: Set<ResourceBin>) {
-        return new ResourceBin(gl, name, collection);
     }
 
     get resourceInfo(): IterableIterator<ResourceInfo> {

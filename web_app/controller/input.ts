@@ -6,11 +6,28 @@ interface ModiferKeyEvent {
     ctrlKey: boolean
 }
 
+/**
+ * The input source of camera controllers.
+ * @remarks
+ * This class abstract away input gestures, such as mouse, keyboard and touch event into a unified model.
+ * It does this by defining a {@link ControllerAxes | set of axes} that represents an imagined gamepad/joystick input device for each class of input gestures.
+ * The assumption is that each of these axes may be bound to a pair of keyboard keys, e.g. `A` and `D`, or some input position coordinate, e.g. the mouse `x` position for left/right motion.
+ * All of these axes are updated independently, i.e. it is possible to move a camera with both keyboard and mouse simultaneously.
+ * It is up to each camera controller to scale and apply each of these axes into an actual motion of the camera.
+ */
 export class ControllerInput {
+    /** The underlying HTMLElement providing input events. */
     readonly domElement;
+
+    /** A set of optional callbacks for controllers that wants to handle certain input events themselves. */
     callbacks: ContollerInputContext | undefined;
+
+    /** The current values of each input axis. */
     readonly axes: ControllerAxes;
-    pointerTable: readonly { readonly id: number; readonly x: number; readonly y: number; }[] = [];
+
+    /** The current list of individual touch contact points. */
+    touchPoints: readonly TouchContactPoint[] = [];
+
     private readonly _keys = new Set<string>();
     private _mouseButtonDown = false;
     private _zoomY = 0;
@@ -21,8 +38,13 @@ export class ControllerInput {
 
     private _mouseWheelLastActive = 0;
     private static readonly _gestureKeys = ["KeyW", "KeyS", "KeyA", "KeyD", "KeyQ", "KeyE", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+
+    /** Whether to use {@link https://developer.mozilla.org/en-US/docs/Web/API/Pointer_Lock_API | mouse pointer lock} or not. */
     usePointerLock = true;
 
+    /**
+     * @param domElement The HTMLElement to subscribe to input events from.
+     */
     constructor(domElement?: HTMLElement) {
         this.domElement = domElement ?? document.body;
         this.connect();
@@ -30,18 +52,22 @@ export class ControllerInput {
         this.resetAxes();
     }
 
+    /** Unsubscribe from input events. */
     dispose() {
         this.disconnect();
     }
 
+    /** Return the client width of the input {@link domElement}. */
     get width() {
         return this.domElement.clientWidth;
     }
 
+    /** Return the client height of the input {@link domElement}. */
     get height() {
         return this.domElement.clientHeight;
     }
 
+    /** Current multiplier applied to motion via the Control/Alt keys. */
     get multiplier() {
         const { _keys } = this;
         let m = 1;
@@ -51,12 +77,18 @@ export class ControllerInput {
         return m;
     }
 
+    /** Whether the shift key is currently pressed or not. */
     get hasShift() {
         const { _keys } = this;
         if (_keys.has("Shift")) return true;
         return false;
     }
 
+    /** The pixel position centering zoom gestures.
+     * @remarks
+     * This is typically the current cursor position while using the mouse scroll wheel,
+     * or the center position between touch points in a pinch gesture.
+     */
     get zoomPos() {
         const { width, height, _zoomX, _zoomY } = this;
         if (_zoomX == 0 && _zoomY == 0) {
@@ -65,6 +97,7 @@ export class ControllerInput {
         return [-(_zoomX - width / 2) / height * 2, (_zoomY - height / 2) / height * 2];
     }
 
+    /** Subscribe to input events from {@link domElement}. */
     protected connect() {
         const { domElement } = this;
         if (!domElement) return;
@@ -86,6 +119,7 @@ export class ControllerInput {
         domElement.focus();
     }
 
+    /** Unsubscribe to input events from {@link domElement}. */
     protected disconnect() {
         const { domElement } = this;
         if (!domElement) return;
@@ -117,6 +151,7 @@ export class ControllerInput {
         return ControllerInput._gestureKeys.indexOf(code) != -1;
     }
 
+    /** Indicate whether the mouse scroll wheel has recently been moved. */
     public isScrolling() {
         return (performance.now() - this._mouseWheelLastActive) < 100
     }
@@ -206,66 +241,66 @@ export class ControllerInput {
     };
 
     private touchstart = async (event: TouchEvent) => {
-        this.pointerTable = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
-        const { pointerTable, _touchMovePrev } = this;
+        this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
+        const { touchPoints, _touchMovePrev } = this;
         this.callbacks?.touchChanged?.(event);
 
-        switch (pointerTable.length) {
+        switch (touchPoints.length) {
             case 1:
-                _touchMovePrev[0] = pointerTable[0].x;
-                _touchMovePrev[1] = pointerTable[0].y;
+                _touchMovePrev[0] = touchPoints[0].x;
+                _touchMovePrev[1] = touchPoints[0].y;
                 break;
             default: // 2 or more
-                const dx = pointerTable[0].x - pointerTable[1].x;
-                const dy = pointerTable[0].y - pointerTable[1].y;
+                const dx = touchPoints[0].x - touchPoints[1].x;
+                const dy = touchPoints[0].y - touchPoints[1].y;
                 this._touchZoomDistancePrev = Math.sqrt(dx * dx + dy * dy);
-                _touchMovePrev[0] = (pointerTable[0].x + pointerTable[1].x) / 2;
-                _touchMovePrev[1] = (pointerTable[0].y + pointerTable[1].y) / 2;
+                _touchMovePrev[0] = (touchPoints[0].x + touchPoints[1].x) / 2;
+                _touchMovePrev[1] = (touchPoints[0].y + touchPoints[1].y) / 2;
                 break;
         }
         await this.callbacks?.moveBegin?.(event);
     };
 
     private touchend = async (event: TouchEvent) => {
-        this.pointerTable = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
-        const { pointerTable, _touchMovePrev } = this;
+        this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
+        const { touchPoints, _touchMovePrev } = this;
         this.callbacks?.touchChanged?.(event);
-        switch (pointerTable.length) {
+        switch (touchPoints.length) {
             case 0:
                 break;
             case 1:
-                _touchMovePrev[0] = pointerTable[0].x;
-                _touchMovePrev[1] = pointerTable[0].y;
+                _touchMovePrev[0] = touchPoints[0].x;
+                _touchMovePrev[1] = touchPoints[0].y;
                 break;
             default:
-                const dx = pointerTable[0].x - pointerTable[1].x;
-                const dy = pointerTable[0].y - pointerTable[1].y;
+                const dx = touchPoints[0].x - touchPoints[1].x;
+                const dy = touchPoints[0].y - touchPoints[1].y;
                 this._touchZoomDistancePrev = Math.sqrt(dx * dx + dy * dy);
-                _touchMovePrev[0] = (pointerTable[0].x + pointerTable[1].x) / 2;
-                _touchMovePrev[1] = (pointerTable[0].y + pointerTable[1].y) / 2;
+                _touchMovePrev[0] = (touchPoints[0].x + touchPoints[1].x) / 2;
+                _touchMovePrev[1] = (touchPoints[0].y + touchPoints[1].y) / 2;
                 break;
         }
     };
 
     private touchcancel = (event: TouchEvent) => {
         event.preventDefault();
-        this.pointerTable = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
+        this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
     };
 
     private touchmove = (event: TouchEvent) => {
         if (event.cancelable) event.preventDefault();
-        this.pointerTable = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
-        const { pointerTable, _touchMovePrev } = this;
-        let { x, y } = pointerTable[0];
+        this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
+        const { touchPoints, _touchMovePrev } = this;
+        let { x, y } = touchPoints[0];
 
         const { axes } = this;
-        if (pointerTable.length > 1) {
-            const dx = pointerTable[0].x - pointerTable[1].x;
-            const dy = pointerTable[0].y - pointerTable[1].y;
+        if (touchPoints.length > 1) {
+            const dx = touchPoints[0].x - touchPoints[1].x;
+            const dy = touchPoints[0].y - touchPoints[1].y;
             const touchZoomDistance = Math.sqrt(dx * dx + dy * dy);
 
-            x = (pointerTable[0].x + pointerTable[1].x) / 2;
-            y = (pointerTable[0].y + pointerTable[1].y) / 2;
+            x = (touchPoints[0].x + touchPoints[1].x) / 2;
+            y = (touchPoints[0].y + touchPoints[1].y) / 2;
 
             const touchCenter = vec2.fromValues(x, y);
             let dist = 0;
@@ -279,14 +314,14 @@ export class ControllerInput {
             this._zoomX = x;
             this._zoomY = y;
             if (dist * 2 < Math.abs(deltaWheel)) {
-                if (pointerTable.length == 2) {
+                if (touchPoints.length == 2) {
                     axes.touch_pinch2 += deltaWheel;
                 } else {
                     axes.touch_pinch3 += deltaWheel;
                 }
             }
         }
-        switch (pointerTable.length) {
+        switch (touchPoints.length) {
             case 1:
                 axes.touch_1_move_x += x - _touchMovePrev[0];
                 axes.touch_1_move_y += y - _touchMovePrev[1];
@@ -304,6 +339,9 @@ export class ControllerInput {
         _touchMovePrev[1] = y;
     };
 
+    /** Apply time-related state updates.
+     * @param elapsedTime The amount of milliseconds passed since the last call to this function.
+     */
     animate(elapsedTime: number) {
         const { axes, _keys } = this;
         const delta = elapsedTime * this.height / 2000;
@@ -321,6 +359,7 @@ export class ControllerInput {
         }
     }
 
+    /** Reset axes to their default/neutral state. */
     resetAxes() {
         const { axes } = this;
         axes.keyboard_ad = 0;
@@ -347,6 +386,7 @@ export class ControllerInput {
         axes.touch_pinch3 = 0;
     }
 
+    /** Determine if axes are all at their default/neutral state. */
     axesEmpty() {
         const { axes } = this;
         return axes.keyboard_ad == 0 &&
@@ -374,6 +414,9 @@ export class ControllerInput {
     }
 }
 
+/** Flags for various mouse buttons.
+ * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons}
+ */
 export enum MouseButtons {
     none = 0,
     left = 1,
@@ -408,11 +451,35 @@ type ControllerAxesName =
     | "touch_pinch3"
     ;
 
+/** The input gesture axes values. */
 export type ControllerAxes = { [P in ControllerAxesName]: number };
 
+/** Input event callbacks. */
 export interface ContollerInputContext {
+    /** Mouse button events. */
     mouseButtonChanged(event: MouseEvent): Promise<void> | void;
+    /** Touch "click" events. */
     touchChanged(event: TouchEvent): Promise<void> | void;
+    /** Mouse or touch move events. */
     moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void
 }
 
+/** A single touch input contact point.
+ * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Touch} for more details.
+ */
+export interface TouchContactPoint {
+    /** The touch identifier.
+     * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Touch/identifier}
+     */
+    readonly id: number;
+
+    /** The touch client x coordinate.
+     * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Touch/clientX}
+     */
+    readonly x: number;
+
+    /** The touch client y coordinate.
+     * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Touch/clientY}
+     */
+    readonly y: number;
+}

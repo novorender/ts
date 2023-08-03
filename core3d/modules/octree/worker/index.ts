@@ -1,6 +1,19 @@
-export * from "./parser";
-export * from "./schema_2_0";
-export * from "./handler";
-export * from "./messages";
-/** @internal */
-export const useWorker = true; // set to false for better debugging
+import { LoaderHandler } from "./handler";
+import type { MessageResponse, MessageRequest } from "./messages";
+export type * from "./parser";
+export type * from "./schema_2_0";
+export type * from "./handler";
+export type * from "./messages";
+
+const handler = new LoaderHandler((msg: MessageResponse, transfer?: Transferable[]) => {
+    postMessage(msg, { transfer });
+});
+
+onmessage = e => {
+    const msg = e.data as MessageRequest;
+    if (msg.kind == "close") {
+        close();
+    } else {
+        handler.receive(msg);
+    }
+};

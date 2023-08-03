@@ -1,5 +1,5 @@
 import { glBlit, glInvalidateFrameBuffer, glReadPixels } from "webgl2";
-import { ResourceBin } from "./resource";
+import type { ResourceBin } from "./resource";
 
 export const enum BufferFlags {
     color = 0x01,
@@ -21,7 +21,6 @@ pick buffer layout
  * Set of buffers uses for rendering and pick.
  * @remarks
  * These buffers are only useful for advanced developers who aim to extend this API with their own custom 3D module.
- * 
  */
 export class RenderBuffers {
     /** Flag to indicate the CPU/read buffers needs to be updated. */
@@ -41,7 +40,18 @@ export class RenderBuffers {
     } | undefined;
 
     /** @internal */
-    constructor(readonly gl: WebGL2RenderingContext, readonly width: number, readonly height: number, readonly samples: number, readonly resourceBin: ResourceBin) {
+    constructor(
+        /** The underlying webgl2 rendering context. */
+        readonly gl: WebGL2RenderingContext,
+        /** The buffer width in pixels. */
+        readonly width: number,
+        /** The buffer height in pixels. */
+        readonly height: number,
+        /** # of MSAA samples. */
+        readonly samples: number,
+        /** The resource bin to manage resource tracking and disposal. */
+        readonly resourceBin: ResourceBin
+    ) {
         const textures = this.textures = {
             // color: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "RGBA16F", type: "HALF_FLOAT", image: null }),
             color: resourceBin.createTexture({ kind: "TEXTURE_2D", width, height, internalFormat: "R11F_G11F_B10F", type: "HALF_FLOAT", image: null }),

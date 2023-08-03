@@ -1,15 +1,28 @@
 import type { DeviceProfile } from "core3d";
+import { View } from "./";
 
+/**
+ * GPU performance tier.
+ * @remarks
+ * This is a rough estimate of the capabilities of a device GPU.
+ * 0 is weakest and 3 is strongest.
+ * As a general guide, these are the targets for the different tiers:
+ * - 0: Unknown GPU - A weak android device. Also the fallback tier for unknown GPUs.
+ * - 1: IOS, IPad, high-end android device, weak integrated (intel) GPU
+ * - 2: Mac M1 or better, strong integrated GPU or weak/old discrete GPU.
+ * - 3: Discrete GPU, mid to high end.
+ */
 export type GPUTier = 0 | 1 | 2 | 3; // larger means more powerful GPU
-/*
-Rough outline of intended tier levels:
-tier 0: Unknown GPU - better safe than sorry, or a weak android device.
-tier 1: IOS, IPad, high-end android device (e.g. modern Samsung S8 Tablet), weak intergrated (intel) GPU
-tier 2: Mac M1 or better, strong integrated GPU or weak/old discrete GPU.
-tier 3: Discrete GPU, mid to high end.
-*/
 
-// A simple tier system is probably too simplistic. We may want to add info about OS and browser here as well.
+/**
+ * Create a device profile.
+ * @param tier The performance level of device GPU, 0-3, where 0 is weakest.
+ * @param resolutionScaling An optional scale factor to apply to output image resolution.
+ * @returns A {@link DeviceProfile} reflecting the typical capabilities of a GPU at given tier level.
+ * @remarks
+ * A simple tier system is probably too simplistic but provides a starting point.
+ * The resulting device profile may be modified further before passing it into the {@link View} constructor.
+ */
 export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): DeviceProfile {
     const outline = tier >= 1;
     let maxGPUBytes = [500_000_000, 750_000_000, 2_000_000_000, 5_000_000_000][tier];
@@ -47,7 +60,6 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
         }
     }
 
-
     const coreProfile = {
         features: {
             outline,
@@ -71,26 +83,3 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
         tier
     } as const;
 }
-
-// const coreProfile = {
-//     features: {
-//         outline: true,
-//     },
-//     limits: {
-//         maxGPUBytes: 2_000_000_000,
-//         maxPrimitives: 100_000_000,
-//         maxSamples: 4, // MSAA
-//     },
-//     quirks: {
-//         iosShaderBug: false, // Older (<A15) IOS devices has a bug when using flat interpolation in complex shaders, which causes Safari to crash after a while. Update: Fixed with WEBGL_provoking_vertex extension!
-//     },
-//     detailBias: 0.6,
-// } as const satisfies DeviceProfile;
-
-
-// export const deviceProfile = {
-//     ...coreProfile,
-//     renderResolution: 1,
-//     framerateTarget: 30 as number
-// } as const;
-

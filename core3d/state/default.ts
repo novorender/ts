@@ -27,8 +27,8 @@ export function defaultRenderState(): RenderState {
         },
         grid: {
             enabled: false,
-            color1: [2, 2, 2],
-            color2: [0, 0, 0],
+            color1: [.5, .5, .5],
+            color2: [1, 1, 1],
             origin: [0, 0, 0],
             axisX: [1, 0, 0],
             axisY: [0, 0, 1],
@@ -101,7 +101,6 @@ export function defaultRenderState(): RenderState {
         toonOutline: {
             enabled: false,
             color: [0, 0, 0],
-            onlyOnIdleFrame: true,
         },
         pick: {
             opacityThreshold: 1,

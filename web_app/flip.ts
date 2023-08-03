@@ -6,10 +6,10 @@ const transforms = {
     CADToGL: flipFuncs(flipCADToGLVec, flipCADToGLQuat),
 };
 
+/** @internal */
 export function flipState(changes: any, transform: "GLToCAD" | "CADToGL") {
     flipRecursive(changes, transforms[transform]);
 }
-
 
 function flipFuncs(swapVecFunc: (v: number[]) => number[], swapQuatFunc: (q: quat) => quat) {
     const state = {
@@ -47,7 +47,7 @@ function flipFuncs(swapVecFunc: (v: number[]) => number[], swapQuatFunc: (q: qua
             }
         },
         dynamic: {
-            objects: flipDynaicObjects(swapVecFunc, swapQuatFunc)
+            objects: flipDynamicObjects(swapVecFunc, swapQuatFunc)
         }
     } as const;
     return state;
@@ -62,6 +62,7 @@ function flipCADToGLVec(v: number[]) {
 }
 
 
+/** @internal */
 export function flipGLtoCadVec(v: number[]) {
     const clone = [...v];
     const tmp = clone[1];
@@ -75,6 +76,7 @@ export function flipGLtoCadVec(v: number[]) {
 //     return quat.mul(quat.create(), flipZY, q);
 // }
 
+/** @internal */
 export function flipCADToGLQuat(b: quat) {
     let ax = -0.7071067811865475,
         aw = 0.7071067811865475;
@@ -94,6 +96,7 @@ export function flipCADToGLQuat(b: quat) {
 //     return quat.mul(quat.create(), flipZY, q);
 // }
 
+/** @internal */
 export function flipGLtoCadQuat(b: quat) {
     let ax = 0.7071067811865475,
         aw = 0.7071067811865475;
@@ -108,7 +111,7 @@ export function flipGLtoCadQuat(b: quat) {
         aw * bw - ax * bx);
 }
 
-function flipDynaicObjects(swapVecFunc: (v: number[]) => number[], swapQuatFunc: (q: quat) => quat) {
+function flipDynamicObjects(swapVecFunc: (v: number[]) => number[], swapQuatFunc: (q: quat) => quat) {
     return function (ar: RenderStateDynamicObject[]) {
         const flippedObjects: RenderStateDynamicObject[] = [];
         for (const obj of ar) {
@@ -137,6 +140,7 @@ function flipArray(swapFunc: (v: number[]) => number[]) {
     }
 }
 
+/** @internal */
 export function flipRecursive(state: any, funcs: any) {
     for (const key in state) {
         const func = funcs ? funcs[key] : undefined;

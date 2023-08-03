@@ -2,9 +2,7 @@ import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState } from "webgl2";
 import type { UniformTypes } from "webgl2";
-import vertexShader from "./shader.vert";
-import fragmentShader from "./shader.frag";
-import logoBinary from "./logo.bin";
+// import logoBinary from "./logo.bin";
 
 export class WatermarkModule implements RenderModule {
     readonly kind = "watermark";
@@ -24,9 +22,10 @@ export class WatermarkModule implements RenderModule {
     }
 
     async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const { vertexShader, fragmentShader } = context.imports.shaders.watermark.render;
         const bin = context.resourceBin("Watermark");
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
-        const { vertices, indices } = WatermarkModule.geometry();
+        const { vertices, indices } = WatermarkModule.geometry(context.imports.logo);
         const vb = bin.createBuffer({ kind: "ARRAY_BUFFER", srcData: vertices });
         const ib = bin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices });
         const vao = bin.createVertexArray({
@@ -46,9 +45,9 @@ export class WatermarkModule implements RenderModule {
     static readonly numIndices = this.indexBufferBytes / 2;
 
     // Logo data are comes from the binary buffer of an gltf file. It has positions and triangle indices only. Z-coordinate is used for antialiasing. Mesh has been tesselated such that each triangle lies in a single antialiasing slope, i.e. has vertices along one edge only.
-    static geometry() {
-        const vertices = new Float32Array(logoBinary.buffer, 0, WatermarkModule.vertexBufferBytes / 4).slice();
-        const indices = new Uint16Array(logoBinary.buffer, WatermarkModule.vertexBufferBytes, WatermarkModule.numIndices).slice();
+    static geometry(logo: ArrayBuffer) {
+        const vertices = new Float32Array(logo, 0, WatermarkModule.vertexBufferBytes / 4).slice();
+        const indices = new Uint16Array(logo, WatermarkModule.vertexBufferBytes, WatermarkModule.numIndices).slice();
         return { vertices, indices };
     }
 }

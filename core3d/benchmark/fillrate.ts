@@ -1,15 +1,22 @@
 import { glClear, glCreateProgram, glDraw, glState, glUniformLocations } from "webgl2";
 import { measure } from "./util";
 import { Benchmark } from "./benchmark";
-import { shaders } from "./shaders";
+import type { ShaderImports } from "core3d/shaders";
 
 /** A basic GPU fill rate profiler. */
 export class FillrateProfiler {
     readonly program;
     readonly uniforms;
 
-    /** Create GPU resources using the gl context from the specified benchmark instance. */
-    constructor(readonly benchmark: Benchmark) {
+    /**
+     * @param benchmark The benchmark context to use.
+     * @param shaders The shader imports.
+     */
+    constructor(
+        /** The benchmark context. */
+        readonly benchmark: Benchmark,
+        shaders: ShaderImports["benchmark"]
+    ) {
         const { gl } = this.benchmark;
         this.program = glCreateProgram(gl, shaders.fillrate);
         this.uniforms = glUniformLocations(gl, this.program, ["seed"]);

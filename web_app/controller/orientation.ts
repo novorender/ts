@@ -1,16 +1,19 @@
 import { type ReadonlyQuat, glMatrix, quat, mat3, type ReadonlyVec3, vec3 } from "gl-matrix";
 
-export class PitchRollYawOrientation {
 
+/** A 3D rotation expressed as pitch, roll and yaw angles.
+ * @see {@link https://en.wikipedia.org/wiki/Aircraft_principal_axes}
+ */
+export class PitchRollYawOrientation {
     private _pitch = 30;
     private _yaw = 0;
     private _roll = 0;
     private _rot: ReadonlyQuat | undefined;
 
+    /** Pitch angle, in degrees. */
     get pitch() {
         return this._pitch;
     }
-
     set pitch(value: number) {
         value = clamp(value, -90, 90);
         if (value != this._pitch) {
@@ -19,23 +22,10 @@ export class PitchRollYawOrientation {
         }
     }
 
-    get yaw() {
-        return this._yaw;
-    }
-
-    set yaw(value: number) {
-        while (value >= 360) value -= 360;
-        while (value < 0) value += 360;
-        if (value != this._yaw) {
-            this._yaw = value;
-            this._rot = undefined;
-        }
-    }
-
+    /** Roll angle, in degrees. */
     get roll() {
         return this._roll;
     }
-
     set roll(value: number) {
         while (value >= 360) value -= 360;
         while (value < 0) value += 360;
@@ -45,6 +35,27 @@ export class PitchRollYawOrientation {
         }
     }
 
+    /** Yaw angle, in degrees. */
+    get yaw() {
+        return this._yaw;
+    }
+    set yaw(value: number) {
+        while (value >= 360) value -= 360;
+        while (value < 0) value += 360;
+        if (value != this._yaw) {
+            this._yaw = value;
+            this._rot = undefined;
+        }
+    }
+
+    /** Rotation expressed as a quaternion.
+     * @remarks
+     * The rotation will return a new object if after pitch, roll or yaw angles have changed since last time this accessor was called.
+     * Othewise, it returns the previous, cached, object.
+     * This enables {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Strict_equality | strict equality}
+     * to determine when the rotation remains unchanged.
+     * @see {@link https://glmatrix.net/docs/module-quat.html}
+     */
     get rotation() {
         if (!this._rot) {
             this._rot = this.computeRotation();
@@ -52,6 +63,9 @@ export class PitchRollYawOrientation {
         return this._rot;
     }
 
+    /** Set pitch, roll and yaw angles from rotation quaternion.
+     * @param rot The rotation quaternion to decompose into angles.
+     */
     decomposeRotation(rot: ReadonlyQuat) {
         const { yaw, pitch, roll } = decomposeRotation(rot);
         this.yaw = yaw * 180 / Math.PI;
@@ -61,13 +75,18 @@ export class PitchRollYawOrientation {
     }
 
     private computeRotation(): ReadonlyQuat {
-        //ported from https://github.com/BabylonJS/Babylon.js/blob/fe8e43bc526f01a3649241d3819a45455a085461/packages/dev/core/src/Maths/math.vector.ts
         const { _roll, _pitch, _yaw } = this;
         return computeRotation(_roll, _pitch, _yaw);
     }
 }
 
+/** Compute rotation quaternion from roll, pitch and yaw angles.
+ * @param roll Roll angle in degrees,
+ * @param pitch Pitch angle in degrees,
+ * @param yaw Yaw angle in degrees,
+ */
 export function computeRotation(roll: number, pitch: number, yaw: number) {
+    //ported from https://github.com/BabylonJS/Babylon.js/blob/fe8e43bc526f01a3649241d3819a45455a085461/packages/dev/core/src/Maths/math.vector.ts
     const halfYaw = glMatrix.toRadian(yaw) * 0.5;
     const halfPitch = glMatrix.toRadian(pitch) * 0.5;
     const halfRoll = glMatrix.toRadian(roll) * 0.5;
@@ -87,6 +106,10 @@ export function computeRotation(roll: number, pitch: number, yaw: number) {
     return quat.mul(quat.create(), flipYZ, quat.fromValues(x, y, z, w));
 }
 
+/** Decompose rotation quaternioan into roll, pitch and yaw angles.
+ * @param rot Rotation quaternion.
+ * @returns Rotation angles in radians.
+ */
 export function decomposeRotation(rot: ReadonlyQuat) {
     //ported from https://github.com/BabylonJS/Babylon.js/blob/fe8e43bc526f01a3649241d3819a45455a085461/packages/dev/core/src/Maths/math.vector.ts
     const flipXZ = quat.fromValues(-0.7071067811865475, 0, 0, 0.7071067811865476);
@@ -115,18 +138,28 @@ export function decomposeRotation(rot: ReadonlyQuat) {
         pitch = Math.asin(-2.0 * zAxisY);
         yaw = Math.atan2(2.0 * (qz * qx + qy * qw), sqz - sqx - sqy + sqw);
     }
-    return { yaw, pitch, roll } as const;
+    return {
+        /** The yaw angle, in radians. */
+        yaw,
+        /** The pitch angle, in radians. */
+        pitch,
+        /** The roll angle, in radians. */
+        roll
+    } as const;
 }
 
-export function clamp(v: number, min: number, max: number) {
-    if (v < min) {
-        v = min;
-    } else if (v > max) {
-        v = max;
+
+/** @internal */
+export function clamp(value: number, min: number, max: number) {
+    if (value < min) {
+        value = min;
+    } else if (value > max) {
+        value = max;
     }
-    return v;
+    return value;
 }
 
+/** @internal */
 export function rotationFromDirection(dir: ReadonlyVec3, snapToAxis?: quat) {
     const up = glMatrix.equals(Math.abs(vec3.dot(vec3.fromValues(0, 0, 1), dir)), 1)
         ? vec3.fromValues(0, 1, 0)

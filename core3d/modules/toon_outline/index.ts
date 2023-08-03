@@ -1,9 +1,6 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState, type UniformTypes } from "webgl2";
-import vertexShader from "./shader.vert";
-import fragmentShader from "./shader.frag";
-import { mat4, vec3 } from "gl-matrix";
 
 export class ToonModule implements RenderModule {
     readonly kind = "toon_outline";
@@ -22,6 +19,7 @@ export class ToonModule implements RenderModule {
     }
 
     async createResources(context: RenderContext, uniformsProxy: Uniforms) {
+        const { vertexShader, fragmentShader } = context.imports.shaders.toon.render;
         const bin = context.resourceBin("Grid");
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
         const sampler = bin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
@@ -35,10 +33,6 @@ export class ToonModule implements RenderModule {
 
 type Uniforms = ReturnType<ToonModule["createUniforms"]>;
 type Resources = Awaited<ReturnType<ToonModule["createResources"]>>;
-
-function isEnabled(context: RenderContext, state: DerivedRenderState) {
-    return state.toonOutline.enabled && (context.isIdleFrame || !state.toonOutline.onlyOnIdleFrame);
-}
 
 class ToonModuleContext implements RenderModuleContext {
     constructor(readonly context: RenderContext, readonly module: ToonModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
@@ -55,7 +49,7 @@ class ToonModuleContext implements RenderModuleContext {
             values.color = toonOutline.color;
             context.updateUniformBuffer(uniforms, this.uniforms);
         }
-        if (context.isRendering() && !context.isPickBuffersValid() && isEnabled(context, state)) {
+        if (context.prevState != undefined && !context.isPickBuffersValid() && state.toonOutline.enabled) {
             await context.renderPickBuffers();
         }
     }
@@ -69,7 +63,7 @@ class ToonModuleContext implements RenderModuleContext {
         const { gl, cameraUniforms } = context;
         const { textures } = context.buffers;
 
-        if (context.isRendering() && context.isPickBuffersValid() && isEnabled(context, state)) {
+        if (context.prevState != undefined && context.isPickBuffersValid() && state.toonOutline.enabled) {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],

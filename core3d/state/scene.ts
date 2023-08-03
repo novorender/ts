@@ -1,5 +1,4 @@
 import type { ReadonlyVec3, ReadonlyMat4 } from "gl-matrix";
-import type { downloadScene } from "../scene";
 
 /** Static, streamable geometry render state.
  * @remarks
@@ -33,19 +32,23 @@ export interface BoundingSphere {
 /** @internal */
 export type Base64String = string;
 
-/** @internal */
+/** Scene materials property arrays, encoded as base 64 strings. */
 export interface MaterialProperties {
+    /** Diffuse color properties. */
     readonly diffuse: {
         readonly red: Base64String;
         readonly green: Base64String;
         readonly blue: Base64String;
     };
+    /** Opacity properties. */
     readonly opacity: Base64String;
+    /** Specular properties. */
     readonly specular: {
         readonly red: Base64String;
         readonly green: Base64String;
         readonly blue: Base64String;
     };
+    /** Shininess properties. */
     readonly shininess: Base64String;
 }
 
@@ -63,23 +66,37 @@ export interface RenderStateStaticGeometryKinds {
     readonly documents?: boolean,
 };
 
-/** @internal */
+/** Scene Configuration */
 export interface SceneConfig {
+    /** Scene kind. */
     readonly kind: "octree";
+    /** Scene id. */
     readonly id: string;
+    /** Binary format version. */
     readonly version: string;
+    /** Weighted center point of scene, in world space. */
     readonly center: ReadonlyVec3;
+    /** Offset used to geo reference scene, in world space. */
     readonly offset: ReadonlyVec3;
-    readonly scale: number;
+    /** Scene bounding sphere, in world space. */
     readonly boundingSphere: BoundingSphere; // bounding sphere in model space
+    /** Scene bounding box, in world space. */
     readonly aabb: AABB;
+    /** Byte size of root node. */
     readonly rootByteSize: number;
+    /** Total # of selectable objects in scene. */
     readonly numObjects: number;
-    readonly numMaterials: number; // in original mesh, i.e. the size of the materialproperties texture
+    /** Total # of materials in scene. */
+    readonly numMaterials: number;
+    /** Scene material properties. */
     readonly materialProperties: MaterialProperties;
 
-    readonly modelWorldMatrix?: ReadonlyMat4; // model -> world space transformation matrix
+    /** Model to world space transformation matrix. */
+    readonly modelWorldMatrix?: ReadonlyMat4; //
+    /** List of geometry type subtrees within this scene. */
     readonly subtrees?: ("" | "terrain" | "triangles" | "lines" | "points" | "documents")[];
+    /** Optional point cloud attributes. */
     readonly variants?: ("deviation" | "intensity")[];
+    /** Binary root node meta information */
     readonly root: Base64String;
 }
