@@ -54,12 +54,20 @@ export class View {
      * @param canvas The HtmlCanvasElement used for rendering.
      * @param deviceProfile The device profile describing the host device's GPU performance characteristics and limitations.
      * @param imports Imported, non-javascript resources.
+     * @remarks
+     * Your browser must run in a {@link https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts | secure}
+     * and {@link https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts | cross-origin isolated } context.
      */
     public constructor(
         /** The HTMLCanvasElement used for rendering. */
         readonly canvas: HTMLCanvasElement,
         deviceProfile: DeviceProfile, imports: Core3DImports
     ) {
+        if (!isSecureContext)
+            throw new Error("Your browser is not running in an secure context!"); // see constructor tsdoc comments for more details
+        if (!crossOriginIsolated)
+            throw new Error("Your browser is not running in an cross-origin isolated context!"); // see constructor tsdoc comments for more details
+
         this._deviceProfile = deviceProfile;
         this._setDeviceProfile = initCore3D(deviceProfile, canvas, imports, this.setRenderContext);
         this.renderStateGL = defaultRenderState();
@@ -67,6 +75,7 @@ export class View {
 
         const input = new ControllerInput(canvas);
 
+        // TODO: Add some way to introduce 3. party controllers.
         this.controllers = {
             flight: new FlightController(this, input),
             orbit: new OrbitController(input),
