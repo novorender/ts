@@ -5,20 +5,17 @@ import { mergeRecursive, type BoundingSphere, type RecursivePartial, type Render
 import { PitchRollYawOrientation, decomposeRotation } from "./orientation";
 import { ControllerInput } from "./input";
 
-/** Ortho type camera motion controller */
-export interface OrthoControllerParams {
-    readonly position?: ReadonlyVec3;
-    readonly rotation?: ReadonlyQuat;
-    readonly fieldOfView?: number;
-    readonly stepInterval?: number;
-    readonly usePointerLock?: boolean
-}
-
+/** The ortho controller is for navigating a orthographic camera.
+ * @remarks
+ * A key aspect of this controller is as a means to view and navigate in 2D,
+ * aligning the parallel to the view plane to the axes or some reference plane.
+ * The front and back clipping planes are used to reveal a limited slab of the geometry.
+ */
 export class OrthoController extends BaseController {
     static readonly defaultParams = {
         position: [0, 0, 0],
         rotation: [0, 0, 0, 1],
-        fieldOfView: 45,
+        fieldOfView: 50,
         stepInterval: 1,
         usePointerLock: false,
     } as const;
@@ -26,11 +23,16 @@ export class OrthoController extends BaseController {
     override kind = "ortho" as const;
     override projection = "orthographic" as const;
     override changed = false;
+
     private params;
     private position: ReadonlyVec3;
     private orientation = new PitchRollYawOrientation();
     private fov: number;
 
+    /**
+     * @param input The input source.
+     * @param params Optional initialization parameters.
+     */
     constructor(input: ControllerInput, params?: OrthoControllerParams) {
         super(input);
         const { position, rotation, fieldOfView } = this.params = { ...OrthoController.defaultParams, ...params } as const;
@@ -187,3 +189,32 @@ export class OrthoController extends BaseController {
         return Math.max(0.1, perspectiveDepth) * Math.tan(((Math.PI / 180) * perspectiveFov) / 2) * 2;
     }
 }
+
+/** Ortho controller initialization parameters. */
+export interface OrthoControllerParams {
+    /** The camera position.
+     * @defaultValue  [0,0,0].
+     */
+    readonly position?: ReadonlyVec3;
+
+    /** The camera rotation.
+     * @defaultValue  An identity quaternion, [0,0,0,1].
+     */
+    readonly rotation?: ReadonlyQuat;
+
+    /** The camera field of view, expressed as meters between top and bottom view planes.
+     * @defaultValue 50
+     */
+    readonly fieldOfView?: number;
+
+    /** The interval to use for stepping clipping planes in the depth direction, i.e. when using mouse navigate buttons.
+     * @defaultValue 1.0
+     */
+    readonly stepInterval?: number;
+
+    /** Whether to use mouse pointer lock or not.
+     * @defaultValue false
+     */
+    readonly usePointerLock?: boolean
+}
+

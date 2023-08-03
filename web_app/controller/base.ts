@@ -1,81 +1,105 @@
-import type { RenderStateCamera, RenderStateChanges, RecursivePartial, BoundingSphere, PickSample, PickOptions } from "core3d";
 import { type ReadonlyVec3, type ReadonlyQuat, vec3 } from "gl-matrix";
+import type { RenderStateCamera, RenderStateChanges, RecursivePartial, BoundingSphere, PickSample, PickOptions } from "core3d";
+import type { View } from "../";
 import { ControllerInput } from "./input";
 import type { FlightControllerParams } from "./flight";
 import type { OrbitControllerParams } from "./orbit";
 import type { OrthoControllerParams } from "./ortho";
 import type { PanoramaControllerParams } from "./panorama";
 
-export type ControllerParams = FlightControllerParams | OrthoControllerParams | PanoramaControllerParams | OrbitControllerParams;
-export interface Orientation {
-    readonly pos: ReadonlyVec3;
-    readonly pitch: number;
-    readonly yaw: number;
-}
-export interface FlyToParams {
-    readonly totalFlightTime: number;
-    readonly begin: Orientation;
-    readonly end: Orientation;
-}
-
-interface FlyToExt extends FlyToParams {
-    currentFlightTime: number;
-    current: Orientation;
-}
-
+/** Base class for all camera controllers. */
 export abstract class BaseController {
+    /** The controller type id. */
     abstract readonly kind: string;
+
+    /** The camera projection kind.
+     * @see {@link RenderStateCamera.kind}.
+     * @virtual
+     */
     abstract readonly projection: RenderStateCamera["kind"];
+
+    /** Whether the camera has changed since last update or not.
+     * @see {@link RenderStateCamera.kind}.
+     * @virtual
+     */
     abstract readonly changed: boolean;
+
     private flyTo: FlyToExt | undefined;
     private isMoving = false;
 
-    constructor(readonly input: ControllerInput) {
-        // this.connect();
-        // this.axes = {} as ControllerAxes;
-        // this.resetAxes();
+    /**
+     * @param input The input source for this controller.
+     */
+    protected constructor(
+        /** The input source for this controller. */
+        readonly input: ControllerInput
+    ) {
     }
 
-    dispose() {
-        // this.disconnect();
-    }
-
+    /** The input axes
+     * @see {@link ControllerInput.axes}
+     */
     get axes() {
         return this.input.axes;
     }
 
+    /** Whether the camera is currently considered moving or not.
+     * @see {@link View.isIdleFrame}
+     */
     get moving() {
         return this.isMoving;
     }
 
+    /** The input element width.
+     * @see {@link ControllerInput.width}
+     */
     get width() {
         return this.input.width;
     }
 
+    /** The input element height.
+     * @see {@link ControllerInput.height}
+     */
     get height() {
         return this.input.height;
     }
 
+    /** The input multiplier.
+     * @see {@link ControllerInput.multiplier}
+     */
     get multiplier() {
         return this.input.multiplier;
     }
 
+    /** The input zoom position.
+     * @see {@link ControllerInput.zoomPos}
+     */
     get zoomPos() {
         return this.input.zoomPos;
     }
 
+    /** The input pointer table.
+     * @see {@link ControllerInput.touchPoints}
+     */
     get pointerTable() {
-        return this.input.pointerTable;
+        return this.input.touchPoints;
     }
 
+    /** The input shift button state.
+     * @see {@link ControllerInput.hasShift}
+     */
     get hasShift() {
         return this.input.hasShift;
     }
 
+    /** The current fly-to state, if any. */
     get currentFlyTo() {
         return this.flyTo?.current;
     }
 
+    /** Initialize a fly-to transition.
+     * @param flyTo The transition parameters
+     */
     protected setFlyTo(flyTo: FlyToParams) {
         // wrap begin yaw to nearest angular distance
         let { yaw } = flyTo.begin
@@ -86,6 +110,12 @@ export abstract class BaseController {
         this.flyTo = { ...flyTo, begin, currentFlightTime: 0, current: begin };
     }
 
+    /** Apply time sensitive changes to controller state.
+     * @param elapsedTime The # of milliseconds elapsed since the last update.
+     * @remarks
+     * Fly-to animations happens here,
+     * as well as motion based on keyboard pressed-state, such as the WASD keys.
+     */
     animate(elapsedTime: number) {
         if (elapsedTime < 0 || elapsedTime > 250) elapsedTime = 1000 / 60;
         this.input.animate(elapsedTime);
@@ -113,22 +143,80 @@ export abstract class BaseController {
         }
     }
 
+    /** Serialize the state of this controller into init parameters.
+     * @param includeDerived Include derived state which may not be intrinsic to this controller, such as orbit controller position.
+     * @see {@link init}
+     */
     abstract serialize(includeDerived?: boolean): ControllerInitParams;
+
+    /** Initialize controller from parameters.
+     * @see {@link serialize}
+     */
     abstract init(params: ControllerInitParams): void;
+
+    /** Attempt to fit controller position such that the specified bounding sphere is brought into view.
+     * @param center The center of the bounding sphere, in world space.
+     * @param radius The radius of the bounding sphere, in world space.
+     */
     abstract autoFit(center: ReadonlyVec3, radius: number): void;
+
+    /** Update internal controller state */
     abstract update(): void;
+
+    /** Retrieve changes to render state from derived class, if any.
+     * @param state The baseline state to apply changes to.
+     * @see {@link View.modifyRenderState}
+     * @remarks
+     * If there are no changes, the returned object will be empty, i.e. {}.
+     * @virtual
+     */
     abstract stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera>;
+
+    /** Update state from partial parameters. */
     abstract updateParams(params: RecursivePartial<ControllerParams>): void;
+
+    /** Attach this controller to the input object */
     attach() {
         this.input.callbacks = this;
     }
 
+    /** 
+     * Handler for mouse buttons events.
+     * @virtual
+     */
     mouseButtonChanged(event: MouseEvent): Promise<void> | void { }
+
+    /** 
+     * Handler for touch events.
+     * @virtual
+     */
     touchChanged(event: TouchEvent): Promise<void> | void { }
+
+    /** 
+     * Handler for mouse/touch move events.
+     * @virtual
+     */
     moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void { }
+
+    /** Move controller to specified position/rotation.
+     * @param targetPosition: The position to move to, in world space.
+     * @param flyTime: The time, in milliseconds, for the transition animation to last, or 0 for instant update.
+     * @param rotation: Optional target rotation, or undefined to retain current rotation.
+     */
     moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat): void { }
+
+    /** Bring the specified bounding sphere into view.
+     * @param boundingSphere: The bounding sphere to move into view.
+     * @param flyTime: The time, in milliseconds, for the transition animation to last, or 0 for instant update.
+     * @remarks
+     * This function will retain the current camera controller rotation.
+     */
     zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void { }
 
+    /** Retrieve the state changes to be applied to the specified render state.
+     * @param state The baseline render state.
+     * @param elapsedTime The time elapsed since last call, in milliseconds.
+     */
     renderStateChanges(state: RenderStateCamera, elapsedTime: number): RenderStateChanges | undefined {
         this.animate(elapsedTime);
         if (this.input.axesEmpty() && this.currentFlyTo == undefined && !this.changed) {
@@ -144,6 +232,12 @@ export abstract class BaseController {
         }
     }
 
+    /** Compute the distance to a point from the specified view plane.
+     * @param point The point to measure distance too
+     * @param cameraPosition The position of the camera/view plane.
+     * @param cameraRotation The rotation of the camera/view plane.
+     * @returns A signed distance from the point to the view plane, i.e. positive for points in front of the plane and negative otherwise.
+     */
     protected static getDistanceFromViewPlane(point: ReadonlyVec3, cameraPosition: ReadonlyVec3, cameraRotation: ReadonlyQuat): number {
         const dir = vec3.fromValues(0, 0, -1);
         vec3.transformQuat(dir, dir, cameraRotation);
@@ -152,19 +246,77 @@ export abstract class BaseController {
     }
 }
 
+
+/** Common controller input parameters. */
+export type ControllerParams = FlightControllerParams | OrthoControllerParams | PanoramaControllerParams | OrbitControllerParams;
+
+/** Camera controller 3D orientation in world space. */
+export interface Orientation {
+    /** Camera position. */
+    readonly pos: ReadonlyVec3;
+    /** Camera pitch angle in degrees. */
+    readonly pitch: number;
+    /** Camera yaw angle in degrees. */
+    readonly yaw: number;
+}
+
+/** Camera fly-to transition/animation parameter */
+export interface FlyToParams {
+    /** Total flight time in milliseconds. */
+    readonly totalFlightTime: number;
+    /** The transition start camera orientation. */
+    readonly begin: Orientation;
+    /** The transition end camera orientation. */
+    readonly end: Orientation;
+}
+
+/** @internal */
+interface FlyToExt extends FlyToParams {
+    currentFlightTime: number;
+    current: Orientation;
+}
+
+
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+
+/** @internal */
 export type MutableCameraState = Partial<Mutable<RenderStateCamera>>;
 
-export interface PickInterface {
+/** A context interface for pick operations.
+ * @remarks
+ * This is used by some controllers to determine the position and depth of point of screen to allow e.g. orbiting around said point.
+ * You may pass {@link View} or {@link RenderContext} directly, or wrap some custom variant of picking in your own object.
+ * @see {@link View.pick}
+ *  */
+export interface PickContext {
     pick: (x: number, y: number, options?: PickOptions) => Promise<PickSample | undefined>;
 }
 
+/** Common controller initialization parameters.
+ * @remarks
+ * No controller uses all of these parameters.
+ * This interface represents the union of all possible intialization paramters for all possible controllers.
+ * This is useful for deserialization, where the kind of controller is not known at compile time.
+ */
 export interface ControllerInitParams {
+    /** The kind of controller to initialize. */
     readonly kind: string;
+
+    /** The camera position, if applicable. */
     readonly position?: ReadonlyVec3;
+
+    /** The camera rotation, if applicable. */
     readonly rotation?: ReadonlyQuat;
-    readonly pivot?: ReadonlyVec3;
+
+    /** The camera perspective field of view, in degrees, if applicable. */
     readonly fovDegrees?: number;
+
+    /** The camera orthographic field of meters, in degrees, if applicable. */
     readonly fovMeters?: number;
+
+    /** The camera pivot point, if applicable. */
+    readonly pivot?: ReadonlyVec3;
+
+    /** The distance to the pivot point, if applicable. */
     readonly distance?: number;
 };

@@ -32,6 +32,7 @@ export interface OrbitControllerParams {
     readonly fieldOfView?: number;
 }
 
+/** A camera controller for orbiting around a point of interest. */
 export class OrbitController extends BaseController {
     static readonly defaultParams = {
         pivot: [0, 0, 0],
@@ -47,12 +48,17 @@ export class OrbitController extends BaseController {
     override kind = "orbit" as const;
     override projection = "pinhole" as const;
     override changed = false;
+
     private params;
     private readonly orientation = new PitchRollYawOrientation();
     private pivot: ReadonlyVec3 = vec3.create();
     private distance: number;
     private fov: number;
 
+    /**
+     * @param input The input source.
+     * @param params Optional initialization parameters.
+     */
     constructor(input: ControllerInput, params?: OrbitControllerParams) {
         super(input);
         const { pitch, yaw, distance, pivot, fieldOfView } = this.params = { ...OrbitController.defaultParams, ...params } as const;
@@ -64,6 +70,7 @@ export class OrbitController extends BaseController {
         this.pivot = pivot;
     }
 
+    // computed position
     private get position() {
         const { orientation, pivot, distance } = this;
         const pos = vec3.fromValues(0, 0, distance);

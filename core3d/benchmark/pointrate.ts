@@ -8,8 +8,15 @@ export class PointrateProfiler {
     readonly program;
     readonly uniforms;
 
-    /** Create GPU resources using the gl context from the specified benchmark instance. */
-    constructor(readonly benchmark: Benchmark, shaders: ShaderImports["benchmark"]) {
+    /**
+     * @param benchmark The benchmark context to use.
+     * @param shaders The shader imports.
+     */
+    constructor(
+        /** The benchmark context. */
+        readonly benchmark: Benchmark,
+        shaders: ShaderImports["benchmark"]
+    ) {
         const { gl } = this.benchmark;
         this.program = glCreateProgram(gl, shaders.pointrate);
         this.uniforms = glUniformLocations(gl, this.program, ["color"]);

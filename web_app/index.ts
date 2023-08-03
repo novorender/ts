@@ -11,4 +11,6 @@ export * from "./serviceWorker";
 export * from "./imports";
 export const packageVersion = "env" in import.meta ? (import.meta as any).env.NPM_PACKAGE_VERSION : undefined ?? "beta";
 
+// THIS IS VERY IMPORTANT!!! MUST BE SET PRIOR TO CREATING ANY GL MATRICES, PREFERABLY AS THE FIRST LINE OF CODE IN THE WHOLE APP!
+// Float32Array doesn't have enough resolution for scenes with georeferenced coordinates.
 glMatrix.setMatrixArrayType(Array);

@@ -15,17 +15,17 @@ export interface RenderStateDynamicImage {
  */
 export interface RenderStateDynamicSampler {
     /** Minification filter
-     * @default `"NEAREST_MIPMAP_LINEAR"`
+     * @defaultValue `"NEAREST_MIPMAP_LINEAR"`
      */
     readonly minificationFilter?: MinFilterString;
 
     /** Magnification filter
-     * @default `"LINEAR"`
+     * @defaultValue `"LINEAR"`
      */
     readonly magnificationFilter?: MagFilterString;
 
     /** Tuple of S and T wrap mode, respectively.
-     * @default `["REPEAT", "REPEAT"]`
+     * @defaultValue `["REPEAT", "REPEAT"]`
      */
     readonly wrap?: readonly [WrapString, WrapString];
 }
@@ -36,7 +36,7 @@ export interface RenderStateDynamicTexture {
     readonly image: RenderStateDynamicImage;
 
     /** Sampler to use for this texture
-     * @default Sampler with all default values.
+     * @defaultValue Sampler with all default values.
      */
     readonly sampler?: RenderStateDynamicSampler;
 }
@@ -47,12 +47,12 @@ export interface RenderStateDynamicTextureReference {
     readonly texture: RenderStateDynamicTexture;
 
     /** What set of texture coordinates to use (0 or 1).
-     * @default 0
+     * @defaultValue 0
      */
     readonly texCoord?: 0 | 1;
 
     /** Optional texture coordinate 3x3 transformation matrix
-     * @default Identity matrix.
+     * @defaultValue Identity matrix.
      */
     readonly transform?: ReadonlyMat3;
 }
@@ -60,7 +60,7 @@ export interface RenderStateDynamicTextureReference {
 /** Normal map texture reference state. */
 export interface RenderStateDynamicNormalTextureReference extends RenderStateDynamicTextureReference {
     /** Scale factor to apply to normal XY coordinate.
-     * @default 1.0
+     * @defaultValue 1.0
      */
     readonly scale?: number;
 }
@@ -68,7 +68,7 @@ export interface RenderStateDynamicNormalTextureReference extends RenderStateDyn
 /** Occlusion map texture reference state. */
 export interface RenderStateDynamicOcclusionTextureReference extends RenderStateDynamicTextureReference {
     /** Strength factor to apply to occlusion [0.0, 1.0].
-     * @default 1.0
+     * @defaultValue 1.0
      */
     readonly strength?: number;
 }
@@ -146,7 +146,7 @@ interface RenderStateDynamicMaterialCommon {
     readonly alphaMode?: "OPAQUE" | "MASK" | "BLEND"; // default: "OPAQUE"
 
     /** Cutoff factor used for alpha masking.
-     * @default 0.5
+     * @defaultValue 0.5
      */
     readonly alphaCutoff?: number;
 }
@@ -158,7 +158,7 @@ export interface RenderStateDynamicMaterialUnlit extends RenderStateDynamicMater
     readonly kind: "unlit";
 
     /** Factor used directly or multiplied with {@link baseColorTexture}, if defined, for material base color.
-     * @default `[1,1,1,1]`
+     * @defaultValue `[1,1,1,1]`
      */
     readonly baseColorFactor?: RGBA;
 
@@ -174,22 +174,22 @@ export interface RenderStateDynamicMaterialGGX extends RenderStateDynamicMateria
     readonly kind: "ggx";
 
     /** Factor used directly or multiplied with {@link baseColorTexture}, if defined, for material base color.
-     * @default `[1,1,1,1]`
+     * @defaultValue `[1,1,1,1]`
      */
     readonly baseColorFactor?: RGBA; // default [1,1,1,1]
 
     /** Metallicness PBR factor (0-1)
-     * @default 1
+     * @defaultValue 1
      */
     readonly metallicFactor?: number; // default: 1
 
     /** Roughness PBR factor (0-1)
-     * @default 1
+     * @defaultValue 1
      */
     readonly roughnessFactor?: number;
 
     /** Emissive light factor (0-1)
-     * @default 1
+     * @defaultValue 1
      */
     readonly emissiveFactor?: RGB; // default [0,0,0]
 

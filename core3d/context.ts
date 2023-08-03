@@ -767,7 +767,7 @@ export class RenderContext {
         }
     }
 
-
+    /** @internal */
     updateOutlinesUniforms(plane: ReadonlyVec4, color: RGB, planeIndex: number) {
         const { outlineUniforms, outlinesUniformsData } = this;
         // transform outline plane into local space
@@ -908,10 +908,6 @@ export interface PickSample {
     readonly deviation?: number;
     /** The depth/distance from the view plane. */
     readonly depth: number;
-
-    // Sigve: Please don't pollute this interface with derived properties. Extend this with a new interface!
-    // readonly normalVS?: ReadonlyVec3;
-    // readonly isEdge?: boolean;
 };
 
 /** Extra pick options. */

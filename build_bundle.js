@@ -1,32 +1,33 @@
 import { build } from "esbuild";
-import copyFilesAsync from "copyfiles";
+import path from "path";
 import fs from "fs";
-// import * as tsup from "tsup";
-import inlineWorkerPlugin from 'esbuild-plugin-inline-worker';
 
-async function copyFiles(paths, options) {
-    return new Promise((resolve, reject) =>
-        copyFilesAsync(paths,
-            options ?? {},
-            error => {
-                if (error) {
-                    reject(error);
-                } else {
-                    resolve();
-                }
-            }
-        )
-    );
+function copyFiles(target, paths) {
+    fs.mkdirSync(target, { recursive: true });
+    for (const filePath of paths) {
+        const fileName = path.basename(filePath);
+        fs.copyFileSync(filePath, `${target}/${fileName}`);
+    }
 }
 
+function copyDirs(target, paths) {
+    fs.mkdirSync(target, { recursive: true });
+    for (const dirPath of paths) {
+        const dirName = path.basename(dirPath);
+        fs.cpSync(dirPath, `${target}/${dirName}`, { recursive: true });
+    }
+}
+
+
 // copy source files
-await copyFiles(["tsconfig.json", "web_app/**/*", "core3d/**/*", "webgl2/**/*", "dist"]);
+copyDirs("dist", ["web_app", "core3d", "webgl2"]);
+copyFiles("dist", ["tsconfig.json"]);
+
+// copy public files
+copyFiles("dist/public", ["core3d/wasm/main.wasm", "core3d/lut_ggx.png", "core3d/modules/watermark/logo.bin"]);
 
 // move web_app/package.json to root
 fs.renameSync("dist/web_app/package.json", "dist/package.json");
-
-// TODO: copy all other resources to be imported to dist filter
-// TODO: use tsc to make .js and .map.js files (and declaration files? - test out in test project)
 
 // const production = process.env.ENV === 'production';
 
@@ -47,9 +48,9 @@ fs.renameSync("dist/web_app/package.json", "dist/package.json");
 
 const buildOptions = {
     entryPoints: {
-        index: 'dist/web_app/index.ts',
-        loaderWorker: 'dist/core3d/imports/loader.worker.ts',
-        shaders: 'dist/core3d/imports/shaders.ts',
+        ["index"]: 'dist/web_app/index.ts',
+        ["public/loaderWorker"]: 'dist/core3d/modules/octree/worker/index.ts',
+        ["public/shaders"]: 'dist/core3d/imports/shaders.ts',
     },
     define: {
         'import.meta.env.NPM_PACKAGE_VERSION': `"${process.env.VERSION ?? process.env.npm_package_version}"`
@@ -68,7 +69,6 @@ const buildOptions = {
         ".vert": "text",
         ".frag": "text"
     },
-    plugins: [inlineWorkerPlugin()],
     outdir: './dist/',
 }
 

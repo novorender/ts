@@ -286,12 +286,12 @@ export interface RenderStateGrid {
     readonly axisY: ReadonlyVec3;
 
     /** Minor grid cell size
-     * @default 1
+     * @defaultValue 1
      */
     readonly size1: number;
 
     /** Major grid cell size
-     * @default 10
+     * @defaultValue 10
      */
     readonly size2: number;
 
@@ -533,7 +533,7 @@ export interface RenderStateHighlightGroup {
  */
 export interface RenderStateHighlightGroups {
     /** Highlight action for all objects current not in a highlight group.
-     * @default `undefined`
+     * @defaultValue `undefined`
      */
     readonly defaultAction: RenderStateGroupAction | undefined;
 
@@ -542,7 +542,7 @@ export interface RenderStateHighlightGroups {
 }
 
 /** Used to visualize internal render buffers.
- * @default `TonemappingMode.color`.
+ * @defaultValue `TonemappingMode.color`.
  */
 export enum TonemappingMode {
     /** Render the regular color output using HDR tone-mapping. */
@@ -592,12 +592,12 @@ export interface RenderStateTonemapping {
     /** Camera light exposure as stops of power of 2.
      * @remarks
      * Negative values darkens the image, while positive ones brightens it.
-     * @default 0.0
+     * @defaultValue 0.0
      */
     readonly exposure: number;
 
     /** Debug/diagnostics option to display internal render buffers.
-     * @default TonemappingMode.color
+     * @defaultValue TonemappingMode.color
      */
     readonly mode: TonemappingMode;
 }

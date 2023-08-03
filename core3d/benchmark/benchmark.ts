@@ -5,7 +5,6 @@ export class Benchmark {
     static readonly size = 1024;
     static readonly numPixels = Benchmark.size * Benchmark.size;
 
-    /** Create a new instance with a HTML canvas and webgl2 render context. */
     constructor() {
         const options: WebGLContextAttributes = {
             alpha: true,

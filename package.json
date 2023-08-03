@@ -25,9 +25,7 @@
         "@types/copyfiles": "^2.4.1",
         "@types/node": "^20.4.1",
         "@types/serviceworker": "^0.0.68",
-        "copyfiles": "^2.4.1",
         "esbuild": "^0.18.17",
-        "esbuild-plugin-inline-worker": "^0.1.1",
         "tsup": "^7.1.0",
         "typescript": "^5.1.6"
     },
