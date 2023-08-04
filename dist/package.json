@@ -5,7 +5,9 @@
     "browser": "./index.js",
     "types": "./web_app/index.ts",
     "type": "module",
-    "scripts": {},
+    "scripts":  {
+        "prepublishOnly": "(cd .. && ENV=production VERSION=$npm_package_version npm run build:webapp)"
+    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/novorender/ts.git"

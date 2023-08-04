@@ -105,7 +105,7 @@ if (baseColor != vec4(0)) {
     if(highlight == 254U) {
         discard;
     }
-    if(highlight != 0U || !scene.applyDefaultHighlight) {
+    if(highlight != 0U || scene.applyDefaultHighlight) {
         float u = (float(highlight) + 0.5) / float(maxHighlights);
         mat4 colorTransform;
         colorTransform[0] = texture(textures.highlights, vec2(u, 0.5 / 5.0));
