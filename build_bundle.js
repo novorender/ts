@@ -18,6 +18,18 @@ function copyDirs(target, paths) {
     }
 }
 
+function emptyDir(dir) {
+    if (fs.existsSync(dir)) {
+        fs.readdirSync(dir).forEach(f => {
+            fs.rmSync(`${dir}/${f}`, { recursive: true, force: true });
+        });
+    } else {
+        fs.mkdirSync(dir);
+    }
+}
+
+// empty dist folder
+emptyDir("dist");
 
 // copy source files
 copyDirs("dist", ["web_app", "core3d", "webgl2"]);
@@ -29,7 +41,7 @@ copyFiles("dist/public", ["core3d/wasm/main.wasm", "core3d/lut_ggx.png", "core3d
 // move web_app/package.json to root
 fs.renameSync("dist/web_app/package.json", "dist/package.json");
 
-// const production = process.env.ENV === 'production';
+const production = process.env.ENV === 'production';
 
 // const buildOptionsIIFE = {
 //     entryPoints: {
@@ -56,15 +68,15 @@ const buildOptions = {
         'import.meta.env.NPM_PACKAGE_VERSION': `"${process.env.VERSION ?? process.env.npm_package_version}"`
     },
     sourcemap: true,
-    minify: true,
+    minify: production,
     bundle: true,
     platform: "browser",
     target: ["esnext"],
     format: "esm",
     loader: {
-        ".wasm": "binary",
-        ".bin": "binary",
-        ".png": "binary",
+        ".wasm": "file",
+        ".bin": "file",
+        ".png": "file",
         ".glsl": "text",
         ".vert": "text",
         ".frag": "text"

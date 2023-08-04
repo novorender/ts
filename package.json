@@ -5,11 +5,8 @@
     "description": "",
     "type": "module",
     "scripts": {
-        "watch": "npm run typescript -- --watch",
-        "copy": "copyfiles -v",
-        "build:webapp": "npm run typescript && node ./build_bundle && npm run tsup -- web_app/index.ts --dts-only",
-        "typescript": "tsc --noemit",
-        "tsup": "tsup"
+        "watch": "tsc --noEmit --watch",
+        "build:bundle": "node ./build_bundle"
     },
     "repository": {
         "type": "git",
@@ -22,11 +19,9 @@
     },
     "homepage": "https://github.com/novorender/ts#readme",
     "devDependencies": {
-        "@types/copyfiles": "^2.4.1",
         "@types/node": "^20.4.1",
         "@types/serviceworker": "^0.0.68",
         "esbuild": "^0.18.17",
-        "tsup": "^7.1.0",
         "typescript": "^5.1.6"
     },
     "dependencies": {

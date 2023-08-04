@@ -38,3 +38,121 @@ export interface Core3DImports {
      */
     readonly shaders: ShaderImports;
 }
+
+
+/**
+ * A map describing inlined resources, or urls where to fetch them.
+ */
+export interface Core3DImportMap {
+    /** The base url to be applied to the other URLs.
+     * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/URL/URL}
+     * @defaultValue `import.meta.url`
+     */
+    readonly baseUrl?: string | URL;
+
+    /** Inlined GGX lookup texture as Blob or ImageBitmap, or URL to download.
+     * @defaultValue `"./lut_ggx.png"`
+     * @remarks Blobs should have their type set to the proper MIME type, e.g. `type: "image/png"`.
+     */
+    readonly lutGGX?: string | URL | Blob | ImageBitmap;
+
+    /** Inlined WASM instance, or URL to download.
+     * @defaultValue `"./main.wasm"`
+     */
+    readonly wasmInstance?: string | URL | WasmInstance;
+
+    /** Inlined loader worker, or URL to download.
+     * @defaultValue `"./loaderWorker.js"`
+     */
+    readonly loaderWorker?: string | URL | Worker;
+
+    /** Inlined Logo, or URL to download.
+     * @defaultValue `"./logo.bin"`
+     */
+    readonly logo?: string | URL | ArrayBuffer;
+
+    /** Inlined shaders, or URL to download.
+     * @defaultValue `"./shaders.js"`
+     */
+    readonly shaders?: string | URL | ShaderImports;
+}
+
+/** Download any missing imports.
+ * @param map URLs or bundled asset map.
+ * @remarks
+ * This function will attempt to download any resource not inlined from the specified urls,
+ * using the specified {@link Core3DImportMap.baseUrl | baseUrl}.
+ * If map is undefined, it will look for the files in the same folder as the current script.
+ * 
+ * @category Render View
+ */
+export async function downloadImports(map: Core3DImportMap): Promise<Core3DImports> {
+    const baseUrl = new URL(map.baseUrl ?? "", import.meta.url);
+    const loaderWorker = getWorker(map.loaderWorker ?? "./loaderWorker.js", baseUrl);
+    const lutGGXPromise = getLutGGX(map.lutGGX ?? "./lut_ggx.png", baseUrl);
+    const wasmInstancePromise = getInstance(map.wasmInstance ?? "./main.wasm", baseUrl);
+    const shadersPromise = getShaders(map.shaders ?? "./shaders.js", baseUrl);
+    const logoPromise = getLogo(map.logo ?? "./logo.bin", baseUrl);
+    const [lutGGX, wasmInstance, shaders, logo] =
+        await Promise.all([lutGGXPromise, wasmInstancePromise, shadersPromise, logoPromise]);
+    return { lutGGX, wasmInstance, loaderWorker, shaders, logo };
+}
+
+async function download<T extends "text" | "json" | "blob" | "arrayBuffer" | "formData">(url: URL, kind: T) {
+    const response = await fetch(url, { mode: "cors" });
+    if (!response.ok)
+        throw new Error(`HTTP error ${response.status}: ${response.statusText}!`);
+    return await (response[kind]() as ReturnType<Response[T]>);
+}
+
+function isUrl(url: unknown): url is string | URL {
+    return typeof url == "string" || url instanceof URL;
+}
+
+async function getLutGGX(arg: string | URL | Blob | ImageBitmap, baseUrl?: string | URL) {
+    let blob: Blob | undefined;
+    if (isUrl(arg)) {
+        const url = new URL(arg, baseUrl);
+        blob = await download(url, "blob");
+    } else if (arg instanceof Blob) {
+        blob = arg;
+    } else {
+        return arg;
+    }
+    return await createImageBitmap(blob);
+}
+
+async function getInstance(arg: string | URL | WasmInstance, baseUrl?: string | URL) {
+    if (!isUrl(arg)) {
+        return arg;
+    }
+    const url = new URL(arg, baseUrl);
+    const response = await fetch(url, { mode: "cors" });
+    const { instance } = await WebAssembly.instantiateStreaming(response);
+    return instance.exports as unknown as WasmInstance;
+}
+
+function getWorker(arg: string | URL | Worker, baseUrl?: string | URL) {
+    if (!isUrl(arg)) {
+        return arg;
+    }
+    const url = new URL(arg, baseUrl);
+    return new Worker(url, { type: "module", name: "loader" });
+}
+
+async function getLogo(arg: string | URL | ArrayBuffer, baseUrl?: string | URL) {
+    if (!isUrl(arg)) {
+        return arg;
+    }
+    const url = new URL(arg, baseUrl);
+    return await download(url, "arrayBuffer");
+}
+
+async function getShaders(arg: string | URL | ShaderImports, baseUrl?: string | URL) {
+    if (!isUrl(arg)) {
+        return arg;
+    }
+    const url = new URL(arg, baseUrl);
+    const { shaders } = await import(url.toString());
+    return shaders as ShaderImports;
+}

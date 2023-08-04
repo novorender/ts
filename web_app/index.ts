@@ -8,7 +8,6 @@ export * from "./device";
 export * from "./view";
 export * from "./controller";
 export * from "./serviceWorker";
-export * from "./imports";
 export * from "./highlight";
 export * from "./geometry";
 

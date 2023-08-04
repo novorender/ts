@@ -9,42 +9,17 @@
             "problemMatcher": [
                 "$tsc-watch"
             ],
-            "detail": "tsc --watch --noemit",
+            "detail": "tsc --watch --noEmit",
             "runOptions": {
                 "runOn": "folderOpen"
             }
         },
         {
-            "type": "shell",
-            "label": "build webgl2/examples",
-            "command": "node",
-            "args": [
-                "build.mjs"
-            ],
-            "options": {
-                "cwd": "webgl2/examples"
-            },
-            "isBackground": true,
+            "type": "npm",
+            "label": "npm start",
+            "script": "build:bundle",
             "problemMatcher": [],
-            "detail": "node build.mjs",
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            }
-        },
-        {
-            "type": "shell",
-            "label": "build core3d/test",
-            "command": "node",
-            "args": [
-                "build.mjs"
-            ],
-            "options": {
-                "cwd": "core3d/test"
-            },
-            "isBackground": true,
-            "problemMatcher": [],
-            "detail": "node build.mjs",
+            "detail": "node build_bundle.js",
             "group": {
                 "kind": "build",
                 "isDefault": true

@@ -1,7 +1,7 @@
 {
     "name": "@novorender/web_app",
     "version": "1.0.0",
-    "description": "",
+    "description": "Novorender web app API package.",
     "browser": "./index.js",
     "types": "./web_app/index.ts",
     "type": "module",
