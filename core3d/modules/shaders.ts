@@ -8,6 +8,7 @@ import tonemap from "./tonemap/shaders";
 import toon from "./toon_outline/shaders";
 import watermark from "./watermark/shaders";
 
+/** @internal */
 export type Shaders = { readonly [P in string]: { readonly vertexShader: string; readonly fragmentShader?: string; } };
 
 /** @internal */

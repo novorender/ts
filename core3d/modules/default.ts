@@ -8,7 +8,9 @@ import { WatermarkModule } from "./watermark";
 import { DynamicModule } from "./dynamic";
 import { ToonModule } from "./toon_outline";
 
-/** Return the default/built-in render modules in the order they should be rendered. */
+/** Return the default/built-in render modules in the order they should be rendered.
+ * @category Render Module
+ */
 export function createDefaultModules() {
     return [
         new BackgroundModule(),

@@ -3,6 +3,7 @@ import { type ReadonlyQuat, glMatrix, quat, mat3, type ReadonlyVec3, vec3 } from
 
 /** A 3D rotation expressed as pitch, roll and yaw angles.
  * @see {@link https://en.wikipedia.org/wiki/Aircraft_principal_axes}
+ * @category Camera Controllers
  */
 export class PitchRollYawOrientation {
     private _pitch = 30;
@@ -84,6 +85,7 @@ export class PitchRollYawOrientation {
  * @param roll Roll angle in degrees,
  * @param pitch Pitch angle in degrees,
  * @param yaw Yaw angle in degrees,
+ * @category Camera Controllers
  */
 export function computeRotation(roll: number, pitch: number, yaw: number) {
     //ported from https://github.com/BabylonJS/Babylon.js/blob/fe8e43bc526f01a3649241d3819a45455a085461/packages/dev/core/src/Maths/math.vector.ts
@@ -109,6 +111,7 @@ export function computeRotation(roll: number, pitch: number, yaw: number) {
 /** Decompose rotation quaternioan into roll, pitch and yaw angles.
  * @param rot Rotation quaternion.
  * @returns Rotation angles in radians.
+ * @category Camera Controllers
  */
 export function decomposeRotation(rot: ReadonlyQuat) {
     //ported from https://github.com/BabylonJS/Babylon.js/blob/fe8e43bc526f01a3649241d3819a45455a085461/packages/dev/core/src/Maths/math.vector.ts

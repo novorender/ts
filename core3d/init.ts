@@ -15,6 +15,7 @@ import type { Core3DImports } from "./imports";
  * Instead it will call your setback function, either when the render context is ready or restored.
  * You can check {@link RenderContext.isContextLost} to see if the underlying WebGLRenderingContext is lost or not.
  * Changes to device profile will force a recreation of the entire context and should generally be avoided.
+ * @category Render View
  */
 export function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanvasElement, imports: Core3DImports, setRenderContext: (context: RenderContext) => void) {
     const options: WebGLContextAttributes = {

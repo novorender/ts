@@ -1,5 +1,6 @@
 import { mat4, vec3, type ReadonlyMat4, type ReadonlyVec4 } from "gl-matrix";
 
+/** @internal */
 export function decodeBase64(base64: string, type?: Uint8ArrayConstructor): Uint8Array;
 export function decodeBase64(base64: string, type: Uint8ClampedArrayConstructor): Uint8ClampedArray;
 export function decodeBase64(base64: string | undefined, type?: Uint8ArrayConstructor): Uint8Array | undefined;

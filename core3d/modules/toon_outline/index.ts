@@ -2,6 +2,7 @@ import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState, type UniformTypes } from "webgl2";
 
+/** @internal */
 export class ToonModule implements RenderModule {
     readonly kind = "toon_outline";
     readonly uniforms = {

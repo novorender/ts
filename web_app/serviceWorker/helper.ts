@@ -1,6 +1,7 @@
 import { PromiseBag, type ConnectRequest, type ReadRequest, type ReadResponse } from ".";
 
 // this class helps handle the service worker tasks for offline caching and loading of a scene
+/** @internal */
 export class ServiceWorkerHelper {
     private _port: MessagePort | undefined;
     private _reads = new PromiseBag<ArrayBuffer>();

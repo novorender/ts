@@ -10,6 +10,7 @@ import { ControllerInput } from "./input";
  * A key aspect of this controller is as a means to view and navigate in 2D,
  * aligning the parallel to the view plane to the axes or some reference plane.
  * The front and back clipping planes are used to reveal a limited slab of the geometry.
+ * @category Camera Controllers
  */
 export class OrthoController extends BaseController {
     static readonly defaultParams = {
@@ -190,7 +191,9 @@ export class OrthoController extends BaseController {
     }
 }
 
-/** Ortho controller initialization parameters. */
+/** Ortho controller initialization parameters.
+ * @category Camera Controllers
+ */
 export interface OrthoControllerParams {
     /** The camera position.
      * @defaultValue  [0,0,0].

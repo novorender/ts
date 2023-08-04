@@ -2,9 +2,9 @@ import fillrate_vert from "./fillrate.vert";
 import fillrate_frag from "./fillrate.frag";
 import pointrate_vert from "./pointrate.vert";
 import pointrate_frag from "./pointrate.frag";
+import type { Shaders } from "core3d/modules/shaders";
 
-type Shaders = { readonly [P in string]: { readonly vertexShader: string; readonly fragmentShader?: string; } };
-
+/** @internal */
 export const shaders = {
     fillrate: {
         vertexShader: fillrate_vert,

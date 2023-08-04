@@ -7,7 +7,9 @@ import type { OrbitControllerParams } from "./orbit";
 import type { OrthoControllerParams } from "./ortho";
 import type { PanoramaControllerParams } from "./panorama";
 
-/** Base class for all camera controllers. */
+/** Base class for all camera controllers.
+ * @category Camera Controllers
+ */
 export abstract class BaseController {
     /** The controller type id. */
     abstract readonly kind: string;
@@ -247,10 +249,14 @@ export abstract class BaseController {
 }
 
 
-/** Common controller input parameters. */
+/** Common controller input parameters.
+ * @category Camera Controllers
+ */
 export type ControllerParams = FlightControllerParams | OrthoControllerParams | PanoramaControllerParams | OrbitControllerParams;
 
-/** Camera controller 3D orientation in world space. */
+/** Camera controller 3D orientation in world space.
+ * @category Camera Controllers
+ */
 export interface Orientation {
     /** Camera position. */
     readonly pos: ReadonlyVec3;
@@ -260,7 +266,9 @@ export interface Orientation {
     readonly yaw: number;
 }
 
-/** Camera fly-to transition/animation parameter */
+/** Camera fly-to transition/animation parameter
+ * @category Camera Controllers
+ */
 export interface FlyToParams {
     /** Total flight time in milliseconds. */
     readonly totalFlightTime: number;
@@ -276,7 +284,6 @@ interface FlyToExt extends FlyToParams {
     current: Orientation;
 }
 
-
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
 /** @internal */
@@ -287,7 +294,8 @@ export type MutableCameraState = Partial<Mutable<RenderStateCamera>>;
  * This is used by some controllers to determine the position and depth of point of screen to allow e.g. orbiting around said point.
  * You may pass {@link View} or {@link RenderContext} directly, or wrap some custom variant of picking in your own object.
  * @see {@link View.pick}
- *  */
+ * @category Camera Controllers
+ */
 export interface PickContext {
     pick: (x: number, y: number, options?: PickOptions) => Promise<PickSample | undefined>;
 }
@@ -297,6 +305,7 @@ export interface PickContext {
  * No controller uses all of these parameters.
  * This interface represents the union of all possible intialization paramters for all possible controllers.
  * This is useful for deserialization, where the kind of controller is not known at compile time.
+ * @category Camera Controllers
  */
 export interface ControllerInitParams {
     /** The kind of controller to initialize. */

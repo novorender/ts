@@ -1,4 +1,6 @@
-/** A basic GPU benchmark helper class. */
+/** A basic GPU benchmark helper class.
+ * @category Device Profile
+ */
 export class Benchmark {
     readonly canvas;
     readonly gl;

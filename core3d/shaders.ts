@@ -7,5 +7,7 @@ export const shaders = {
     common, benchmark, ...moduleShaders
 } as const;
 
-/** Standard module glsl shader imports. */
+/** Standard module glsl shader imports.
+ * @category Render Module
+ */
 export type ShaderImports = typeof shaders;

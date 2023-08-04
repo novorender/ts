@@ -13,6 +13,7 @@ type Mutable<T> = { -readonly [P in keyof T]: T[P] };
  * @remarks
  * The loaded state does not contain any geometry, only the data required to start geometry streaming.
  * It may take several frames for any geometry to appear, and several seconds for it to fully resolve.
+ * @category Render State
  */
 export async function downloadScene(url: string, abortController?: AbortController): Promise<RenderStateScene> {
     if (!abortController)

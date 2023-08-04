@@ -21,6 +21,7 @@ pick buffer layout
  * Set of buffers uses for rendering and pick.
  * @remarks
  * These buffers are only useful for advanced developers who aim to extend this API with their own custom 3D module.
+ * @category Render Module
  */
 export class RenderBuffers {
     /** Flag to indicate the CPU/read buffers needs to be updated. */

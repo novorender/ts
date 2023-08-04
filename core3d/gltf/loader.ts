@@ -28,6 +28,7 @@ const BINARY_HEADER_MAGIC = 'glTF';
 const BINARY_HEADER_LENGTH = 12;
 const BINARY_CHUNK_TYPES = { JSON: 0x4E4F534A, BIN: 0x004E4942 };
 
+/** @internal */
 export function parseGLB(data: ArrayBuffer) {
     const headerView = new DataView(data, 0, BINARY_HEADER_LENGTH);
     const decoder = new TextDecoder();
@@ -73,6 +74,7 @@ export function parseGLB(data: ArrayBuffer) {
     return { json, buffer };
 }
 
+/** @internal */
 export async function loadData(url: URL, abortController?: AbortController) {
     const path = url.pathname.toLowerCase();
     let gltf: GLTF.GlTf;

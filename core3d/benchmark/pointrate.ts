@@ -3,7 +3,9 @@ import { waitFrame, measure } from "./util";
 import { Benchmark } from "./benchmark";
 import type { ShaderImports } from "core3d/shaders";
 
-/** A basic GPU point rate profiler. */
+/** A basic GPU point rate profiler.
+ * @category Device Profile
+ */
 export class PointrateProfiler {
     readonly program;
     readonly uniforms;

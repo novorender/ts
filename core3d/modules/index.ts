@@ -4,7 +4,7 @@ import type { RenderContext } from "../context";
 /** A render module factory object.
  * @remarks
  * The render module should be able to gracefully recreate its context from a new render context whenever a lost GL context is restored.
- * 
+ * @category Render Module
  */
 export interface RenderModule {
     /** Human readable name of module. */
@@ -16,6 +16,7 @@ export interface RenderModule {
 
 /** A render module's context for a specific render context.
  * @remarks This object should contain all GPU/render context specific resources and handle actual updates and rendering.
+ * @category Render Module
  */
 export interface RenderModuleContext {
     /** Associated render module. */

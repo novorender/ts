@@ -4,6 +4,7 @@ import { glUBOProxy, glDraw, glState } from "webgl2";
 import type { UniformTypes } from "webgl2";
 // import logoBinary from "./logo.bin";
 
+/** @internal */
 export class WatermarkModule implements RenderModule {
     readonly kind = "watermark";
     readonly uniforms = {

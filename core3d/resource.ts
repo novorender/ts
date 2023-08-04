@@ -4,6 +4,7 @@ import { glCreateBuffer, glCreateFrameBuffer, glCreateProgram, glCreateRenderbuf
  * A WebGL resource tracking helper class.
  * @remarks
  * Resource bins are used to track allocation of WebGL resources and assist with automatic disposal.
+ * @category Render Module
  */
 export class ResourceBin {
     private readonly resourceMap = new Map<WebGLResource, ResourceInfo[]>();

@@ -14,6 +14,7 @@ import { esbuildImports } from "core3d/imports/esbuild";
  * If you wish to inline some or all of these resources,
  * or fetch them from different locations,
  * you must do so making your own, equivalent function within your bundler/build environment.
+ * @category Render View
  */
 export async function getBundledImports(baseUrl?: string) {
     baseUrl ??= (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url; // use current script url.

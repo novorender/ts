@@ -6,7 +6,9 @@ import type { TextureImageSource } from "webgl2";
  *  Core3D bundler/build resource imports.
  * @remarks
  * In order to adapt to any build/bundler system and inlining preferences, we declare all non-javascript imported resources here.
- * These must be created by some external function that is specific to your build/bundler environment. */
+ * These must be created by some external function that is specific to your build/bundler environment.
+ * @category Render View
+ */
 export interface Core3DImports {
     /** The GGX shader lookup image.
      * @remarks This image can be found in `core3d/lut_ggx.png`.

@@ -1,14 +1,5 @@
 
-import { mat3, quat, vec3, type ReadonlyQuat, type ReadonlyVec3, vec4, type ReadonlyVec4 } from "gl-matrix";
-import type { RecursivePartial, RenderState, RenderStateCamera, RenderStateChanges, RenderStateClipping, RenderStateClippingPlane, RenderStateGrid, RenderStateOutput } from ".";
-import type { MutableCameraState } from "web_app/controller/base";
-import type { RGBA } from "webgl2";
-
-type Mutable<T> = { -readonly [P in keyof T]: T[P] };
-export type MutableGridState = Partial<Mutable<RenderStateGrid>>;
-
-// this function will create a copy where unchanged properties have same identity (=== operator yields true)
-// use this to quickly check for changes.
+import type { RenderState, RenderStateChanges, RenderStateClipping, RenderStateOutput } from ".";
 
 /**
  * Create a new copy of render state with specified modifications.
@@ -25,6 +16,7 @@ export type MutableGridState = Partial<Mutable<RenderStateGrid>>;
  * This function also performs some basic validation of the new state changes, at a slight performance cost.
  * To mitigate this overhead, accumulating all the changes for a frame into a single object may be beneficial.
  * The {@link mergeRecursive} function may be useful in for this.
+ * @category Render State
  */
 export function modifyRenderState(state: RenderState, changes: RenderStateChanges): RenderState {
     const newState = mergeRecursive(state, changes) as RenderState;

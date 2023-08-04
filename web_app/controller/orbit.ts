@@ -5,7 +5,9 @@ import { BaseController, type ControllerInitParams, type MutableCameraState } fr
 import { PitchRollYawOrientation } from "./orientation";
 import { ControllerInput } from "./input";
 
-/** Orbit type camera motion controller */
+/** Orbit type camera motion controller
+ * @category Camera Controllers
+ */
 export interface OrbitControllerParams {
     /** The world space coordinate to orbit around. (0,0,0) is default. */
     readonly pivot?: ReadonlyVec3;
@@ -32,7 +34,9 @@ export interface OrbitControllerParams {
     readonly fieldOfView?: number;
 }
 
-/** A camera controller for orbiting around a point of interest. */
+/** A camera controller for orbiting around a point of interest.
+ * @category Camera Controllers
+ */
 export class OrbitController extends BaseController {
     static readonly defaultParams = {
         pivot: [0, 0, 0],

@@ -1,3 +1,4 @@
+/** @internal */
 export class PromiseBag<T = void> {
     private readonly promises = new Map<number, PendingPromise<T>>();
     private currentId = 0;

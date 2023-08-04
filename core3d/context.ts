@@ -29,6 +29,8 @@ import { createDefaultModules } from "./modules/default";
  * Features such as async picking and shader linking requires {@link poll} to be called at regular intervals,
  * e.g. at the start of each frame.
  * Otherwise the promises will never be resolved.
+ * 
+ * @category Render Module
  */
 export class RenderContext {
     /** WebGL2 render context associated with this object. */

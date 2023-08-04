@@ -2,13 +2,16 @@ import type { ReadonlyMat3, ReadonlyMat4, ReadonlyQuat, ReadonlyVec3 } from "gl-
 import type { DrawMode, MagFilterString, MinFilterString, RGBA, TextureParams2DUncompressed, VertexAttribute, WrapString } from "webgl2";
 import type { RGB } from "./types";
 
-/** Texture image related state. */
+/** Texture image related state.
+ * @category Render State
+ */
 export interface RenderStateDynamicImage {
     /** The parameters for to 2D, uncompressed texture creation. */
     readonly params: TextureParams2DUncompressed; // TODO: Add support for compressed textures
 }
 
 /** Texture sampled related state
+ * @category Render State
  * @see 
  * https://en.wikipedia.org/wiki/Texture_filtering
  * https://learnopengl.com/Getting-started/Textures
@@ -30,7 +33,9 @@ export interface RenderStateDynamicSampler {
     readonly wrap?: readonly [WrapString, WrapString];
 }
 
-/** Texture related state. */
+/** Texture related state.
+ * @category Render State
+ */
 export interface RenderStateDynamicTexture {
     /** Image to use for this texture */
     readonly image: RenderStateDynamicImage;
@@ -41,7 +46,9 @@ export interface RenderStateDynamicTexture {
     readonly sampler?: RenderStateDynamicSampler;
 }
 
-/** Texture reference state. */
+/** Texture reference state.
+ * @category Render State
+ */
 export interface RenderStateDynamicTextureReference {
     /** What texture to use. */
     readonly texture: RenderStateDynamicTexture;
@@ -57,7 +64,9 @@ export interface RenderStateDynamicTextureReference {
     readonly transform?: ReadonlyMat3;
 }
 
-/** Normal map texture reference state. */
+/** Normal map texture reference state.
+ * @category Render State
+ */
 export interface RenderStateDynamicNormalTextureReference extends RenderStateDynamicTextureReference {
     /** Scale factor to apply to normal XY coordinate.
      * @defaultValue 1.0
@@ -65,7 +74,9 @@ export interface RenderStateDynamicNormalTextureReference extends RenderStateDyn
     readonly scale?: number;
 }
 
-/** Occlusion map texture reference state. */
+/** Occlusion map texture reference state.
+  * @category Render State
+*/
 export interface RenderStateDynamicOcclusionTextureReference extends RenderStateDynamicTextureReference {
     /** Strength factor to apply to occlusion [0.0, 1.0].
      * @defaultValue 1.0
@@ -73,10 +84,14 @@ export interface RenderStateDynamicOcclusionTextureReference extends RenderState
     readonly strength?: number;
 }
 
-/** Vertex attribute type for dynamic objects. */
+/** Vertex attribute type for dynamic objects.
+ * @category Render State
+ */
 export type RenderStateDynamicVertexAttribute = Omit<VertexAttribute, "buffer"> & { readonly buffer: BufferSource };
 
-/** Dynamic mesh vertex attributes state. */
+/** Dynamic mesh vertex attributes state.
+ * @category Render State
+ */
 export interface RenderStateDynamicVertexAttributes {
     /** Vertex position. */
     readonly position: RenderStateDynamicVertexAttribute;
@@ -99,7 +114,9 @@ export interface RenderStateDynamicVertexAttributes {
     readonly texCoord1?: RenderStateDynamicVertexAttribute;
 }
 
-/** Dynamic mesh geometry state. */
+/** Dynamic mesh geometry state.
+ * @category Render State
+ */
 export interface RenderStateDynamicGeometry {
     /** Type of render primitive. */
     readonly primitiveType: DrawMode;
@@ -113,6 +130,7 @@ export interface RenderStateDynamicGeometry {
  * @remarks
  * Meshes are rendered one material at a time.
  * This interfaces describes such a sub-mesh, or mesh primitive
+ * @category Render State
  */
 export interface RenderStateDynamicMeshPrimitive {
     /** What dynamic mesh geometry to use. */
@@ -122,13 +140,17 @@ export interface RenderStateDynamicMeshPrimitive {
     readonly material: RenderStateDynamicMaterial;
 }
 
-/** Dynamic mesh render state. */
+/** Dynamic mesh render state.
+ * @category Render State
+ */
 export interface RenderStateDynamicMesh {
     /** Array of geometry+material sub meshes. */
     readonly primitives: readonly RenderStateDynamicMeshPrimitive[];
 }
 
-/** Common material properties. */
+/** Common material properties.
+ * @category Render State
+ */
 interface RenderStateDynamicMaterialCommon {
     /** Whether to render material as double sided or not.
      * @default: false
@@ -152,7 +174,9 @@ interface RenderStateDynamicMaterialCommon {
 }
 
 
-/** Unlit material properties. */
+/** Unlit material properties.
+ * @category Render State
+ */
 export interface RenderStateDynamicMaterialUnlit extends RenderStateDynamicMaterialCommon {
     /** Material union discriminant. */
     readonly kind: "unlit";
@@ -168,6 +192,7 @@ export interface RenderStateDynamicMaterialUnlit extends RenderStateDynamicMater
 
 /** GGX type of PBR material.
  * @see https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#materials
+ * @category Render State
  */
 export interface RenderStateDynamicMaterialGGX extends RenderStateDynamicMaterialCommon {
     /** Material union discriminant. */
@@ -213,10 +238,14 @@ export interface RenderStateDynamicMaterialGGX extends RenderStateDynamicMateria
     // TODO: include specular, ior and clearcoat?
 }
 
-/** Material related render state. */
+/** Material related render state.
+ * @category Render State
+ */
 export type RenderStateDynamicMaterial = RenderStateDynamicMaterialUnlit | RenderStateDynamicMaterialGGX;
 
-/** Dynamic object instance render state. */
+/** Dynamic object instance render state.
+ * @category Render State
+ */
 export interface RenderStateDynamicInstance {
     /** Object instance position, in world space. */
     readonly position: ReadonlyVec3;
@@ -225,7 +254,9 @@ export interface RenderStateDynamicInstance {
     readonly rotation?: ReadonlyQuat;
 }
 
-/** Dynamic object related render state. */
+/** Dynamic object related render state.
+ * @category Render State
+ */
 export interface RenderStateDynamicObject {
     /** What mesh to render. */
     readonly mesh: RenderStateDynamicMesh;
@@ -257,6 +288,7 @@ export interface RenderStateDynamicObject {
  * 
  * Since there is a significant overlap between the {@link https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html | gltf2 specifications} and this render state,
  * you may read the glTF2 specs to learn more details.
+ * @category Render State
  */
 export interface RenderStateDynamicObjects {
     /** Dynamic objects to render. */

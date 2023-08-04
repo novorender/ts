@@ -9,7 +9,7 @@ import { flipState } from "./flip";
  * The view class wraps the complexities of the `Core3D` module into a high-level abstraction.
  * Notably, it implements a render loop in the {@link run} function, which deals with a number of issues, such as:
  * - Camera controllers.
- * - Re-rendering after {@link modifyRenderState | state changes} only, saving energy and battery life.
+ * - Rendering after {@link modifyRenderState | state changes}, saving energy and battery life.
  * - Adjust to resizing of canvas element.
  * - Managing idle vs active rendering, i.e. lower fidelity rendering while the camera is moving for better frame rates.
  * - Adaptive performance adjustment to maintain a target frame rate target.
@@ -17,6 +17,7 @@ import { flipState } from "./flip";
  * 
  * In the likely event that you want to change or extend some of the default behaviour,
  * you should make a derived View class of your own and override the methods you need.
+ * @category Render View
  */
 export class View {
     /** The url from which the javascript containing this class was loaded. */
@@ -492,7 +493,9 @@ export class View {
     }
 }
 
-/** Background/IBL environment description */
+/** Background/IBL environment description
+ * @category Render View
+ */
 export interface EnvironmentDescription {
     /** Display name of environment */
     readonly name: string;
@@ -504,7 +507,9 @@ export interface EnvironmentDescription {
     readonly thumnbnailURL: string;
 }
 
-/** View related render statistics. */
+/** View related render statistics.
+ * @category Render View
+ */
 export interface ViewStatistics {
     /** Effective resolution factor. */
     readonly resolution: number,
@@ -516,7 +521,9 @@ export interface ViewStatistics {
     readonly fps?: number,
 }
 
-/** Extended pick sample information. */
+/** Extended pick sample information.
+ * @category Render View
+ */
 export interface PickSampleExt extends PickSample {
     /** Sample normal, in view space. */
     readonly normalVS: ReadonlyVec3;
@@ -525,7 +532,10 @@ export interface PickSampleExt extends PickSample {
     readonly isEdge: boolean;
 }
 
-/** Type of camera controller. */
+/** Type of camera controller.
+ * @category Camera Controller
+ * @category Render View
+ */
 export type CameraControllerType = keyof View["controllers"];
 
 /** Optional values to initialize camera controller. */
@@ -540,7 +550,10 @@ export interface CameraControllerInitialValues {
     readonly fov?: number;
 }
 
-/** Camera controller switch options. */
+/** Camera controller switch options.
+ * @category Camera Controller
+ * @category Render View
+ */
 export interface CameraControllerOptions {
     /** Whether to attempt an auto initializion of camera position or not.
      * @remarks

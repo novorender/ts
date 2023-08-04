@@ -25,6 +25,7 @@ function getTransform(node: GLTF.Node) {
     return transform;
 }
 
+/** @internal */
 export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externalImageBlobs: (Blob | undefined)[], baseObjectId?: number): Promise<readonly RenderStateDynamicObject[]> {
     const { extensionsRequired, extensionsUsed } = gltf;
     if (extensionsUsed && extensionsUsed.length != 0 && extensionsUsed[0] != "KHR_materials_unlit") {

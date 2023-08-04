@@ -1,11 +1,5 @@
 import { vec2 } from "gl-matrix";
 
-interface ModiferKeyEvent {
-    altKey: boolean,
-    shiftKey: boolean,
-    ctrlKey: boolean
-}
-
 /**
  * The input source of camera controllers.
  * @remarks
@@ -14,6 +8,7 @@ interface ModiferKeyEvent {
  * The assumption is that each of these axes may be bound to a pair of keyboard keys, e.g. `A` and `D`, or some input position coordinate, e.g. the mouse `x` position for left/right motion.
  * All of these axes are updated independently, i.e. it is possible to move a camera with both keyboard and mouse simultaneously.
  * It is up to each camera controller to scale and apply each of these axes into an actual motion of the camera.
+ * @category Camera Controllers
  */
 export class ControllerInput {
     /** The underlying HTMLElement providing input events. */
@@ -416,6 +411,7 @@ export class ControllerInput {
 
 /** Flags for various mouse buttons.
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons}
+ * @category Camera Controllers
  */
 export enum MouseButtons {
     none = 0,
@@ -451,10 +447,19 @@ type ControllerAxesName =
     | "touch_pinch3"
     ;
 
-/** The input gesture axes values. */
+/** The input gesture axes values.
+ * @property keyboard_ad Keyboard `A` and `D` axis.
+ * @property keyboard_ws Keyboard `W` and `S` axis.
+ * @property keyboard_qe Keyboard `Q` and `E` axis.
+ * @property keyboard_arrow_left_right Keyboard cursor left and right axis.
+ * @property keyboard_arrow_up_down Keyboard cursor up and down axis.
+ * @category Camera Controllers
+ */
 export type ControllerAxes = { [P in ControllerAxesName]: number };
 
-/** Input event callbacks. */
+/** Input event callbacks.
+ * @category Camera Controllers
+ */
 export interface ContollerInputContext {
     /** Mouse button events. */
     mouseButtonChanged(event: MouseEvent): Promise<void> | void;
@@ -466,6 +471,7 @@ export interface ContollerInputContext {
 
 /** A single touch input contact point.
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Touch} for more details.
+ * @category Camera Controllers
  */
 export interface TouchContactPoint {
     /** The touch identifier.
@@ -482,4 +488,10 @@ export interface TouchContactPoint {
      * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Touch/clientY}
      */
     readonly y: number;
+}
+
+interface ModiferKeyEvent {
+    altKey: boolean,
+    shiftKey: boolean,
+    ctrlKey: boolean
 }

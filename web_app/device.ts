@@ -11,6 +11,7 @@ import { View } from "./";
  * - 1: IOS, IPad, high-end android device, weak integrated (intel) GPU
  * - 2: Mac M1 or better, strong integrated GPU or weak/old discrete GPU.
  * - 3: Discrete GPU, mid to high end.
+ * @category Device Profile
  */
 export type GPUTier = 0 | 1 | 2 | 3; // larger means more powerful GPU
 
@@ -22,6 +23,7 @@ export type GPUTier = 0 | 1 | 2 | 3; // larger means more powerful GPU
  * @remarks
  * A simple tier system is probably too simplistic but provides a starting point.
  * The resulting device profile may be modified further before passing it into the {@link View} constructor.
+ * @category Device Profile
  */
 export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): DeviceProfile {
     const outline = tier >= 1;

@@ -3,6 +3,7 @@ import type { ReadonlyVec3, ReadonlyMat4 } from "gl-matrix";
 /** Static, streamable geometry render state.
  * @remarks
  * Any change to this state will trigger a complete reload of the streamable scene.
+ * @category Render State
  */
 export interface RenderStateScene {
     /** Base url whence the scene was downloaded. */
@@ -13,7 +14,9 @@ export interface RenderStateScene {
     readonly hide?: RenderStateStaticGeometryKinds;
 }
 
-/** Axis-aligned bounding box */
+/** Axis-aligned bounding box
+ * @category Render State
+ */
 export interface AABB {
     /** Minimum coordinates. */
     readonly min: ReadonlyVec3;
@@ -21,7 +24,9 @@ export interface AABB {
     readonly max: ReadonlyVec3;
 }
 
-/** Bounding sphere */
+/** Bounding sphere
+ * @category Render State
+ */
 export interface BoundingSphere {
     /** Sphere center. */
     readonly center: ReadonlyVec3;
@@ -32,7 +37,9 @@ export interface BoundingSphere {
 /** @internal */
 export type Base64String = string;
 
-/** Scene materials property arrays, encoded as base 64 strings. */
+/** Scene materials property arrays, encoded as base 64 strings.
+ * @category Render State
+ */
 export interface MaterialProperties {
     /** Diffuse color properties. */
     readonly diffuse: {
@@ -52,7 +59,9 @@ export interface MaterialProperties {
     readonly shininess: Base64String;
 }
 
-/** Flags for what types of geometry to render or not. */
+/** Flags for what types of geometry to render or not.
+ * @category Render State
+ */
 export interface RenderStateStaticGeometryKinds {
     /** Whether to render terrain geometry. */
     readonly terrain?: boolean,
@@ -66,7 +75,9 @@ export interface RenderStateStaticGeometryKinds {
     readonly documents?: boolean,
 };
 
-/** Scene Configuration */
+/** Scene Configuration
+ * @category Render State
+ */
 export interface SceneConfig {
     /** Scene kind. */
     readonly kind: "octree";

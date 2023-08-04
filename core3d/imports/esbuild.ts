@@ -37,7 +37,9 @@ async function loadLogo(baseUrl: string) {
     return await download(url, "arrayBuffer");
 }
 
-/** esbuild specific bundler imports */
+/** esbuild specific bundler imports
+ * @category Render View
+ */
 export async function esbuildImports(baseUrl: string): Promise<Core3DImports> {
     const loaderWorker = createWorker(baseUrl);
     const lutGGXPromise = createLutGGX(baseUrl);

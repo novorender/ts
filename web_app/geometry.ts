@@ -41,7 +41,8 @@ export function createRandomInstances(count = 1, radius?: number) {
  * const cube = createCubeObject();
  * view.modifyRenderState({ dynamic: { objects: [cube] } });
  * ```
- * @beta
+ * @category Geometry
+ * @experimental
  */
 export function createCubeObject(material?: RenderStateDynamicMaterial): RenderStateDynamicObject {
     const vertices = createCubeVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
@@ -120,7 +121,8 @@ function createCubeIndices() {
  * const sphere = createSphereObject();
  * view.modifyRenderState({ dynamic: { objects: [sphere] } });
  * ```
- * @beta
+ * @category Geometry
+ * @experimental
  */
 export function createSphereObject(detail = 5, material?: RenderStateDynamicMaterial): RenderStateDynamicObject {
     const radius = 1;

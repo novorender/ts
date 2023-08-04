@@ -13,7 +13,7 @@ async function getDirHandle(name: string) {
     return dirHandle;
 }
 
-
+/** @internal */
 export async function handleMainMessage(message: MessageEvent<ConnectRequest | WriteRequest>) {
     const data = message.data;
     // TODO: check out message.ports for ways to communicate directly between service worker and io worker.

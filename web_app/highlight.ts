@@ -2,6 +2,7 @@ import type { AtLeastOne, RGB, RGBA, RGBATransform } from "core3d/state";
 
 /** 
  * Create a highlight color transform that doesn't change colors.
+ * @category Render State
  */
 export function createNeutralHighlight(): RGBATransform {
     return [
@@ -15,6 +16,7 @@ export function createNeutralHighlight(): RGBATransform {
 /** 
  * Create a highlight color transform that replaces material opacity.
  * @param opacity New material opacity between 0 and 1, where 0 is 100% transparent and 1.0 is 100% opaque.
+ * @category Render State
  */
 export function createTransparentHighlight(opacity: number): RGBATransform {
     return [
@@ -28,6 +30,7 @@ export function createTransparentHighlight(opacity: number): RGBATransform {
 /** 
  * Create a highlight color transform that replaces material colors.
  * @param color New material color or color modifier with optional alpha to be used uniformly across selection.
+ * @category Render State
  */
 export function createColorSetHighlight(color: RGB | RGBA): RGBATransform {
     const [r, g, b, a] = color;
@@ -44,6 +47,7 @@ export function createColorSetHighlight(color: RGB | RGBA): RGBATransform {
  * @param color New material color or color modifier with optional alpha.
  * @remarks
  * Colors can either be replaced or modified using the {@link LinearTransform}.
+ * @category Render State
  */
 export function createRGBATransformHighlight(options: AtLeastOne<RGBAOptions>): RGBATransform {
     const r = normalizeLinearTransform(options.red);
@@ -61,6 +65,7 @@ export function createRGBATransformHighlight(options: AtLeastOne<RGBAOptions>): 
 /** 
  * Create a highlight color transform that modifies material colors using hue, saturation and lightness.
  * @param color New material hue, saturation and lightness modifier with optional alpha.
+ * @category Render State
  */
 export function createHSLATransformHighlight(options: AtLeastOne<HSLAOptions>): RGBATransform {
     const [ls, lo] = normalizeLinearTransform(options.lightness);
@@ -108,6 +113,7 @@ function normalizeLinearTransform(transform: LinearTransform | number | undefine
 /** Options for RGBA + alpha color transformation.
  * @remarks
  * All input values are between 0 and 1.
+ * @category Render State
  */
 export interface RGBAOptions {
     /** Red color adjustment. */
@@ -123,7 +129,8 @@ export interface RGBAOptions {
 /** Options for HSL + alpha color transformation.
  * @remarks
  * All input values are between 0 and 1.
- * See [Wikipedia](https://en.wikipedia.org/wiki/HSL_and_HSV) for more details on the HSV color space.
+ * See {@link https://en.wikipedia.org/wiki/HSL_and_HSV | Wikipedia} for more details on the HSV color space.
+ * @category Render State
  */
 export interface HSLAOptions {
     /** Lightness adjustment. */
@@ -141,6 +148,7 @@ export interface HSLAOptions {
  * @remarks
  * The transform is performed by first applying scale, then adding offset, i.e.: result = value * scale + offset.
  * If scale = 0, offset will effectively replace input value.
+ * @category Render State
  */
 export interface LinearTransform {
     /** Multiplicand for input value. Default = 1.*/

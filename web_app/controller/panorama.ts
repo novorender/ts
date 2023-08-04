@@ -5,7 +5,9 @@ import { type RenderStateScene, type RenderStateCamera, type RenderState, mergeR
 import { PitchRollYawOrientation, decomposeRotation } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 
-/** Panorama type camera motion controller */
+/** Panorama camera controller parameters
+ * @category Camera Controllers
+ */
 export interface PanoramaControllerParams {
     position?: ReadonlyVec3;
     pitch?: number;
@@ -15,6 +17,11 @@ export interface PanoramaControllerParams {
 }
 
 
+/** Panorama type camera motion controller
+ * @remarks
+ * For rotating the camera inside a sphere with a panorama image projected onto it.
+ * @category Camera Controllers
+ */
 export class PanoramaController extends BaseController {
     static readonly defaultParams = {
         position: [0, 0, 0],
@@ -32,6 +39,10 @@ export class PanoramaController extends BaseController {
     private readonly orientation = new PitchRollYawOrientation();
     private fov: number;
 
+    /**
+     * @param input The input source.
+     * @param params Optional initialization parameters.
+     */
     constructor(input: ControllerInput, params?: PanoramaControllerParams) {
         super(input);
         this.params = { ...PanoramaController.defaultParams, ...params } as const;
@@ -154,7 +165,9 @@ export class PanoramaController extends BaseController {
     }
 }
 
-/** Panorama controller initialization parameters. */
+/** Panorama controller initialization parameters.
+ * @category Camera Controllers
+ */
 export interface PanoramaControllerParams {
     /** The camera position.
      * @defaultValue [0,0,0]

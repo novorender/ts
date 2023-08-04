@@ -8,6 +8,7 @@ import type { GPUTier } from "web_app/device";
  * Overestimating may crash the browser, so when in doubt we go with a low estimate.
  * Underestimating will produce fewer details and lower resolution/quality than your device can handle.
  * Knowledgeable users may adjust these settings manually, but should be warned to do so with caution.
+ * @category Device Profile
 */
 export interface DeviceProfile {
     /** What features should be enabled or disabled on this device. */
@@ -31,7 +32,7 @@ export interface DeviceProfile {
      * Smaller values will produce less geometric details, which may improve rendering performance at the cost of geometric error.
      * Larger values will produce more geometric details, which in turn requires more powerful GPU to keep performance acceptable.
      * The formula is essentially this:
-     * `acceptable_geometric_error = geometry_max_error * detailBias`
+     * `acceptable_geometric_error = geometry_max_error / detailBias`
      */
     readonly detailBias: number;
 
@@ -49,7 +50,7 @@ export interface DeviceProfile {
      * @remarks
      * Most devices can display up to 60 FPS, which is perceived as nice and fluid.
      * However, lower frame rates enables more detail and fidelity.
-     * 30 or even 20 frames per second may be acceptable on low-powered devices.
+     * 30 or even 20 frames per second may be acceptable on weak devices.
      * Note that this value is merely a hint for automatic adjustments and does not guarantee the effective framerate.
      */
     readonly framerateTarget: number;
@@ -63,7 +64,9 @@ export interface DeviceProfile {
     readonly tier: GPUTier;
 }
 
-/** Feature flags for current device. True = enable. */
+/** Feature flags for current device. True = enable.
+ * @category Device Profile
+ */
 export interface DeviceFeatures {
     /** Enable/disable outline rendering. */
     readonly outline: boolean;
@@ -72,6 +75,7 @@ export interface DeviceFeatures {
 /** Device hardware limitations.
  * @remarks
  * Note that these limitations should reflect the effective limitations of the browser hosting web app, with room for UI and other app related resources.
+ * @category Device Profile
  */
 export interface DeviceLimits {
     /** Max. # bytes allowed for GPU resources, such as buffers and textures. */
@@ -93,6 +97,7 @@ export interface DeviceLimits {
  * @remarks
  * These problems usually stems from buggy native WebGL drivers.
  * Workarounds may involve disabling certain features or not producing certain outputs.
+ * @category Device Profile
  */
 export interface DeviceQuirks {
     /** Adreno 600 series driver bug. Normals in the picking buffer will be 0 and toon shading will be off. */

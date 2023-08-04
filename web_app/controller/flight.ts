@@ -5,9 +5,11 @@ import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type Bou
 import { PitchRollYawOrientation, clamp, decomposeRotation } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 
-/** The flight controller mimics the behaviour of an etheral, hovering drone, allowing unconstrained movements through walls and obstacles. */
+/** The flight controller mimics the behaviour of an etheral, hovering drone, allowing unconstrained movements through walls and obstacles.
+ * @category Camera Controllers
+ */
 export class FlightController extends BaseController {
-    static readonly defaultParams = {
+    private static readonly defaultParams = {
         position: [0, 0, 0],
         pitch: -30,
         yaw: 30,
@@ -340,7 +342,9 @@ function isTouchEvent(event: MouseEvent | TouchEvent): event is TouchEvent {
     return "TouchEvent" in globalThis && event instanceof TouchEvent;
 }
 
-/** Variant of flight controller that uses middle mouse button for panning. */
+/** Variant of flight controller that uses middle mouse button for panning.
+ * @category Camera Controllers
+ */
 export class CadMiddlePanController extends FlightController {
     override kind = "cadMiddlePan" as const;
 
@@ -369,7 +373,9 @@ export class CadMiddlePanController extends FlightController {
     }
 }
 
-/** Variant of flight controller that uses right mouse button for panning. */
+/** Variant of flight controller that uses right mouse button for panning.
+ * @category Camera Controllers
+ */
 export class CadRightPanController extends FlightController {
     override kind = "cadRightPan" as const;
 
@@ -398,7 +404,9 @@ export class CadRightPanController extends FlightController {
     }
 }
 
-/** Vassbakk's super special flight controller. */
+/** Vassbakk's super special flight controller.
+ * @category Camera Controllers
+ */
 export class SpecialFlightController extends FlightController {
     override kind = "special" as const;
 
@@ -432,7 +440,9 @@ export class SpecialFlightController extends FlightController {
     }
 }
 
-/** Flight controller initialization parameters */
+/** Flight controller initialization parameters
+ * @category Camera Controllers
+ */
 export interface FlightControllerParams {
     /** The camera position.
      * @defaultValue [0,0,0]
