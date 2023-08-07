@@ -16,10 +16,10 @@
         },
         {
             "type": "npm",
-            "label": "npm start",
-            "script": "build:bundle",
+            "label": "npm ./build.mjs",
+            "script": "build",
             "problemMatcher": [],
-            "detail": "node build_bundle.js",
+            "detail": "node ./build",
             "group": {
                 "kind": "build",
                 "isDefault": true

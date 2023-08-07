@@ -3,10 +3,9 @@
     "private": true,
     "version": "1.0.0",
     "description": "",
-    "type": "module",
     "scripts": {
         "watch": "tsc --noEmit --watch",
-        "build:bundle": "node ./build_bundle"
+        "build": "node ./build.mjs"
     },
     "repository": {
         "type": "git",
