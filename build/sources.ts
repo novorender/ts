@@ -1,6 +1,7 @@
 import { resolve, dirname, normalize, posix, relative } from "path";
-import { stat, mkdir, copyFile, cp, readdir, rm, writeFile } from "fs/promises";
-import * as packageInfo from "../package.json";
+import { stat, mkdir, copyFile, cp, readFile, readdir, rm, writeFile } from "fs/promises";
+import * as packageJson from "../package.json";
+import ejs from "ejs";
 
 async function copyFiles(target: string, paths: readonly string[]) {
     await mkdir(target, { recursive: true });
@@ -15,11 +16,6 @@ async function copyDir(sourceDir: string, targetDir: string) {
         /\.(?:ts|glsl|vert|frag)$/, // source files
         /^tsconfig\.json$/, // important for resolving library types
     ];
-    // const exclude = [
-    //     /^\./, // any file/folder starting with dot.
-    //     /\.(?:bin|png|wasm|zig|json|(?:d\..*ts)|)$/, // non-source files
-    //     /^package.json$/
-    // ];
     function filter(source: string): boolean {
         return include.some(re => re.test(source));
     }
@@ -40,37 +36,12 @@ async function copyDir(sourceDir: string, targetDir: string) {
             await copyFile(sourceFile, targetFile)
         }
     }
-
-    // const entries = await readdir(sourceDir, { withFileTypes: true });
-    // const subDirs = entries.filter(e => e.isDirectory());
-    // const files = entries.filter(e => { return e.isFile() && filter(e.name) });
-    // console.log(sourceDir);
-    // let hasFiles = false;
-    // for (const { name } of subDirs) {
-    //     hasFiles ||= await copyDir(resolve(sourceDir, name), resolve(targetDir, name));
-    // }
-    // if (files.length) {
-    //     await mkdir(targetDir, { recursive: true });
-    //     for (const { name } of files) {
-    //         await copyFile(resolve(sourceDir, name), resolve(targetDir, name));
-    //     }
-    //     hasFiles = true;
-    // }
-    // return hasFiles;
 }
 
 async function copyDirs(target: string, paths: readonly string[]) {
-    // await mkdir(target, { recursive: true });
-
-
     for (const path of paths) {
         await copyDir(resolve(path), resolve(target, path));
     }
-
-    // for (const dirPath of paths) {
-    //     const dirName = basename(dirPath);
-    //     await cp(dirPath, `${target}/${dirName}`, { recursive: true, force: true, filter });
-    // }
 }
 
 async function emptyDir(dir: string) {
@@ -91,9 +62,9 @@ async function writeIndexDeclaration(dir: string) {
 
 async function writePackageJson(dir: string) {
     const data: any = {
-        "name": "@novorender/web_app",
-        "version": packageInfo.version,
-        "description": "Novorender web app API.",
+        "name": "@novorender/api",
+        "version": packageJson.version,
+        "description": "Novorender web API.",
         "browser": "./index.js",
         "types": "./types/index.d.ts",
         "type": "module",
@@ -114,18 +85,23 @@ async function writePackageJson(dir: string) {
             "gl-matrix": "^3.4.3"
         }
     };
-    const json = JSON.stringify(data, undefined, "  ");
+    const json = JSON.stringify(data, undefined, 2);
     await writeFile(posix.resolve(dir, "package.json"), json);
 }
 
-export async function copySourceFiles(distFolder?: string) {
-    const dirName = posix.resolve(distFolder ?? "dist");
+async function writeReadme(dirName: string) {
+    const data = { packageJson };
+    const template = await readFile(posix.resolve("README.md"), { encoding: 'utf8' });
+    const readme = ejs.render(template, data, {});
+    await writeFile(posix.resolve(dirName, "README.md"), readme);
+}
+
+export async function copySourceFiles(dirName: string) {
     await emptyDir(dirName);
     await copyDirs(dirName, ["web_app", "core3d", "webgl2"]);
     await copyFiles(dirName, ["tsconfig.json"]);
     await copyFiles(posix.resolve(dirName, "public"), ["core3d/wasm/main.wasm", "core3d/lut_ggx.png", "core3d/modules/watermark/logo.bin"]);
     await writeIndexDeclaration(dirName);
     await writePackageJson(dirName);
-    // TODO: apply template transformations on readme.md
-    return dirName;
+    await writeReadme(dirName);
 }

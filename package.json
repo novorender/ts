@@ -1,7 +1,7 @@
 {
     "name": "@novorender/ts",
     "private": true,
-    "version": "1.0.0",
+    "version": "0.0.1",
     "description": "",
     "scripts": {
         "watch": "tsc --noEmit --watch",
@@ -18,8 +18,10 @@
     },
     "homepage": "https://github.com/novorender/ts#readme",
     "devDependencies": {
+        "@types/ejs": "^3.1.2",
         "@types/node": "^20.4.1",
         "@types/serviceworker": "^0.0.68",
+        "ejs": "^3.1.9",
         "esbuild": "^0.18.17",
         "typescript": "^5.1.6"
     },

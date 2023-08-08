@@ -23,7 +23,7 @@ import { parseGLTF } from "./parser";
  * Currently the only extensions supported is {@link https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_materials_unlit/README.md | KHR_materials_unlit}.
  * @category Geometry
  */
-export async function loadGLTF(url: URL, baseObjectId?: number, abortController?: AbortController) {
+export async function downloadGLTF(url: URL, baseObjectId?: number, abortController?: AbortController) {
     const { gltf, buffers, externalImageBlobs } = await loadData(url, abortController);
     return parseGLTF(buffers, gltf, externalImageBlobs, baseObjectId);
 }

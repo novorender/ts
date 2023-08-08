@@ -12,5 +12,5 @@ export * from "./imports";
 export * from "./benchmark";
 export * from "./wasm";
 export { downloadScene } from "./scene";
-export { loadGLTF } from "./gltf";
+export { downloadGLTF } from "./gltf";
 

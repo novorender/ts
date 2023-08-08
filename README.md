@@ -1,4 +1,8 @@
-# Novorender web app API
+# Novorender web API
+
+[![Latest NPM Version](https://img.shields.io/npm/v/@novorender/api.svg?label=@novorender/api)](https://www.npmjs.com/package/@novorender/api)  
+Build version: <%- packageJson.version %>  
+Build date: <%- new Date().toUTCString() %>  
 
 This package contains all the various APIs relevant for developing a Novorender web app. We've decided to open source this code so that you can easily navigate directly to the source code whenever the provided documentation is not detailed enough. [Bug reports and feedback are welcome](https://github.com/novorender/ts/issues).
 
@@ -8,7 +12,7 @@ It is possible to use the sources directly from our [github repo](https://github
 
 For the rest of us there's [npm](https://npmjs.com/). (If you're using yarn or pnpm you'll know what to do).
 
->`npm i @novorender/web_app`
+>`npm i @novorender/api`
 
 This npm package contains pre-built [ESM](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) bundles for the main script and worker scripts as well as the binary resource dependencies. We removed support for legacy UMD modules.
 
@@ -18,7 +22,7 @@ Besides installing the package, you must make sure the files in the `public/` di
 │   ├── index.html
 │   │── app.css // your main css bundle
 │   ├── app.js  // your main js bundle
-│   ├── <all files from "@novorender/web_app/public/" copied/linked here...>
+│   ├── <all files from "@novorender/api/public/" copied/linked here...>
 ├── node_modules
 ├── package.json
 ├── package-lock.json 
@@ -27,7 +31,7 @@ Besides installing the package, you must make sure the files in the `public/` di
 
 A copy of all the original typescript source code along with sourcemaps is included too. We consided the source code an important part of our documentation.
 
->Avoid [deep imports](https://gist.github.com/daleyjem/0f38f561a4e91e58eba580889f38330f)! Everything you need should be available from the package root: `@novorender/web_app`.
+>Avoid [deep imports](https://gist.github.com/daleyjem/0f38f561a4e91e58eba580889f38330f)! Everything you need should be available from the package root: `@novorender/api`.
 
 ## Dependencies
 At runtime we use [gl-matrix](https://www.npmjs.com/package/gl-matrix) for linear algebra and [tslib](https://www.npmjs.com/package/tslib) for typescript internal helper functions.
@@ -36,7 +40,7 @@ At runtime we use [gl-matrix](https://www.npmjs.com/package/gl-matrix) for linea
 
 ## Server requirements
 
-Our API uses advanced, cutting edge javascript APIs, many of which comes with certain security requirements. In general the following two global properties have to be true: [`isSecureContext`](https://developer.mozilla.org/en-US/docs/Web/API/isSecureContext) and [`crossOriginIsolated`](https://developer.mozilla.org/en-US/docs/Web/API/crossOriginIsolated).
+Our API uses advanced, cutting edge javascript APIs, many of which comes with certain security requirements. In general, the following two global properties have to be true: [`isSecureContext`](https://developer.mozilla.org/en-US/docs/Web/API/isSecureContext) and [`crossOriginIsolated`](https://developer.mozilla.org/en-US/docs/Web/API/crossOriginIsolated).
 
 To make it all work, your server has to ensure:
 
@@ -59,13 +63,13 @@ Cross-Origin-Embedder-Policy: require-corp
 
 Using our APIs from javascript is possible but *strongly discouraged*. We rely heavily on typescript to help users catch common errors at edit/compile time. Technical support will only be provided for typescript users.
 
-We currently use version `<%=package.devDependencies.typescript%>` of typescript. As a rule of thumb, you should upgrade to the latest version of typescript whenever a new version is released.
+This package is built using version `<%- packageJson.devDependencies.typescript%>` of typescript. As a rule of thumb, you should upgrade to the latest version of typescript whenever a new version is released.
 
 If you plan to do your own bundling and use our sources directly, you may want to use our `tsconfig.json` as a baseline for your own:
 
 ```jsonc
 {
-  "extends": "node_modules/@novorender/web_app/tsconfig.json", // or wherever...
+  "extends": "node_modules/@novorender/api/tsconfig.json", // or wherever...
   "compilerOptions": {
     ...
   }
@@ -79,12 +83,12 @@ We generally use `ESNext` as target since we only support lastest version of bro
 A minimal app might look something like this: 
 
 ```typescript
-import {View, getDeviceProfile, downloadImports} from "@novorender/web_app";
+import {View, getDeviceProfile, downloadImports} from "@novorender/api";
 
 async function main(canvas: HTMLCanvasElement) {
     const gpuTier = 2; // laptop with reasonably new/powerful GPU.
     const deviceProfile = getDeviceProfile(gpuTier);
-    const imports = await downloadImports({ baseUrl: "public/" }); // whereever you copied the public/ files from the package.
+    const imports = await downloadImports({ baseUrl: "public/" }); // or whereever you copied the public/ files from the package.
     const view = new View(canvas, deviceProfile, imports);
     await view.run();
     view.dispose();
