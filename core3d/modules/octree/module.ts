@@ -4,7 +4,6 @@ import { glUBOProxy, type TextureParams2DUncompressed, type UniformTypes } from 
 import type { ResourceBin } from "core3d/resource";
 import { OctreeModuleContext } from "./context";
 import { NodeLoader } from "./loader";
-import { useWorker } from "./worker";
 
 /** @internal */
 export const enum ShaderPass { color, pick, pre };
@@ -44,7 +43,7 @@ export class OctreeModule implements RenderModule {
         const uniforms = this.createUniforms();
         const resources = await this.createResources(context, uniforms);
 
-        const loader = new NodeLoader({ useWorker });
+        const loader = new NodeLoader(context.imports.loaderWorker);
         const maxObjects = 10_000_000;// TODO: Get from device profile?
         const maxByteLength = maxObjects + 4; // add four bytes for mutex
         const buffer = new SharedArrayBuffer(maxByteLength);
@@ -132,6 +131,7 @@ export class OctreeModule implements RenderModule {
     }
 
     static async compileShaders(context: RenderContext, bin: ResourceBin, programFlags = OctreeModule.defaultProgramFlags): Promise<PassPrograms> {
+        const shaders = context.imports.shaders.octree;
         const { textureUniforms, uniformBufferBlocks } = OctreeModule;
         const programs = {} as Mutable<PassPrograms>;
         const promises: Promise<void>[] = [];
