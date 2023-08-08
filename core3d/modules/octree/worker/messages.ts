@@ -9,6 +9,11 @@ export interface BufferMessage {
 }
 
 /** @internal */
+export interface BufferSet {
+    readonly kind: "buffer";
+}
+
+/** @internal */
 export interface ParseParams {
     readonly id: string;
     readonly version: string;
@@ -81,4 +86,4 @@ export interface ErrorMessage {
 /** @internal */
 export type MessageRequest = BufferMessage | ParseMessage | LoadMessage | AbortMessage | AbortAllMessage | CloseMessage;
 /** @internal */
-export type MessageResponse = ReadyMessage | AbortedMessage | AbortedAllMessage | ErrorMessage;
+export type MessageResponse = ReadyMessage | AbortedMessage | AbortedAllMessage | ErrorMessage | BufferSet;

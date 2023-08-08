@@ -3,6 +3,8 @@ import type { RenderModule } from "..";
 import { glUBOProxy, type TextureParams2DUncompressed, type UniformTypes } from "webgl2";
 import type { ResourceBin } from "core3d/resource";
 import { OctreeModuleContext } from "./context";
+import { NodeLoader } from "./loader";
+import { useWorker } from "./worker";
 
 /** @internal */
 export const enum ShaderPass { color, pick, pre };
@@ -41,7 +43,13 @@ export class OctreeModule implements RenderModule {
     async withContext(context: RenderContext) {
         const uniforms = this.createUniforms();
         const resources = await this.createResources(context, uniforms);
-        return new OctreeModuleContext(context, this, uniforms, resources);
+
+        const loader = new NodeLoader({ useWorker });
+        const maxObjects = 10_000_000;// TODO: Get from device profile?
+        const maxByteLength = maxObjects + 4; // add four bytes for mutex
+        const buffer = new SharedArrayBuffer(maxByteLength);
+        await loader.setBuffer(buffer);
+        return new OctreeModuleContext(context, this, uniforms, resources, buffer, loader);
     }
 
     createUniforms() {
@@ -74,22 +82,19 @@ export class OctreeModule implements RenderModule {
             });
         }
 
-        const { textureUniforms, uniformBufferBlocks } = OctreeModule;
-        const programs = {} as Mutable<Programs>;
-        const shadersPromise = OctreeModule.compileShaders(context, bin, programs);
-        const [/*color, pick, pre,*/ intersect, line, debug] = await Promise.all([
+        const { uniformBufferBlocks } = OctreeModule;
+        const shadersPromise = OctreeModule.compileShaders(context, bin);
+        const [/*color, pick, pre,*/ intersect, line, debug, corePrograms] = await Promise.all([
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.color, ShaderMode.triangles) }),
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pick, ShaderMode.triangles) }),
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pre, ShaderMode.triangles) }),
             context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks: ["Camera", "Clipping", "Outline", "Node"], transformFeedback: { varyings: ["line_vertices", "opacity", "object_id"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
-            context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Outline", "Node"] }),
+            context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Outline", "Node"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
             context.makeProgramAsync(bin, { ...shaders.debug, uniformBufferBlocks }),
             shadersPromise,
         ]);
+        const programs: Programs = { ...corePrograms, intersect, line, debug };
         // const programs = { color, pick, pre, intersect, line, debug };
-        programs.intersect = intersect;
-        programs.line = line;
-        programs.debug = debug;
         // const programs = { intersect, line, debug };
         return {
             bin, programs,
@@ -126,12 +131,12 @@ export class OctreeModule implements RenderModule {
         return { defines, flags } as const;
     }
 
-    static async compileShaders(context: RenderContext, bin: ResourceBin, programs: Mutable<Programs>, programFlags = OctreeModule.defaultProgramFlags): Promise<void> {
-        const shaders = context.imports.shaders.octree;
+    static async compileShaders(context: RenderContext, bin: ResourceBin, programFlags = OctreeModule.defaultProgramFlags): Promise<PassPrograms> {
         const { textureUniforms, uniformBufferBlocks } = OctreeModule;
+        const programs = {} as Mutable<PassPrograms>;
         const promises: Promise<void>[] = [];
         for (const pass of OctreeModule.passes) {
-            const modes = (programs[pass] ??= {} as ModePrograms) as Mutable<ModePrograms>;
+            const modes = {} as Mutable<ModePrograms>;
             for (const mode of OctreeModule.modes) {
                 const promise = context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(context.deviceProfile, pass, mode, programFlags) });
                 const compiledPromise = promise.then(program => {
@@ -139,8 +144,10 @@ export class OctreeModule implements RenderModule {
                 });
                 promises.push(compiledPromise);
             }
+            programs[pass] = modes;
         }
         await Promise.all(promises);
+        return programs;
     }
 
     readonly maxLines = 1024 * 1024; // TODO: find a proper size!

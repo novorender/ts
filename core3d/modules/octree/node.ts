@@ -80,7 +80,7 @@ export class OctreeNode {
         [NodeGeometryKind.terrain]: .05,
         [NodeGeometryKind.triangles]: 1,
         [NodeGeometryKind.lines]: .5,
-        [NodeGeometryKind.points]: .15,
+        [NodeGeometryKind.points]: .35,
         [NodeGeometryKind.documents]: .08,
     };
     static readonly errorModifiersOrtho = {

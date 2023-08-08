@@ -9,6 +9,8 @@ export class NodeLoader {
     readonly payloadPromises = new Map<string, PayloadPromiseMethods>();
     abortAllPromise: Promise<void> = Promise.resolve();
     private resolveAbortAll: (() => void) | undefined;
+    bufferPromise: Promise<void> = Promise.resolve();
+    private resolveBuffer: (() => void) | undefined;
     aborted = false;
 
     constructor(readonly worker: Worker) {
@@ -17,9 +19,13 @@ export class NodeLoader {
         }
     }
 
-    setBuffer(buffer: SharedArrayBuffer) {
+    async setBuffer(buffer: SharedArrayBuffer) {
+        this.bufferPromise = new Promise<void>((resolve) => {
+            this.resolveBuffer = resolve;
+        })
         const msg: BufferMessage = { kind: "buffer", buffer };
         this.send(msg);
+        await this.bufferPromise;
     }
 
     get activeDownloads() {
@@ -31,6 +37,12 @@ export class NodeLoader {
     }
 
     private receive(msg: MessageResponse) {
+        if (msg.kind == "buffer") {
+            const { resolveBuffer } = this;
+            this.resolveBuffer = undefined;
+            resolveBuffer?.();
+            return;
+        }
         if (msg.kind == "aborted_all") {
             const { resolveAbortAll } = this;
             this.resolveAbortAll = undefined;

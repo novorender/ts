@@ -1,4 +1,4 @@
-import type { DerivedRenderState, RenderContext, RenderState, RenderStateGroupAction, RenderStateHighlightGroups, RenderStateScene, RGB, RGBATransform } from "core3d";
+import type { DerivedRenderState, RenderContext, RenderStateGroupAction, RenderStateHighlightGroups, RenderStateScene, RGB, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
@@ -6,7 +6,7 @@ import { glClear, glDraw, glState, glTransformFeedback, glUpdateTexture } from "
 import { MaterialType } from "./worker/schema_2_0";
 import { getMultiDrawParams } from "./mesh";
 import { type ReadonlyVec3, vec3, vec4, type ReadonlyVec4 } from "gl-matrix";
-import { NodeLoader } from "./loader";
+import type { NodeLoader } from "./loader";
 import { computeGradientColors, gradientRange } from "./gradient";
 // import { BufferFlags } from "@novorender/core3d/buffers";
 import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass } from "./module";
@@ -31,9 +31,9 @@ export interface RootNodes {
 
 /** @internal */
 export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
-    readonly loader: NodeLoader;
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
     currentProgramFlags = OctreeModule.defaultProgramFlags;
+    nextProgramFlags = OctreeModule.defaultProgramFlags;
     debug = false;
     suspendUpdates = false;
 
@@ -47,14 +47,9 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     hidden = [false, false, false, false, false] as readonly [boolean, boolean, boolean, boolean, boolean];
     readonly highlight;
     highlightGeneration = 0;
+    private compiling = false;
 
-    constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly uniforms: Uniforms, readonly resources: Resources) {
-        this.loader = new NodeLoader(renderContext.imports.loaderWorker);
-        const maxObjects = 10_000_000;// TODO: Get from device profile?
-        const maxByteLength = maxObjects + 4; // add four bytes for mutex
-        //@ts-ignore (TS does not yet declare types for constructor options, although this is supported on both chrome and safari)
-        const buffer = new SharedArrayBuffer(4, { maxByteLength });
-        this.loader.setBuffer(buffer);
+    constructor(readonly renderContext: RenderContext, readonly module: OctreeModule, readonly uniforms: Uniforms, readonly resources: Resources, buffer: SharedArrayBuffer, readonly loader: NodeLoader) {
         this.highlight = {
             buffer,
             indices: new Uint8Array(buffer, 4),
@@ -69,16 +64,16 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     update(state: DerivedRenderState) {
         // const beginTime = performance.now();
 
-        const { renderContext, resources, uniforms, projectedSizeSplitThreshold, module } = this;
+        const { renderContext, resources, uniforms, projectedSizeSplitThreshold, module, currentProgramFlags } = this;
         const { gl, deviceProfile } = renderContext;
         const { scene, localSpaceTranslation, highlights, points, terrain, pick, output, clipping } = state;
         const { values } = uniforms.scene;
 
-        let { currentProgramFlags } = this;
-        function updateShaderCompileConstants(flags: Partial<typeof currentProgramFlags>) {
-            type Keys = keyof typeof currentProgramFlags;
-            if ((Object.getOwnPropertyNames(flags) as Keys[]).some(key => currentProgramFlags[key] != flags[key])) {
-                currentProgramFlags = { ...currentProgramFlags, ...flags };
+        let { nextProgramFlags } = this;
+        const updateShaderCompileConstants = (flags: Partial<typeof nextProgramFlags>) => {
+            type Keys = keyof typeof nextProgramFlags;
+            if ((Object.getOwnPropertyNames(flags) as Keys[]).some(key => nextProgramFlags[key] != flags[key])) {
+                this.nextProgramFlags = nextProgramFlags = { ...nextProgramFlags, ...flags };
             }
         }
 
@@ -270,12 +265,18 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         renderContext.updateUniformBuffer(resources.sceneUniforms, uniforms.scene);
 
         // recompile shader programs if flags have changed
-        if (this.currentProgramFlags != currentProgramFlags) {
-            this.currentProgramFlags = currentProgramFlags;
-            OctreeModule.compileShaders(renderContext, resources.bin, resources.programs, currentProgramFlags).then(() => {
-                // console.log(`new render program flags:`, currentProgramFlags);
+        if (currentProgramFlags != nextProgramFlags && !this.compiling) {
+            this.compiling = true;
+            const recompile = async () => {
+                const programs = await OctreeModule.compileShaders(renderContext, resources.bin, nextProgramFlags);
+                //console.log(`new render program flags:`, nextProgramFlags);
                 renderContext.changed = true;
-            });
+
+                Object.assign(resources.programs, programs);
+                this.compiling = false;
+                this.currentProgramFlags = nextProgramFlags;
+            }
+            recompile();
         }
 
         if (!this.suspendUpdates) {

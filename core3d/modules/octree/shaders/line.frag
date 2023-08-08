@@ -42,5 +42,9 @@ void main() {
 
     fragColor = vec4(outline.color, varyings.opacity);
     float linearDepth = -varyings.positionVS.z;
+    #if defined (ADRENO600)
     fragPick = uvec4(varyingsFlat.objectId, 0, 0, floatBitsToUint(linearDepth));
+#else
+    fragPick = uvec4(varyingsFlat.objectId, packNormalAndDeviation(vec3(0), uintBitsToFloat(0x7f800000U)), floatBitsToUint(linearDepth));
+#endif
 }

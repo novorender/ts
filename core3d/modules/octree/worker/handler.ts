@@ -1,7 +1,7 @@
 import { AbortableDownload, Downloader } from "./download";
 import { Mutex } from "../mutex";
 import { parseNode } from "./parser";
-import type { AbortAllMessage, AbortMessage, AbortedAllMessage, AbortedMessage, BufferMessage, ParseMessage, ErrorMessage, LoadMessage, ReadyMessage, MessageRequest, MessageResponse, ParseParams } from "./messages";
+import type { AbortAllMessage, AbortMessage, AbortedAllMessage, AbortedMessage, BufferMessage, ParseMessage, ErrorMessage, LoadMessage, ReadyMessage, MessageRequest, MessageResponse, ParseParams, BufferSet } from "./messages";
 
 export interface HighlightsBuffer {
     readonly buffer: SharedArrayBuffer;
@@ -45,6 +45,8 @@ export class LoaderHandler {
         const indices = new Uint8Array(buffer, 4);
         const mutex = new Mutex(buffer);
         this.highlights = { buffer, indices, mutex };
+        const setBufferMsg = { kind: "buffer" } as BufferSet;
+        this.send(setBufferMsg);
     }
 
     private parseBuffer(buffer: ArrayBuffer, params: ParseParams) {
