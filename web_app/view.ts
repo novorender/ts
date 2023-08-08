@@ -86,7 +86,7 @@ export class View {
             cadRightPan: new CadRightPanController(this, input),
             special: new SpecialFlightController(this, input),
         } as const;
-        this._activeController = this.controllers["flight"];
+        this._activeController = this.controllers["orbit"];
         this._activeController.attach();
 
         const resizeObserver = new ResizeObserver(() => {
@@ -389,14 +389,14 @@ export class View {
      * @param time The frame render timestamp in millisecond.
      * @virtual
      */
-    protected animate?(time: number): void;
+    animate?(time: number): void;
 
     /**
      * Override this in a derived class for custom rendering of e.g. 2D content, such as text and lines etc.
      * @param isIdleFrame Was the camera moving or not.
      * @virtual
      */
-    protected render?(isIdleFrame: boolean): void;
+    render?(isIdleFrame: boolean): void;
 
     /** 
      * Callback function to update render context.

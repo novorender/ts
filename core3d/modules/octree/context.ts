@@ -270,9 +270,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const recompile = async () => {
                 const programs = await OctreeModule.compileShaders(renderContext, resources.bin, nextProgramFlags);
                 //console.log(`new render program flags:`, nextProgramFlags);
-                renderContext.changed = true;
-
                 Object.assign(resources.programs, programs);
+                renderContext.changed = true;
                 this.compiling = false;
                 this.currentProgramFlags = nextProgramFlags;
             }

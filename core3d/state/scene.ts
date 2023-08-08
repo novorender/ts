@@ -8,7 +8,7 @@ import type { ReadonlyVec3, ReadonlyMat4 } from "gl-matrix";
 export interface RenderStateScene {
     /** Base url whence the scene was downloaded. */
     readonly url: string;
-    /** @internal. */
+    /** The scene configuration. */
     readonly config: SceneConfig;
     /** Flags for whether to hide/filter various kinds of geometry. */
     readonly hide?: RenderStateStaticGeometryKinds;

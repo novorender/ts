@@ -43,7 +43,7 @@ export interface RenderState {
     /** Grid helper related state. */
     readonly grid: RenderStateGrid;
 
-    /** @internal */
+    /** @ignore */
     readonly debug: RenderStateDebug;
 
     /** @internal. */

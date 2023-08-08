@@ -920,7 +920,7 @@ export interface PickOptions {
      * @remarks The latter option is more error prone, but useful for e.g. mouse hover operations.
      */
     readonly async?: boolean;
-    /** @internal (related to adreno bug?) */
+    /** Return pick without depth. */
     readonly pickCameraPlane?: boolean;
 }
 
