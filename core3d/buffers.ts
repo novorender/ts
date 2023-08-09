@@ -136,12 +136,28 @@ export class RenderBuffers {
         }
         if (this.pickFence) {
             const { promises } = this.pickFence;
+            let promiseCallbacks: typeof promises[0] | undefined;
+            const timeout = setTimeout(() => {//Sometimes it will never poll so set timeout, especially during setup
+                for (let i = 0; i < promises.length; ++i) {
+                    if (promiseCallbacks == promises[i]) {
+                        promises.splice(i, 1);
+                        promiseCallbacks.resolve();
+                    }
+                }
+            }, 100);
             const promise = new Promise<void>((resolve, reject) => {
-                promises.push({ resolve, reject });
+                promiseCallbacks = {
+                    resolve: () => {
+                        clearTimeout(timeout);
+                        resolve()
+                    },
+                    reject
+                };
+                promises.push(promiseCallbacks);
             });
 
-            await Promise.any([promise, new Promise(resolve => setTimeout(resolve, 100))]); //Sometimes it will never poll so set timeout, especially during setup
-            //await promise;
+
+            await promise;
             return this.typedArrays;
         } else {
             return Promise.resolve(this.typedArrays);
