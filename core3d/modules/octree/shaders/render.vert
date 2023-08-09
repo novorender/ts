@@ -42,34 +42,35 @@ const uint vertexHighlight = 0U;
 
 void main() {
     vec4 vertPos = vertexPosition;
-    if(scene.useProjectedPosition && vertexProjectedPos.w != 0.) {
+    bool isDefined = dot(vertexProjectedPos.xyz, vertexProjectedPos.xyz) != 0.f;
+    if(scene.useProjectedPosition && vertexProjectedPos.w != 0.f && isDefined) {
         vertPos = vertexProjectedPos;
     }
     vec4 posLS = node.modelLocalMatrix * vertPos;
     vec4 posVS = camera.localViewMatrix * posLS;
     gl_Position = camera.viewClipMatrix * posVS;
 
-    vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
+    vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5f) / 256.f, .5f));
     float deviation = uintBitsToFloat(0x7f800000U); // +inf
 
 #if (MODE == MODE_POINTS)
     deviation = vertexDeviations[scene.deviationIndex];
-    if(scene.deviationFactor > 0. && deviation != uintBitsToFloat(0x7f800000U)) {
+    if(scene.deviationFactor > 0.f && deviation != uintBitsToFloat(0x7f800000U)) {
         vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
         color = mix(vertexColor0, gradientColor, scene.deviationFactor);
     }
 
         // compute point size
     float linearSize = scene.metricSize + node.tolerance * scene.toleranceFactor;
-    float projectedSize = max(0., camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 0.5 / gl_Position.w);
-    gl_PointSize = min(scene.maxPixelSize, max(1.0, scene.pixelSize + projectedSize));
+    float projectedSize = max(0.f, camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 0.5f / gl_Position.w);
+    gl_PointSize = min(scene.maxPixelSize, max(1.0f, scene.pixelSize + projectedSize));
 
         // Convert position to window coordinates
-    vec2 halfsize = camera.viewSize * 0.5;
+    vec2 halfsize = camera.viewSize * 0.5f;
     varyings.screenPos = halfsize + ((gl_Position.xy / gl_Position.w) * halfsize);
 
         // Convert radius to window coordinates
-    varyings.radius = max(1.0, gl_PointSize * 0.5);
+    varyings.radius = max(1.0f, gl_PointSize * 0.5f);
 #elif defined (HIGHLIGHT)
     if(vertexHighlight >= 0xFEU) {
         gl_Position = vec4(0); // hide 0xff group by outputting degenerate triangles/lines
