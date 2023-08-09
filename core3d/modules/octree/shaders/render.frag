@@ -19,11 +19,8 @@ uniform OctreeTextures textures;
 in OctreeVaryings varyings;
 flat in OctreeVaryingsFlat varyingsFlat;
 
-#if (PASS != PASS_PICK)
 layout(location = 0) out vec4 fragColor;
-#else
 layout(location = 1) out uvec4 fragPick;
-#endif
 
 void main() {
     float linearDepth = -varyings.positionVS.z;
@@ -140,7 +137,9 @@ if (baseColor != vec4(0)) {
 
 #if (PASS != PASS_PICK)
     fragColor = rgba;
-#elif defined (ADRENO600)
+#endif
+
+#if defined (ADRENO600)
     fragPick = uvec4(objectId, 0u, 0u, floatBitsToUint(linearDepth));
 #else
     fragPick = uvec4(objectId, packNormalAndDeviation(geometricNormalWS, varyings.deviation), floatBitsToUint(linearDepth));
