@@ -235,7 +235,8 @@ export class View {
                     position: vec3.fromValues(centerSample.position[0], -centerSample.position[2], centerSample.position[1]),
                     normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1]),
                     isEdge,
-                    normalVS: vec3.transformMat3(vec3.create(), centerSample.normal, worldViewMatrixNormal)
+                    normalVS: vec3.transformMat3(vec3.create(), centerSample.normal, worldViewMatrixNormal),
+                    deviation: this.deviceProfile.quirks.adreno600 ? undefined : centerSample.deviation
                 }
                 return flippedSample;
             }

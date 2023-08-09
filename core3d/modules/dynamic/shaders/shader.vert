@@ -41,5 +41,11 @@ void main() {
     varyings.texCoord1 = vertexTexCoord1;
     varyings.color0 = vertexColor0;
     varyings.linearDepth = -posVS.z;
-    varyingsFlat.objectId = object.baseObjectId != 0xffffU ? object.baseObjectId + uint(gl_InstanceID) : object.baseObjectId;
+    highp uint objId = object.baseObjectId != 0xffffU ? object.baseObjectId + uint(gl_InstanceID) : object.baseObjectId;
+#if defined (ADRENO600)
+    varyingsFlat.objectId_high = objId >> 16u;
+    varyingsFlat.objectId_low = objId & 0xffffu;
+#else
+    varyingsFlat.objectId = objId;
+#endif
 }

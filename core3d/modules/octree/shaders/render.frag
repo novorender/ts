@@ -42,7 +42,12 @@ void main() {
     uint objectId;
     uint highlight;
     baseColor = varyingsFlat.color;
+#if defined (ADRENO600)
+    objectId = combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low);
+#else
     objectId = varyingsFlat.objectId;
+#endif
+
     highlight = varyingsFlat.highlight;
 
     vec3 normalVS = normalize(varyings.normalVS);

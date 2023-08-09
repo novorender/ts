@@ -232,6 +232,10 @@ void main() {
     fragColor = outColor;
     // only write to pick buffers for opaque triangles (for devices without OES_draw_buffers_indexed support)
     if(outColor.a >= 0.99f) {
+#if defined (ADRENO600)
+        fragPick = uvec4(combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low), packNormal(normal), floatBitsToUint(varyings.linearDepth));
+#else
         fragPick = uvec4(varyingsFlat.objectId, packNormal(normal), floatBitsToUint(varyings.linearDepth));
+#endif
     }
 }
