@@ -529,7 +529,6 @@ export class RenderContext {
         const beginTime = performance.now();
         const { gl, canvas, prevState } = this;
         this.changed = false;
-        this.pickBuffersValid = false;
 
         this.resetStatistics();
 
@@ -537,6 +536,7 @@ export class RenderContext {
 
         const { MAX_SAMPLES } = glLimits(gl);
         const effectiveSamplesMSAA = Math.max(1, Math.min(MAX_SAMPLES, Math.min(this.deviceProfile.limits.maxSamples, state.output.samplesMSAA)));
+        this.pickBuffersValid = effectiveSamplesMSAA == 1;
 
         // handle resizes
         let resized = false;
@@ -671,6 +671,11 @@ export class RenderContext {
     }
 
     //* @internal */
+    clearPickBuffers() {
+        glClear(this.gl, { kind: "COLOR", drawBuffer: 1, type: "Uint", color: [0xffffffff, 0x0000_0000, 0x0000_0000, 0x7f80_0000] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format), 0x7f80_0000 is Float32.+inf
+    }
+
+    //* @internal */
     renderPickBuffers() {
         if (!this.pickBuffersValid) {
             if (!this.modules) {
@@ -690,7 +695,7 @@ export class RenderContext {
             glState(gl, stateParams);
             glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 }); // we need to clear (again) since depth might be different for pick and color renders and we're also not using MSAA depth buffer.
             // glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Float", color: [Number.POSITIVE_INFINITY, 0, 0, 0] });
-            glClear(gl, { kind: "COLOR", drawBuffer: 1, type: "Uint", color: [0xffffffff, 0x0000_0000, 0x0000_0000, 0x7f80_0000] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format), 0x7f80_0000 is Float32.+inf
+            this.clearPickBuffers();
 
             for (const module of this.modules) {
                 if (module) {

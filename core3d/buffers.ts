@@ -69,6 +69,7 @@ export class RenderBuffers {
             color: resourceBin.createFrameBuffer({
                 color: [
                     { kind: "FRAMEBUFFER", texture: textures.color },
+                    { kind: "DRAW_FRAMEBUFFER", texture: textures.pick },
                 ],
                 depth: { kind: "DRAW_FRAMEBUFFER", texture: textures.depth },
             }),

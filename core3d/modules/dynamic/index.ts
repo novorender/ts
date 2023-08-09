@@ -29,9 +29,10 @@ export class DynamicModule implements RenderModule {
         const uniformBufferBlocks = ["Camera", "Material", "Object"];
         const textureNames = ["lut_ggx", "ibl.diffuse", "ibl.specular", "base_color", "metallic_roughness", "normal", "emissive", "occlusion"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
+
         const [unlit, ggx] = await Promise.all([
-            context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms }),
-            context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms, header: { flags: ["PBR_METALLIC_ROUGHNESS"] } }),
+            context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms, header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
+            context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms, header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600", "PBR_METALLIC_ROUGHNESS"] : ["PBR_METALLIC_ROUGHNESS"] } }),
         ]);
         const programs = { unlit, ggx };
         return { bin, defaultSampler, defaultTexture, programs } as const;

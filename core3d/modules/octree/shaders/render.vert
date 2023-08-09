@@ -83,6 +83,11 @@ void main() {
     varyings.deviation = deviation;
     varyings.elevation = posLS.y;
     varyingsFlat.color = color;
+#if defined (ADRENO600)
+    varyingsFlat.objectId_high = vertexObjectId >> 16u;
+    varyingsFlat.objectId_low = vertexObjectId & 0xffffu;
+#else
     varyingsFlat.objectId = vertexObjectId;
+#endif
     varyingsFlat.highlight = vertexHighlight;
 }

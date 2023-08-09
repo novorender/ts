@@ -3,6 +3,7 @@ import { parseKTX } from "core3d/ktx";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glClear, glDraw, glState } from "webgl2";
 import { type TextureParams, type UniformTypes, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped } from "webgl2";
+import { BufferFlags } from "core3d/buffers";
 
 /** @internal */
 export class BackgroundModule implements RenderModule {
@@ -120,6 +121,8 @@ class BackgroundModuleContext implements RenderModuleContext {
         const { gl, cameraUniforms, samplerSingle, samplerMip } = context;
 
         const clearColor = state.background.color ?? [0.33, 0.33, 0.33, 1];
+        const drawBuffers = context.drawBuffers(BufferFlags.color | BufferFlags.pick);
+
         if ((!state.background.color || state.background.url) && state.camera.kind != "orthographic") {
             const { specular } = context.iblTextures;
             glState(gl, {
@@ -138,6 +141,12 @@ class BackgroundModuleContext implements RenderModuleContext {
             context.addRenderStatistics(stats);
         } else {
             glClear(gl, { kind: "COLOR", drawBuffer: 0, color: clearColor });
+        }
+        glState(gl, {
+            drawBuffers: drawBuffers
+        });
+        if (drawBuffers.includes("COLOR_ATTACHMENT1")) {
+            context.clearPickBuffers();
         }
     }
 

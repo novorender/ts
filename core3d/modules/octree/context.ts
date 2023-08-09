@@ -12,6 +12,7 @@ import { computeGradientColors, gradientRange } from "./gradient";
 import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass } from "./module";
 import { Mutex } from "./mutex";
 import { decodeBase64 } from "core3d/util";
+import { BufferFlags } from "core3d/buffers";
 
 const enum UBO { camera, clipping, scene, node };
 
@@ -424,6 +425,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
             ],
+            drawBuffers: renderContext.drawBuffers(BufferFlags.color | BufferFlags.pick),
         });
         this.applyDefaultAttributeValues();
         gl.activeTexture(gl.TEXTURE0);

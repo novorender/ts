@@ -20,7 +20,12 @@ in struct {
 } varyings;
 
 flat in struct {
-    uint objectId;
+#if defined (ADRENO600)
+    mediump uint objectId_low;
+    mediump uint objectId_high;
+#else
+    highp uint objectId;
+#endif
 } varyingsFlat;
 
 layout(location = 0) out vec4 fragColor;
@@ -42,8 +47,9 @@ void main() {
 
     fragColor = vec4(outline.color, varyings.opacity);
     float linearDepth = -varyings.positionVS.z;
-    #if defined (ADRENO600)
-    fragPick = uvec4(varyingsFlat.objectId, 0, 0, floatBitsToUint(linearDepth));
+#if defined (ADRENO600)
+    highp uint objectId = combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low);
+    fragPick = uvec4(objectId, 0, 0, floatBitsToUint(linearDepth));
 #else
     fragPick = uvec4(varyingsFlat.objectId, packNormalAndDeviation(vec3(0), uintBitsToFloat(0x7f800000U)), floatBitsToUint(linearDepth));
 #endif
