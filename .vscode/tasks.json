@@ -16,7 +16,7 @@
         },
         {
             "type": "npm",
-            "label": "npm ./build.mjs",
+            "label": "node ./build.mjs",
             "script": "build",
             "problemMatcher": [],
             "detail": "node ./build",
@@ -24,6 +24,14 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "type": "npm",
+            "label": "npm run build:ts",
+            "script": "build:ts",
+            "problemMatcher": [],
+            "detail": "npm run build:ts",
+            "group": "build"
         }
     ]
 }

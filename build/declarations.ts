@@ -15,9 +15,8 @@ export function declarations(basePath: string, configFilePath = "tsconfig.json")
         declaration: true,
         declarationMap: true,
         // emitDeclarationOnly: true,
-        declarationDir: "./types/",
+        declarationDir: resolve(basePath, "./types/"),
     };
-    // TODO: clearn up decldir++
     const { options, fileNames, projectReferences, errors } =
         ts.parseJsonConfigFileContent(config, ts.sys, basePath, declOptions, configFilePath);
     logDiagnostics(errors);
