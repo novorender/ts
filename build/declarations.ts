@@ -12,12 +12,11 @@ export function declarations(basePath: string, configFilePath = "tsconfig.json")
         logDiagnostics([error]);
     }
     const declOptions: ts.CompilerOptions = {
-        // declaration: true,
-        // declarationMap: true,
+        declaration: true,
+        declarationMap: true,
         // emitDeclarationOnly: true,
-        // declarationDir: "./types/",
+        declarationDir: resolve(basePath, "./types/"),
     };
-    // TODO: clearn up decldir++
     const { options, fileNames, projectReferences, errors } =
         ts.parseJsonConfigFileContent(config, ts.sys, basePath, declOptions, configFilePath);
     logDiagnostics(errors);

@@ -44,8 +44,17 @@ async function copyDirs(target: string, paths: readonly string[]) {
     }
 }
 
+async function exists(dir: string) {
+    try {
+        await stat(dir);
+        return true;
+    } catch (error: unknown) {
+        return false;
+    }
+}
+
 async function emptyDir(dir: string) {
-    if (await stat(dir)) {
+    if (await exists(dir)) {
         const entries = await readdir(dir, { withFileTypes: true });
         for (const { path } of entries) {
             await rm(path, { recursive: true, force: true });
