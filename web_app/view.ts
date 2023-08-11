@@ -223,10 +223,8 @@ export class View {
                 let sampleType: "edge" | "corner" | "surface" = "surface";
                 const edgeNormal1 = vec3.create();
                 const edgeNormal2 = vec3.create();
-                const edgeDepth = 0;
 
                 const edgeThreshold = 0.8; // the cos() value of the edge angle threshold.
-                const cornerThreshold = 0.8; // the cos() value of the corner angle threshold.
                 // select the sample that is closest to the camera.
                 const centerSample = samples.reduce((a, b) => {
                     if (sampleType == "surface" && vec3.dot(a.normal, b.normal) < edgeThreshold) {
@@ -238,7 +236,7 @@ export class View {
                 });
                 if (sampleType as any == "edge") {
                     samples.forEach(v => {
-                        if (vec3.dot(v.normal, edgeNormal1) < cornerThreshold && vec3.dot(v.normal, edgeNormal2) < cornerThreshold) {
+                        if (vec3.dot(v.normal, edgeNormal1) < edgeThreshold && vec3.dot(v.normal, edgeNormal2) < edgeThreshold) {
                             sampleType = "corner";
                         }
                     });
