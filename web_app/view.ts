@@ -220,21 +220,35 @@ export class View {
         if (context) {
             const samples = await context.pick(x, y, options);
             if (samples.length) {
-                let isEdge = false;
+                let sampleType: "edge" | "corner" | "surface" = "surface";
+                const edgeNormal1 = vec3.create();
+                const edgeNormal2 = vec3.create();
+                const edgeDepth = 0;
+
                 const edgeThreshold = 0.8; // the cos() value of the edge angle threshold.
+                const cornerThreshold = 0.8; // the cos() value of the corner angle threshold.
                 // select the sample that is closest to the camera.
                 const centerSample = samples.reduce((a, b) => {
-                    if (!isEdge && vec3.dot(a.normal, b.normal) < edgeThreshold) {
-                        isEdge = true;
+                    if (sampleType == "surface" && vec3.dot(a.normal, b.normal) < edgeThreshold) {
+                        vec3.copy(edgeNormal1, a.normal);
+                        vec3.copy(edgeNormal2, b.normal);
+                        sampleType = "edge";
                     }
                     return a.depth < b.depth ? a : b
                 });
-                const worldViewMatrixNormal = context.prevState?.matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World) ?? mat3.create();
+                if (sampleType as any == "edge") {
+                    samples.forEach(v => {
+                        if (vec3.dot(v.normal, edgeNormal1) < cornerThreshold && vec3.dot(v.normal, edgeNormal2) < cornerThreshold) {
+                            sampleType = "corner";
+                        }
+                    });
+                }
+                const worldViewMatrixNormal = context.prevState?.matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View) ?? mat3.create();
                 const flippedSample: PickSampleExt = {
                     ...centerSample,
                     position: vec3.fromValues(centerSample.position[0], -centerSample.position[2], centerSample.position[1]),
                     normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1]),
-                    isEdge,
+                    sampleType,
                     normalVS: vec3.transformMat3(vec3.create(), centerSample.normal, worldViewMatrixNormal),
                     deviation: this.deviceProfile.quirks.adreno600 ? undefined : centerSample.deviation
                 }
@@ -525,12 +539,14 @@ export interface ViewStatistics {
 /** Extended pick sample information.
  * @category Render View
  */
+
+
 export interface PickSampleExt extends PickSample {
     /** Sample normal, in view space. */
     readonly normalVS: ReadonlyVec3;
 
-    /** Whether sample lies on an edge or not. */
-    readonly isEdge: boolean;
+    /** Whether sample lies on an edge, corner or surface. */
+    readonly sampleType: "edge" | "corner" | "surface";
 }
 
 /** Type of camera controller.
