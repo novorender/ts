@@ -26,7 +26,7 @@ export function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanvasEleme
         failIfMajorPerformanceCaveat: true,
         powerPreference: "high-performance",
         premultipliedAlpha: true,
-        preserveDrawingBuffer: false,
+        preserveDrawingBuffer: true,
         stencil: false,
     };
 

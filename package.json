@@ -1,7 +1,7 @@
 {
     "name": "@novorender/ts",
     "private": true,
-    "version": "0.0.5",
+    "version": "0.0.6",
     "description": "",
     "scripts": {
         "start": "npm run build:ts & npm run build",
