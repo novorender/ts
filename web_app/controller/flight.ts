@@ -484,6 +484,11 @@ export interface FlightControllerParams {
      */
     pickDelay: number;
 
+    /** Option to enable shift to modify mouse wheel speed.
+    * @defaultValue false
+    */
+    enableShiftModifierOnWheel: boolean;
+
     /** 
      * When set, the controller will sample the distance to the pixel under the mouse cursor,
      * or central pinch point, and move the camera with speed proportional to that distance.
