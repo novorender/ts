@@ -50,7 +50,7 @@ class ToonModuleContext implements RenderModuleContext {
             values.color = toonOutline.color;
             context.updateUniformBuffer(uniforms, this.uniforms);
         }
-        if (context.prevState != undefined && !context.isPickBuffersValid() && state.toonOutline.enabled) {
+        if (context.prevState != undefined && !context.isPickBuffersValid() && state.toonOutline.enabled && state.toonOutline.on) {
             await context.renderPickBuffers();
         }
     }
@@ -64,7 +64,7 @@ class ToonModuleContext implements RenderModuleContext {
         const { gl, cameraUniforms } = context;
         const { textures } = context.buffers;
 
-        if (context.prevState != undefined && context.isPickBuffersValid() && state.toonOutline.enabled) {
+        if (context.prevState != undefined && context.isPickBuffersValid() && state.toonOutline.enabled && state.toonOutline.on) {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, uniforms],

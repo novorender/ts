@@ -651,6 +651,12 @@ export interface RenderStateTonemapping {
  * @category Render State
  */
 export interface RenderStateToonOutline {
+    /** 
+     * @ignore
+     * @privateRemarks Ability to turn the "toon" outlines on and off based on conditions in the render loop.
+     * Will be overwritten every frame 
+    */
+    readonly on: boolean;
     /** Whether to do render "toon" outlines or not. */
     readonly enabled: boolean;
     /** Color to use for edges and contours. */

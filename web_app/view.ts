@@ -46,8 +46,9 @@ export class View {
     private baseRenderResolution = 1;
     private drsHighInterval = 50;
     private drsLowInterval = 100;
-    private lastQualityAdjustTime = 0;
+    private lastDrsAdjustTime = 0;
     private resolutionTier: 0 | 1 | 2 = 2;
+    private activeToonOutline = true;
 
     private currentDetailBias: number = 1;
 
@@ -322,6 +323,9 @@ export class View {
                 _renderContext.poll(); // poll for events, such as async reads and shader linking
 
                 if (isIdleFrame) { //increase resolution and detail bias on idleFrame
+                    if (deviceProfile.tier > 0 && this.renderState.toonOutline.on == false) {
+                        this.modifyRenderState({ toonOutline: { on: true } });
+                    }
                     if (!wasIdle) {
                         this.resolutionModifier = Math.min(1, this.baseRenderResolution * 2);
                         this.resize();
@@ -337,10 +341,11 @@ export class View {
                     if (wasIdle) {
                         this.resolutionModifier = this.baseRenderResolution;
                         this.resolutionTier = 2;
+                        this.activeToonOutline = true;
                         wasIdle = false;
                     } else {
                         frameIntervals.push(frameTime);
-                        this.dynamicResolutionScaling(frameIntervals);
+                        this.dynamicQualityAdjustment(frameIntervals);
                     }
                     const activeDetailModifier = 0.5;
                     if (this.renderStateGL.quality.detail != activeDetailModifier) {
@@ -473,35 +478,48 @@ export class View {
         return clone;
     }
 
-    private dynamicResolutionScaling(frameIntervals: number[]) {
+    private dynamicQualityAdjustment(frameIntervals: number[]) {
         const samples = 9;
         if (frameIntervals.length == samples) {
-            const highFrameInterval = this.drsHighInterval;
-            const lowFrameInterval = this.drsLowInterval;
             const sortedIntervals = [...frameIntervals];
             sortedIntervals.sort();
             const medianInterval = sortedIntervals[Math.floor(samples / 2)];
+            const lowValue = sortedIntervals[8];
             frameIntervals.splice(0, 1);
             const cooldown = 3000;
             const now = performance.now();
-            if (now > this.lastQualityAdjustTime + cooldown) { // add a cooldown period before changing anything
-                const resolutionTiers = [0.4, 0.6, 1];
-                if (medianInterval > highFrameInterval) {
-                    if (this.resolutionTier != 0) {
-                        this.resolutionModifier = this.baseRenderResolution * resolutionTiers[--this.resolutionTier];
-                        this.resize();
-                    }
-                    this.lastQualityAdjustTime = now; // reset cooldown whenever we encounter a slow frame so we don't change back to high res too eagerly
-                    return;
-                } else if (medianInterval < lowFrameInterval) {
-                    if (this.resolutionTier != 2) {
-                        this.resolutionModifier = this.baseRenderResolution * resolutionTiers[++this.resolutionTier];
-                        this.lastQualityAdjustTime = now; // reset cooldown whenever we encounter a slow frame so we don't change back to high res too eagerly
-                        this.resize();
-                    }
-                    return;
+            if (this.activeToonOutline) {
+                const activeToon = medianInterval < this.drsLowInterval && this.resolutionTier == 2;
+                if (this.activeToonOutline != activeToon) {
+                    this.activeToonOutline = activeToon;
+                    this.modifyRenderState({ toonOutline: { on: this.activeToonOutline } });
                 }
             }
+            if (now > this.lastDrsAdjustTime + cooldown) { // add a cooldown period before changing anything
+                this.dynamicResolutionScaling(medianInterval, now);
+            }
+        }
+    }
+
+    private dynamicResolutionScaling(medianInterval: number, now: number) {
+        const highFrameInterval = this.drsHighInterval;
+        const lowFrameInterval = this.drsLowInterval;
+
+        const resolutionTiers = [0.4, 0.6, 1];
+        if (medianInterval > highFrameInterval) {
+            if (this.resolutionTier != 0) {
+                this.resolutionModifier = this.baseRenderResolution * resolutionTiers[--this.resolutionTier];
+                this.resize();
+            }
+            this.lastDrsAdjustTime = now; // reset cooldown whenever we encounter a slow frame so we don't change back to high res too eagerly
+            return;
+        } else if (medianInterval < lowFrameInterval) {
+            if (this.resolutionTier != 2) {
+                this.resolutionModifier = this.baseRenderResolution * resolutionTiers[++this.resolutionTier];
+                this.lastDrsAdjustTime = now; // reset cooldown whenever we encounter a slow frame so we don't change back to high res too eagerly
+                this.resize();
+            }
+            return;
         }
     }
 }

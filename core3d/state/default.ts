@@ -99,6 +99,7 @@ export function defaultRenderState(): RenderState {
             useProjectedPosition: false
         },
         toonOutline: {
+            on: false,
             enabled: false,
             color: [0, 0, 0],
         },
