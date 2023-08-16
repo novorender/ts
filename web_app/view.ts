@@ -341,7 +341,8 @@ export class View {
                     if (wasIdle) {
                         this.resolutionModifier = this.baseRenderResolution;
                         this.resolutionTier = 2;
-                        this.activeToonOutline = true;
+                        this.modifyRenderState({ toonOutline: { on: false } });
+                        //this.activeToonOutline = true; //Related to dynamic on off toon outline, planned for performance settings
                         wasIdle = false;
                     } else {
                         frameIntervals.push(frameTime);
@@ -484,17 +485,17 @@ export class View {
             const sortedIntervals = [...frameIntervals];
             sortedIntervals.sort();
             const medianInterval = sortedIntervals[Math.floor(samples / 2)];
-            const lowValue = sortedIntervals[8];
             frameIntervals.splice(0, 1);
             const cooldown = 3000;
             const now = performance.now();
-            if (this.activeToonOutline) {
-                const activeToon = medianInterval < this.drsLowInterval && this.resolutionTier == 2;
-                if (this.activeToonOutline != activeToon) {
-                    this.activeToonOutline = activeToon;
-                    this.modifyRenderState({ toonOutline: { on: this.activeToonOutline } });
-                }
-            }
+            //To handle dynamic on and off on toon outline.
+            // if (this.activeToonOutline) {
+            //     const activeToon = medianInterval < this.drsLowInterval && this.resolutionTier == 2;
+            //     if (this.activeToonOutline != activeToon) {
+            //         this.activeToonOutline = activeToon;
+            //         this.modifyRenderState({ toonOutline: { on: this.activeToonOutline } });
+            //     }
+            // }
             if (now > this.lastDrsAdjustTime + cooldown) { // add a cooldown period before changing anything
                 this.dynamicResolutionScaling(medianInterval, now);
             }
