@@ -1,5 +1,5 @@
 
-import { type ReadonlyVec3, vec3, glMatrix, quat } from "gl-matrix";
+import { type ReadonlyVec3, vec3, quat, glMatrix, type ReadonlyQuat } from "gl-matrix";
 import { BaseController, type ControllerInitParams, type MutableCameraState, type PickContext } from "./base";
 import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type BoundingSphere } from "core3d";
 import { PitchRollYawOrientation, clamp, decomposeRotation } from "./orientation";
@@ -9,19 +9,6 @@ import { ControllerInput, MouseButtons } from "./input";
  * @category Camera Controllers
  */
 export class FlightController extends BaseController {
-    private static readonly defaultParams = {
-        position: [0, 0, 0],
-        pitch: -30,
-        yaw: 30,
-        linearVelocity: 1,
-        rotationalVelocity: 1,
-        flightTime: 0,
-        fieldOfView: 60,
-        pickDelay: 200,
-        proportionalCameraSpeed: null, // { min: 0.2, max: 1000 }
-        enableShiftModifierOnWheel: false
-    };
-
     /** @internal */
     protected arrowKeyScale = 0.4;
     /** @internal */
@@ -33,11 +20,18 @@ export class FlightController extends BaseController {
     override projection = "pinhole" as const;
     override changed = false;
 
-    private params;
-    private position: ReadonlyVec3 = vec3.create();
-    private readonly orientation = new PitchRollYawOrientation();
-    private pivot: Pivot | undefined;
-    private fov: number;
+    private params: FlightControllerParams = {
+        linearVelocity: 1,
+        rotationalVelocity: 1,
+        pickDelay: 200,
+        proportionalCameraSpeed: null, // { min: 0.2, max: 1000 }
+        enableShiftModifierOnWheel: false
+    }
+
+    private _position: ReadonlyVec3 = vec3.create();
+    private readonly _orientation = new PitchRollYawOrientation(-30, 30);
+    private _pivot: Pivot | undefined;
+    private _fov = 60;
 
     private readonly resetPickDelay = 3000;
     private lastUpdatedMoveBegin: number = 0;
@@ -47,42 +41,92 @@ export class FlightController extends BaseController {
     private inMoveBegin = false;
 
     /**
-     * @param pick The context used for pick queries.
      * @param input The input source.
-     * @param params Optional initialization parameters.
+     * @param pick The context used for pick queries.
      */
     constructor(
+        input: ControllerInput,
         /** The context used for pick queries. */
         readonly pick: PickContext,
-        input: ControllerInput, params?: FlightControllerParams) {
+    ) {
         super(input);
-        this.params = { ...FlightController.defaultParams, ...params } as const;
-        const { orientation } = this;
-        const { pitch, yaw, fieldOfView } = this.params;
-        orientation.pitch = pitch;
-        orientation.yaw = yaw;
-        this.fov = fieldOfView;
+    }
+
+    /** Camera position, in world space. */
+    get position() {
+        return this._position;
+    }
+    set position(value: ReadonlyVec3) {
+        this._position = value;
+        this.changed = true;
+    }
+
+    /** Computed rotation quaternion, in world space.
+     * @remarks
+     * This rotation is derived from {@link pitch} and {@link yaw} angles.
+     */
+    get rotation() {
+        return this._orientation.rotation;
+    }
+
+    /** The camera pitch angle, in degrees. */
+    get pitch() {
+        return this._orientation.pitch;
+    }
+    set pitch(value: number) {
+        this._orientation.pitch = value;
+        this.changed = true;
+    }
+
+    /** The camera yaw angle, in degrees. */
+    get yaw() {
+        return this._orientation.yaw;
+    }
+    set yaw(value: number) {
+        this._orientation.yaw = value;
+        this.changed = true;
+    }
+
+    /** The camera vertical field of view angle, in degrees. */
+    get fov() {
+        return this._fov;
+    }
+    set fov(value: number) {
+        this._fov = value;
+        this.changed = true;
+    }
+
+    /** The optional pivot point to orbit around, in world space. */
+    get pivot() {
+        return this._pivot;
+    }
+
+    /** Update controller parameters.
+     * @param params Set of parameters to change.
+     */
+    updateParams(params: RecursivePartial<FlightControllerParams>) {
+        this.params = mergeRecursive(this.params, params);
     }
 
     override serialize(): ControllerInitParams {
-        const { kind, position, orientation, fov } = this;
-        const { rotation } = orientation;
+        const { kind, position, _orientation, _fov } = this;
+        const { rotation } = _orientation;
         this.changed = false;
-        return { kind, position, rotation, fovDegrees: fov };
+        return { kind, position, rotation, fovDegrees: _fov };
     }
 
     override init(params: ControllerInitParams) {
         const { kind, position, rotation, fovDegrees } = params;
         console.assert(kind == this.kind);
         if (position) {
-            this.position = position;
+            this._position = position;
         }
         if (rotation) {
-            this.orientation.decomposeRotation(rotation);
-            this.orientation.roll = 0;
+            this._orientation.decomposeRotation(rotation);
+            this._orientation.roll = 0;
         }
         if (fovDegrees != undefined) {
-            this.fov = fovDegrees;
+            this._fov = fovDegrees;
         }
         this.changed = false;
         this.input.callbacks = this;
@@ -90,23 +134,19 @@ export class FlightController extends BaseController {
     }
 
     override autoFit(center: ReadonlyVec3, radius: number): void {
-        const { orientation } = this;
+        const { _orientation } = this;
         const maxDistance = 1000;
-        const distance = Math.min(maxDistance, radius / Math.tan(glMatrix.toRadian(this.fov) / 2));
+        const distance = Math.min(maxDistance, radius / Math.tan(glMatrix.toRadian(this._fov) / 2));
         const dir = vec3.fromValues(0, 0, distance);
-        vec3.transformQuat(dir, dir, orientation.rotation);
-        this.position = vec3.add(vec3.create(), center, dir)
+        vec3.transformQuat(dir, dir, _orientation.rotation);
+        this._position = vec3.add(vec3.create(), center, dir)
     }
 
-    override updateParams(params: RecursivePartial<FlightControllerParams>) {
-        this.params = mergeRecursive(this.params, params);
-    }
-
-    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void {
-        const { orientation, position } = this;
+    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat): void {
+        const { _orientation, _position } = this;
         if (flyTime) {
-            let targetPitch = orientation.pitch;
-            let targetYaw = orientation.yaw;
+            let targetPitch = _orientation.pitch;
+            let targetYaw = _orientation.yaw;
             if (rotation) {
                 const { pitch, yaw } = decomposeRotation(rotation)
                 targetPitch = pitch / Math.PI * 180;
@@ -116,61 +156,61 @@ export class FlightController extends BaseController {
             this.setFlyTo({
                 totalFlightTime: flyTime,
                 end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
-                begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw }
             });
         }
         else {
-            this.position = targetPosition;
+            this._position = targetPosition;
             if (rotation) {
-                this.orientation.decomposeRotation(rotation);
+                this._orientation.decomposeRotation(rotation);
             }
             this.changed = true;
         }
     }
 
     override zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void {
-        const { orientation, position, fov } = this;
+        const { _orientation, _position, _fov } = this;
         if (flyTime) {
-            const dist = Math.max(boundingSphere.radius / Math.tan(glMatrix.toRadian(fov) / 2), boundingSphere.radius);
+            const dist = Math.max(boundingSphere.radius / Math.tan(glMatrix.toRadian(_fov) / 2), boundingSphere.radius);
             const targetPosition = vec3.create();
-            vec3.add(targetPosition, vec3.transformQuat(targetPosition, vec3.fromValues(0, 0, dist), orientation.rotation), boundingSphere.center);
+            vec3.add(targetPosition, vec3.transformQuat(targetPosition, vec3.fromValues(0, 0, dist), _orientation.rotation), boundingSphere.center);
             this.setFlyTo({
                 totalFlightTime: flyTime,
-                end: { pos: vec3.clone(targetPosition), pitch: orientation.pitch, yaw: orientation.yaw + 0.05 },
-                begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+                end: { pos: vec3.clone(targetPosition), pitch: _orientation.pitch, yaw: _orientation.yaw + 0.05 },
+                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw }
             });
         } else {
-            const dist = boundingSphere.radius / Math.tan(glMatrix.toRadian(fov) / 2);
-            this.position = vec3.add(vec3.create(), vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, dist), orientation.rotation), boundingSphere.center);
+            const dist = boundingSphere.radius / Math.tan(glMatrix.toRadian(_fov) / 2);
+            this._position = vec3.add(vec3.create(), vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, dist), _orientation.rotation), boundingSphere.center);
             this.changed = true;
         }
     }
 
     override update(): void {
         this.changed = false;
-        const { multiplier, orientation, params, height, pivot, zoomPos, currentFlyTo } = this;
+        const { multiplier, _orientation, params, height, _pivot, zoomPos, currentFlyTo } = this;
         if (currentFlyTo) {
-            this.position = vec3.clone(currentFlyTo.pos);
-            orientation.pitch = currentFlyTo.pitch;
-            orientation.yaw = currentFlyTo.yaw;
+            this._position = vec3.clone(currentFlyTo.pos);
+            _orientation.pitch = currentFlyTo.pitch;
+            _orientation.yaw = currentFlyTo.yaw;
             this.changed = true;
             return;
         }
         this.lastUpdate = performance.now();
         let { tx, ty, tz, rx, ry, shouldPivot } = this.getTransformations();
-        orientation.roll = 0;
+        _orientation.roll = 0;
         const [zoomX, zoomY] = zoomPos;
 
         if (rx || ry) {
-            const rotationalVelocity = (shouldPivot ? 180 : this.fov) * params.rotationalVelocity / height;
-            orientation.pitch += rx * rotationalVelocity;
-            orientation.yaw += ry * rotationalVelocity;
-            if (pivot && shouldPivot && pivot.active) {
-                const { center, offset, distance } = pivot;
+            const rotationalVelocity = (shouldPivot ? 180 : this._fov) * params.rotationalVelocity / height;
+            _orientation.pitch += rx * rotationalVelocity;
+            _orientation.yaw += ry * rotationalVelocity;
+            if (_pivot && shouldPivot && _pivot.active) {
+                const { center, offset, distance } = _pivot;
                 const pos = vec3.fromValues(0, 0, distance);
                 vec3.add(pos, pos, offset);
-                vec3.transformQuat(pos, pos, orientation.rotation);
-                this.position = vec3.add(vec3.create(), center, pos);
+                vec3.transformQuat(pos, pos, _orientation.rotation);
+                this._position = vec3.add(vec3.create(), center, pos);
             }
             this.changed = true;
         }
@@ -181,10 +221,10 @@ export class FlightController extends BaseController {
                 ty += -zoomY * tz * 0.6;
             }
             const linearVelocity = multiplier * params.linearVelocity / height;
-            const worldPosDelta = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * linearVelocity, -ty * linearVelocity, tz * linearVelocity), orientation.rotation);
-            this.position = vec3.add(vec3.create(), this.position, worldPosDelta);
-            if (pivot && pivot.active) {
-                this.setPivot(pivot.center, pivot.active);
+            const worldPosDelta = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * linearVelocity, -ty * linearVelocity, tz * linearVelocity), _orientation.rotation);
+            this._position = vec3.add(vec3.create(), this._position, worldPosDelta);
+            if (_pivot && _pivot.active) {
+                this.setPivot(_pivot.center, _pivot.active);
             }
             this.changed = true;
         }
@@ -192,18 +232,18 @@ export class FlightController extends BaseController {
 
     override stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera> {
         const changes: MutableCameraState = {};
-        const { position, orientation, pivot, fov } = this;
-        if (!state || !vec3.exactEquals(state.position, position)) {
-            changes.position = position;
+        const { _position, _orientation, _pivot, _fov } = this;
+        if (!state || !vec3.exactEquals(state.position, _position)) {
+            changes.position = _position;
         }
-        if (!state || !quat.exactEquals(state.rotation, orientation.rotation)) {
-            changes.rotation = orientation.rotation;
+        if (!state || !quat.exactEquals(state.rotation, _orientation.rotation)) {
+            changes.rotation = _orientation.rotation;
         }
-        if (!state || (pivot && state.pivot && vec3.exactEquals(state.pivot, pivot?.center))) {
-            changes.pivot = pivot?.center;
+        if (!state || (_pivot && state.pivot && vec3.exactEquals(state.pivot, _pivot?.center))) {
+            changes.pivot = _pivot?.center;
         }
-        if (!state || state.fov !== fov) {
-            changes.fov = fov;
+        if (!state || state.fov !== _fov) {
+            changes.fov = _fov;
         }
         if (!state) {
             changes.kind = "pinhole";
@@ -278,31 +318,31 @@ export class FlightController extends BaseController {
     }
 
     private resetPivot(active: boolean) {
-        const { pivot } = this;
-        if (pivot) {
-            this.setPivot(pivot.center, active);
+        const { _pivot } = this;
+        if (_pivot) {
+            this.setPivot(_pivot.center, active);
         }
     }
 
     private setPivot(center: ReadonlyVec3, active: boolean) {
-        const { position, orientation } = this;
-        const distance = vec3.distance(center, position);
+        const { _position, _orientation } = this;
+        const distance = vec3.distance(center, _position);
         const offset = vec3.fromValues(0, 0, distance);
-        vec3.transformQuat(offset, offset, orientation.rotation);
+        vec3.transformQuat(offset, offset, _orientation.rotation);
         vec3.add(offset, center, offset);
-        vec3.sub(offset, position, offset);
-        const invRot = quat.invert(quat.create(), orientation.rotation);
+        vec3.sub(offset, _position, offset);
+        const invRot = quat.invert(quat.create(), _orientation.rotation);
         vec3.transformQuat(offset, offset, invRot)
-        this.pivot = { center, offset, distance, active };
+        this._pivot = { center, offset, distance, active };
     }
 
     /** @internal */
     protected modifiers() {
-        const { params, recordedMoveBegin, position, fov } = this;
+        const { params, recordedMoveBegin, _position, _fov } = this;
         const { proportionalCameraSpeed, enableShiftModifierOnWheel } = params;
         let scale = 20;
         if (proportionalCameraSpeed && recordedMoveBegin) {
-            scale = vec3.dist(position, recordedMoveBegin) * Math.tan(((Math.PI / 180) * fov) / 2) * 2;
+            scale = vec3.dist(_position, recordedMoveBegin) * Math.tan(((Math.PI / 180) * _fov) / 2) * 2;
             const siceMoveDelay = performance.now() - this.moveBeginDelay;
             if (siceMoveDelay < 400) {  //Delay proportinal speed for better feeling on bad devices
                 scale = Math.min(scale, 60 + (siceMoveDelay * 0.5));
@@ -337,6 +377,21 @@ export class FlightController extends BaseController {
         const ry = shouldPivot ? pivotY : rotY;
         return { tx, ty, tz, rx, ry, shouldPivot };
     }
+
+    /** FlightController type guard function.
+     * @param controller The controller to type guard.
+     */
+    static is(controller: BaseController): controller is FlightController {
+        return controller instanceof FlightController;
+    }
+
+    /** FlightController type assert function.
+     * @param controller The controller to type assert.
+     */
+    static assert(controller: BaseController): asserts controller is FlightController {
+        if (!(controller instanceof FlightController))
+            throw new Error("Camera controller is not of type FlightController!");
+    }
 }
 
 function isTouchEvent(event: MouseEvent | TouchEvent): event is TouchEvent {
@@ -349,8 +404,8 @@ function isTouchEvent(event: MouseEvent | TouchEvent): event is TouchEvent {
 export class CadMiddlePanController extends FlightController {
     override kind = "cadMiddlePan" as const;
 
-    constructor(readonly pick: PickContext, input: ControllerInput, params?: FlightControllerParams) {
-        super(pick, input);
+    constructor(input: ControllerInput, readonly pick: PickContext, params?: FlightControllerParams) {
+        super(input, pick);
         this.pivotButton = MouseButtons.left;
         this.pivotFingers = 1;
     }
@@ -380,8 +435,8 @@ export class CadMiddlePanController extends FlightController {
 export class CadRightPanController extends FlightController {
     override kind = "cadRightPan" as const;
 
-    constructor(readonly pick: PickContext, input: ControllerInput, params?: FlightControllerParams) {
-        super(pick, input);
+    constructor(input: ControllerInput, readonly pick: PickContext, params?: FlightControllerParams) {
+        super(input, pick);
         this.pivotButton = MouseButtons.left;
         this.pivotFingers = 1;
     }
@@ -411,13 +466,8 @@ export class CadRightPanController extends FlightController {
 export class SpecialFlightController extends FlightController {
     override kind = "special" as const;
 
-    /**
-     * @param pick 
-     * @param input 
-     * @param params 
-     */
-    constructor(readonly pick: PickContext, input: ControllerInput, params?: FlightControllerParams) {
-        super(pick, input);
+    constructor(input: ControllerInput, readonly pick: PickContext, params?: FlightControllerParams) {
+        super(input, pick);
         this.pivotButton = MouseButtons.middle;
         this.pivotFingers = 1;
     }
@@ -445,39 +495,15 @@ export class SpecialFlightController extends FlightController {
  * @category Camera Controllers
  */
 export interface FlightControllerParams {
-    /** The camera position.
-     * @defaultValue [0,0,0]
-     */
-    position?: ReadonlyVec3;
-    /** The camera pitch.
-     * @defaultValue -30
-     */
-    pitch?: number;
-
-    /** The camera yaw.
-     * @defaultValue 30
-     */
-    yaw?: number;
-
     /** The camera linear velocity factor.
      * @defaultValue 1
      */
-    linearVelocity?: number;
+    linearVelocity: number;
 
     /** The camera rotational velocity factor.
      * @defaultValue 1
      */
-    rotationalVelocity?: number;
-
-    /** Default fly time in milliseconds.
-     * @defaultValue 0
-     */
-    flightTime?: number;
-
-    /** Field of view angle between top and bottom plane, in degrees.
-     * @defaultValue 60
-     */
-    fieldOfView?: number;
+    rotationalVelocity: number;
 
     /** Delay for pick updates, in milliseconds.
      * @defaultValue 200
@@ -497,7 +523,7 @@ export interface FlightControllerParams {
      * Setting this to `null` disables this feature, using a constant speed factor of 1.0.
      * @defaultValue null
      */
-    proportionalCameraSpeed?: { readonly min: number, readonly max: number; } | null;
+    proportionalCameraSpeed: { readonly min: number, readonly max: number; } | null;
 }
 
 interface CameraTransformations {

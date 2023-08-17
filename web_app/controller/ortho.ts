@@ -1,7 +1,7 @@
 
-import { type ReadonlyVec3, vec3, type ReadonlyQuat, glMatrix, quat } from "gl-matrix";
+import { type ReadonlyVec3, vec3, type ReadonlyQuat, glMatrix } from "gl-matrix";
 import { BaseController, type ControllerInitParams, type MutableCameraState } from "./base";
-import { mergeRecursive, type BoundingSphere, type RecursivePartial, type RenderStateCamera } from "core3d";
+import { mergeRecursive, type BoundingSphere, type RenderStateCamera } from "core3d";
 import { PitchRollYawOrientation, decomposeRotation } from "./orientation";
 import { ControllerInput } from "./input";
 
@@ -13,62 +13,108 @@ import { ControllerInput } from "./input";
  * @category Camera Controllers
  */
 export class OrthoController extends BaseController {
-    static readonly defaultParams = {
-        position: [0, 0, 0],
-        rotation: [0, 0, 0, 1],
-        fieldOfView: 50,
-        stepInterval: 1,
-        usePointerLock: false,
-    } as const;
-
     override kind = "ortho" as const;
     override projection = "orthographic" as const;
     override changed = false;
 
-    private params;
-    private position: ReadonlyVec3;
-    private orientation = new PitchRollYawOrientation();
-    private fov: number;
+    private params: OrthoControllerParams = {
+        stepInterval: 1,
+        usePointerLock: false,
+    };
+    private _position: ReadonlyVec3 = vec3.create();
+    private _orientation = new PitchRollYawOrientation();
+    private _fov = 50;
 
     /**
      * @param input The input source.
-     * @param params Optional initialization parameters.
      */
-    constructor(input: ControllerInput, params?: OrthoControllerParams) {
+    constructor(input: ControllerInput) {
         super(input);
-        const { position, rotation, fieldOfView } = this.params = { ...OrthoController.defaultParams, ...params } as const;
-        this.position = position;
-        this.orientation.decomposeRotation(rotation);
-        this.fov = fieldOfView;
     }
 
-    override serialize(): ControllerInitParams {
-        const { kind, position, orientation, fov } = this;
-        const { rotation } = orientation;
-        this.changed = false;
-        return { kind, position, rotation, fovMeters: fov };
+    /** Camera position, in world space. */
+    get position() {
+        return this._position;
+    }
+    set position(value: ReadonlyVec3) {
+        this._position = value;
+        this.changed = true;
     }
 
-    override updateParams(params: RecursivePartial<OrthoControllerParams>) {
+    /** Computed rotation quaternion, in world space.
+     * @remarks
+     * This rotation is derived from {@link pitch}, {@link yaw} and  {@link roll} angles.
+     */
+    get rotation() {
+        return this._orientation.rotation;
+    }
+
+    /** The camera pitch angle, in degrees. */
+    get pitch() {
+        return this._orientation.pitch;
+    }
+    set pitch(value: number) {
+        this._orientation.pitch = value;
+        this.changed = true;
+    }
+
+    /** The camera yaw angle, in degrees. */
+    get yaw() {
+        return this._orientation.yaw;
+    }
+    set yaw(value: number) {
+        this._orientation.yaw = value;
+        this.changed = true;
+    }
+
+    /** The camera roll angle, in degrees. */
+    get roll() {
+        return this._orientation.roll;
+    }
+    set roll(value: number) {
+        this._orientation.roll = value;
+        this.changed = true;
+    }
+
+    /** The camera vertical field of view angle, in meters. */
+    get fov() {
+        return this._fov;
+    }
+    set fov(value: number) {
+        this._fov = value;
+        this.changed = true;
+    }
+
+    /** Update controller parameters.
+     * @param params Set of parameters to change.
+     */
+    updateParams(params: Partial<OrthoControllerParams>) {
         this.params = mergeRecursive(this.params, params);
         if (this.input.callbacks == this) {
             this.input.usePointerLock = this.params.usePointerLock;
         }
     }
 
+    override serialize(): ControllerInitParams {
+        const { kind, position, _orientation, _fov } = this;
+        const { rotation } = _orientation;
+        this.changed = false;
+        return { kind, position, rotation, fovMeters: _fov };
+    }
+
     override init(params: ControllerInitParams) {
         const { kind, position, rotation, fovMeters, distance, fovDegrees } = params;
         console.assert(kind == this.kind);
         if (position) {
-            this.position = position;
+            this._position = position;
         }
         if (rotation) {
-            this.orientation.decomposeRotation(rotation);
+            this._orientation.decomposeRotation(rotation);
         }
         if (fovMeters) {
-            this.fov = fovMeters;
+            this._fov = fovMeters;
         } else if (fovDegrees && distance) {
-            this.fov = OrthoController.fovFromPerspective(fovDegrees, distance);
+            this._fov = OrthoController.fovFromPerspective(fovDegrees, distance);
         }
         this.changed = true;
         this.input.usePointerLock = this.params.usePointerLock;
@@ -76,22 +122,22 @@ export class OrthoController extends BaseController {
     }
 
     override autoFit(center: ReadonlyVec3, radius: number): void {
-        const { orientation } = this;
+        const { _orientation } = this;
         const dir = vec3.fromValues(0, 0, radius);
-        vec3.transformQuat(dir, dir, orientation.rotation);
-        this.position = vec3.add(vec3.create(), center, dir);
-        this.orientation.pitch = -90;
-        this.orientation.yaw = 0;
-        this.orientation.roll = 0;
-        this.fov = radius * 2;
+        vec3.transformQuat(dir, dir, _orientation.rotation);
+        this._position = vec3.add(vec3.create(), center, dir);
+        this._orientation.pitch = -90;
+        this._orientation.yaw = 0;
+        this._orientation.roll = 0;
+        this._fov = radius * 2;
         this.changed = true;
     }
 
-    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void {
-        const { orientation, position } = this;
+    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat): void {
+        const { _orientation, _position } = this;
         if (flyTime) {
-            let targetPitch = orientation.pitch;
-            let targetYaw = orientation.yaw;
+            let targetPitch = _orientation.pitch;
+            let targetYaw = _orientation.yaw;
             if (rotation) {
                 const { pitch, yaw } = decomposeRotation(rotation)
                 targetPitch = pitch / Math.PI * 180;
@@ -101,43 +147,43 @@ export class OrthoController extends BaseController {
             this.setFlyTo({
                 totalFlightTime: flyTime,
                 end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
-                begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw }
             });
         }
         else {
-            this.position = targetPosition;
+            this._position = targetPosition;
             if (rotation) {
-                this.orientation.decomposeRotation(rotation);
+                this._orientation.decomposeRotation(rotation);
             }
             this.changed = true;
         }
     }
 
     override zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void {
-        const { orientation, position, fov } = this;
+        const { _orientation, _position, _fov } = this;
         if (flyTime) {
-            const dist = Math.max(boundingSphere.radius / Math.tan(glMatrix.toRadian(fov) / 2), boundingSphere.radius);
+            const dist = Math.max(boundingSphere.radius / Math.tan(glMatrix.toRadian(_fov) / 2), boundingSphere.radius);
             const targetPosition = vec3.create();
-            vec3.add(targetPosition, vec3.transformQuat(targetPosition, vec3.fromValues(0, 0, dist), orientation.rotation), boundingSphere.center);
+            vec3.add(targetPosition, vec3.transformQuat(targetPosition, vec3.fromValues(0, 0, dist), _orientation.rotation), boundingSphere.center);
             this.setFlyTo({
                 totalFlightTime: flyTime,
-                end: { pos: vec3.clone(targetPosition), pitch: orientation.pitch, yaw: orientation.yaw + 0.05 },
-                begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+                end: { pos: vec3.clone(targetPosition), pitch: _orientation.pitch, yaw: _orientation.yaw + 0.05 },
+                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw }
             });
         } else {
-            const dist = boundingSphere.radius / Math.tan(glMatrix.toRadian(fov) / 2);
-            this.position = vec3.add(vec3.create(), vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, dist), orientation.rotation), boundingSphere.center);
+            const dist = boundingSphere.radius / Math.tan(glMatrix.toRadian(_fov) / 2);
+            this._position = vec3.add(vec3.create(), vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, dist), _orientation.rotation), boundingSphere.center);
             this.changed = true;
         }
     }
 
     override update() {
-        const { axes, zoomPos, height, position, orientation, hasShift, currentFlyTo } = this;
+        const { axes, zoomPos, height, _position, _orientation, hasShift, currentFlyTo } = this;
         this.changed = false;
         if (currentFlyTo) {
-            this.position = vec3.clone(currentFlyTo.pos);
-            orientation.pitch = currentFlyTo.pitch;
-            orientation.yaw = currentFlyTo.yaw;
+            this._position = vec3.clone(currentFlyTo.pos);
+            _orientation.pitch = currentFlyTo.pitch;
+            _orientation.yaw = currentFlyTo.yaw;
             this.changed = true;
             return;
         }
@@ -151,7 +197,7 @@ export class OrthoController extends BaseController {
         const [zoomX, zoomY] = zoomPos;
 
         if (rz) {
-            orientation.roll += rz * 0.2;
+            _orientation.roll += rz * 0.2;
             this.changed = true;
         }
         if (tx || ty || tz || zoom) {
@@ -159,25 +205,25 @@ export class OrthoController extends BaseController {
                 const dz = 1 + (zoom / height);
                 tx += zoomX * -zoom * 0.6;
                 ty += zoomY * zoom * 0.6;
-                this.fov *= dz;
+                this._fov *= dz;
             }
-            const scale = this.fov / height;
-            const deltaPos = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * scale * -1, ty * scale, tz), orientation.rotation);
-            this.position = vec3.add(vec3.create(), position, deltaPos);
+            const scale = this._fov / height;
+            const deltaPos = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * scale * -1, ty * scale, tz), _orientation.rotation);
+            this._position = vec3.add(vec3.create(), _position, deltaPos);
             this.changed = true;
         }
     }
 
     override stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera> {
         const changes: MutableCameraState = {};
-        if (!state || state.position !== this.position) {
-            changes.position = this.position;
+        if (!state || state.position !== this._position) {
+            changes.position = this._position;
         }
-        if (!state || state.rotation !== this.orientation.rotation) {
-            changes.rotation = this.orientation.rotation;
+        if (!state || state.rotation !== this._orientation.rotation) {
+            changes.rotation = this._orientation.rotation;
         }
-        if (!state || state.fov !== this.fov) {
-            changes.fov = this.fov;
+        if (!state || state.fov !== this._fov) {
+            changes.fov = this._fov;
         }
         if (!state) {
             changes.kind = "orthographic";
@@ -186,8 +232,23 @@ export class OrthoController extends BaseController {
     }
 
     //perspectiveDepth = BaseController.getDistanceFromViewPlane(pivot);
-    static fovFromPerspective(perspectiveFov: number, perspectiveDepth: number) {
+    private static fovFromPerspective(perspectiveFov: number, perspectiveDepth: number) {
         return Math.max(0.1, perspectiveDepth) * Math.tan(((Math.PI / 180) * perspectiveFov) / 2) * 2;
+    }
+
+    /** OrthoController type guard function.
+     * @param controller The controller to type guard.
+     */
+    static is(controller: BaseController): controller is OrthoController {
+        return controller instanceof OrthoController;
+    }
+
+    /** OrthoController type assert function.
+     * @param controller The controller to type assert.
+     */
+    static assert(controller: BaseController): asserts controller is OrthoController {
+        if (!(controller instanceof OrthoController))
+            throw new Error("Camera controller is not of type OrthoController!");
     }
 }
 
@@ -195,29 +256,14 @@ export class OrthoController extends BaseController {
  * @category Camera Controllers
  */
 export interface OrthoControllerParams {
-    /** The camera position.
-     * @defaultValue  [0,0,0].
-     */
-    readonly position?: ReadonlyVec3;
-
-    /** The camera rotation.
-     * @defaultValue  An identity quaternion, [0,0,0,1].
-     */
-    readonly rotation?: ReadonlyQuat;
-
-    /** The camera field of view, expressed as meters between top and bottom view planes.
-     * @defaultValue 50
-     */
-    readonly fieldOfView?: number;
-
     /** The interval to use for stepping clipping planes in the depth direction, i.e. when using mouse navigate buttons.
      * @defaultValue 1.0
      */
-    readonly stepInterval?: number;
+    readonly stepInterval: number;
 
     /** Whether to use mouse pointer lock or not.
      * @defaultValue false
      */
-    readonly usePointerLock?: boolean
+    readonly usePointerLock: boolean;
 }
 

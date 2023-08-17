@@ -1,21 +1,9 @@
 
-import { type ReadonlyVec3, vec3, type ReadonlyQuat, glMatrix, quat } from "gl-matrix";
+import { type ReadonlyVec3, vec3, type ReadonlyQuat, glMatrix } from "gl-matrix";
 import { BaseController, type ControllerInitParams, type MutableCameraState } from "./base";
-import { type RenderStateScene, type RenderStateCamera, type RenderState, mergeRecursive, type RecursivePartial } from "core3d";
+import { type RenderStateCamera, mergeRecursive } from "core3d";
 import { PitchRollYawOrientation, decomposeRotation } from "./orientation";
-import { ControllerInput, MouseButtons } from "./input";
-
-/** Panorama camera controller parameters
- * @category Camera Controllers
- */
-export interface PanoramaControllerParams {
-    position?: ReadonlyVec3;
-    pitch?: number;
-    yaw?: number;
-    rotationalVelocity?: number;
-    fieldOfView?: number;
-}
-
+import { ControllerInput } from "./input";
 
 /** Panorama type camera motion controller
  * @remarks
@@ -23,59 +11,93 @@ export interface PanoramaControllerParams {
  * @category Camera Controllers
  */
 export class PanoramaController extends BaseController {
-    static readonly defaultParams = {
-        position: [0, 0, 0],
-        pitch: -30,
-        yaw: 30,
-        rotationalVelocity: 1,
-        fieldOfView: 60,
-    };
-
     override kind = "panorama" as const;
     override projection = "pinhole" as const;
     override changed = false;
-    private params;
-    private position: ReadonlyVec3 = vec3.create();
-    private readonly orientation = new PitchRollYawOrientation();
-    private fov: number;
+    private params: PanoramaControllerParams = {
+        rotationalVelocity: 1,
+    }
+    private _position: ReadonlyVec3 = vec3.create();
+    private readonly _orientation = new PitchRollYawOrientation(-30, 30);
+    private _fov = 60;
 
     /**
      * @param input The input source.
-     * @param params Optional initialization parameters.
      */
-    constructor(input: ControllerInput, params?: PanoramaControllerParams) {
+    constructor(input: ControllerInput) {
         super(input);
-        this.params = { ...PanoramaController.defaultParams, ...params } as const;
-        const { orientation } = this;
-        const { pitch, yaw, fieldOfView } = this.params;
-        orientation.pitch = pitch;
-        orientation.yaw = yaw;
-        this.fov = fieldOfView;
+    }
+
+    /** Camera position, in world space. */
+    get position() {
+        return this._position;
+    }
+    set position(value: ReadonlyVec3) {
+        this._position = value;
+        this.changed = true;
+    }
+
+    /** Computed rotation quaternion, in world space.
+     * @remarks
+     * This rotation is derived from {@link pitch} and {@link yaw} angles.
+     */
+    get rotation() {
+        return this._orientation.rotation;
+    }
+
+    /** The camera pitch angle, in degrees. */
+    get pitch() {
+        return this._orientation.pitch;
+    }
+    set pitch(value: number) {
+        this._orientation.pitch = value;
+        this.changed = true;
+    }
+
+    /** The camera yaw angle, in degrees. */
+    get yaw() {
+        return this._orientation.yaw;
+    }
+    set yaw(value: number) {
+        this._orientation.yaw = value;
+        this.changed = true;
+    }
+
+    /** The camera vertical field of view angle, in degrees. */
+    get fov() {
+        return this._fov;
+    }
+    set fov(value: number) {
+        this._fov = value;
+        this.changed = true;
+    }
+
+    /** Update controller parameters.
+     * @param params Set of parameters to change.
+     */
+    updateParams(params: Partial<PanoramaControllerParams>) {
+        this.params = mergeRecursive(this.params, params);
     }
 
     override serialize(): ControllerInitParams {
-        const { kind, position, orientation, fov } = this;
-        const { rotation } = orientation;
+        const { kind, position, _orientation, _fov } = this;
+        const { rotation } = _orientation;
         this.changed = false;
-        return { kind, position, rotation, fovDegrees: fov };
-    }
-
-    override updateParams(params: RecursivePartial<PanoramaControllerParams>) {
-        this.params = mergeRecursive(this.params, params);
+        return { kind, position, rotation, fovDegrees: _fov };
     }
 
     override init(params: ControllerInitParams) {
         const { kind, position, rotation, fovDegrees } = params;
         console.assert(kind == this.kind);
         if (position) {
-            this.position = position;
+            this._position = position;
         }
         if (rotation) {
-            this.orientation.decomposeRotation(rotation);
-            this.orientation.roll = 0;
+            this._orientation.decomposeRotation(rotation);
+            this._orientation.roll = 0;
         }
         if (fovDegrees != undefined) {
-            this.fov = fovDegrees;
+            this._fov = fovDegrees;
         }
         this.changed = false;
         this.input.callbacks = this;
@@ -84,19 +106,19 @@ export class PanoramaController extends BaseController {
     }
 
     override autoFit(center: ReadonlyVec3, radius: number): void {
-        const { orientation } = this;
+        const { _orientation } = this;
         const maxDistance = 1000;
-        const distance = Math.min(maxDistance, radius / Math.tan(glMatrix.toRadian(this.fov) / 2));
+        const distance = Math.min(maxDistance, radius / Math.tan(glMatrix.toRadian(this._fov) / 2));
         const dir = vec3.fromValues(0, 0, distance);
-        vec3.transformQuat(dir, dir, orientation.rotation);
-        this.position = vec3.add(vec3.create(), center, dir)
+        vec3.transformQuat(dir, dir, _orientation.rotation);
+        this._position = vec3.add(vec3.create(), center, dir)
     }
 
-    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: quat): void {
-        const { orientation, position } = this;
+    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat): void {
+        const { _orientation, _position } = this;
         if (flyTime) {
-            let targetPitch = orientation.pitch;
-            let targetYaw = orientation.yaw;
+            let targetPitch = _orientation.pitch;
+            let targetYaw = _orientation.yaw;
             if (rotation) {
                 const { pitch, yaw } = decomposeRotation(rotation)
                 targetPitch = pitch / Math.PI * 180;
@@ -106,91 +128,87 @@ export class PanoramaController extends BaseController {
             this.setFlyTo({
                 totalFlightTime: flyTime,
                 end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
-                begin: { pos: vec3.clone(position), pitch: orientation.pitch, yaw: orientation.yaw }
+                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw }
             });
         }
         else {
-            this.position = targetPosition;
+            this._position = targetPosition;
             if (rotation) {
-                this.orientation.decomposeRotation(rotation);
+                this._orientation.decomposeRotation(rotation);
             }
             this.changed = true;
         }
     }
 
     override update(): void {
-        const { axes, orientation, params, height, fov, currentFlyTo } = this;
+        const { axes, _orientation, params, height, _fov, currentFlyTo } = this;
         if (currentFlyTo) {
-            this.position = vec3.clone(currentFlyTo.pos);
-            orientation.pitch = currentFlyTo.pitch;
-            orientation.yaw = currentFlyTo.yaw;
+            this._position = vec3.clone(currentFlyTo.pos);
+            _orientation.pitch = currentFlyTo.pitch;
+            _orientation.yaw = currentFlyTo.yaw;
             this.changed = true;
             return;
         }
         const tz = axes.keyboard_ws + axes.mouse_wheel + axes.touch_pinch2;
         const rx = -axes.keyboard_arrow_up_down / 5 - axes.mouse_lmb_move_y + axes.touch_1_move_y;
         const ry = -axes.keyboard_arrow_left_right / 5 - axes.mouse_lmb_move_x + axes.touch_1_move_x;
-        orientation.roll = 0;
+        _orientation.roll = 0;
 
         if (rx || ry) {
-            const rotationalVelocity = this.fov * params.rotationalVelocity / height;
-            orientation.pitch += rx * rotationalVelocity;
-            orientation.yaw += ry * rotationalVelocity;
+            const rotationalVelocity = this._fov * params.rotationalVelocity / height;
+            _orientation.pitch += rx * rotationalVelocity;
+            _orientation.yaw += ry * rotationalVelocity;
             this.changed = true;
         }
 
         if (tz) {
             const dz = 1 + (tz / height);
-            this.fov = Math.max(Math.min(60, fov * dz), 0.1);
+            this._fov = Math.max(Math.min(60, _fov * dz), 0.1);
             this.changed = true;
         }
     }
 
     override stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera> {
         const changes: MutableCameraState = {};
-        const { position, orientation, fov } = this;
-        if (!state || state.position !== position) {
-            changes.position = position;
+        const { _position, _orientation, _fov } = this;
+        if (!state || state.position !== _position) {
+            changes.position = _position;
         }
-        if (!state || state.rotation !== orientation.rotation) {
-            changes.rotation = orientation.rotation;
+        if (!state || state.rotation !== _orientation.rotation) {
+            changes.rotation = _orientation.rotation;
         }
-        if (!state || state.fov !== fov) {
-            changes.fov = fov;
+        if (!state || state.fov !== _fov) {
+            changes.fov = _fov;
         }
         if (!state) {
             changes.kind = "pinhole";
         }
         return changes;
     }
+
+    /** PanoramaController type guard function.
+     * @param controller The controller to type guard.
+     */
+    static is(controller: BaseController): controller is PanoramaController {
+        return controller instanceof PanoramaController;
+    }
+
+    /** PanoramaController type assert function.
+     * @param controller The controller to type assert.
+     */
+    static assert(controller: BaseController): asserts controller is PanoramaController {
+        if (!(controller instanceof PanoramaController))
+            throw new Error("Camera controller is not of type PanoramaController!");
+    }
 }
 
-/** Panorama controller initialization parameters.
+/** Panorama camera controller parameters
  * @category Camera Controllers
  */
 export interface PanoramaControllerParams {
-    /** The camera position.
-     * @defaultValue [0,0,0]
-     */
-    position?: ReadonlyVec3;
-
-    /** The camera pitch.
-     * @defaultValue -30
-     */
-    pitch?: number;
-
-    /** The camera yaw.
-     * @defaultValue 30
-     */
-    yaw?: number;
-
     /** The camera rotational velocity factor.
      * @defaultValue 1
      */
-    rotationalVelocity?: number;
-
-    /** Field of view angle between top and bottom plane, in degrees.
-     * @defaultValue 60
-     */
-    fieldOfView?: number;
+    rotationalVelocity: number;
 }
+

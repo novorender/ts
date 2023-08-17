@@ -1,10 +1,12 @@
 import { type ReadonlyVec3, vec3, type ReadonlyQuat, mat3 } from "gl-matrix";
 import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera } from "core3d";
-import { ControllerInput, FlightController, OrbitController, OrthoController, PanoramaController, type BaseController, CadMiddlePanController, CadRightPanController, SpecialFlightController } from "./controller";
+import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipState } from "./flip";
 
 /**
  * A view base class for Novorender content.
+ * @template CameraControllerType Types of camera controllers used by this view.
+ * @template CameraControllerKind The inferred camera controller kind string union.
  * @remarks
  * The view class wraps the complexities of the `Core3D` module into a high-level abstraction.
  * Notably, it implements a render loop in the {@link run} function, which deals with a number of issues, such as:
@@ -19,12 +21,12 @@ import { flipState } from "./flip";
  * you should make a derived View class of your own and override the methods you need.
  * @category Render View
  */
-export class View {
+export class View<CameraControllerTypes extends CameraControllers = BuiltinCameraControllerType, CameraControllerKind extends string = Extract<keyof CameraControllerTypes, string>> {
     /** The url from which the javascript containing this class was loaded. */
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
 
     /** Available camera controller types. */
-    controllers;
+    controllers: CameraControllerTypes;
 
     private _renderContext: RenderContext | undefined;
     private _run = true;
@@ -63,7 +65,8 @@ export class View {
     public constructor(
         /** The HTMLCanvasElement used for rendering. */
         readonly canvas: HTMLCanvasElement,
-        deviceProfile: DeviceProfile, imports: Core3DImports
+        deviceProfile: DeviceProfile, imports: Core3DImports,
+        controllersFactory: CameraControllersFactory<CameraControllerTypes> = (builtinControllers as unknown as CameraControllersFactory<CameraControllerTypes>)
     ) {
         if (!isSecureContext)
             throw new Error("Your browser is not running in an secure context!"); // see constructor tsdoc comments for more details
@@ -76,18 +79,8 @@ export class View {
         this.renderStateCad = this.createRenderState(this.renderStateGL);
 
         const input = new ControllerInput(canvas);
-
-        // TODO: Add some way to introduce 3. party controllers.
-        this.controllers = {
-            flight: new FlightController(this, input),
-            orbit: new OrbitController(input),
-            ortho: new OrthoController(input),
-            panorama: new PanoramaController(input),
-            cadMiddlePan: new CadMiddlePanController(this, input),
-            cadRightPan: new CadRightPanController(this, input),
-            special: new SpecialFlightController(this, input),
-        } as const;
-        this._activeController = this.controllers["orbit"];
+        this.controllers = controllersFactory(input, this);
+        this._activeController = Object.values(this.controllers)[0];
         this._activeController.attach();
 
         const resizeObserver = new ResizeObserver(() => {
@@ -261,12 +254,18 @@ export class View {
      * @param kind The type of camera controller to switch to.
      * @param initialState Optional initial state for the new camera controller. Undefined properties will be copied/adapted from the current render state.
      * @param options Switch options.
+     * @template T Kind of camera controller.
+     * @returns The new camera controller.
      * @remarks
      * The function will also set the {@link RenderStateCamera.kind | camera projection model}.
      */
-    async switchCameraController(kind: CameraControllerType, initialState?: CameraControllerInitialValues, options?: CameraControllerOptions) {
+    async switchCameraController<T extends CameraControllerKind>(
+        kind: T,
+        initialState?: CameraControllerInitialValues,
+        options?: CameraControllerOptions
+    ): Promise<CameraControllerTypes[T]> {
         const autoInit = options?.autoInit ?? false;
-        function isControllerKind(kind: string, controllers: Object): kind is CameraControllerType {
+        function isControllerKind(kind: string, controllers: Object): kind is CameraControllerKind {
             return kind in controllers;
         }
         if (!isControllerKind(kind, this.controllers))
@@ -289,11 +288,13 @@ export class View {
 
         // transfer what state we can from previous controller
         const prevState = _activeController.serialize(true /* include derived properties as well */);
-        _activeController = this._activeController = controllers[kind];
+        const controller = controllers[kind];
+        _activeController = this._activeController = controller;
         const { position, rotation, pivot, fovMeters } = prevState;
         _activeController.init({ kind, position: initialState?.position ?? position, rotation: initialState?.rotation ?? rotation, pivot, distance, fovMeters: initialState?.fov ?? (kind != "panorama" ? fovMeters : undefined) });
         const changes = _activeController.stateChanges();
         this.modifyRenderState({ camera: changes });
+        return controller;
     }
 
     /**
@@ -401,7 +402,6 @@ export class View {
     modifyRenderState(changes: RenderStateChanges): void {
         this._stateChanges = mergeRecursive(this._stateChanges, changes);
     }
-
 
     /**
      * Override this in a derived class to modify render state just prior to rendering.
@@ -556,8 +556,6 @@ export interface ViewStatistics {
 /** Extended pick sample information.
  * @category Render View
  */
-
-
 export interface PickSampleExt extends PickSample {
     /** Sample normal, in view space. */
     readonly normalVS: ReadonlyVec3;
@@ -566,11 +564,15 @@ export interface PickSampleExt extends PickSample {
     readonly sampleType: "edge" | "corner" | "surface";
 }
 
-/** Type of camera controller.
- * @category Camera Controller
- * @category Render View
+/** @ignore */
+export type CameraControllers<T extends string = string> = {
+    readonly [P in T]: BaseController;
+}
+
+/** Camera controller factory function signature type.
+ * @template T dude
  */
-export type CameraControllerType = keyof View["controllers"];
+export type CameraControllersFactory<T extends CameraControllers> = (input: ControllerInput, pick: PickContext) => T;
 
 /** Optional values to initialize camera controller. */
 export interface CameraControllerInitialValues {

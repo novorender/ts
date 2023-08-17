@@ -6,10 +6,21 @@ import { type ReadonlyQuat, glMatrix, quat, mat3, type ReadonlyVec3, vec3 } from
  * @category Camera Controllers
  */
 export class PitchRollYawOrientation {
-    private _pitch = 30;
+    private _pitch = 0;
     private _yaw = 0;
     private _roll = 0;
     private _rot: ReadonlyQuat | undefined;
+
+    /**
+     * @param pitch Pitch angle, in degrees.
+     * @param yaw Yaw angle, in degrees.
+     * @param roll Roll angle, in degrees.
+     */
+    constructor(pitch: number = 0, yaw: number = 0, roll: number = 0) {
+        this.pitch = pitch;
+        this.yaw = yaw;
+        this.roll = roll;
+    }
 
     /** Pitch angle, in degrees. */
     get pitch() {

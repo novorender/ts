@@ -1,5 +1,5 @@
 import { type ReadonlyVec3, type ReadonlyQuat, vec3 } from "gl-matrix";
-import type { RenderStateCamera, RenderStateChanges, RecursivePartial, BoundingSphere, PickSample, PickOptions } from "core3d";
+import type { RenderStateCamera, RenderStateChanges, BoundingSphere, PickSample, PickOptions } from "core3d";
 import type { View } from "../";
 import { ControllerInput } from "./input";
 import type { FlightControllerParams } from "./flight";
@@ -16,18 +16,16 @@ export abstract class BaseController {
 
     /** The camera projection kind.
      * @see {@link RenderStateCamera.kind}.
-     * @virtual
      */
-    abstract readonly projection: RenderStateCamera["kind"];
+    abstract readonly projection: RenderStateCamera["kind"] | undefined;
 
     /** Whether the camera has changed since last update or not.
      * @see {@link RenderStateCamera.kind}.
-     * @virtual
      */
     abstract readonly changed: boolean;
 
-    private flyTo: FlyToExt | undefined;
-    private isMoving = false;
+    private _flyTo: FlyToExt | undefined;
+    private _isMoving = false;
 
     /**
      * @param input The input source for this controller.
@@ -49,7 +47,7 @@ export abstract class BaseController {
      * @see {@link View.isIdleFrame}
      */
     get moving() {
-        return this.isMoving;
+        return this._isMoving;
     }
 
     /** The input element width.
@@ -96,7 +94,7 @@ export abstract class BaseController {
 
     /** The current fly-to state, if any. */
     get currentFlyTo() {
-        return this.flyTo?.current;
+        return this._flyTo?.current;
     }
 
     /** Initialize a fly-to transition.
@@ -109,7 +107,7 @@ export abstract class BaseController {
         if (yaw - target < -180) yaw += 360;
         else if (yaw - target > 180) yaw -= 360;
         const begin = { ...flyTo.begin, yaw };
-        this.flyTo = { ...flyTo, begin, currentFlightTime: 0, current: begin };
+        this._flyTo = { ...flyTo, begin, currentFlightTime: 0, current: begin };
     }
 
     /** Apply time sensitive changes to controller state.
@@ -121,13 +119,13 @@ export abstract class BaseController {
     animate(elapsedTime: number) {
         if (elapsedTime < 0 || elapsedTime > 250) elapsedTime = 1000 / 60;
         this.input.animate(elapsedTime);
-        const { flyTo } = this;
-        if (flyTo) {
-            if (flyTo.currentFlightTime >= flyTo.totalFlightTime) {
-                this.flyTo = undefined;
+        const { _flyTo } = this;
+        if (_flyTo) {
+            if (_flyTo.currentFlightTime >= _flyTo.totalFlightTime) {
+                this._flyTo = undefined;
             } else {
-                flyTo.currentFlightTime += elapsedTime;
-                const { currentFlightTime, totalFlightTime, begin, end, current } = flyTo;
+                _flyTo.currentFlightTime += elapsedTime;
+                const { currentFlightTime, totalFlightTime, begin, end, current } = _flyTo;
                 if (currentFlightTime < totalFlightTime) {
                     const lerp = (a: number, b: number, t: number) => (a + (b - a) * t);
                     const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
@@ -137,7 +135,7 @@ export abstract class BaseController {
                     let yaw = lerp(begin.yaw, end.yaw, t);
                     if (yaw < -180) yaw += 360;
                     else if (yaw > 180) yaw -= 360;
-                    flyTo.current = { pos, yaw, pitch } as const;
+                    _flyTo.current = { pos, yaw, pitch } as const;
                 } else {
                     Object.assign(current, end);
                 }
@@ -170,12 +168,8 @@ export abstract class BaseController {
      * @see {@link View.modifyRenderState}
      * @remarks
      * If there are no changes, the returned object will be empty, i.e. {}.
-     * @virtual
      */
     abstract stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera>;
-
-    /** Update state from partial parameters. */
-    abstract updateParams(params: RecursivePartial<ControllerParams>): void;
 
     /** Attach this controller to the input object */
     attach() {
@@ -204,12 +198,14 @@ export abstract class BaseController {
      * @param targetPosition: The position to move to, in world space.
      * @param flyTime: The time, in milliseconds, for the transition animation to last, or 0 for instant update.
      * @param rotation: Optional target rotation, or undefined to retain current rotation.
+     * @virtual
      */
     moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat): void { }
 
     /** Bring the specified bounding sphere into view.
      * @param boundingSphere: The bounding sphere to move into view.
      * @param flyTime: The time, in milliseconds, for the transition animation to last, or 0 for instant update.
+     * @virtual
      * @remarks
      * This function will retain the current camera controller rotation.
      */
@@ -222,10 +218,10 @@ export abstract class BaseController {
     renderStateChanges(state: RenderStateCamera, elapsedTime: number): RenderStateChanges | undefined {
         this.animate(elapsedTime);
         if (this.input.axesEmpty() && this.currentFlyTo == undefined && !this.changed) {
-            this.isMoving = false;
+            this._isMoving = false;
             return;
         }
-        this.isMoving = true;
+        this._isMoving = true;
         if (Object.values(this.input.axes).some(v => v != 0) || this.currentFlyTo || this.changed) { // check if anything has changed
             this.update();
             this.input.resetAxes();

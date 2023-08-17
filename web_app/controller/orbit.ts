@@ -1,132 +1,154 @@
 
-import { mergeRecursive, type RecursivePartial, type RenderStateCamera } from "core3d";
-import { type ReadonlyVec3, glMatrix, vec2, vec3 } from "gl-matrix";
+import { mergeRecursive, type RenderStateCamera } from "core3d";
+import { type ReadonlyVec3, glMatrix, vec2, vec3, type ReadonlyQuat } from "gl-matrix";
 import { BaseController, type ControllerInitParams, type MutableCameraState } from "./base";
 import { PitchRollYawOrientation } from "./orientation";
 import { ControllerInput } from "./input";
-
-/** Orbit type camera motion controller
- * @category Camera Controllers
- */
-export interface OrbitControllerParams {
-    /** The world space coordinate to orbit around. (0,0,0) is default. */
-    readonly pivot?: ReadonlyVec3;
-
-    /** The current pitch of camera in degrees (+/-90) */
-    readonly pitch?: number;
-
-    /** The current yaw of camera in degrees (+/-180) */
-    readonly yaw?: number;
-
-    /** The camera distance relative to pivot point in meters. */
-    readonly distance?: number;
-
-    /** The camera distance relative to pivot point in meters. */
-    readonly maxDistance?: number;
-
-    /** Linear velocity modifier (default is 1.0) */
-    readonly linearVelocity?: number;
-
-    /** Rotational velocity modifier (default is 1.0) */
-    readonly rotationalVelocity?: number;
-
-    /** The vertical camera field of view in degrees (default is 45). */
-    readonly fieldOfView?: number;
-}
 
 /** A camera controller for orbiting around a point of interest.
  * @category Camera Controllers
  */
 export class OrbitController extends BaseController {
-    static readonly defaultParams = {
-        pivot: [0, 0, 0],
-        distance: 15,
-        pitch: -30,
-        yaw: 30,
-        maxDistance: 1000,
-        linearVelocity: 1,
-        rotationalVelocity: 1,
-        fieldOfView: 45,
-    } as const;
-
     override kind = "orbit" as const;
     override projection = "pinhole" as const;
     override changed = false;
 
-    private params;
-    private readonly orientation = new PitchRollYawOrientation();
-    private pivot: ReadonlyVec3 = vec3.create();
-    private distance: number;
-    private fov: number;
+    private params: OrbitControllerParams = {
+        maxDistance: 1000,
+        linearVelocity: 1,
+        rotationalVelocity: 1,
+    };
+    private readonly _orientation = new PitchRollYawOrientation(-30, 30);
+    private _pivot: ReadonlyVec3 = vec3.create();
+    private _distance = 10;
+    private _fov = 60;
 
     /**
      * @param input The input source.
      * @param params Optional initialization parameters.
      */
-    constructor(input: ControllerInput, params?: OrbitControllerParams) {
+    constructor(input: ControllerInput, params?: Partial<OrbitControllerParams>) {
         super(input);
-        const { pitch, yaw, distance, pivot, fieldOfView } = this.params = { ...OrbitController.defaultParams, ...params } as const;
-        const { orientation } = this;
-        orientation.pitch = pitch;
-        orientation.yaw = yaw;
-        this.distance = distance;
-        this.fov = fieldOfView;
-        this.pivot = pivot;
+        Object.assign(this.params, params);
     }
 
-    // computed position
-    private get position() {
-        const { orientation, pivot, distance } = this;
-        const pos = vec3.fromValues(0, 0, distance);
-        vec3.transformQuat(pos, pos, orientation.rotation);
-        vec3.add(pos, pos, pivot);
+    /** The current controller parameters. */
+    get parameters() {
+        return this.params;
+    }
+
+    /** Computed position, in world space.
+     * @remarks
+     * This position is derived from {@link pivot} point, {@link distance}, rotated around {@link pitch} and {@link yaw} angles.
+     */
+    get position() {
+        const { _orientation, _pivot, _distance } = this;
+        const pos = vec3.fromValues(0, 0, _distance);
+        vec3.transformQuat(pos, pos, _orientation.rotation);
+        vec3.add(pos, pos, _pivot);
         return pos;
     }
 
-    override serialize(includeDerived = false): ControllerInitParams {
-        const { kind, pivot, orientation, distance, fov } = this;
-        const { rotation } = orientation;
-        this.changed = false;
-        return { kind, pivot, rotation, distance, fovDegrees: fov, ...(includeDerived ? { position: this.position } : undefined) };
+    /** Computed rotation quaternion, in world space.
+     * @remarks
+     * This rotation is derived from {@link pitch} and {@link yaw} angles.
+     */
+    get rotation() {
+        return this._orientation.rotation;
     }
 
-    override updateParams(params: RecursivePartial<OrbitControllerParams>) {
+    /** The pitch angle around the pivot point, in degrees. */
+    get pitch() {
+        return this._orientation.pitch;
+    }
+    set pitch(value: number) {
+        this._orientation.pitch = value;
+        this.changed = true;
+    }
+
+    /** The yaw angle around the pivot point, in degrees. */
+    get yaw() {
+        return this._orientation.yaw;
+    }
+    set yaw(value: number) {
+        this._orientation.yaw = value;
+        this.changed = true;
+    }
+
+    /** The pivot point to orbit around, in world space. */
+    get pivot() {
+        return this._pivot;
+    }
+    set pivot(value: ReadonlyVec3) {
+        this._pivot = value;
+        this.changed = true;
+    }
+
+    /** The distance from the pivot point, in meters. */
+    get distance() {
+        return this._distance;
+    }
+    set distance(value: number) {
+        this._distance = value;
+        this.changed = true;
+    }
+
+    /** The camera vertical field of view angle, in degrees. */
+    get fov() {
+        return this._fov;
+    }
+    set fov(value: number) {
+        this._fov = value;
+        this.changed = true;
+    }
+
+    /** Update controller parameters.
+     * @param params Set of parameters to change.
+     */
+    updateParams(params: Partial<OrbitControllerParams>) {
         this.params = mergeRecursive(this.params, params);
+    }
+
+    override serialize(includeDerived = false): ControllerInitParams {
+        const { kind, pivot, _orientation, distance, fov } = this;
+        const { rotation } = _orientation;
+        this.changed = false;
+        return { kind, pivot, rotation, distance, fovDegrees: fov, ...(includeDerived ? { position: this.position } : undefined) };
     }
 
     override init(params: ControllerInitParams) {
         const { kind, position, rotation, pivot, fovDegrees, distance } = params;
         console.assert(kind == this.kind);
         if (fovDegrees != undefined) {
-            this.fov = fovDegrees;
+            this._fov = fovDegrees;
         }
         if (pivot) {
-            this.pivot = pivot;
+            this._pivot = pivot;
         }
         if (rotation) {
-            this.orientation.decomposeRotation(rotation);
-            this.orientation.roll = 0;
+            this._orientation.decomposeRotation(rotation);
+            this._orientation.roll = 0;
         }
         if (distance) {
-            this.distance = distance;
+            this._distance = distance;
             if (!pivot && position && rotation) {
                 const tmp = vec3.fromValues(0, 0, -distance);
                 vec3.transformQuat(tmp, tmp, rotation);
-                this.pivot = vec3.add(tmp, tmp, position);
+                this._pivot = vec3.add(tmp, tmp, position);
             }
         }
         if (position && pivot) {
-            const { orientation } = this;
+            const { _orientation } = this;
             if (!distance) {
-                this.distance = vec3.distance(position, pivot);
+                this._distance = vec3.distance(position, pivot);
             }
             if (!rotation) {
                 const [x, y, z] = vec3.sub(vec3.create(), position, pivot);
                 const pitch = Math.atan2(-y, vec2.len(vec2.fromValues(x, z)));
                 const yaw = Math.atan2(x, z);
-                orientation.yaw = yaw * 180 / Math.PI;
-                orientation.pitch = pitch * 180 / Math.PI;
-                orientation.roll = 0;
+                _orientation.yaw = yaw * 180 / Math.PI;
+                _orientation.pitch = pitch * 180 / Math.PI;
+                _orientation.roll = 0;
             }
         }
         this.attach();
@@ -135,57 +157,88 @@ export class OrbitController extends BaseController {
 
     override autoFit(center: ReadonlyVec3, radius: number): void {
         const { params } = this;
-        this.pivot = center;
-        this.distance = Math.min(params.maxDistance, radius / Math.tan(glMatrix.toRadian(this.fov) / 2));
+        this._pivot = center;
+        this._distance = Math.min(params.maxDistance, radius / Math.tan(glMatrix.toRadian(this._fov) / 2));
         this.changed = true;
     }
 
     override update() {
-        const { axes, multiplier, pivot, orientation, distance, fov, params, height } = this;
+        const { axes, multiplier, _pivot, _orientation, _distance, _fov, params, height } = this;
         const tx = axes.keyboard_ad + axes.mouse_rmb_move_x - axes.touch_2_move_x;
         const ty = -axes.keyboard_qe + axes.mouse_rmb_move_y - axes.touch_2_move_y;
         const tz = axes.keyboard_ws * 2 + axes.mouse_mmb_move_y + axes.mouse_wheel / 2 + axes.touch_pinch2 * 2;
         const rx = axes.keyboard_arrow_up_down / 5 + axes.mouse_lmb_move_y + axes.touch_1_move_y;
         const ry = axes.keyboard_arrow_left_right / 5 + axes.mouse_lmb_move_x + axes.touch_1_move_x;
 
-        orientation.roll = 0;
+        _orientation.roll = 0;
         const rotationalVelocity = 180 * params.rotationalVelocity / height;
         if (rx || ry) {
-            orientation.pitch += -rx * rotationalVelocity;
-            orientation.yaw += -ry * rotationalVelocity;
+            _orientation.pitch += -rx * rotationalVelocity;
+            _orientation.yaw += -ry * rotationalVelocity;
             this.changed = true;
         }
 
-        const fovRatio = Math.tan(((Math.PI / 180) * fov) / 2) * 2;
-        const linearVelocity = distance * fovRatio * multiplier * params.linearVelocity / height;
+        const fovRatio = Math.tan(((Math.PI / 180) * _fov) / 2) * 2;
+        const linearVelocity = _distance * fovRatio * multiplier * params.linearVelocity / height;
         if (tz) {
-            this.distance += tz * linearVelocity;
+            this._distance += tz * linearVelocity;
             this.changed = true;
         } else if (tx || ty) {
-            const worldPosDelta = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * linearVelocity, -ty * linearVelocity, 0), orientation.rotation);
-            this.pivot = vec3.add(vec3.create(), pivot, worldPosDelta);
+            const worldPosDelta = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * linearVelocity, -ty * linearVelocity, 0), _orientation.rotation);
+            this._pivot = vec3.add(vec3.create(), _pivot, worldPosDelta);
             this.changed = true;
         }
     }
 
     override stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera> {
-        const { pivot, orientation, position, fov } = this;
+        const { _pivot, _orientation, position, _fov } = this;
         const changes: MutableCameraState = {};
         if (!state || !vec3.exactEquals(state.position, position)) {
             changes.position = position;
         }
-        if (!state || state.rotation !== orientation.rotation) {
-            changes.rotation = orientation.rotation;
+        if (!state || state.rotation !== _orientation.rotation) {
+            changes.rotation = _orientation.rotation;
         }
-        if (!state || state.pivot !== pivot) {
-            changes.pivot = pivot;
+        if (!state || state.pivot !== _pivot) {
+            changes.pivot = _pivot;
         }
-        if (!state || state.fov !== fov) {
-            changes.fov = fov;
+        if (!state || state.fov !== _fov) {
+            changes.fov = _fov;
         }
         if (!state) {
             changes.kind = "pinhole";
         }
         return changes;
     }
+
+    /** OrbitController type guard function.
+     * @param controller The controller to type guard.
+     */
+    static is(controller: BaseController): controller is OrbitController {
+        return controller instanceof OrbitController;
+    }
+
+    /** OrbitController type assert function.
+     * @param controller The controller to type assert.
+     */
+    static assert(controller: BaseController): asserts controller is OrbitController {
+        if (!(controller instanceof OrbitController))
+            throw new Error("Camera controller is not of type OrbitController!");
+    }
 }
+
+
+/** Orbit type camera motion controller
+ * @category Camera Controllers
+ */
+export interface OrbitControllerParams {
+    /** The camera distance relative to pivot point in meters. */
+    readonly maxDistance: number;
+
+    /** Linear velocity modifier (default is 1.0) */
+    readonly linearVelocity: number;
+
+    /** Rotational velocity modifier (default is 1.0) */
+    readonly rotationalVelocity: number;
+}
+
