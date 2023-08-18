@@ -351,7 +351,22 @@ export class RenderContext {
         }
     }
 
-    /** Helper function to check for changes in render state. */
+    /**
+     * Helper function to check for changes in render state.
+     * @param state The parts of the render state to check for changes.
+     * @returns True if any of the specified parts has changed since last frame.
+     * @remarks
+     * Since the render state is immutable, any changes will automatically trickle up to the container object as well.
+     * Thus, this function does a shallow strict equality of the parts of the renderstate specified in the state parameter.
+     * @example
+     * Example of how to check for changes in either camera or output render state.
+     * ```typescript
+     * const {camera, output} = renderState;
+     * if(renderContext.hasStateChanged({camera, output})) {
+     *   // update related GPU state here...
+     * }
+     * ```
+     */
     hasStateChanged(state: Partial<DerivedRenderState>) {
         const { prevState } = this;
         let changed = false;

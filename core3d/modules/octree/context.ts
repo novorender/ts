@@ -204,12 +204,12 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 let reload = false;
                 const prevDefaultAction = prevState?.highlights.defaultAction;
                 const currDefaultAction = state.highlights.defaultAction;
-                if (prevDefaultAction != currDefaultAction && prevDefaultAction == "filter" || currDefaultAction == "filter") {
-                    reload = true;
+                if (prevDefaultAction != currDefaultAction && (prevDefaultAction == "filter" || currDefaultAction == "filter")) {
+                    reload = true; // default action has changed from/to filter mode.
                 } else {
                     for (let i = 0; i < n; i++) {
                         if (groups[i] != prevGroups[i] && (groups[i]?.action == "filter" || prevGroups[i]?.action == "filter")) {
-                            reload = true;
+                            reload = true; // one of the groups has changed from/to filter mode.
                             break;
                         }
                     }
