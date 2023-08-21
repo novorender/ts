@@ -13,7 +13,6 @@ import { ControllerInput } from "./input";
 export class PanoramaController extends BaseController {
     override kind = "panorama" as const;
     override projection = "pinhole" as const;
-    override changed = false;
     private params: PanoramaControllerParams = {
         rotationalVelocity: 1,
     }
@@ -34,7 +33,7 @@ export class PanoramaController extends BaseController {
     }
     set position(value: ReadonlyVec3) {
         this._position = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** Computed rotation quaternion, in world space.
@@ -51,7 +50,7 @@ export class PanoramaController extends BaseController {
     }
     set pitch(value: number) {
         this._orientation.pitch = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** The camera yaw angle, in degrees. */
@@ -60,7 +59,7 @@ export class PanoramaController extends BaseController {
     }
     set yaw(value: number) {
         this._orientation.yaw = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** The camera vertical field of view angle, in degrees. */
@@ -69,7 +68,7 @@ export class PanoramaController extends BaseController {
     }
     set fov(value: number) {
         this._fov = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** Update controller parameters.
@@ -82,7 +81,6 @@ export class PanoramaController extends BaseController {
     override serialize(): ControllerInitParams {
         const { kind, position, _orientation, _fov } = this;
         const { rotation } = _orientation;
-        this.changed = false;
         return { kind, position, rotation, fovDegrees: _fov };
     }
 
@@ -99,7 +97,6 @@ export class PanoramaController extends BaseController {
         if (fovDegrees != undefined) {
             this._fov = fovDegrees;
         }
-        this.changed = false;
         this.input.callbacks = this;
         this.input.usePointerLock = true;
         this.attach();
@@ -136,7 +133,7 @@ export class PanoramaController extends BaseController {
             if (rotation) {
                 this._orientation.decomposeRotation(rotation);
             }
-            this.changed = true;
+            this.changed();
         }
     }
 
@@ -146,7 +143,7 @@ export class PanoramaController extends BaseController {
             this._position = vec3.clone(currentFlyTo.pos);
             _orientation.pitch = currentFlyTo.pitch;
             _orientation.yaw = currentFlyTo.yaw;
-            this.changed = true;
+            this.changed();
             return;
         }
         const tz = axes.keyboard_ws + axes.mouse_wheel + axes.touch_pinch2;
@@ -158,13 +155,13 @@ export class PanoramaController extends BaseController {
             const rotationalVelocity = this._fov * params.rotationalVelocity / height;
             _orientation.pitch += rx * rotationalVelocity;
             _orientation.yaw += ry * rotationalVelocity;
-            this.changed = true;
+            this.changed();
         }
 
         if (tz) {
             const dz = 1 + (tz / height);
             this._fov = Math.max(Math.min(60, _fov * dz), 0.1);
-            this.changed = true;
+            this.changed();
         }
     }
 

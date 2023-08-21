@@ -12,7 +12,6 @@ import { ControllerInput } from "./input";
 export class NullController extends BaseController {
     override kind = "null" as const;
     override projection = undefined;
-    override changed = false;
 
     /**
      * @param input The input source.

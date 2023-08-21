@@ -18,7 +18,6 @@ export class FlightController extends BaseController {
 
     override kind = "flight";
     override projection = "pinhole" as const;
-    override changed = false;
 
     private params: FlightControllerParams = {
         linearVelocity: 1,
@@ -58,7 +57,7 @@ export class FlightController extends BaseController {
     }
     set position(value: ReadonlyVec3) {
         this._position = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** Computed rotation quaternion, in world space.
@@ -75,7 +74,7 @@ export class FlightController extends BaseController {
     }
     set pitch(value: number) {
         this._orientation.pitch = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** The camera yaw angle, in degrees. */
@@ -84,7 +83,7 @@ export class FlightController extends BaseController {
     }
     set yaw(value: number) {
         this._orientation.yaw = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** The camera vertical field of view angle, in degrees. */
@@ -93,7 +92,7 @@ export class FlightController extends BaseController {
     }
     set fov(value: number) {
         this._fov = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** The optional pivot point to orbit around, in world space. */
@@ -111,7 +110,6 @@ export class FlightController extends BaseController {
     override serialize(): ControllerInitParams {
         const { kind, position, _orientation, _fov } = this;
         const { rotation } = _orientation;
-        this.changed = false;
         return { kind, position, rotation, fovDegrees: _fov };
     }
 
@@ -128,7 +126,6 @@ export class FlightController extends BaseController {
         if (fovDegrees != undefined) {
             this._fov = fovDegrees;
         }
-        this.changed = false;
         this.input.callbacks = this;
         this.input.usePointerLock = true;
     }
@@ -164,7 +161,7 @@ export class FlightController extends BaseController {
             if (rotation) {
                 this._orientation.decomposeRotation(rotation);
             }
-            this.changed = true;
+            this.changed();
         }
     }
 
@@ -182,18 +179,17 @@ export class FlightController extends BaseController {
         } else {
             const dist = boundingSphere.radius / Math.tan(glMatrix.toRadian(_fov) / 2);
             this._position = vec3.add(vec3.create(), vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, dist), _orientation.rotation), boundingSphere.center);
-            this.changed = true;
+            this.changed();
         }
     }
 
     override update(): void {
-        this.changed = false;
         const { multiplier, _orientation, params, height, _pivot, zoomPos, currentFlyTo } = this;
         if (currentFlyTo) {
             this._position = vec3.clone(currentFlyTo.pos);
             _orientation.pitch = currentFlyTo.pitch;
             _orientation.yaw = currentFlyTo.yaw;
-            this.changed = true;
+            this.changed();
             return;
         }
         this.lastUpdate = performance.now();
@@ -212,7 +208,7 @@ export class FlightController extends BaseController {
                 vec3.transformQuat(pos, pos, _orientation.rotation);
                 this._position = vec3.add(vec3.create(), center, pos);
             }
-            this.changed = true;
+            this.changed();
         }
 
         if (tx || ty || tz) {
@@ -226,7 +222,7 @@ export class FlightController extends BaseController {
             if (_pivot && _pivot.active) {
                 this.setPivot(_pivot.center, _pivot.active);
             }
-            this.changed = true;
+            this.changed();
         }
     }
 

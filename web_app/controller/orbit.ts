@@ -11,7 +11,6 @@ import { ControllerInput } from "./input";
 export class OrbitController extends BaseController {
     override kind = "orbit" as const;
     override projection = "pinhole" as const;
-    override changed = false;
 
     private params: OrbitControllerParams = {
         maxDistance: 1000,
@@ -63,7 +62,7 @@ export class OrbitController extends BaseController {
     }
     set pitch(value: number) {
         this._orientation.pitch = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** The yaw angle around the pivot point, in degrees. */
@@ -72,7 +71,7 @@ export class OrbitController extends BaseController {
     }
     set yaw(value: number) {
         this._orientation.yaw = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** The pivot point to orbit around, in world space. */
@@ -81,7 +80,7 @@ export class OrbitController extends BaseController {
     }
     set pivot(value: ReadonlyVec3) {
         this._pivot = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** The distance from the pivot point, in meters. */
@@ -90,7 +89,7 @@ export class OrbitController extends BaseController {
     }
     set distance(value: number) {
         this._distance = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** The camera vertical field of view angle, in degrees. */
@@ -99,7 +98,7 @@ export class OrbitController extends BaseController {
     }
     set fov(value: number) {
         this._fov = value;
-        this.changed = true;
+        this.changed();
     }
 
     /** Update controller parameters.
@@ -112,7 +111,6 @@ export class OrbitController extends BaseController {
     override serialize(includeDerived = false): ControllerInitParams {
         const { kind, pivot, _orientation, distance, fov } = this;
         const { rotation } = _orientation;
-        this.changed = false;
         return { kind, pivot, rotation, distance, fovDegrees: fov, ...(includeDerived ? { position: this.position } : undefined) };
     }
 
@@ -152,14 +150,14 @@ export class OrbitController extends BaseController {
             }
         }
         this.attach();
-        this.changed = true;
+        this.changed();
     }
 
     override autoFit(center: ReadonlyVec3, radius: number): void {
         const { params } = this;
         this._pivot = center;
         this._distance = Math.min(params.maxDistance, radius / Math.tan(glMatrix.toRadian(this._fov) / 2));
-        this.changed = true;
+        this.changed();
     }
 
     override update() {
@@ -175,18 +173,18 @@ export class OrbitController extends BaseController {
         if (rx || ry) {
             _orientation.pitch += -rx * rotationalVelocity;
             _orientation.yaw += -ry * rotationalVelocity;
-            this.changed = true;
+            this.changed();
         }
 
         const fovRatio = Math.tan(((Math.PI / 180) * _fov) / 2) * 2;
         const linearVelocity = _distance * fovRatio * multiplier * params.linearVelocity / height;
         if (tz) {
             this._distance += tz * linearVelocity;
-            this.changed = true;
+            this.changed();
         } else if (tx || ty) {
             const worldPosDelta = vec3.transformQuat(vec3.create(), vec3.fromValues(tx * linearVelocity, -ty * linearVelocity, 0), _orientation.rotation);
             this._pivot = vec3.add(vec3.create(), _pivot, worldPosDelta);
-            this.changed = true;
+            this.changed();
         }
     }
 

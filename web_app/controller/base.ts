@@ -19,11 +19,24 @@ export abstract class BaseController {
      */
     abstract readonly projection: RenderStateCamera["kind"] | undefined;
 
-    /** Whether the camera has changed since last update or not.
-     * @see {@link RenderStateCamera.kind}.
+    /**
+     * Camera controller state generation.
+     * @remarks
+     * If the controller state changes, the generation count will be incremented once every call to {@link renderStateChanges}.
+     * This can be used to detect changes by comparing to a local generation count.
+     * The count is wrapped at 0xffffffff, so make sure you use != comparison and not < comparison.
      */
-    abstract readonly changed: boolean;
+    get generation(): number {
+        return this._generation;
+    }
 
+    /** Signal changes to internal state. */
+    protected changed() {
+        this._changed = true;
+    }
+
+    private _changed = false;
+    private _generation: number = 0;
     private _flyTo: FlyToExt | undefined;
     private _isMoving = false;
 
@@ -217,12 +230,17 @@ export abstract class BaseController {
      */
     renderStateChanges(state: RenderStateCamera, elapsedTime: number): RenderStateChanges | undefined {
         this.animate(elapsedTime);
-        if (this.input.axesEmpty() && this.currentFlyTo == undefined && !this.changed) {
+        const { _changed, input, currentFlyTo } = this;
+        if (_changed) {
+            this._generation = (this._generation + 1) & 0xffff_ffff;
+            this._changed = false;
+        }
+        if (input.axesEmpty() && currentFlyTo == undefined && !_changed) {
             this._isMoving = false;
             return;
         }
         this._isMoving = true;
-        if (Object.values(this.input.axes).some(v => v != 0) || this.currentFlyTo || this.changed) { // check if anything has changed
+        if (Object.values(input.axes).some(v => v != 0) || currentFlyTo || _changed) { // check if anything has changed
             this.update();
             this.input.resetAxes();
             const changes = this.stateChanges(state);
