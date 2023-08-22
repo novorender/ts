@@ -35,7 +35,7 @@ export abstract class BaseController {
         this._changed = true;
     }
 
-    private _changed = false;
+    private _changed = true;
     private _generation: number = 0;
     private _flyTo: FlyToExt | undefined;
     private _isMoving = false;

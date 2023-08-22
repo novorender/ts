@@ -34,9 +34,9 @@ export class LoaderHandler {
             case "abort_all":
                 this.abortAll(msg);
                 break;
-            default:
-                console.error(`Uknown load message: ${msg}!`);
-                break;
+            // default:
+            //     console.warn(`Unknown load message: ${msg}!`);
+            //     break;
         }
     }
 

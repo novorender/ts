@@ -299,10 +299,11 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
 
     /**
      * Start the main render loop for the view.
+     * @param abortSignal Signal to abort any pending downloads and exit render loop.
      * @remarks
      * This method will not exit until you call {@link exit}.
      */
-    async run() {
+    async run(abortSignal?: AbortSignal) {
         let prevState: RenderState | undefined;
         let pickRenderState: RenderState | undefined;
         let prevRenderTime = performance.now();
@@ -310,7 +311,7 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
         let idleFrameTime = 0;
         let wasIdle = false;
         const frameIntervals: number[] = [];
-        while (this._run) {
+        while (this._run && !(abortSignal?.aborted ?? false)) {
             const { _renderContext, _activeController, deviceProfile } = this;
             const renderTime = await RenderContext.nextFrame(_renderContext);
             const frameTime = renderTime - prevRenderTime;
@@ -388,6 +389,7 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
 
     /** Signal the render loop to exit.
      * @see {@link run}.
+     * @deprecated Use {@link run} `abortSignal` instead.
      */
     exit() {
         this._run = false;
