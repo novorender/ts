@@ -4,10 +4,10 @@
     "version": "0.0.8",
     "description": "",
     "scripts": {
-        "start": "npm run build:ts & npm run build",
+        "start": "npm run build:ts && npm run build",
         "watch": "tsc --noEmit --watch",
-        "build:ts": "cd build & tsc & cd ..",
-        "build:ts:watch": "cd build & tsc --watch & cd ..",
+        "build:ts": "cd build && tsc && cd ..",
+        "build:ts:watch": "cd build && tsc --watch && cd ..",
         "build": "node ./build.mjs"
     },
     "repository": {
