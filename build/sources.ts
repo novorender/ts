@@ -11,17 +11,31 @@ async function copyFiles(target: string, paths: readonly string[]) {
     }
 }
 
+async function getFileRecursive(sourceDir: string, files: string[]) {
+    const entries = await readdir(normalize(sourceDir), { withFileTypes: true });
+    for (const entry of entries) {
+        const path = resolve(sourceDir, entry.name);
+        if (entry.isFile()) {
+            files.push(path);
+        } else {
+            await getFileRecursive(path, files);
+        }
+    }
+}
+
 async function copyDir(sourceDir: string, targetDir: string) {
     const include = [
         /\.(?:ts|glsl|vert|frag)$/, // source files
-        /^tsconfig\.json$/, // important for resolving library types
+        /tsconfig\.json$/, // important for resolving library types
     ];
     function filter(source: string): boolean {
         return include.some(re => re.test(source));
     }
 
-    const entries = await readdir(normalize(sourceDir), { withFileTypes: true, recursive: true });
-    const files = entries.filter(e => (e.isFile() && filter(e.name))).map(e => relative(sourceDir, resolve(e.path, e.name)));
+    const paths: string[] = [];
+    await getFileRecursive(sourceDir, paths);
+    const files = paths.filter(path => (filter(path))).map(path => relative(sourceDir, resolve(path)));
+
     const dirs = new Set<string>();
     for (const file of files) {
         if (filter(file)) {
@@ -33,7 +47,7 @@ async function copyDir(sourceDir: string, targetDir: string) {
             }
             const sourceFile = resolve(sourceDir, file);
             const targetFile = resolve(targetDir, file);
-            await copyFile(sourceFile, targetFile)
+            await copyFile(sourceFile, targetFile);
         }
     }
 }
@@ -56,8 +70,8 @@ async function exists(dir: string) {
 async function emptyDir(dir: string) {
     if (await exists(dir)) {
         const entries = await readdir(dir, { withFileTypes: true });
-        for (const { path } of entries) {
-            await rm(path, { recursive: true, force: true });
+        for (const { name } of entries) {
+            await rm(resolve(dir, name), { recursive: true, force: true });
         };
     } else {
         await mkdir(dir);
