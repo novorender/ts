@@ -8,6 +8,7 @@ export * from "./types";
 export * from "./scene";
 export * from "./default";
 export * from "./modify";
+export * from "./validate";
 
 /**
  * An object describing the what to be rendered and how by {@link RenderContext.render}.
@@ -346,11 +347,11 @@ export interface RenderStateColorGradientKnot<T extends RGB | RGBA> {
 export interface RenderStateColorGradient<T extends RGB | RGBA> {
     /**A set of knots defining a non-uniform linear spline curve.
      * @remarks
-     * Nodes must be sorted in ascending order of elevation!
+     * Nodes must be sorted in ascending order of position!
      * At least two nodes are required for any sort of gradient.
-     * Nodes do not have to be uniformly distributed elevation-wise.
-     * To create a discontinuity in the gradient, two adjacent nodes with identical elevation, but different colors may be used.
-     * Any elevation outside the min/max range defined by this list will be clamped to the color of the nearest node (min or max), i.e., no extrapolation will occur.
+     * Nodes do not have to be uniformly distributed position-wise.
+     * To create a discontinuity in the gradient, two adjacent nodes with identical position, but different colors may be used.
+     * Any position outside the min/max range defined by this list will be clamped to the color of the nearest node (min or max), i.e., no extrapolation will occur.
      */
     readonly knots: readonly RenderStateColorGradientKnot<T>[];
 }

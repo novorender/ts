@@ -1,5 +1,5 @@
 
-import type { RenderState, RenderStateChanges, RenderStateClipping, RenderStateOutput } from ".";
+import type { RenderState, RenderStateChanges } from ".";
 
 /**
  * Create a new copy of render state with specified modifications.
@@ -14,18 +14,13 @@ import type { RenderState, RenderStateChanges, RenderStateClipping, RenderStateO
  * Making unnecessary copies of unchanged sub objects will reduce render/update performance.
  * 
  * This function also performs some basic validation of the new state changes, at a slight performance cost.
+ * If validation fails, it will throw an error of `Error` objects, one per problem.
  * To mitigate this overhead, accumulating all the changes for a frame into a single object may be beneficial.
  * The {@link mergeRecursive} function may be useful in for this.
  * @category Render State
  */
 export function modifyRenderState(state: RenderState, changes: RenderStateChanges): RenderState {
     const newState = mergeRecursive(state, changes) as RenderState;
-    if (changes.output) {
-        verifyOutputState(newState.output);
-    }
-    if (changes.clipping) {
-        verifyClippingState(newState.clipping);
-    }
     return newState;
 }
 
@@ -49,16 +44,4 @@ export function mergeRecursive(original: any, changes: any) {
         }
     }
     return clone;
-}
-
-function verifyOutputState(state: RenderStateOutput) {
-    const { width, height } = state;
-    if (!Number.isInteger(width) || !Number.isInteger(height))
-        throw new Error(`Output size dimentions (width:${width}, height:${height}) must be integers!`);
-}
-
-function verifyClippingState(state: RenderStateClipping) {
-    const { planes } = state;
-    if (planes.length > 6)
-        throw new Error(`A maximum of six clippings planes are allowed!`);
 }

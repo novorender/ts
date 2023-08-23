@@ -1,5 +1,5 @@
 import { type ReadonlyVec3, vec3, type ReadonlyQuat, mat3 } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipState } from "./flip";
 
@@ -395,14 +395,28 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
         this._run = false;
     }
 
-    /** Accumulate render state changes without validation.
+    /** Accumulate render state changes.
      * @param changes The changes to apply to the current view render state.
      * @remarks
-     * This function is useful to batch up multiple render state changes without the overhead of validation.
-     * These changes will be applied and validated in a single call to the {@link modifyRenderState} function just prior to rendering each frame.
+     * These changes will be applied and a single call to the {@link modifyRenderState} function just prior to rendering each frame.
      */
     modifyRenderState(changes: RenderStateChanges): void {
         this._stateChanges = mergeRecursive(this._stateChanges, changes);
+    }
+
+    /**
+     * Validate render state changes made since last rendered frame.
+     * @returns An array of validation errors, if any.
+     * @see {@link View.modifyRenderState}
+     * @remarks
+     * Validation is useful for catching potential bugs and problems early.
+     * It should not be performed in production code, however, since it is non-trivial in terms of performance, paritcularly on large sets of dynamic objects.
+     */
+    validateRenderState(): readonly Error[] {
+        const changes = { ...this._stateChanges };
+        flipState(changes, "CADToGL"); // we assume this will only mutate root properties.
+        const newState = mergeRecursive(this.renderStateGL, changes) as RenderState;
+        return validateRenderState(newState, changes);
     }
 
     /**
@@ -411,6 +425,14 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
      * @virtual
      */
     animate?(time: number): void;
+
+    /**
+     * Override this in a derived class to handle render state validation.
+     * @param newState The new render state about to be rendered
+     * @param changes The changes that went into the new render state.
+     * @virtual
+     */
+    validate?(newState: RenderState, changes: RenderStateChanges): void;
 
     /**
      * Override this in a derived class for custom rendering of e.g. 2D content, such as text and lines etc.
@@ -473,6 +495,7 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
         this.renderStateCad = mergeRecursive(this.renderStateCad, changes) as RenderState;
         flipState(changes, "CADToGL");
         this.renderStateGL = modifyRenderState(this.renderStateGL, changes);
+        this.validate?.(this.renderStateGL, changes);
     }
 
     private createRenderState(state: RenderState) {
