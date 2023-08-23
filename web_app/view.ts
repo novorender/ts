@@ -406,17 +406,19 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
 
     /**
      * Validate render state changes made since last rendered frame.
+     * @param changes The render state changes to validate, or undefined to validate changes applied via {@link View.modifyRenderState} since last rendered frame.
      * @returns An array of validation errors, if any.
      * @see {@link View.modifyRenderState}
      * @remarks
      * Validation is useful for catching potential bugs and problems early.
-     * It should not be performed in production code, however, since it is non-trivial in terms of performance, paritcularly on large sets of dynamic objects.
+     * It should not be performed in production code, however, since it is non-trivial in terms of performance, particularly on large sets of dynamic objects.
      */
-    validateRenderState(): readonly Error[] {
-        const changes = { ...this._stateChanges };
-        flipState(changes, "CADToGL"); // we assume this will only mutate root properties.
-        const newState = mergeRecursive(this.renderStateGL, changes) as RenderState;
-        return validateRenderState(newState, changes);
+    validateRenderState(changes?: RenderStateChanges): readonly Error[] {
+        changes ??= this._stateChanges;
+        const changesCopy = { ...changes };
+        flipState(changesCopy, "CADToGL"); // we assume this will only mutate root properties.
+        const newState = mergeRecursive(this.renderStateGL, changesCopy) as RenderState;
+        return validateRenderState(newState, changesCopy);
     }
 
     /**
