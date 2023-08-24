@@ -1,4 +1,4 @@
-import { vec3, mat4, quat, type ReadonlyMat4, mat3 } from "gl-matrix";
+import { vec3, mat4, quat, type ReadonlyMat4, mat3, type ReadonlyVec3 } from "gl-matrix";
 import type { MagFilterString, MinFilterString, TextureParams2DUncompressed, WrapString } from "webgl2";
 import { GL } from "webgl2/constants";
 import type { RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterialGGX, RenderStateDynamicMaterialUnlit, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicNormalTextureReference, RenderStateDynamicObject, RenderStateDynamicOcclusionTextureReference, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicTextureReference, RenderStateDynamicVertexAttribute, RenderStateDynamicVertexAttributes, RGB, RGBA } from "../state";
@@ -6,21 +6,28 @@ import * as GLTF from "./types";
 
 
 function decomposeMatrix(transform: mat4) {
+    const [sx, sy, sz] = mat4.getScaling(vec3.create(), transform);
+    let scale: number | undefined = (sx + sy + sz) / 3; // get average scale factor.
+    const epsilon = 1E-5;
+    if (scale > 1 - epsilon && scale < 1 + epsilon) {
+        scale = undefined;
+    }
     const rotation = quat.fromMat3(quat.create(), mat3.fromMat4(mat3.create(), transform));
     const position = vec3.fromValues(transform[12], transform[13], transform[14]);
-    return { rotation, position } as const;
+    return { rotation, position, scale } as const;
 }
 
 
 function getTransform(node: GLTF.Node) {
-    const { matrix, translation, rotation } = node;
+    const { matrix, translation, rotation, scale } = node;
     const transform: mat4 = mat4.create();
     if (matrix) {
         mat4.set(transform, ...(matrix as Parameters<typeof mat4.fromValues>));
     } else if (translation || rotation) {
         const t = translation ? vec3.fromValues(...(translation as Parameters<typeof vec3.fromValues>)) : vec3.create();
         const r = rotation ? quat.fromValues(...(rotation as Parameters<typeof quat.fromValues>)) : quat.create();
-        mat4.fromRotationTranslation(transform, r, t);
+        const s = scale ? vec3.fromValues(...(rotation as Parameters<typeof vec3.fromValues>)) : vec3.fromValues(1, 1, 1);
+        mat4.fromRotationTranslationScale(transform, r, t, s);
     }
     return transform;
 }

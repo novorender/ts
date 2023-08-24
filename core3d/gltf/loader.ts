@@ -95,7 +95,7 @@ export async function loadData(url: URL, abortController?: AbortController) {
         gltf = JSON.parse(json) as GLTF.GlTf;
         buffers = [buffer];
     } else {
-        throw new Error(`Uknown GLTF file extention: "${url}"!`);
+        throw new Error(`Unknown GLTF file extension: "${url}"!`);
     }
     const imageBlobPromises = gltf.images?.map(img => {
         if (img.uri) {
