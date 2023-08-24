@@ -25,7 +25,7 @@ async function getFileRecursive(sourceDir: string, files: string[]) {
 
 async function copyDir(sourceDir: string, targetDir: string) {
     const include = [
-        /\.(?:ts|glsl|vert|frag)$/, // source files
+        /\.(?:ts|js|glsl|vert|frag)$/, // source files
         /tsconfig\.json$/, // important for resolving library types
     ];
     function filter(source: string): boolean {
@@ -121,9 +121,9 @@ async function writeReadme(dirName: string) {
 
 export async function copySourceFiles(dirName: string) {
     await emptyDir(dirName);
-    await copyDirs(dirName, ["web_app", "core3d", "webgl2"]);
+    await copyDirs(dirName, ["web_app", "core3d", "webgl2", "measure"]);
     await copyFiles(dirName, ["tsconfig.json"]);
-    await copyFiles(posix.resolve(dirName, "public"), ["core3d/wasm/main.wasm", "core3d/lut_ggx.png", "core3d/modules/watermark/logo.bin"]);
+    await copyFiles(posix.resolve(dirName, "public"), ["core3d/wasm/main.wasm", "core3d/lut_ggx.png", "core3d/modules/watermark/logo.bin", "measure/wasm/nurbs.wasm"]);
     await writeIndexDeclaration(dirName);
     await writePackageJson(dirName);
     await writeReadme(dirName);

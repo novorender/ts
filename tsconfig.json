@@ -103,6 +103,7 @@
         "core3d",
         "webgl2",
         "web_app",
+        "measure"
         // "dist",
         // "build_bundle.js"
     ],

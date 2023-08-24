@@ -86,7 +86,7 @@ export interface Core3DImportMap {
  * 
  * @category Render View
  */
-export async function downloadImports(map: Core3DImportMap): Promise<Core3DImports> {
+export async function downloadCore3dImports(map: Core3DImportMap): Promise<Core3DImports> {
     const baseUrl = new URL(map.baseUrl ?? "", import.meta.url);
     const loaderWorker = getWorker(map.loaderWorker ?? "./loaderWorker.js", baseUrl);
     const lutGGXPromise = getLutGGX(map.lutGGX ?? "./lut_ggx.png", baseUrl);

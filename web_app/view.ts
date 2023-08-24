@@ -1,7 +1,8 @@
 import { type ReadonlyVec3, vec3, type ReadonlyQuat, mat3 } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipState } from "./flip";
+import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
 
 /**
  * A view base class for Novorender content.
@@ -35,6 +36,12 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
     private _stateChanges: RenderStateChanges | undefined;
     private _activeController: BaseController;
     private _statistics: { readonly render: RenderStatistics, readonly view: ViewStatistics } | undefined = undefined;
+    private _measureViewPromise: Promise<MeasureView>;
+    private _drawContext2d: {
+        width: number,
+        height: number,
+        camera: RenderStateCamera
+    };
 
     /** @internal */
     protected renderStateGL: RenderState;
@@ -65,7 +72,7 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
     public constructor(
         /** The HTMLCanvasElement used for rendering. */
         readonly canvas: HTMLCanvasElement,
-        deviceProfile: DeviceProfile, imports: Core3DImports,
+        deviceProfile: DeviceProfile, readonly imports: Core3DImports & MeasureImports,
         controllersFactory: CameraControllersFactory<CameraControllerTypes> = (builtinControllers as unknown as CameraControllersFactory<CameraControllerTypes>)
     ) {
         if (!isSecureContext)
@@ -77,6 +84,11 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
         this._setDeviceProfile = initCore3D(deviceProfile, canvas, imports, this.setRenderContext);
         this.renderStateGL = defaultRenderState();
         this.renderStateCad = this.createRenderState(this.renderStateGL);
+        this._drawContext2d = {
+            camera: this.renderState.camera,
+            width: 0,
+            height: 0
+        }
 
         const input = new ControllerInput(canvas);
         this.controllers = controllersFactory(input, this);
@@ -87,12 +99,18 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
             this.recalcBaseRenderResolution();
         });
         resizeObserver.observe(canvas);
+        this._measureViewPromise = createMeasureView(this._drawContext2d, this.imports);
     }
 
     /** Dispose of the view's GPU resources. */
     dispose() {
         this._renderContext?.dispose();
         this._renderContext = undefined;
+    }
+
+    // Measure view for the currently loaded scene, used for parametric measure
+    get measure() {
+        return this._measureViewPromise;
     }
 
     // The active camera controller.
@@ -195,11 +213,28 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
     * The url typically contains the scene id as the latter part of the path, i.e. `https://.../<scene_guid>/`.
     */
     async loadSceneFromURL(url: URL): Promise<SceneConfig> {
+        const measureView = await this._measureViewPromise;
+        measureView.loadScene(url);
         const scene = await downloadScene(url.toString());
         const stateChanges = { scene };
         flipState(stateChanges, "GLToCAD");
         this.modifyRenderState(stateChanges);
         return scene.config;
+    }
+
+    /**
+     * Query parametric measure entity for the given coordinates
+     * @param x Center x coordinate in css pixels.
+     * @param y Center y coordinate in css pixels.
+     * @param options Extra options.
+     * @returns Parametric measure entity, if non exists in the current location, the poisiton will be retuned.
+     */
+    async pickMeasureEntity(x: number, y: number, options?: PickOptions): Promise<MeasureEntity | undefined> {
+        const sample = await this.pick(x, y, options);
+        if (sample) {
+            const measureView = await this._measureViewPromise;
+            return (await measureView.core.pickMeasureEntity(sample.objectId, sample.position)).entity;
+        }
     }
 
     /**
@@ -468,6 +503,8 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
         const scale = devicePixelRatio * this.resolutionModifier;
         // const scale = 1.0;
         let { width, height } = this.canvas.getBoundingClientRect();
+        this._drawContext2d.width = width;
+        this._drawContext2d.height = height;
         width = Math.round(width * scale);
         height = Math.round(height * scale);
         const { output } = this.renderStateGL;
@@ -495,6 +532,7 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
     private applyChanges(changes: RenderStateChanges) {
         this.prevRenderStateCad = this.renderStateCad;
         this.renderStateCad = mergeRecursive(this.renderStateCad, changes) as RenderState;
+        this._drawContext2d.camera = this.renderStateCad.camera;
         flipState(changes, "CADToGL");
         this.renderStateGL = modifyRenderState(this.renderStateGL, changes);
         this.validate?.(this.renderStateGL, changes);
@@ -548,6 +586,16 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
                 this.resize();
             }
             return;
+        }
+    }
+
+    static async downloadImports(map: ViewImportmap): Promise<ViewImports> {
+        const core3dPromise = downloadCore3dImports(map);
+        const measurePromise = downloadMeasureImports(map);
+        const [core3d, measure] = await Promise.all([core3dPromise, measurePromise]);
+        return {
+            ...core3d,
+            ...measure
         }
     }
 }
@@ -625,3 +673,6 @@ export interface CameraControllerOptions {
      */
     readonly autoInit?: boolean;
 }
+
+export type ViewImports = Core3DImports & MeasureImports;
+export type ViewImportmap = Core3DImportMap & MeasureImportMap;

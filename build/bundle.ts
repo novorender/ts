@@ -8,6 +8,7 @@ export async function bundle(outdir: string, production = process.env.ENV == "pr
             ["index"]: resolve(outdir, "web_app/index.ts"),
             ["public/loaderWorker"]: resolve(outdir, "core3d/modules/octree/worker/index.ts"),
             ["public/shaders"]: resolve(outdir, "core3d/imports/shaders.ts"),
+            ["public/measureWorker"]: resolve(outdir, "measure/worker/service.ts"),
         },
         define: {
             'import.meta.env.NPM_PACKAGE_VERSION': `"${process.env.VERSION ?? process.env.npm_package_version}"`
