@@ -252,6 +252,9 @@ export interface RenderStateDynamicInstance {
 
     /** Object instance rotation, in world space. */
     readonly rotation?: ReadonlyQuat;
+
+    /** Object instance scale, default = 1. */
+    readonly scale?: number;
 }
 
 /** Dynamic object related render state.

@@ -118,7 +118,9 @@ function flipDynamicObjects(swapVecFunc: (v: number[]) => number[], swapQuatFunc
             const flippedInstances: RenderStateDynamicInstance[] = [];
             for (const inst of obj.instances) {
                 flippedInstances.push({
-                    position: swapVecFunc(inst.position as any) as vec3, rotation: inst.rotation ? swapQuatFunc(inst.rotation as any) : undefined
+                    position: swapVecFunc(inst.position as any) as vec3,
+                    rotation: inst.rotation ? swapQuatFunc(inst.rotation as any) : undefined,
+                    scale: inst.scale,
                 });
             }
             flippedObjects.push({ mesh: obj.mesh, instances: flippedInstances, baseObjectId: obj.baseObjectId });

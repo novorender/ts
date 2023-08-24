@@ -331,13 +331,17 @@ class ObjectAsset {
     static computeInstanceMatrices(instances: readonly RenderStateDynamicInstance[], localSpaceTranslation: ReadonlyVec3) {
         const srcData = new Float32Array(instances.length * 12);
         for (let i = 0; i < instances.length; i++) {
-            const { position, rotation } = instances[i];
+            const { position, rotation, scale } = instances[i];
             const translatedPos = vec3.sub(vec3.create(), position, localSpaceTranslation);
             const transform = rotation ? mat4.fromRotationTranslation(mat4.create(), rotation, translatedPos) : mat4.fromTranslation(mat4.create(), translatedPos);
             const [e00, e01, e02, e03, e10, e11, e12, e13, e20, e21, e22, e23, e30, e31, e32, e33] = transform;
             const elems4x3 = [e00, e01, e02, e10, e11, e12, e20, e21, e22, e30, e31, e32];
+            if (scale != undefined) {
+                for (let i = 0; i < 9; i++) { // don't scale translation
+                    elems4x3[i] *= scale;
+                }
+            }
             srcData.set(elems4x3, i * elems4x3.length);
-            // srcData.set(transform, i * 16);
         }
         return srcData;
     }
