@@ -215,7 +215,9 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
     async loadSceneFromURL(url: URL): Promise<SceneConfig> {
         const measureView = await this._measureViewPromise;
         measureView.loadScene(url);
-        const scene = await downloadScene(url.toString());
+        const webgl2Bin = new URL(url);
+        webgl2Bin.pathname += "webgl2_bin/";
+        const scene = await downloadScene(webgl2Bin.toString());
         const stateChanges = { scene };
         flipState(stateChanges, "GLToCAD");
         this.modifyRenderState(stateChanges);
