@@ -207,11 +207,18 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 if (prevDefaultAction != currDefaultAction && (prevDefaultAction == "filter" || currDefaultAction == "filter")) {
                     reload = true; // default action has changed from/to filter mode.
                 } else {
-                    for (let i = 0; i < n; i++) {
-                        if (groups[i] != prevGroups[i] && (groups[i]?.action == "filter" || prevGroups[i]?.action == "filter")) {
-                            reload = true; // one of the groups has changed from/to filter mode.
-                            break;
+                    const filterGroups = new Set<Iterable<number>>(prevGroups.filter(g => g.action == "filter").map(g => g.objectIds));
+                    for (const { action, objectIds } of groups) {
+                        if (action == "filter") {
+                            var removed = filterGroups.delete(objectIds);
+                            if (!removed) {
+                                reload = true; // one of the groups has changed to filter mode.
+                                break;
+                            }
                         }
+                    }
+                    if (filterGroups.size > 0) {
+                        reload = true; // At least one of the groups has changed from filter mode.
                     }
                 }
                 if (reload) {
