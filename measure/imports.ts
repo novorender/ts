@@ -36,12 +36,12 @@ export interface MeasureImportMap {
  */
     readonly baseUrl?: string | URL;
     /** Inlined WASM instance, or URL to download.
-     * @defaultValue `"./main.wasm"`
+     * @defaultValue `"./nurbs.wasm"`
      */
     readonly nurbsWasm?: string | URL | ArrayBuffer;
 
     /** Inlined loader worker, or URL to download.
-     * @defaultValue `"./loaderWorker.js"`
+     * @defaultValue `"./measureWorker.js"`
      */
     readonly measureWorker?: string | URL;
 }

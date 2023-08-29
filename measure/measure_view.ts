@@ -95,7 +95,7 @@ function createWorkers(url: string) {
 }
 
 /**
- * Creates a measure view based on t he scene url.
+ * Creates a measure view based on the scene url.
  */
 export async function createMeasureView(drawContext: DrawContext, imports: MeasureImports) {
     const workers = createWorkers(imports.measureWorker.toString());
