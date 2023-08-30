@@ -1,4 +1,4 @@
-import { vec3, mat4, quat, type ReadonlyMat4, mat3, type ReadonlyVec3 } from "gl-matrix";
+import { vec3, mat4, quat, type ReadonlyMat4, mat3, type ReadonlyVec3, glMatrix } from "gl-matrix";
 import type { MagFilterString, MinFilterString, TextureParams2DUncompressed, WrapString } from "webgl2";
 import { GL } from "webgl2/constants";
 import type { RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterialGGX, RenderStateDynamicMaterialUnlit, RenderStateDynamicMesh, RenderStateDynamicMeshPrimitive, RenderStateDynamicNormalTextureReference, RenderStateDynamicObject, RenderStateDynamicOcclusionTextureReference, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicTextureReference, RenderStateDynamicVertexAttribute, RenderStateDynamicVertexAttributes, RGB, RGBA } from "../state";
@@ -269,6 +269,7 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
                     mat4.multiply(transform, parentTransform, transform);
                 }
                 if (node.mesh != undefined) {
+                    mat4.rotateX(transform, transform, glMatrix.toRadian(90)); // transform into CAD space.
                     const instance: RenderStateDynamicInstance = decomposeMatrix(transform);
                     const mesh = meshes[node.mesh];
                     const obj: RenderStateDynamicObject = { instances: [instance], mesh, baseObjectId };
