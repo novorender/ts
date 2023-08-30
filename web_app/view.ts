@@ -221,7 +221,7 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
         const stateChanges = { scene };
         flipState(stateChanges, "GLToCAD");
         this.modifyRenderState(stateChanges);
-        return scene.config;
+        return stateChanges.scene.config;
     }
 
     /**
