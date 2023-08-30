@@ -1,4 +1,4 @@
-import type { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicVertexAttribute } from "core3d";
+import type { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicTextureReference, RenderStateDynamicVertexAttribute } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState, type UniformTypes, type VertexArrayParams, type VertexAttribute, type DrawParamsElements, type DrawParamsArrays, type StateParams, type DrawParamsArraysInstanced, type DrawParamsElementsInstanced, glUpdateBuffer } from "webgl2";
 import { mat3, mat4, vec3, type ReadonlyVec3 } from "gl-matrix";
@@ -24,7 +24,10 @@ export class DynamicModule implements RenderModule {
     async createResources(context: RenderContext) {
         const { vertexShader, fragmentShader } = context.imports.shaders.dynamic.render;
         const bin = context.resourceBin("Dynamic");
-        const defaultSampler = bin.createSampler({ magnificationFilter: "LINEAR", minificationFilter: "LINEAR_MIPMAP_LINEAR", wrap: ["REPEAT", "REPEAT"] });
+        const defaultSamplers = {
+            mip: bin.createSampler({ magnificationFilter: "LINEAR", minificationFilter: "LINEAR_MIPMAP_LINEAR", wrap: ["REPEAT", "REPEAT"] }),
+            plain: bin.createSampler({ magnificationFilter: "LINEAR", minificationFilter: "LINEAR", wrap: ["REPEAT", "REPEAT"] }),
+        } as const;
         const defaultTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array(4) }); // used to avoid warnings on android
         const uniformBufferBlocks = ["Camera", "Material", "Object"];
         const textureNames = ["lut_ggx", "ibl.diffuse", "ibl.specular", "base_color", "metallic_roughness", "normal", "emissive", "occlusion"] as const;
@@ -35,11 +38,12 @@ export class DynamicModule implements RenderModule {
             context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms, header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600", "PBR_METALLIC_ROUGHNESS"] : ["PBR_METALLIC_ROUGHNESS"] } }),
         ]);
         const programs = { unlit, ggx };
-        return { bin, defaultSampler, defaultTexture, programs } as const;
+        return { bin, defaultSamplers, defaultTexture, programs } as const;
     }
 }
 
 type Resources = Awaited<ReturnType<DynamicModule["createResources"]>>;
+type DefaultSamplers = Resources["defaultSamplers"];
 
 class DynamicModuleContext implements RenderModuleContext {
     iblTextures;
@@ -56,7 +60,7 @@ class DynamicModuleContext implements RenderModuleContext {
 
     update(state: DerivedRenderState) {
         const { context, resources } = this;
-        const { bin, defaultSampler, defaultTexture, programs } = resources;
+        const { bin, defaultSamplers, defaultTexture, programs } = resources;
         const { dynamic, localSpaceTranslation } = state;
         if (context.hasStateChanged({ dynamic })) {
             // synchronizing assets by reference is slower than array indexing, but it makes the render state safer and simpler to modify.
@@ -93,7 +97,7 @@ class DynamicModuleContext implements RenderModuleContext {
             syncAssets(bin, samplers, this.samplers, data => new SamplerAsset(bin, data));
             syncAssets(bin, geometries, this.geometries, data => new GeometryAsset(bin, data, this.buffers));
             syncAssets(bin, objects, this.objects, data => new ObjectAsset(bin, context, data, state));
-            syncAssets(bin, materials, this.materials, data => new MaterialAsset(bin, context, data, this.images, this.samplers, defaultTexture, defaultSampler, programs[data.kind]));
+            syncAssets(bin, materials, this.materials, data => new MaterialAsset(bin, context, data, this.images, this.samplers, defaultTexture, defaultSamplers, programs[data.kind]));
         }
         if (context.hasStateChanged({ localSpaceTranslation })) {
             for (const instance of this.objects.values()) {
@@ -193,13 +197,13 @@ class DynamicModuleContext implements RenderModuleContext {
 
     dispose() {
         const { resources, buffers, geometries, materials, objects } = this;
-        const { bin, programs, defaultSampler, defaultTexture } = resources;
+        const { bin, programs, defaultSamplers, defaultTexture } = resources;
         this.contextLost();
         const assets = [...buffers.values(), ...geometries.values(), ...materials.values(), ...objects.values()];
         for (const asset of assets) {
             asset.dispose(bin);
         }
-        bin.delete(programs.unlit, programs.ggx, defaultSampler, defaultTexture);
+        bin.delete(programs.unlit, programs.ggx, defaultSamplers.mip, defaultSamplers.plain, defaultTexture);
         console.assert(bin.size == 0);
         bin.dispose();
         buffers.clear();
@@ -383,7 +387,7 @@ class MaterialAsset {
         textures: Map<RenderStateDynamicImage, TextureAsset>,
         samplers: Map<RenderStateDynamicSampler, SamplerAsset>,
         defaultTexture: WebGLTexture,
-        defaultSamper: WebGLSampler,
+        defaultSamplers: DefaultSamplers,
         program: DynamicModuleContext["resources"]["programs"]["ggx"],
     ) {
         this.kind = data.kind;
@@ -424,9 +428,16 @@ class MaterialAsset {
         values.baseColorUVSet = data.baseColorTexture ? data.baseColorTexture.texCoord ?? 0 : -1;
         values.alphaCutoff = data.alphaCutoff ?? data.alphaMode == "MASK" ? .5 : 0;
         values.radianceMipCount = context.iblTextures.numMipMaps;
+
+        function getDefaultSampler(texRef: RenderStateDynamicTextureReference | undefined) {
+            if (texRef) {
+                return isImagePowerOfTwo(texRef.texture.image) ? defaultSamplers.mip : defaultSamplers.plain;
+            }
+        }
+
         if (baseColorTexture) {
             tex.baseColor = textures.get(baseColorTexture.texture.image)!.texture;
-            samp.baseColor = samplers.get(baseColorTexture.texture.sampler!)?.sampler ?? defaultSamper;
+            samp.baseColor = samplers.get(baseColorTexture.texture.sampler!)?.sampler ?? getDefaultSampler(baseColorTexture);
         }
         if (data.kind == "ggx") {
             const { roughnessFactor, metallicFactor, emissiveFactor, emissiveTexture, normalTexture, occlusionTexture, metallicRoughnessTexture } = data;
@@ -441,19 +452,19 @@ class MaterialAsset {
             values.emissiveUVSet = emissiveTexture ? emissiveTexture.texCoord ?? 0 : -1;
             if (emissiveTexture) {
                 tex.emissive = textures.get(emissiveTexture.texture.image)!.texture;
-                samp.emissive = samplers.get(emissiveTexture.texture.sampler!)?.sampler ?? defaultSamper;
+                samp.emissive = samplers.get(emissiveTexture.texture.sampler!)?.sampler ?? getDefaultSampler(emissiveTexture);
             }
             if (normalTexture) {
                 tex.normal = textures.get(normalTexture.texture.image)!.texture;
-                samp.normal = samplers.get(normalTexture.texture.sampler!)?.sampler ?? defaultSamper;
+                samp.normal = samplers.get(normalTexture.texture.sampler!)?.sampler ?? getDefaultSampler(normalTexture);
             }
             if (occlusionTexture) {
                 tex.occlusion = textures.get(occlusionTexture.texture.image)!.texture;
-                samp.occlusion = samplers.get(occlusionTexture.texture.sampler!)?.sampler ?? defaultSamper;
+                samp.occlusion = samplers.get(occlusionTexture.texture.sampler!)?.sampler ?? getDefaultSampler(occlusionTexture);
             }
             if (metallicRoughnessTexture) {
                 tex.metallicRoughness = textures.get(metallicRoughnessTexture.texture.image)!.texture;
-                samp.metallicRoughness = samplers.get(metallicRoughnessTexture.texture.sampler!)?.sampler ?? defaultSamper;
+                samp.metallicRoughness = samplers.get(metallicRoughnessTexture.texture.sampler!)?.sampler ?? getDefaultSampler(metallicRoughnessTexture);
             }
         } else {
             values.roughnessFactor = 1;
@@ -519,4 +530,12 @@ class SamplerAsset {
     dispose(bin: ResourceBin) {
         bin.delete(this.sampler);
     }
+}
+
+function isImagePowerOfTwo(image: RenderStateDynamicImage) {
+    function isPowerOf2(value: number) {
+        return (value & (value - 1)) == 0;
+    }
+    const { width, height } = image.params;
+    return isPowerOf2(width) && isPowerOf2(height);
 }
