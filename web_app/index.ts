@@ -10,6 +10,7 @@ export * from "./controller";
 export * from "./serviceWorker";
 export * from "./highlight";
 export * from "./geometry";
+export * from "../measure";
 
 /**
  * NPM package version, if applicable.
