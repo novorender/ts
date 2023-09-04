@@ -28,10 +28,14 @@ export interface FollowParametricObject {
     readonly ids: ObjectId[];
     /** Information about the entity, used to avoid finding the objects in api functions*/
     readonly selectedEntity: MeasureEntity | undefined;
-    /** Start and stop bounds of the followed object, 
-     * unless the parametric object specify otherwise start will be 0 and end will be the length of all segments*/
+    /** 
+     * Start and stop bounds of the followed object, 
+     * unless the parametric object specify otherwise start will be 0 and end will be the length of all segments
+     */
     readonly parameterBounds: ParameterBounds;
-    /** Returns camera values for given parameter T,
-     * if T is before start it will return camera values at start and if its larger than end it will return camera values for end*/
+    /** 
+     * Returns camera values for given parameter T,
+     * if T is before start it will return camera values at start and if its larger than end it will return camera values for end
+     */
     getCameraValues(t: number): Promise<CameraValues | undefined>;
 }

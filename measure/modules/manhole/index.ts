@@ -33,7 +33,10 @@ export interface ManholeMeasureValues {
     readonly outer: CylinderValues;
     /** Radius of the outer cylinder */
     readonly outerRadius: number;
-    /** Internal values used for drawing */
+    /** 
+     * @ignore
+     * Internal values used for drawing 
+    */
     readonly internal: {
         readonly top: FaceData;
         readonly bottomOuter: FaceData;

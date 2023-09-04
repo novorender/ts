@@ -3,11 +3,11 @@ import type { Camera, ObjectId } from "../../measure_view";
 
 export { DrawModule } from "./module";
 
-/** An entity that can be used in Api.getDrawMeasureEntity, Objects returned from the api with draw kind parameter can be used*/
+/** An entity that can be used in measureView.draw.getDrawMeasureEntity, Objects returned from the api with draw kind parameter can be used*/
 export interface DrawableEntity {
-    /** Object id from the web-gl api*/
+    /** Object id corresponding to he object ids gotten from picking from the core3d api*/
     readonly ObjectId?: ObjectId;
-    /** Collection of kinds that can be drawn using Api.getDrawMeasureEntity*/
+    /** Collection of kinds that can be drawn using measureView.draw.getDrawMeasureEntity*/
     readonly drawKind: "edge" | "face" | "vertex" | "curveSegment" | "manhole" | "measureResult";
 }
 
@@ -40,17 +40,18 @@ export interface DrawVoid {
 export interface DrawPart {
     /** Name of the part */
     readonly name?: string;
-    /** Display text of the part,
+    /** 
+     * Display text of the part,
      * For lines of 2 points it is the length
      * For angles its the angle in degrees
-     * For surfaces its a list of list strings. One list for out then for its voids 
+     * For surfaces its a list of list strings. First list is for the outer loop while the remaining is for the voids 
      */
     text?: string | string[][];
     /** Type of object to draw */
     readonly drawType: "lines" | "filled" | "vertex" | "curveSegment" | "angle" | "text";
     /** From/to 3d elevation of object, used for cylinder to show slope */
     readonly elevation?: { from: number; to: number; horizontalDisplay: boolean };
-    /** Hole in the draw part,  only valid for filled kind*/
+    /** Void in the draw part,  only valid for filled kind*/
     readonly voids?: DrawVoid[];
     /** View space coordinates, in pixel values, empty if the entire part is out of view*/
     vertices2D?: ReadonlyVec2[];
