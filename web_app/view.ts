@@ -22,7 +22,10 @@ import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImpo
  * you should make a derived View class of your own and override the methods you need.
  * @category Render View
  */
-export class View<CameraControllerTypes extends CameraControllers = BuiltinCameraControllerType, CameraControllerKind extends string = Extract<keyof CameraControllerTypes, string>> {
+export class View<
+    CameraControllerTypes extends CameraControllers = BuiltinCameraControllerType,
+    CameraControllerKind extends string = Extract<keyof CameraControllerTypes, string>
+> implements Disposable {
     /** The url from which the javascript containing this class was loaded. */
     readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
 
@@ -100,6 +103,11 @@ export class View<CameraControllerTypes extends CameraControllers = BuiltinCamer
         });
         resizeObserver.observe(canvas);
         this._measureViewPromise = createMeasureView(this._drawContext2d, this.imports);
+    }
+
+    /** Dispose of the view's GPU resources. */
+    [Symbol.dispose]() {
+        this.dispose();
     }
 
     /** Dispose of the view's GPU resources. */

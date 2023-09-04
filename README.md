@@ -83,12 +83,12 @@ We generally use `ESNext` as target since we only support lastest version of bro
 A minimal app might look something like this: 
 
 ```typescript
-import {View, getDeviceProfile, downloadImports} from "@novorender/api";
+import {View, getDeviceProfile} from "@novorender/api";
 
 async function main(canvas: HTMLCanvasElement) {
     const gpuTier = 2; // laptop with reasonably new/powerful GPU.
     const deviceProfile = getDeviceProfile(gpuTier);
-    const imports = await downloadImports({ baseUrl: "public/" }); // or whereever you copied the public/ files from the package.
+    const imports = await View.downloadImports({ baseUrl: "public/" }); // or whereever you copied the public/ files from the package.
     const view = new View(canvas, deviceProfile, imports);
     await view.run();
     view.dispose();
