@@ -68,6 +68,7 @@ export interface PlaneValues {
     readonly innerEdges: EdgeValues[][];
     /** Y value of the plane origin*/
     readonly heightAboveXyPlane?: number;
+    /** @ignore */
     readonly entity: ParametricEntity;
 }
 
@@ -80,7 +81,7 @@ export interface CylinderValues {
     readonly centerLineStart: vec3;
     /** End of the line going in the center of the cylinder */
     readonly centerLineEnd: vec3;
-    /** Entity */
+    /** @ignore */
     readonly entity: ParametricEntity;
 }
 
@@ -113,14 +114,17 @@ export interface DuoMeasurementValues {
 export interface MeasureObjectInfo {
     /** Closest point on object */
     readonly point?: vec3;
-    /** Parameter on closest point, one if its a curve 2 if its a surface */
+    /** Parameter on closest point, one if its a curve two if its a surface */
     readonly parameter?: number | [number, number]
     /** The valid measurement settings for object*/
     readonly validMeasureSettings?: boolean;
 }
 
 
-/** Tolerance for picking and snapping to parametric objects, numbers are distance in meters */
+/** 
+ * Tolerance for picking and snapping to parametric objects, numbers are distance in meters
+ * 0 can be used to ignore certain types when picking or snapping
+ */
 export interface SnapTolerance {
     segment?: number;
     edge?: number;

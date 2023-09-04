@@ -51,6 +51,6 @@ void main() {
     highp uint objectId = combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low);
     fragPick = uvec4(objectId, 0, 0, floatBitsToUint(linearDepth));
 #else
-    fragPick = uvec4(varyingsFlat.objectId, packNormalAndDeviation(vec3(0), uintBitsToFloat(0x7f800000U)), floatBitsToUint(linearDepth));
+    fragPick = uvec4(varyingsFlat.objectId, packNormalAndDeviation(vec3(0), 0.), floatBitsToUint(linearDepth));
 #endif
 }

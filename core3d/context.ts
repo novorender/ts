@@ -687,7 +687,7 @@ export class RenderContext {
 
     //* @internal */
     clearPickBuffers() {
-        glClear(this.gl, { kind: "COLOR", drawBuffer: 1, type: "Uint", color: [0xffffffff, 0x0000_0000, 0x0000_0000, 0x7f80_0000] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format), 0x7f80_0000 is Float32.+inf
+        glClear(this.gl, { kind: "COLOR", drawBuffer: 1, type: "Uint", color: [0xffffffff, 0x0000_0000, 0x0000_0000, 0x0000_0000] }); // 0xffff is bit-encoding for Float16.nan. (https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
     }
 
     //* @internal */
@@ -853,7 +853,7 @@ export class RenderContext {
                     const ny = wasm.float32(ny16);
                     const nz = wasm.float32(nz16);
                     const dev32 = wasm.float32(deviation16);
-                    const deviation = Math.abs(dev32) < f16Max ? dev32 : undefined;
+                    const deviation = deviation16 !== 0 ? dev32 : undefined;
 
                     // compute normal
                     // compute clip space x,y coords
