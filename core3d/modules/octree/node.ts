@@ -181,7 +181,19 @@ export class OctreeNode {
     shouldSplit(projectedSizeSplitThreshold: number): boolean {
         const { visibility, projectedSize, context, geometryKind } = this;
         const hidden = context.hidden[geometryKind ?? -1] ?? false;
-        return !hidden && (this.isRoot || (visibility != Visibility.none && projectedSize > projectedSizeSplitThreshold));
+        return !hidden && (this.isRoot || (visibility != Visibility.none && projectedSize > projectedSizeSplitThreshold)) && !this.areAllDescendantsHidden;
+    }
+
+    get areAllDescendantsHidden() {
+        const { descendantObjectIds } = this.data;
+        if (descendantObjectIds) {
+            const { highlights } = this.context;
+            // We assume descendantObjectIds are rare and small. Otherwise this check should probably be optimized by performing this check only on recent loads or when highligts changes.
+            if (descendantObjectIds.every(id => highlights[id] >= 0xfe)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     intersectsPlane(plane: ReadonlyVec4) {
