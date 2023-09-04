@@ -420,6 +420,11 @@ export interface RenderStatePointCloud {
          * @remarks May define different gradients for negative and positive numbers.
          */
         readonly colorGradient: RenderStateColorGradient<RGBA>;
+
+        /** 
+         * The color of undefined points
+         */
+        readonly undefinedColor?: RGBA;
     };
 
     /** Use pre-computed projected point cloud positions instead of original.

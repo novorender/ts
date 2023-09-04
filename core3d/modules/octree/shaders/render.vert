@@ -51,13 +51,17 @@ void main() {
     gl_Position = camera.viewClipMatrix * posVS;
 
     vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5f) / 256.f, .5f));
-    float deviation = uintBitsToFloat(0x7f800000U); // +inf
+    float deviation = 0.f;
 
 #if (MODE == MODE_POINTS)
     deviation = vertexDeviations[scene.deviationIndex];
-    if(scene.deviationFactor > 0.f && deviation != uintBitsToFloat(0x7f800000U)) {
-        vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
-        color = mix(vertexColor0, gradientColor, scene.deviationFactor);
+    if(scene.deviationFactor > 0.f) {
+        if(deviation == 0.f) { //undefined
+            color = scene.deviationUndefinedColor;
+        } else {
+            vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
+            color = mix(vertexColor0, gradientColor, scene.deviationFactor);
+        }
     }
 
         // compute point size
