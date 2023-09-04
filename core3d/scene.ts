@@ -2,27 +2,27 @@ import type { SceneConfig, RenderState, RenderStateScene, DeviceProfile } from "
 import { OctreeNode, type OctreeContext, NodeGeometryKind } from "./modules/octree/node";
 import type { RootNodes } from "./modules/octree";
 import { decodeBase64 } from "./util";
+import { isSupportedVersion } from "./modules/octree";
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
 /**
  * Download scene from url.
  * @param url Url of scene Root folder, e.g. `https://blobs.novorender.com/<sceneid>/`
- * @param abortController Optional abort controller.
+ * @param abortSignal Optional abort signal.
  * @returns A render state scene ready to be assign to {@link RenderState.scene}.
  * @remarks
  * The loaded state does not contain any geometry, only the data required to start geometry streaming.
  * It may take several frames for any geometry to appear, and several seconds for it to fully resolve.
  * @category Render State
  */
-export async function downloadScene(url: string, abortController?: AbortController): Promise<RenderStateScene> {
-    if (!abortController)
-        abortController = new AbortController();
-    const { signal } = abortController;
+export async function downloadScene(url: string, abortSignal?: AbortSignal): Promise<RenderStateScene> {
     const fullUrl = new URL(url);
     fullUrl.pathname += "scene.json";
-    const config = (await download(fullUrl, "json", signal)) as SceneConfig;
-    console.assert(config.version == "2.0");
+    const config = (await download(fullUrl, "json", abortSignal)) as SceneConfig;
+    if (!isSupportedVersion(config.version)) {
+        throw new Error(`Unsupported scene version: ${config.variants}!`);
+    }
     return { url: url.toString(), config } as const;
 }
 
@@ -45,7 +45,7 @@ export async function createSceneRootNodes(context: OctreeContext, config: Scene
     return hasNodes ? rootNodes : undefined;
 }
 
-async function download<T extends "arrayBuffer" | "json">(url: URL, kind: T, signal: AbortSignal) {
+async function download<T extends "arrayBuffer" | "json">(url: URL, kind: T, signal?: AbortSignal) {
     const response = await fetch(url, { mode: "cors", signal });
     if (response.ok) {
         return (await response[kind]()) as T extends "arrayBuffer" ? ArrayBuffer : SceneConfig;

@@ -1,8 +1,6 @@
 import { LoaderHandler } from "./handler";
 import type { MessageResponse, MessageRequest } from "./messages";
 export type * from "./parser";
-export type * from "./schema_2_0";
-export type * from "./handler";
 export type * from "./messages";
 
 const handler = new LoaderHandler((msg: MessageResponse, transfer?: Transferable[]) => {

@@ -1,6 +1,14 @@
 import { glUpdateBuffer, type DrawParams, type VertexAttribute, type DrawParamsArraysMultiDraw, type DrawParamsElementsMultiDraw } from "webgl2";
-import { type MaterialType, type MeshDrawRange, type MeshObjectRange, type NodeGeometry, type Vertex, type VertexAttributeData, type VertexAttributes } from "./worker";
+import { type MeshDrawRange, type MeshObjectRange, type NodeGeometry, type VertexAttributeData, type VertexAttributes } from "./worker";
 import { ResourceBin } from "core3d/resource";
+
+export const enum MaterialType {
+    opaque = 0,
+    opaqueDoubleSided = 1,
+    transparent = 2,
+    elevation = 3,
+};
+
 
 /** @internal */
 export interface Mesh {
@@ -71,7 +79,7 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
             { kind: "arrays", mode: subMesh.primitiveType, count };
         const baseColorTextureIndex = subMesh.baseColorTexture as number;
         const baseColorTexture = textures[baseColorTextureIndex] ?? null;
-        yield { vao, vaoPosOnly, vaoTriangles, highlightVB, highlightTriVB, drawParams, drawRanges, numVertices, numTriangles, objectRanges, materialType, baseColorTexture } as const satisfies Mesh;
+        yield { vao, vaoPosOnly, vaoTriangles, highlightVB, highlightTriVB, drawParams, drawRanges, numVertices, numTriangles, objectRanges, materialType: materialType as unknown as MaterialType, baseColorTexture } as const satisfies Mesh;
     }
 }
 

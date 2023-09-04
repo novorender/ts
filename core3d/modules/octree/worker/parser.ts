@@ -1,10 +1,31 @@
 import { type ReadonlyVec3, vec3 } from "gl-matrix";
 import type { AABB, BoundingSphere } from "core3d/state";
-import { type Double3, type Float3, MaterialType, OptionalVertexAttribute, PrimitiveType, readSchema, type Schema, type SubMeshProjection, TextureSemantic } from "./schema_2_0";
 import { BufferReader, Float16Array } from "./util";
 import type { ComponentType, ShaderAttributeType, TextureParams } from "webgl2";
 import { parseKTX } from "core3d/ktx";
 import type { Mutex } from "../mutex";
+import * as Current from "./2_1";
+import * as Previous from "./2_0";
+const { MaterialType, OptionalVertexAttribute, PrimitiveType, TextureSemantic } = Current;
+type Current = typeof Current;
+type Previous = typeof Previous;
+// extract common types and ensure that current and previous binary format versions of them are 100% overlapping
+type Float3 = Current.Float3 | Previous.Float3;
+type Double3 = Current.Double3 | Previous.Double3;
+type Schema = Current.Schema | Previous.Schema;
+type SubMeshProjection = Current.SubMeshProjection | Previous.SubMeshProjection;
+type MaterialType = Current.MaterialType | Previous.MaterialType;
+type TextureSemantic = Current.TextureSemantic | Previous.TextureSemantic;
+type PrimitiveType = Current.PrimitiveType | Previous.PrimitiveType;
+type OptionalVertexAttribute = Current.OptionalVertexAttribute | Previous.OptionalVertexAttribute;
+
+function isCurrentSchema(schema: Schema): schema is Current.Schema {
+    return schema.version == Current.version;
+}
+
+export function isSupportedVersion(version: string) {
+    return version == Current.version || version == Previous.version;
+}
 
 /** @internal */
 export interface MeshDrawRange {
@@ -46,6 +67,7 @@ export interface NodeData {
     readonly id: string;
     readonly childIndex: number; // octant # (not mask, but index)
     readonly childMask: number; // 32-bit mask for what child indices (octants) have geometry
+    readonly descendantObjectIds?: readonly number[]; // optional array of all object ids found in descendant nodes for filter optimization
     readonly tolerance: number;
     readonly byteSize: number; // uncompressed byte size of node file
     readonly offset: ReadonlyVec3;
@@ -292,8 +314,15 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
         const parentPrimitives = parentPrimitiveCounts[childIndex];
         const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshProjectionRange, separatePositionBuffer, predicate);
         const primitivesDelta = primitives - (parentPrimitives ?? 0);
+        let descendantObjectIds: number[] | undefined;
+        if (isCurrentSchema(schema)) {
+            const [idsBegin, idsEnd] = getRange(schema.childInfo.descendantObjectIds, i);
+            if (idsBegin != idsEnd) {
+                descendantObjectIds = [...schema.descendantObjectIds.slice(idsBegin, idsEnd)];
+            }
+        }
         // console.assert(parentId == "0" || primitivesDelta >= 0, "negative primitive delta");
-        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes });
+        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes, descendantObjectIds });
     }
     return children;
 }
@@ -639,10 +668,10 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
 }
 
 export function parseNode(id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, highlights: Highlights, applyFilter: boolean) {
-    console.assert(version == "2.0");
+    console.assert(isSupportedVersion(version));
     // const begin = performance.now();
     const r = new BufferReader(buffer);
-    var schema = readSchema(r);
+    var schema = version == Current.version ? Current.readSchema(r) : Previous.readSchema(r);
     let predicate: ((objectId: number) => boolean) | undefined;
     predicate = applyFilter ? (objectId =>
         highlights.indices[objectId] != 0xff

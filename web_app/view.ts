@@ -217,15 +217,16 @@ export class View<
      * Load a scene from a url.
     * @public
     * @param url The absolute url to the folder containing the scene.
+    * @param abortSignal Optional abort controller.
     * @remarks
     * The url typically contains the scene id as the latter part of the path, i.e. `https://.../<scene_guid>/`.
     */
-    async loadSceneFromURL(url: URL): Promise<SceneConfig> {
+    async loadSceneFromURL(url: URL, abortSignal?: AbortSignal): Promise<SceneConfig> {
         const measureView = await this._measureViewPromise;
-        measureView.loadScene(url);
+        measureView.loadScene(url); // TODO: include abort signal!
         const webgl2Bin = new URL(url);
         webgl2Bin.pathname += "webgl2_bin/";
-        const scene = await downloadScene(webgl2Bin.toString());
+        const scene = await downloadScene(webgl2Bin.toString(), abortSignal);
         const stateChanges = { scene };
         flipState(stateChanges, "GLToCAD");
         this.modifyRenderState(stateChanges);
