@@ -75,6 +75,24 @@ void main() {
         rgba = baseColor;
     }
 #endif
+
+
+#if defined (HIGHLIGHT)
+    if(highlight == 254U) {
+        discard;
+    }
+    if(highlight != 0U || scene.applyDefaultHighlight) {
+        float u = (float(highlight) + 0.5f) / float(maxHighlights);
+        mat4 colorTransform;
+        colorTransform[0] = texture(textures.highlights, vec2(u, 0.5f / 5.0f));
+        colorTransform[1] = texture(textures.highlights, vec2(u, 1.5f / 5.0f));
+        colorTransform[2] = texture(textures.highlights, vec2(u, 2.5f / 5.0f));
+        colorTransform[3] = texture(textures.highlights, vec2(u, 3.5f / 5.0f));
+        vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5f / 5.0f));
+        rgba = colorTransform * rgba + colorTranslation;
+    }
+#endif
+
 #if (PASS != PASS_PICK && MODE != MODE_POINTS)
 if (baseColor != vec4(0)) {
     vec4 diffuseOpacity = rgba;
@@ -102,24 +120,6 @@ if (baseColor != vec4(0)) {
     if(rgba.a < scene.pickOpacityThreshold)
         discard;
 #endif
-
-#if defined (HIGHLIGHT)
-    if(highlight == 254U) {
-        discard;
-    }
-    if(highlight != 0U || scene.applyDefaultHighlight) {
-        float u = (float(highlight) + 0.5) / float(maxHighlights);
-        mat4 colorTransform;
-        colorTransform[0] = texture(textures.highlights, vec2(u, 0.5 / 5.0));
-        colorTransform[1] = texture(textures.highlights, vec2(u, 1.5 / 5.0));
-        colorTransform[2] = texture(textures.highlights, vec2(u, 2.5 / 5.0));
-        colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / 5.0));
-        vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / 5.0));
-        rgba = colorTransform * rgba + colorTranslation;
-    }
-#endif
-
-
 
     // we put discards here (late) to avoid problems with derivative functions
 #if (MODE == MODE_POINTS)
