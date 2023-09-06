@@ -173,7 +173,13 @@ export function clamp(value: number, min: number, max: number) {
     return value;
 }
 
-/** @internal */
+/** Retuns a quaternion computed for the given direction.
+  * Will compute rotation with Y as the up vector unless direction is Y or snapToAxis is given
+  * @param dir Direction vector.
+  * @param snapToAxis Snap to custom rotation, uses Y as up otherwise 
+  * @returns Rotation computed for the given direction and snap axis.
+  * @category Camera Controllers
+  */
 export function rotationFromDirection(dir: ReadonlyVec3, snapToAxis?: quat) {
     const up = glMatrix.equals(Math.abs(vec3.dot(vec3.fromValues(0, 0, 1), dir)), 1)
         ? vec3.fromValues(0, 1, 0)
