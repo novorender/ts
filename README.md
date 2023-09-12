@@ -109,6 +109,14 @@ If everything succeeds, this should render an image with a minor gradient of gra
 
 The view already has camera controller built in, so you can move around and enjoy your grid with the mouse and/or keyboard, or even touch gestures.
 
+> The view will automatically resize your canvas' pixel size when the css layout and/or the render state output settings changes.
+This could lead to a runaway recursive feedback loop.
+To avoid this, you must assign a css width and height to your canvas!
+
+```html
+<canvas style="width:100%; height:100%">
+```
+
 ## Next steps
 
 Getting that first view up and running is an important step. Now you can actually start to make your application. Please see the [documentation](https://docs.novorender.com) for tutorials, examples and a detailed reference manual!
