@@ -16,13 +16,12 @@ export interface DeviceProfile {
 
     /** What are the practical resource limitations of this device.
      * @remarks
-     * Note these are also limited by the browser and other resources currently in use.
+     * The effectively available resources are affected by other resources used by the browser and other apps.
+     * Make sure to put these values well below the nominal/theoretical limits to allow for this.
      */
     readonly limits: DeviceLimits;
 
     /** What particular quirks/bugs does this device have.
-     * @remarks
-     * Note these are also limited by the browser and other resources currently in use.
      */
     readonly quirks: DeviceQuirks;
 
