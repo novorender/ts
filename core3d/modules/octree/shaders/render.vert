@@ -57,7 +57,9 @@ void main() {
     deviation = vertexDeviations[scene.deviationIndex];
     if(scene.deviationFactor > 0.f) {
         if(deviation == 0.f) { //undefined
-            color = scene.deviationUndefinedColor;
+            if(dot(scene.deviationUndefinedColor, scene.deviationUndefinedColor) != 0.f) {
+                color = scene.deviationUndefinedColor;
+            }
         } else {
             vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
             color = mix(vertexColor0, gradientColor, scene.deviationFactor);
