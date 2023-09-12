@@ -45,6 +45,7 @@ export class View<
         height: number,
         camera: RenderStateCamera
     };
+    private readonly _resizeObserver: ResizeObserver;
 
     /** @internal */
     protected renderStateGL: RenderState;
@@ -98,7 +99,7 @@ export class View<
         this._activeController = Object.values(this.controllers)[0];
         this._activeController.attach();
 
-        const resizeObserver = new ResizeObserver(() => {
+        const resizeObserver = this._resizeObserver = new ResizeObserver(() => {
             this.recalcBaseRenderResolution();
         });
         resizeObserver.observe(canvas);
@@ -112,6 +113,7 @@ export class View<
 
     /** Dispose of the view's GPU resources. */
     dispose() {
+        this._resizeObserver.disconnect();
         this._renderContext?.dispose();
         this._renderContext = undefined;
     }
