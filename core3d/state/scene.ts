@@ -85,6 +85,8 @@ export interface SceneConfig {
     readonly id: string;
     /** Binary format version. */
     readonly version: string;
+    /** Up vector, in world space. */
+    readonly up?: ReadonlyVec3;
     /** Weighted center point of scene, in world space. */
     readonly center: ReadonlyVec3;
     /** Offset used to geo reference scene, in world space. */

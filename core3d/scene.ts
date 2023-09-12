@@ -3,6 +3,7 @@ import { OctreeNode, type OctreeContext, NodeGeometryKind } from "./modules/octr
 import type { RootNodes } from "./modules/octree";
 import { decodeBase64 } from "./util";
 import { isSupportedVersion } from "./modules/octree";
+import { vec3, type ReadonlyVec3 } from "gl-matrix";
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
@@ -10,7 +11,7 @@ type Mutable<T> = { -readonly [P in keyof T]: T[P] };
  * Download scene from url.
  * @param url Url of scene Root folder, e.g. `https://blobs.novorender.com/<sceneid>/`
  * @param abortSignal Optional abort signal.
- * @returns A render state scene ready to be assign to {@link RenderState.scene}.
+ * @returns A render state scene ready to be assigned to {@link RenderState.scene}.
  * @remarks
  * The loaded state does not contain any geometry, only the data required to start geometry streaming.
  * It may take several frames for any geometry to appear, and several seconds for it to fully resolve.
@@ -19,11 +20,24 @@ type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 export async function downloadScene(url: string, abortSignal?: AbortSignal): Promise<RenderStateScene> {
     const fullUrl = new URL(url);
     fullUrl.pathname += "scene.json";
-    const config = (await download(fullUrl, "json", abortSignal)) as SceneConfig;
+    let config = (await download(fullUrl, "json", abortSignal)) as SceneConfig;
+    if (config.up) {
+        // for now we assume that the presence of an up vector means cad-space.
+        // until every scene is in cad space, we rotate it back into gl-space for backward compatibility.
+        let { offset, center } = config;
+        offset = flipCADToGLVec(offset);
+        center = flipCADToGLVec(center);
+        config = { ...config, offset, center };
+    }
     if (!isSupportedVersion(config.version)) {
         throw new Error(`Unsupported scene version: ${config.variants}!`);
     }
     return { url: url.toString(), config } as const;
+}
+
+function flipCADToGLVec(v: ReadonlyVec3): ReadonlyVec3 {
+    const [x, y, z] = v;
+    return vec3.fromValues(x, z, -y);
 }
 
 /** @internal */
