@@ -545,7 +545,7 @@ function getResultDrawObject(result: DuoMeasurementValues): DrawObject {
         parts.push({ name: "z-axis", text: Math.abs(diff[2]).toFixed(3), drawType: "lines", vertices3D: [vec3.clone(pts[2]), vec3.clone(pts[3])] });
 
 
-        const planarDiff = vec2.len(vec2.fromValues(diff[0], diff[2]));
+        const planarDiff = vec2.len(vec2.fromValues(diff[0], diff[1]));
         const xyPt1 = vec3.fromValues(pts[0][0], pts[0][1], Math.min(pts[0][2], pts[3][2]));
         const xyPt2 = vec3.fromValues(pts[3][0], pts[3][1], Math.min(pts[0][2], pts[3][2]));
         parts.push({ name: "xy-plane", text: planarDiff.toFixed(3), drawType: "lines", vertices3D: [xyPt1, xyPt2] });
