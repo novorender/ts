@@ -3,6 +3,7 @@ import { downloadScene, type RenderState, type RenderStateChanges, defaultRender
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
+import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections } from "./buffer_inspect";
 
 /**
  * A view base class for Novorender content.
@@ -235,6 +236,22 @@ export class View<
         return stateChanges.scene.config;
     }
 
+
+    /**
+     * Inspect the deviations that is on screen
+     * @public
+     * @param settings Deviation settings, 
+     * @returns Spaced out lables prioritizing the smallest or highest deviation values based on settings. 
+     * Also returns a line trough the points if it is able to project the points on a line and the option is given.
+     */
+    async inspectDeviations(settings: DeviationInspectionSettings): Promise<DeviationInspections | undefined> {
+        const context = this._renderContext;
+        if (context) {
+            const scale = devicePixelRatio * this.resolutionModifier;
+            return inspectDeviations(await context.getDeviations(), scale, settings);
+        }
+    }
+
     /**
      * Query parametric measure entity for the given coordinates
      * @param x Center x coordinate in css pixels.
@@ -307,6 +324,7 @@ export class View<
      * @remarks
      * The function will also set the {@link RenderStateCamera.kind | camera projection model}.
      */
+
     async switchCameraController<T extends CameraControllerKind>(
         kind: T,
         initialState?: CameraControllerInitialValues,

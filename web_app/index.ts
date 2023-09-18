@@ -6,6 +6,7 @@ import { glMatrix } from "gl-matrix";
 export * from "../core3d";
 export * from "./device";
 export * from "./view";
+export * from "./buffer_inspect";
 export * from "./controller";
 export * from "./serviceWorker";
 export * from "./highlight";
