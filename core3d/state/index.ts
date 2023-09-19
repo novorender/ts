@@ -194,7 +194,7 @@ export interface RenderStateBackground {
      */
     readonly color?: RGBA;
 
-    /** The url of the background/environment.
+    /** The absolute url of the background/environment.
      * @remarks
      * This should point to the folder that contains the textures files of the desired environment, e.g. `https://api.novorender/env/lake/'.
      */

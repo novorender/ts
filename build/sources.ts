@@ -121,7 +121,7 @@ async function writeReadme(dirName: string) {
 
 export async function copySourceFiles(dirName: string) {
     await emptyDir(dirName);
-    await copyDirs(dirName, ["web_app", "core3d", "webgl2", "measure"]);
+    await copyDirs(dirName, ["web_app", "core3d", "webgl2", "measure", "offline"]);
     await copyFiles(dirName, ["tsconfig.json"]);
     await copyFiles(posix.resolve(dirName, "public"), ["core3d/wasm/main.wasm", "core3d/lut_ggx.png", "core3d/modules/watermark/logo.bin", "measure/wasm/nurbs.wasm"]);
     await writeIndexDeclaration(dirName);

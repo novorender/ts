@@ -11,7 +11,7 @@ export async function bundle(outdir: string, production = process.env.ENV == "pr
             ["public/measureWorker"]: resolve(outdir, "measure/worker/service.ts"),
         },
         define: {
-            'import.meta.env.NPM_PACKAGE_VERSION': `"${process.env.VERSION ?? process.env.npm_package_version}"`
+            'NPM_PACKAGE_VERSION': `"${process.env.VERSION ?? process.env.npm_package_version}"`
         },
         sourcemap: true,
         minify: production,

@@ -62,9 +62,12 @@ class ValidationContext {
     readonly errors: Error[] = [];
 
     background(state: RenderStateBackground) {
-        const { blur } = state;
+        const { blur, url } = state;
         if (blur != undefined) {
             this.numeric(blur).rangeInclusive(0, 1).report("background.blur");
+        }
+        if (url != undefined) {
+            this.url(url).valid().report("background.url");
         }
     }
 
@@ -183,7 +186,10 @@ class ValidationContext {
     }
 
     scene(state: RenderStateScene) {
-        // there's not really any state that can be verified here quickly
+        const { url } = state;
+        if (url != undefined) {
+            this.url(url).valid().report("scene.url");
+        }
     }
 
     terrain(state: RenderStateTerrain) {
@@ -211,6 +217,10 @@ class ValidationContext {
 
     gradient(value: RenderStateColorGradient<RGB | RGBA>) {
         return new GradientValidator(this, value);
+    }
+
+    url(value: string) {
+        return new UrlValidator(this, value);
     }
 }
 
@@ -351,6 +361,17 @@ class GradientValidator extends BaseValidator<RenderStateColorGradient<RGB | RGB
             }
         } else {
             this.error('must have more than zero knots!');
+        }
+        return this;
+    }
+}
+
+class UrlValidator extends BaseValidator<string> {
+    valid() {
+        try {
+            new URL(this.value);
+        } catch {
+            this.error("is not a valid absolute url!")
         }
         return this;
     }
