@@ -28,13 +28,10 @@ export interface MeasureImports {
  * A map describing inlined resources, or urls where to fetch them.
  */
 export interface MeasureImportMap {
-
-
-    /** The base url to be applied to the other URLs.
- * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/URL/URL}
- * @defaultValue `import.meta.url`
- */
-    readonly baseUrl?: string | URL;
+    /** The absolute base url to be applied to the other URLs.
+     * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/URL/URL}
+     */
+    readonly baseUrl: URL;
     /** Inlined WASM instance, or URL to download.
      * @defaultValue `"./nurbs.wasm"`
      */
@@ -56,7 +53,7 @@ export interface MeasureImportMap {
  * @category Render View
  */
 export async function downloadMeasureImports(map: MeasureImportMap): Promise<MeasureImports> {
-    const baseUrl = new URL(map.baseUrl ?? "", import.meta.url);
+    const { baseUrl } = map;
     const measureWorker = getWorkerUrl(map.measureWorker ?? "./measureWorker.js", baseUrl);
     const wasmInstancePromise = getInstance(map.nurbsWasm ?? "./nurbs.wasm", baseUrl);
     const nurbsWasm = await wasmInstancePromise;

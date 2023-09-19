@@ -17,7 +17,7 @@ type Mutable<T> = { -readonly [P in keyof T]: T[P] };
  * It may take several frames for any geometry to appear, and several seconds for it to fully resolve.
  * @category Render State
  */
-export async function downloadScene(url: string, abortSignal?: AbortSignal): Promise<RenderStateScene> {
+export async function downloadScene(url: URL, abortSignal?: AbortSignal): Promise<RenderStateScene> {
     const fullUrl = new URL(url);
     fullUrl.pathname += "scene.json";
     let config = (await download(fullUrl, "json", abortSignal)) as SceneConfig;

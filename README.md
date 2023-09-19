@@ -88,7 +88,8 @@ import {View, getDeviceProfile} from "@novorender/api";
 async function main(canvas: HTMLCanvasElement) {
     const gpuTier = 2; // laptop with reasonably new/powerful GPU.
     const deviceProfile = getDeviceProfile(gpuTier);
-    const imports = await View.downloadImports({ baseUrl: "public/" }); // or whereever you copied the public/ files from the package.
+    const baseUrl = new URL("public/", import.meta.url); // or wherever you copied the public/ files from the package.
+    const imports = await View.downloadImports({ baseUrl }); 
     const view = new View(canvas, deviceProfile, imports);
     await view.run();
     view.dispose();
