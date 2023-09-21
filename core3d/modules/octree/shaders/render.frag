@@ -142,11 +142,11 @@ if (baseColor != vec4(0)) {
 
 #if (PASS != PASS_PICK)
     fragColor = rgba;
-#endif
-
+#else
 #if defined (ADRENO600)
     fragPick = uvec4(objectId, 0u, 0u, floatBitsToUint(linearDepth));
 #else
     fragPick = uvec4(objectId, packNormalAndDeviation(geometricNormalWS, varyings.deviation), floatBitsToUint(linearDepth));
+#endif
 #endif
 }

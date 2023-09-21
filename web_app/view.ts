@@ -253,6 +253,20 @@ export class View<
     }
 
     /**
+     * Get all object ids currently on screen
+     * @public
+     * @returns returns a set of all object ids on the screen 
+     */
+    async getOutlineObjectsOnScreen() {
+        const context = this._renderContext;
+        if (context) {
+            context.renderPickBuffers();
+            const pick = (await context.buffers.pickBuffers()).pick;
+            return context.getOutlineOjects(pick);
+        }
+    }
+
+    /**
      * Query parametric measure entity for the given coordinates
      * @param x Center x coordinate in css pixels.
      * @param y Center y coordinate in css pixels.
@@ -345,7 +359,7 @@ export class View<
         if (autoInit && _renderContext && _renderContext.prevState) {
             _renderContext.renderPickBuffers();
             const pick = (await _renderContext.buffers.pickBuffers()).pick;
-            const depths = await _renderContext.getLinearDepths(pick);
+            const depths = _renderContext.getLinearDepths(pick);
             distance = Number.MAX_VALUE;
             for (const depth of depths) {
                 distance = Math.min(distance, depth);

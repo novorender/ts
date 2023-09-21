@@ -741,6 +741,19 @@ export class RenderContext {
         }
     }
 
+    //* @internal */
+    getOutlineOjects(pick: Uint32Array) {
+        const objs = new Set<string>();
+        for (let i = 0; i < pick.length; i += 4) {
+            const objectId = pick[i];
+            const isLine = objectId & (1 << 31);
+            if (objectId != 0xffffffff && (objectId & (1 << 31)) != 0) {
+                objs.add(objectId.toString(16) + " " + (objectId & (1 << 31)).toString(16) + " " + (objectId & ~(1 << 31)).toString(16) + " " + isLine.toString(16));
+            }
+        }
+        return objs;
+    }
+
     /**
 * scan the pick buffer for deviation values
 * @returns Return pixel coordinates and deviation values for any deviation on screen 
@@ -768,6 +781,7 @@ export class RenderContext {
                     const deviation = deviation16 !== 0 ? dev32 : undefined;
 
                     if (deviation) {
+                        console.log(deviation16);
                         const depth = floats[buffOffs * 4 + 3];
 
                         const xCS = ((ix + 0.5) / width) * 2 - 1;
@@ -891,8 +905,9 @@ export class RenderContext {
                 if (dx * dx + dy * dy > r2)
                     continue; // filter out samples that lie outside sample disc radius
                 const buffOffs = ix + iy * width;
-                const objectId = pickBuffer[buffOffs * 4];
+                let objectId = pickBuffer[buffOffs * 4];
                 if (objectId != 0xffffffff) {
+                    objectId = objectId & ~(1 << 31);
                     const depth = pickCameraPlane ? 0 : floats[buffOffs * 4 + 3];
                     const [nx16, ny16, nz16, deviation16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
                     const nx = wasm.float32(nx16);
