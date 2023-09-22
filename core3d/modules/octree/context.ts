@@ -568,7 +568,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         },
                     });
                     for (const { mask, node } of renderNodes) {
-                        if (node.intersectsPlane(state.viewFrustum.near)) {
+                        if (node.intersectsPlane(p)) {
                             this.renderNodeClippingOutline(node, mask);
                         }
                     }

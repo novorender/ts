@@ -262,7 +262,7 @@ export class View<
         if (context) {
             context.renderPickBuffers();
             const pick = (await context.buffers.pickBuffers()).pick;
-            return context.getOutlineOjects(pick);
+            return context.getOutlineObjects(pick);
         }
     }
 

@@ -742,13 +742,12 @@ export class RenderContext {
     }
 
     //* @internal */
-    getOutlineOjects(pick: Uint32Array) {
-        const objs = new Set<string>();
+    getOutlineObjects(pick: Uint32Array) {
+        const objs = new Set<number>();
         for (let i = 0; i < pick.length; i += 4) {
             const objectId = pick[i];
-            const isLine = objectId & (1 << 31);
             if (objectId != 0xffffffff && (objectId & (1 << 31)) != 0) {
-                objs.add(objectId.toString(16) + " " + (objectId & (1 << 31)).toString(16) + " " + (objectId & ~(1 << 31)).toString(16) + " " + isLine.toString(16));
+                objs.add(objectId & ~(1 << 31));
             }
         }
         return objs;
