@@ -38,12 +38,11 @@ export type DeviationInspections = {
 
 /** @internal */
 export function inspectDeviations(deviations: DeviationSample[], screenScaling: number, settings: DeviationInspectionSettings): DeviationInspections {
-    console.log(deviations);
     const sortedDeviations = deviations.sort((a, b) => settings.deviationPrioritization == "minimum" ? Math.abs(a.deviation) - Math.abs(b.deviation) : Math.abs(b.deviation) - Math.abs(a.deviation));
     const labels: DeviationLabel[] = [];
     const linePoints: { position: vec2 }[] = [];
     const minLabelPixelRadius = 60;
-    const minPixelRadiusLine = 25;
+    const minPixelRadiusLine = 10;
     const r2Label = minLabelPixelRadius * minLabelPixelRadius;
     const r2Line = minPixelRadiusLine * minPixelRadiusLine;
     const glCenterPos = settings.projection ? vec3.fromValues(settings.projection.centerPoint3d[0], settings.projection.centerPoint3d[2], -settings.projection.centerPoint3d[1]) : undefined;

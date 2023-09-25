@@ -780,7 +780,6 @@ export class RenderContext {
                     const deviation = deviation16 !== 0 ? dev32 : undefined;
 
                     if (deviation) {
-                        console.log(deviation16);
                         const depth = floats[buffOffs * 4 + 3];
 
                         const xCS = ((ix + 0.5) / width) * 2 - 1;
