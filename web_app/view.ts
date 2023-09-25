@@ -391,6 +391,7 @@ export class View<
         let idleFrameTime = 0;
         let wasIdle = false;
         const frameIntervals: number[] = [];
+        let possibleChanges = false;
         while (this._run && !(abortSignal?.aborted ?? false)) {
             const { _renderContext, _activeController, deviceProfile } = this;
             const renderTime = await RenderContext.nextFrame(_renderContext);
@@ -447,12 +448,15 @@ export class View<
                 const { renderStateGL } = this;
                 if (prevState !== renderStateGL || _renderContext.changed) {
                     prevState = renderStateGL;
-                    this.render?.(isIdleFrame);
                     const statsPromise = _renderContext.render(renderStateGL);
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
+                        this.render?.(isIdleFrame);
+                        possibleChanges = true;
                     });
                     pickRenderState = renderStateGL;
+                } else if (possibleChanges) {
+                    this.render?.(isIdleFrame);
                 }
             }
 
