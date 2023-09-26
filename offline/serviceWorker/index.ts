@@ -21,7 +21,7 @@ export async function serviceWorkerHandleMessage(event: MessageEvent<ConnectResp
                 navigator.locks.request(clientId, {}, (lock) => {
                     // When the client tab closes it will release the lock so we can delete the entry.
                     console.log(`Client ${clientId} disconnected from service worker!`);
-                    clientStorages.delete(clientId);
+                    clientStorages.set(clientId, null); // we don't want to reconnect this client, so don't delete.
                 });
                 const client = await clients.get(clientId);
                 client?.postMessage({ kind: "connected" } as const satisfies ConnectAcknowledge)
