@@ -121,13 +121,6 @@ export class OfflineScene {
                     // do downloads in "parallel"
                     async function download() {
                         let fileResponse = await fetch(fileRequest);
-                        let attempts = 3;
-                        while (!fileResponse.ok && attempts--) {
-                            try {
-                                fileResponse = await fetch(fileRequest);
-                            } catch { }
-                        }
-                        // TODO: compute md5 hash and check file integrity?
                         if (fileResponse.ok) {
                             const buffer = await fileResponse.arrayBuffer();
                             await dir.write(name, buffer);
