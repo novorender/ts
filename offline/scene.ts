@@ -1,0 +1,187 @@
+import type { Logger } from ".";
+import type { OfflineViewState } from "./state";
+import { SceneManifest, type SceneManifestData } from "./manifest";
+import type { OfflineDirectory } from "./storage";
+import { errorMessage } from "./util";
+
+/**
+ * An offline scene.
+ * @remarks
+ * This class supports incremental synchronization between offline and online storage.
+ * Error and status updates are reported to the {@link logger} property.
+ * By default it's undefined, so to display status, events and progress, you must assign your own object implementing the {@link Logger} interface.
+ */
+export class OfflineScene {
+    /** Logger for errors and status updates. */
+    logger: Logger | undefined;
+
+    constructor(
+        /** The offline context for this scene. */
+        readonly context: OfflineViewState,
+        /** The storage directory for this scene. */
+        readonly dir: OfflineDirectory,
+        /** The file manifest this scene.
+         * @remarks
+         * Initially, this may be empty or partial.
+         * It may change when the scene is synchronized.
+         */
+        public manifest: SceneManifest
+    ) { }
+
+    /** The scene id. */
+    get id() {
+        return this.dir.name;
+    }
+
+    /** Delete all downloaded files for this scene and remove it from the context's list of offline scenes. */
+    async delete() {
+        const { dir, context, logger } = this;
+        const { scenes } = context;
+        const { name } = dir;
+        logger?.status("deleting");
+        await dir.delete();
+        scenes.delete(name);
+        context.logger?.status("scene deleted");
+        return;
+    }
+
+    /**
+     * Incrementally synchronize scene files with online storage.
+     * @param abortSignal A signal to abort downloads/synchronization.
+     * @returns True, if completed successfully, false if not.
+     * @remarks
+     * Synchronization may be resumed after an abort/failure.
+     * It compares the file manifest of local files with the online version and downloads only the difference.
+     * Errors are logged in the {@link logger}.
+     */
+    async sync(abortSignal: AbortSignal): Promise<boolean> {
+        const { dir, manifest, logger, context } = this;
+        const { requestFormatter } = context.storage;
+        if (!navigator.onLine) {
+            logger?.status("offline");
+            logger?.error("You must be online to synchronize files!");
+            return false;
+        }
+
+        const existingFiles = new Map<string, number>(manifest.files);
+        async function scanFiles() {
+            // scan local files in the background, since this could take some time.
+            const files = dir.files();
+            for await (const filename of files) {
+                if (!filename.endsWith(".json")) {
+                    existingFiles.set(filename, 0);
+                }
+            }
+        };
+        const scanFilesPromise = Promise.resolve();
+        // const scanFilesPromise = scanFiles();
+        // await scanFilesPromise;
+        // console.log(`# files: ${existingFiles.size}`);
+
+        try {
+            logger?.status("synchronizing");
+            logger?.info?.("fetching manifest");
+            // fetch online manifest
+            const manifestRequest = requestFormatter.request(dir.name, "manifest.json", true, abortSignal)
+            const manifestResponse = await fetch(manifestRequest);
+            if (!manifestResponse.ok) {
+                throw new Error(manifestResponse.statusText);
+            }
+            const manifestData = await manifestResponse.json() as SceneManifestData;
+            if (abortSignal.aborted) {
+                logger?.status("aborted");
+                return false;
+            }
+            const onlineManifest = new SceneManifest(manifestData);
+            const { totalByteSize } = onlineManifest;
+
+            const debounce = debouncer();
+
+            // start incremental download
+            logger?.info?.("fetching new files");
+            let totalDownload = 0;
+            logger?.progress?.(totalDownload, totalByteSize);
+            const maxSimulataneousDownloads = 8;
+            const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
+            for (const [name, size] of onlineManifest.files) {
+                if (!existingFiles.has(name)) {
+                    const fileRequest = requestFormatter.request(dir.name, name, true, abortSignal);
+                    let idx = downloadQueue.findIndex(e => !e);
+                    if (idx < 0) {
+                        // queue is full, so wait for another download to complete
+                        await Promise.race(downloadQueue);
+                        idx = downloadQueue.findIndex(e => !e);
+                        console.assert(idx >= 0);
+                    }
+                    const downloadPromise = download();
+                    downloadQueue[idx] = downloadPromise;
+                    downloadPromise.finally(() => {
+                        downloadQueue[idx] = undefined;
+                    });
+                    // do downloads in "parallel"
+                    async function download() {
+                        let fileResponse = await fetch(fileRequest);
+                        let attempts = 3;
+                        while (!fileResponse.ok && attempts--) {
+                            try {
+                                fileResponse = await fetch(fileRequest);
+                            } catch { }
+                        }
+                        // TODO: compute md5 hash and check file integrity?
+                        if (fileResponse.ok) {
+                            const buffer = await fileResponse.arrayBuffer();
+                            await dir.write(name, buffer);
+                            totalDownload += size;
+                        } else {
+                            throw new Error(`Could not fetch ${name}!`);
+                        }
+                    }
+                } else {
+                    totalDownload += size;
+                }
+                if (debounce(100)) {
+                    logger?.progress?.(totalDownload, totalByteSize);
+                }
+            }
+            await Promise.all(downloadQueue);
+            logger?.progress?.(undefined, undefined);
+
+            // add manifest to local files last to mark the completion of sync.
+            const manifestBuffer = new TextEncoder().encode(JSON.stringify(manifestData)).buffer;
+            await dir.write("manifest.json", manifestBuffer);
+            this.manifest = onlineManifest;
+
+            // delete unreferenced entries
+            await scanFilesPromise;
+            logger?.info?.("cleanup");
+            for (const [name] of onlineManifest.files) {
+                existingFiles.delete(name);
+            }
+            await dir.deleteFiles(existingFiles.keys());
+
+            logger?.status("synchronized");
+            return true;
+        } catch (error: unknown) {
+            if (typeof error == "object" && error instanceof DOMException && error.code == DOMException.ABORT_ERR) {
+                logger?.status("aborted");
+            } else {
+                logger?.status("error");
+                logger?.error(errorMessage(error));
+            }
+            return false;
+        }
+    }
+}
+
+function debouncer() {
+    let prevTime = performance.now();
+    return function (minInterval: number) {
+        const now = performance.now();
+        if (now - prevTime > minInterval) {
+            prevTime = now;
+            return true;
+        } else {
+            return false;
+        }
+    }
+}
