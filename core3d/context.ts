@@ -741,6 +741,64 @@ export class RenderContext {
         }
     }
 
+    //* @internal */
+    getOutlineObjects(pick: Uint32Array) {
+        const objs = new Set<number>();
+        for (let i = 0; i < pick.length; i += 4) {
+            const objectId = pick[i];
+            if (objectId != 0xffffffff && (objectId & (1 << 31)) != 0) {
+                objs.add(objectId & ~(1 << 31));
+            }
+        }
+        return objs;
+    }
+
+    /**
+* scan the pick buffer for deviation values
+* @returns Return pixel coordinates and deviation values for any deviation on screen 
+*/
+    async getDeviations(): Promise<DeviationSample[]> {
+        this.renderPickBuffers();
+        const pickBufferPromise = this.buffers.pickBuffers();
+        this.currentPick = (await pickBufferPromise).pick;
+        const { currentPick, width, height, canvas, wasm } = this;
+        if (currentPick === undefined || width * height * 4 != currentPick.length) {
+            return [];
+        }
+
+        const u16 = new Uint16Array(currentPick.buffer);
+        const floats = new Float32Array(currentPick.buffer);
+        const samples: DeviationSample[] = [];
+        const { isOrtho, viewClipMatrixLastPoll, viewWorldMatrixLastPoll } = this;
+        for (let iy = 0; iy < height; iy++) {
+            for (let ix = 0; ix < width; ix++) {
+                const buffOffs = ix + iy * width;
+                const objectId = currentPick[buffOffs * 4];
+                if (objectId != 0xffffffff) {
+                    const deviation16 = u16[buffOffs * 8 + 5];
+                    const dev32 = wasm.float32(deviation16);
+                    const deviation = deviation16 !== 0 ? dev32 : undefined;
+
+                    if (deviation) {
+                        const depth = floats[buffOffs * 4 + 3];
+
+                        const xCS = ((ix + 0.5) / width) * 2 - 1;
+                        const yCS = ((iy + 0.5) / height) * 2 - 1;
+
+                        // compute view space position and normal
+                        const scale = isOrtho ? 1 : depth;
+                        const posVS = vec3.fromValues((xCS / viewClipMatrixLastPoll[0]) * scale, (yCS / viewClipMatrixLastPoll[5]) * scale, -depth);
+                        // convert into world space.
+                        const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrixLastPoll);
+
+                        samples.push({ x: ix, y: height - iy, deviation, position });
+                    }
+                }
+            }
+        }
+        return samples;
+    }
+
     private updateCameraUniforms(state: DerivedRenderState) {
         const { cameraUniformsData, localSpaceTranslation } = this;
         const { output, camera, matrices } = state;
@@ -845,8 +903,9 @@ export class RenderContext {
                 if (dx * dx + dy * dy > r2)
                     continue; // filter out samples that lie outside sample disc radius
                 const buffOffs = ix + iy * width;
-                const objectId = pickBuffer[buffOffs * 4];
+                let objectId = pickBuffer[buffOffs * 4];
                 if (objectId != 0xffffffff) {
+                    objectId = objectId & ~(1 << 31);
                     const depth = pickCameraPlane ? 0 : floats[buffOffs * 4 + 3];
                     const [nx16, ny16, nz16, deviation16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
                     const nx = wasm.float32(nx16);
@@ -904,10 +963,28 @@ export class RenderContext {
         }
         return this.extractPick(currentPick, x, y, sampleDiscRadius, pickCameraPlane);
     }
+
+
 }
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
+}
+
+/**
+ * Deviation sampled from screen
+ */
+export interface DeviationSample {
+    /** x coordinate in pixel space */
+    readonly x: number;
+    /** y coordinate in pixel space */
+    readonly y: number;
+    /** World space position of underlying pixel. */
+    readonly position: ReadonlyVec3;
+    /** The spatial deviation of underlying pixel.
+     * @remarks This only applies to point clouds with precomputed deviation data.
+     */
+    readonly deviation: number;
 }
 
 /**

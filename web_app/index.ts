@@ -8,6 +8,7 @@ export * from "../offline";
 export * from "../measure";
 export * from "./device";
 export * from "./view";
+export * from "./buffer_inspect";
 export * from "./controller";
 export * from "./highlight";
 export * from "./geometry";

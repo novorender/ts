@@ -3,6 +3,7 @@ import { downloadScene, type RenderState, type RenderStateChanges, defaultRender
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
+import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections } from "./buffer_inspect";
 
 /**
  * A view base class for Novorender content.
@@ -229,6 +230,36 @@ export class View<
         return stateChanges.scene.config;
     }
 
+
+    /**
+     * Inspect the deviations that is on screen
+     * @public
+     * @param settings Deviation settings, 
+     * @returns Spaced out lables prioritizing the smallest or highest deviation values based on settings. 
+     * Also returns a line trough the points if it is able to project the points on a line and the option is given.
+     */
+    async inspectDeviations(settings: DeviationInspectionSettings): Promise<DeviationInspections | undefined> {
+        const context = this._renderContext;
+        if (context) {
+            const scale = devicePixelRatio * this.resolutionModifier;
+            return inspectDeviations(await context.getDeviations(), scale, settings);
+        }
+    }
+
+    /**
+     * Get all object ids currently on screen
+     * @public
+     * @returns returns a set of all object ids on the screen 
+     */
+    async getOutlineObjectsOnScreen() {
+        const context = this._renderContext;
+        if (context) {
+            context.renderPickBuffers();
+            const pick = (await context.buffers.pickBuffers()).pick;
+            return context.getOutlineObjects(pick);
+        }
+    }
+
     /**
      * Query parametric measure entity for the given coordinates
      * @param x Center x coordinate in css pixels.
@@ -301,6 +332,7 @@ export class View<
      * @remarks
      * The function will also set the {@link RenderStateCamera.kind | camera projection model}.
      */
+
     async switchCameraController<T extends CameraControllerKind>(
         kind: T,
         initialState?: CameraControllerInitialValues,
@@ -321,7 +353,7 @@ export class View<
         if (autoInit && _renderContext && _renderContext.prevState) {
             _renderContext.renderPickBuffers();
             const pick = (await _renderContext.buffers.pickBuffers()).pick;
-            const depths = await _renderContext.getLinearDepths(pick);
+            const depths = _renderContext.getLinearDepths(pick);
             distance = Number.MAX_VALUE;
             for (const depth of depths) {
                 distance = Math.min(distance, depth);
@@ -353,6 +385,7 @@ export class View<
         let idleFrameTime = 0;
         let wasIdle = false;
         const frameIntervals: number[] = [];
+        let possibleChanges = false;
         while (this._run && !(abortSignal?.aborted ?? false)) {
             const { _renderContext, _activeController, deviceProfile } = this;
             const renderTime = await RenderContext.nextFrame(_renderContext);
@@ -409,12 +442,15 @@ export class View<
                 const { renderStateGL } = this;
                 if (prevState !== renderStateGL || _renderContext.changed) {
                     prevState = renderStateGL;
-                    this.render?.(isIdleFrame);
                     const statsPromise = _renderContext.render(renderStateGL);
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
+                        this.render?.(isIdleFrame);
+                        possibleChanges = true;
                     });
                     pickRenderState = renderStateGL;
+                } else if (possibleChanges) {
+                    this.render?.(isIdleFrame);
                 }
             }
 

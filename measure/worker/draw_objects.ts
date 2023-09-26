@@ -70,6 +70,7 @@ export async function getSurfaceDrawParts(product: ProductData, instanceIdx: num
     const drawParts: DrawPart[] = [];
     async function loopToVertices(loop: LoopData): Promise<{ vertices: ReadonlyVec3[], text: string[] }> {
         const vertices: ReadonlyVec3[] = [];
+        const hasLineOnEitherSide: boolean[] = [];
         const text: string[] = [];
         if (product) {
             let first = true;
@@ -81,7 +82,7 @@ export async function getSurfaceDrawParts(product: ProductData, instanceIdx: num
                     halfEdgeData.edge
                 );
                 if (edgeCurve) {
-                    const useLabels = edgeCurve.kind == "line" || edgeCurve.kind == "lineStrip" || edgeCurve.kind == "nurbs";
+                    const isLine = edgeCurve.kind == "line" || edgeCurve.kind == "lineStrip";
                     const edge = {
                         curve: edgeCurve,
                         geometryTransformation: matFromInstance(
@@ -90,21 +91,43 @@ export async function getSurfaceDrawParts(product: ProductData, instanceIdx: num
                         instanceIndex: instanceIdx,
                     };
                     const edgeStrip = getEdgeStrip(edge, halfEdgeData.direction);
-                    let i = first ? 0 : 1;
                     const startIdx = first ? 0 : vertices.length - 1;
+                    if (!first && isLine) {
+                        hasLineOnEitherSide[startIdx]
+                    }
+                    let i = first ? 0 : 1;
                     first = false;
                     for (; i < edgeStrip.length; ++i) {
                         vertices.push(edgeStrip[i]);
-                        if (i == 0 && startIdx == 0) {
-                            continue;
-                        }
-                        if (useLabels) {
-                            text.push(vec3.dist(vertices[startIdx + i - 1], vertices[startIdx + i]).toFixed(3));
-                        } else {
-                            text.push("");
-                        }
+                        hasLineOnEitherSide.push(isLine);
                     }
                 }
+            }
+
+        }
+        if (vertices.length > 3) {
+            let prev = vec3.sub(vec3.create(), vertices[vertices.length - 1], vertices[0]);
+            let next = vec3.create();
+            for (let i = 0; i < vertices.length - 1; ++i) {
+                next = vec3.sub(vec3.create(), vertices[i + 1], vertices[i]);
+                if (hasLineOnEitherSide[i]) {
+                    text.push(vec3.length(next).toFixed(3));
+                    const prevIdx = i == 0 ? vertices.length - 1 : i - 1;
+                    if (hasLineOnEitherSide[prevIdx] && hasLineOnEitherSide[i + 1]) {
+                        const angle = vec3.angle(prev, next) * (180 / Math.PI);
+                        if (angle > 0.1 && (angle > 92 || angle < 88)) {
+                            drawParts.push({
+                                text: angle.toFixed(1) + "°", drawType: "angle", vertices3D:
+                                    [vec3.clone(vertices[i]), vec3.clone(vertices[prevIdx]), vec3.clone(vertices[i + 1])]
+                            });
+                        }
+                    }
+
+                } else {
+                    text.push("");
+                }
+                vec3.negate(next, next);
+                prev = next;
             }
         }
         return { vertices, text };
