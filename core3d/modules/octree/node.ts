@@ -128,7 +128,6 @@ export class OctreeNode {
             max: "vec3",
         });
         this.uniformsData.values.tolerance = Math.pow(2, data.tolerance);
-
     }
 
     dispose() {

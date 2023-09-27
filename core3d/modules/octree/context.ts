@@ -235,7 +235,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             if (!sequenceEqual(transforms, prevTransforms)) {
                 // update highlight matrices
                 const image = createColorTransforms(highlights);
-                glUpdateTexture(gl, resources.highlightTexture, { kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image });
+                glUpdateTexture(gl, resources.highlightTexture, { kind: "TEXTURE_2D", width: 256, height: 6, internalFormat: "RGBA32F", type: "FLOAT", image });
             }
 
             const objectIds = groups.map(g => g.objectIds);
@@ -769,7 +769,7 @@ function* iterateNodes(node: OctreeNode | undefined): IterableIterator<OctreeNod
 
 function createColorTransforms(highlights: RenderStateHighlightGroups) {
     const numColorMatrices = 256;
-    const numColorMatrixCols = 5;
+    const numColorMatrixCols = 6;
     const numColorMatrixRows = 4;
 
     const colorMatrices = new Float32Array(numColorMatrices * numColorMatrixRows * numColorMatrixCols);
@@ -780,19 +780,24 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
         }
     }
 
-    function copyMatrix(index: number, rgbaTransform: RGBATransform) {
-        for (let col = 0; col < numColorMatrixCols; col++) {
+    function copyMatrix(index: number, rgbaTransform: RGBATransform, outlineColor?: RGB) {
+        for (let col = 0; col < 5; col++) {
             for (let row = 0; row < numColorMatrixRows; row++) {
-                colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform[col + row * numColorMatrixCols];
+                colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform[col + row * 5];
             }
         }
-    }
+        const col = numColorMatrixCols - 1;
+        const rgba = outlineColor ? [...outlineColor, 1] : [0, 0, 0, 0];
+        for (let row = 0; row < numColorMatrixRows; row++) {
+            colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgba[row];
+        }
 
+    }
     // Copy transformation matrices
     const { defaultAction, groups } = highlights;
     copyMatrix(0, getRGBATransform(defaultAction));
     for (let i = 0; i < groups.length; i++) {
-        copyMatrix(i + 1, getRGBATransform(groups[i].action));
+        copyMatrix(i + 1, getRGBATransform(groups[i].action), groups[i].outlineColor);
     }
     return colorMatrices;
 }
@@ -827,8 +832,7 @@ const defaultRGBATransform: RGBATransform = [
     1, 0, 0, 0, 0,
     0, 1, 0, 0, 0,
     0, 0, 1, 0, 0,
-    0, 0, 0, 1, 0,
-];
+    0, 0, 0, 1, 0,];
 
 
 function getRGBATransform(action: RenderStateGroupAction | undefined): RGBATransform {

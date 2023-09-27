@@ -16,7 +16,7 @@ layout(std140) uniform Node {
 
 in struct {
     vec3 positionVS;
-    float opacity;
+    vec4 color;
 } varyings;
 
 flat in struct {
@@ -45,7 +45,7 @@ void main() {
         discard;
     }
 
-    fragColor = vec4(outline.color, varyings.opacity);
+    fragColor = varyings.color;
     float linearDepth = -varyings.positionVS.z;
 #if defined (ADRENO600)
     highp uint objectId = combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low) | (1u << 31);

@@ -18,6 +18,7 @@ vec2 intersectEdge(vec3 p0, vec3 p1) {
     float t = -p0.z / (p1.z - p0.z);
     return mix(p0.xy, p1.xy, t);
 }
+uniform OctreeTextures textures;
 
 layout(location = 0) in vec4 vertexPos0;
 layout(location = 1) in vec4 vertexPos1;
@@ -25,7 +26,7 @@ layout(location = 2) in vec4 vertexPos2;
 layout(location = 3) in uint vertexObjectId;
 layout(location = 4) in uint vertexHighlight;
 flat out vec4 line_vertices;
-out float opacity;
+flat out vec4 color;
 flat out uint object_id;
 
 void main() {
@@ -58,6 +59,17 @@ void main() {
     } else {
         line_vertices = vec4(0);
     }
-    opacity = 1. - abs(normal.z);
+
+    vec3 rgb = outline.color;
+
+    if(vertexHighlight != 0U) {
+        float u = (float(vertexHighlight) + 0.5f) / float(maxHighlights);
+        vec4 colorTranslation = texture(textures.highlights, vec2(u, 5.5f / 6.0f));
+        if(colorTranslation.a == 1.f) {
+            rgb = colorTranslation.rgb;
+        }
+    }
+
+    color = vec4(rgb, 1.f - abs(normal.z));
     object_id = vertexObjectId;
 }

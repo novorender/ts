@@ -1,4 +1,4 @@
-import type { ReadonlyQuat, ReadonlyVec3, ReadonlyVec4, ReadonlyMat4, ReadonlyMat3 } from "gl-matrix";
+import type { ReadonlyQuat, ReadonlyVec3, ReadonlyVec4, ReadonlyMat4, ReadonlyMat3, vec4 } from "gl-matrix";
 import type { RGB, RGBA, FixedSizeArray, RecursivePartial } from "./types";
 import type { RenderStateScene } from "./scene";
 import type { RenderStateDynamicObjects } from "./dynamic";
@@ -550,6 +550,8 @@ export type RenderStateGroupAction = RGBATransform | "hide" | "filter";
 export interface RenderStateHighlightGroup {
     /** How to treat this particular group. */
     readonly action: RenderStateGroupAction;
+    /** Outline highlight color. */
+    readonly outlineColor?: RGB;
     /** A set of unique object_id belonging to this group, sorted in ascending order. */
     readonly objectIds: Iterable<number>;
 }

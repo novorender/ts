@@ -84,11 +84,11 @@ void main() {
     if(highlight != 0U || scene.applyDefaultHighlight) {
         float u = (float(highlight) + 0.5f) / float(maxHighlights);
         mat4 colorTransform;
-        colorTransform[0] = texture(textures.highlights, vec2(u, 0.5f / 5.0f));
-        colorTransform[1] = texture(textures.highlights, vec2(u, 1.5f / 5.0f));
-        colorTransform[2] = texture(textures.highlights, vec2(u, 2.5f / 5.0f));
-        colorTransform[3] = texture(textures.highlights, vec2(u, 3.5f / 5.0f));
-        vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5f / 5.0f));
+        colorTransform[0] = texture(textures.highlights, vec2(u, 0.5f / 6.0f));
+        colorTransform[1] = texture(textures.highlights, vec2(u, 1.5f / 6.0f));
+        colorTransform[2] = texture(textures.highlights, vec2(u, 2.5f / 6.0f));
+        colorTransform[3] = texture(textures.highlights, vec2(u, 3.5f / 6.0f));
+        vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5f / 6.0f));
         rgba = colorTransform * rgba + colorTranslation;
     }
 #endif
