@@ -65,7 +65,7 @@ export class OctreeModule implements RenderModule {
         const samplerNearest = bin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         const defaultBaseColorTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array([255, 255, 255, 255]) });
         const materialTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null });
-        const highlightTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 5, internalFormat: "RGBA32F", type: "FLOAT", image: null });
+        const highlightTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 6, internalFormat: "RGBA32F", type: "FLOAT", image: null });
         const gradientsTexture = bin.createTexture(this.gradientImageParams);
 
         const transformFeedback = bin.createTransformFeedback()!;
@@ -75,20 +75,20 @@ export class OctreeModule implements RenderModule {
             vb_line = bin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: this.maxLines * 24, usage: "STATIC_DRAW" });
             vao_line = bin.createVertexArray({
                 attributes: [
-                    { kind: "FLOAT_VEC4", buffer: vb_line, byteStride: 24, byteOffset: 0, componentType: "FLOAT", divisor: 1 }, // positions in plane space (line vertex pair)
-                    { kind: "FLOAT", buffer: vb_line, byteStride: 24, byteOffset: 16, componentType: "FLOAT", divisor: 1 }, // opacity
-                    { kind: "UNSIGNED_INT", buffer: vb_line, byteStride: 24, byteOffset: 20, componentType: "UNSIGNED_INT", divisor: 1 }, // object_id
+                    { kind: "FLOAT_VEC4", buffer: vb_line, byteStride: 36, byteOffset: 0, componentType: "FLOAT", divisor: 1 }, // positions in plane space (line vertex pair)
+                    { kind: "FLOAT_VEC4", buffer: vb_line, byteStride: 36, byteOffset: 16, componentType: "FLOAT", divisor: 1 }, // color
+                    { kind: "UNSIGNED_INT", buffer: vb_line, byteStride: 36, byteOffset: 32, componentType: "UNSIGNED_INT", divisor: 1 }, // object_id
                 ],
             });
         }
 
-        const { uniformBufferBlocks } = OctreeModule;
+        const { textureUniforms, uniformBufferBlocks } = OctreeModule;
         const shadersPromise = OctreeModule.compileShaders(context, bin);
         const [/*color, pick, pre,*/ intersect, line, debug, corePrograms] = await Promise.all([
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.color, ShaderMode.triangles) }),
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pick, ShaderMode.triangles) }),
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pre, ShaderMode.triangles) }),
-            context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks: ["Camera", "Clipping", "Outline", "Node"], transformFeedback: { varyings: ["line_vertices", "opacity", "object_id"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
+            context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks: ["Camera", "Clipping", "Outline", "Node"], textureUniforms, transformFeedback: { varyings: ["line_vertices", "color", "object_id"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
             context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Outline", "Node"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
             context.makeProgramAsync(bin, { ...shaders.debug, uniformBufferBlocks }),
             shadersPromise,
