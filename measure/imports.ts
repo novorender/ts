@@ -1,7 +1,3 @@
-import type { WasmInstance } from "core3d";
-import type { ShaderImports } from "core3d/shaders";
-import type { TextureImageSource } from "webgl2";
-
 /**
  *  Core3D bundler/build resource imports.
  * @remarks
@@ -10,14 +6,14 @@ import type { TextureImageSource } from "webgl2";
  * @category Render View
  */
 export interface MeasureImports {
-    /** The web assembly instance.
-     * @remarks This web assembly can be found in `core3d/wasm/main.wasm`.
+    /** The nurbs web assembly instance.
+     * @remarks This web assembly can be found in `measure/nurbs.wasm`.
      * @see {@link https://developer.mozilla.org/en-US/docs/WebAssembly/Loading_and_running | Loading and running WebAssembly code}
      */
     readonly nurbsWasm: ArrayBuffer;
 
-    /** The scene load/parse worker.
-     * @remarks This worker root can be found in `core3d/modules/octree/worker/index.ts`.
+    /** The  measure load/parse worker.
+     * @remarks This worker root can be found in `measure/measureWorker.js`.
      * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Worker/Worker | Worker: Worker() constructor}
      */
     readonly measureWorker: URL;
@@ -37,7 +33,7 @@ export interface MeasureImportMap {
      */
     readonly nurbsWasm?: string | URL | ArrayBuffer;
 
-    /** Inlined loader worker, or URL to download.
+    /** Inlined measure worker, or URL to download.
      * @defaultValue `"./measureWorker.js"`
      */
     readonly measureWorker?: string | URL;

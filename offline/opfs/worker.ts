@@ -183,8 +183,8 @@ async function fileNames(dir: string): Promise<readonly string[]> {
 }
 
 async function readFile(dir: string, filename: string) {
-    const dirHandle = await getDirHandle(dir);
     try {
+        const dirHandle = await getDirHandle(dir);
         const fileHandle = await dirHandle.getFileHandle(filename);
         const accessHandle = await fileHandle.createSyncAccessHandle();
         const size = accessHandle.getSize();

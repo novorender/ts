@@ -4,7 +4,7 @@
     "version": "0.0.24",
     "description": "",
     "scripts": {
-        "start": "npm run build:ts && npm run build",
+        "start": "npm i && npm run build:ts && npm run build",
         "watch": "tsc --noEmit --watch",
         "build:ts": "cd build && tsc && cd ..",
         "build:ts:watch": "cd build && tsc --watch && cd ..",
@@ -30,6 +30,7 @@
         "typescript": "^5.2.2"
     },
     "dependencies": {
+        "@novorender/wasm": "^0.1.2",
         "gl-matrix": "^3.4.3",
         "tslib": "^2.6.2"
     }

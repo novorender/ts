@@ -16,14 +16,11 @@ export const schemaVersion = "1.0";
 
 /** Offline context object. */
 export interface OfflineContext {
-    /** Disable offline support. */
-    disable(): void;
+    /** I/O Worker for OPFS file access. */
+    readonly ioWorker: Worker | undefined;
 
-    /**
-     * Manage offline storage.
-     * @returns An offline view state context used for offline storage management UI.
-     */
-    manage(): Promise<OfflineViewState>;
+    /** Disable offline support. */
+    dispose(): void;
 }
 
 /**
@@ -41,91 +38,91 @@ export interface OfflineContext {
  * Note that Cache API doesn't work well on chrome for large scenes with tens of thousands of files or more.
  * @see https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API
  */
-export async function enableOffline(serviceWorkerUrl: URL, ioWorker: Worker | undefined, sasKey: string | undefined): Promise<OfflineContext | undefined> {
-    let context: OfflineContext | undefined;
-    if ("serviceWorker" in navigator) {
-        const { serviceWorker } = navigator;
-        const { controller } = serviceWorker;
-        if (ioWorker && controller) {
-            let disableResolve: (arg: () => void) => void = undefined!;
-            let connectedResolve: () => void = undefined!;
-            let disablePromise = new Promise<() => void>(resolve => {
-                disableResolve = resolve;
-            });
-            let connectedPromise = new Promise<void>(resolve => {
-                connectedResolve = resolve;
-            });
-            // handle connect messages
-            serviceWorker.onmessage = async (event: MessageEvent<ConnectRequest | ConnectAcknowledge>) => {
-                const { data } = event;
-                switch (data.kind) {
-                    case "connect": {
-                        const { clientId } = data;
-                        navigator.locks.request(clientId, { ifAvailable: true }, lock => {
-                            if (lock) {
-                                const promise = new Promise<void>((resolve) => {
-                                    disableResolve(resolve);
-                                }); // sit on this lock until this tab/client closes or the returned disable() function is called.
-                                return promise;
-                            } else {
-                                console.warn(`Could not obtain service worker client lock ${clientId}!`);
-                            }
-                        });
-                        // respond and hook up service and IO worker.
-                        const channel = new MessageChannel();
-                        const { port1, port2 } = channel;
-                        ioWorker.postMessage({ kind: "connect", port: port1, sasKey } as const satisfies ConnectResponse, [port1]);
-                        controller.postMessage({ kind: "connect", port: port2, sasKey } as const satisfies ConnectResponse, [port2]);
-                        break;
-                    }
-                    case "connected": {
-                        connectedResolve();
-                        break;
-                    }
+export async function enableOffline(serviceWorkerUrl: URL | undefined, ioWorkerUrl: URL | undefined, sasKey?: string): Promise<OfflineContext | undefined> {
+    const ioWorker = ioWorkerUrl ? new Worker(ioWorkerUrl, { type: "module", name: "IO" }) : undefined;
+    const dispose = await enableServiceWorker(serviceWorkerUrl, ioWorker, sasKey);
+    return { ioWorker, dispose } as const satisfies OfflineContext;
+}
 
+async function enableServiceWorker(serviceWorkerUrl: URL | undefined, ioWorker: Worker | undefined, sasKey?: string) {
+    let disable = () => { }; // don't do anything here by default.
+    if (serviceWorkerUrl) {
+        if ("serviceWorker" in navigator) {
+            const { serviceWorker } = navigator;
+            const { controller } = serviceWorker;
+            if (ioWorker && controller) {
+                let disableResolve: (arg: () => void) => void = undefined!;
+                let connectedResolve: () => void = undefined!;
+                let disablePromise = new Promise<() => void>(resolve => {
+                    disableResolve = resolve;
+                });
+                let connectedPromise = new Promise<void>(resolve => {
+                    connectedResolve = resolve;
+                });
+                // handle connect messages
+                serviceWorker.onmessage = async (event: MessageEvent<ConnectRequest | ConnectAcknowledge>) => {
+                    const { data } = event;
+                    switch (data.kind) {
+                        case "connect": {
+                            const { clientId } = data;
+                            navigator.locks.request(clientId, { ifAvailable: true }, lock => {
+                                if (lock) {
+                                    const promise = new Promise<void>((resolve) => {
+                                        disableResolve(resolve);
+                                    }); // sit on this lock until this tab/client closes or the returned disable() function is called.
+                                    return promise;
+                                } else {
+                                    console.warn(`Could not obtain service worker client lock ${clientId}!`);
+                                }
+                            });
+                            // respond and hook up service and IO worker.
+                            const channel = new MessageChannel();
+                            const { port1, port2 } = channel;
+                            ioWorker.postMessage({ kind: "connect", port: port1 } as const satisfies ConnectResponse, [port1]);
+                            controller.postMessage({ kind: "connect", port: port2 } as const satisfies ConnectResponse, [port2]);
+                            break;
+                        }
+                        case "connected": {
+                            connectedResolve();
+                            break;
+                        }
+
+                    }
+                }
+                // await connect request from service worker
+                disable = await disablePromise;
+                // await acknowledgement from service worker
+                await connectedPromise;
+                console.log("Service worker connected!");
+            }
+
+            // register service worker.
+            if (navigator.onLine) {
+                try {
+                    await registerServiceWorker(serviceWorkerUrl);
+                } catch (error: unknown) {
+                    console.warn(`Service worker registration failed: ${error}`); // 
                 }
             }
-            // await connect request from service worker
-            const disable = await disablePromise;
-            const manage = async () => {
-                return await manageOfflineStorage(ioWorker, sasKey);
-            }
-            context = { disable, manage } as const;
-            // await acknowledgement from service worker
-            await connectedPromise;
-            console.log("Service worker connected!");
+            // const registration = await navigator.serviceWorker.ready;
+            // const registration = await navigator.serviceWorker.getRegistration();
+        } else {
+            console.warn(`Service worker is not supported!`); // private/incognito mode?
         }
-
-        // register service worker.
-        if (navigator.onLine) {
-            try {
-                await registerServiceWorker(serviceWorkerUrl);
-            } catch (error: unknown) {
-                console.warn(`Service worker registration failed: ${error}`); // 
-            }
-        }
-        // const registration = await navigator.serviceWorker.ready;
-        // const registration = await navigator.serviceWorker.getRegistration();
-    } else {
-        console.warn(`Service worker is not supported!`); // private/incognito mode?
     }
-    return context;
+    return disable;
 }
 
 /**
  * Manage offline storage.
  * @param ioWorker The I/O worker for OPFS access.
- * @param sasKey A shared access signature key for access to the online storage.
  * @returns An offline view state context used for offline storage management UI.
-* @remarks
- * If defined, the sas key is applied to the end of each request uri as a query string.
- * It should not look include the `?` character itself.
  * @internal
  */
-async function manageOfflineStorage(ioWorker: Worker | undefined, sasKey?: string) {
+export async function manageOfflineStorage(ioWorker: Worker | undefined) {
     const storage = ioWorker ?
-        await createOPFSStorage(schemaVersion, defaultRequestFormatter(sasKey), ioWorker) :
-        await createCacheStorage(schemaVersion, defaultRequestFormatter(sasKey));
+        await createOPFSStorage(schemaVersion, defaultRequestFormatter(), ioWorker) :
+        await createCacheStorage(schemaVersion, defaultRequestFormatter());
     // The context is for UI. The engine only needs the storage itself.
     const context = await createOfflineViewState(storage);
     return context;
@@ -133,30 +130,22 @@ async function manageOfflineStorage(ioWorker: Worker | undefined, sasKey?: strin
 
 /**
  * Create a cache based offline storage.
- * @param sasKey A shared access signature key for access to the online storage.
  * @returns An offline context used for offline storage management UI.
- * @remarks
- * If defined, the sas key is applied to the end of each request uri as a query string.
- * It should not look include the `?` character itself.
  * @internal
  */
-export async function createCacheOfflineStorage(sasKey?: string): Promise<OfflineStorage> {
-    const storage = await createCacheStorage(schemaVersion, defaultRequestFormatter(sasKey));
+export async function createCacheOfflineStorage(): Promise<OfflineStorage> {
+    const storage = await createCacheStorage(schemaVersion, defaultRequestFormatter());
     return storage;
 }
 
 /**
  * Create an OPFS based offline storage.
  * @param worker The OPFS IO worker, either directly from main thread, or indirectly from service worker. (Safari doesn't support OPFS directly from service worker).
- * @param sasKey A shared access signature key for access to the online storage.
  * @returns An offline context used for offline storage management UI.
- * @remarks
- * If defined, the sas key is applied to the end of each request uri as a query string.
- * It should not look include the `?` character itself.
  * @internal
  */
-export async function createOPFSOfflineStorage(worker: Worker | MessagePort, sasKey?: string): Promise<OfflineStorage> {
-    const storage = await createOPFSStorage(schemaVersion, defaultRequestFormatter(sasKey), worker);
+export async function createOPFSOfflineStorage(worker: Worker | MessagePort): Promise<OfflineStorage> {
+    const storage = await createOPFSStorage(schemaVersion, defaultRequestFormatter(), worker);
     return storage;
 }
 

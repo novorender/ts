@@ -2,14 +2,13 @@ import { type PathNameFormatter, type PathNameParser, RequestFormatter } from ".
 
 /**
  * Create a request formatter for the standard novorender cloud/blob storage.
- * @param sasKey A shared access signature key for access to the online storage.
  */
-export function defaultRequestFormatter(sasKey?: string) {
+export function defaultRequestFormatter() {
     const re = /^\/(?<dir>[0-9a-f]{32})\/webgl2_bin\/(?<file>.+)$/;
     const parser: PathNameParser = (str) => (str.match(re)?.groups as ReturnType<PathNameParser>);
     const formatter: PathNameFormatter = (dir, file) => (`/${dir}/webgl2_bin/${file}`);
     const baseUrl = new URL("https://blobs.novorender.com/");
-    return new RequestFormatter(baseUrl, parser, formatter, sasKey, "cors");
+    return new RequestFormatter(baseUrl, parser, formatter, "cors");
 }
 
 /**

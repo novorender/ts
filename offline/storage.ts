@@ -127,8 +127,6 @@ export class RequestFormatter {
         private readonly parser: PathNameParser,
         /** The path name formatter to use. */
         private readonly formatter: PathNameFormatter,
-        /** The query string to apply, e.g. a sas key. */
-        readonly query?: string,
         /** The mode flags for request, e.g. "cors". */
         readonly mode?: RequestMode) { }
 
@@ -140,9 +138,11 @@ export class RequestFormatter {
      * @param applyQuery Whether or not to apply query string to request url.
      * @returns A Request to feed to fetch() API and/or to match against cache entries.
      */
-    request(dir: string, file: string, applyQuery = false, signal?: AbortSignal): Request {
-        const { baseUrl, formatter, mode, query } = this;
-        const url = new URL(formatter(dir, file), baseUrl) + (query && applyQuery ? `?${query}` : "");
+    request(dir: string, file: string, query?: string, signal?: AbortSignal): Request {
+        const { baseUrl, formatter, mode } = this;
+        const url = new URL(formatter(dir, file), baseUrl);
+        if (query)
+            url.search = query;
         return new Request(url, { mode, signal });
     }
 
