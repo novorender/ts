@@ -4,6 +4,7 @@ import type { RootNodes } from "./modules/octree";
 import { decodeBase64 } from "./util";
 import { isSupportedVersion } from "./modules/octree";
 import { vec3, type ReadonlyVec3 } from "gl-matrix";
+import { requestOfflineFile } from "./offline";
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
@@ -17,7 +18,7 @@ type Mutable<T> = { -readonly [P in keyof T]: T[P] };
  * It may take several frames for any geometry to appear, and several seconds for it to fully resolve.
  * @category Render State
  */
-export async function downloadScene(url: string, abortSignal?: AbortSignal): Promise<RenderStateScene> {
+export async function downloadScene(url: URL, abortSignal?: AbortSignal): Promise<RenderStateScene> {
     const fullUrl = new URL(url);
     fullUrl.pathname += "scene.json";
     let config = (await download(fullUrl, "json", abortSignal)) as SceneConfig;
@@ -60,7 +61,7 @@ export async function createSceneRootNodes(context: OctreeContext, config: Scene
 }
 
 async function download<T extends "arrayBuffer" | "json">(url: URL, kind: T, signal?: AbortSignal) {
-    const response = await fetch(url, { mode: "cors", signal });
+    const response = await requestOfflineFile(url.pathname) ?? await fetch(url, { mode: "cors", signal });
     if (response.ok) {
         return (await response[kind]()) as T extends "arrayBuffer" ? ArrayBuffer : SceneConfig;
     } else {

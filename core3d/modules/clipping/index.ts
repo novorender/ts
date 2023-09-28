@@ -65,7 +65,6 @@ class ClippingModuleContext implements RenderModuleContext {
             glState(gl, {
                 program,
                 uniformBuffers: [cameraUniforms, clippingUniforms, uniforms],
-                drawBuffers: context.drawBuffers(),
                 depth: {
                     test: true,
                     // writeMask: true,
@@ -81,6 +80,10 @@ class ClippingModuleContext implements RenderModuleContext {
             const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
             context.addRenderStatistics(stats);
         }
+    }
+
+    pick(state: DerivedRenderState) {
+        return this.render(state);
     }
 
     contextLost(): void {

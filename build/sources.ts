@@ -3,10 +3,11 @@ import { stat, mkdir, copyFile, cp, readFile, readdir, rm, writeFile } from "fs/
 import * as packageJson from "../package.json";
 import ejs from "ejs";
 
-async function copyFiles(target: string, paths: readonly string[]) {
+async function copyFiles(target: string, paths: readonly (string | readonly [string, string])[]) {
     await mkdir(target, { recursive: true });
-    for (const filePath of paths) {
-        const fileName = posix.basename(filePath);
+    for (const file of paths) {
+        const filePath = Array.isArray(file) ? file[0] : file;
+        const fileName = Array.isArray(file) ? file[1] : posix.basename(filePath);
         await copyFile(filePath, `${target}/${fileName}`);
     }
 }
@@ -121,9 +122,9 @@ async function writeReadme(dirName: string) {
 
 export async function copySourceFiles(dirName: string) {
     await emptyDir(dirName);
-    await copyDirs(dirName, ["web_app", "core3d", "webgl2", "measure"]);
+    await copyDirs(dirName, ["web_app", "core3d", "webgl2", "measure", "offline"]);
     await copyFiles(dirName, ["tsconfig.json"]);
-    await copyFiles(posix.resolve(dirName, "public"), ["core3d/wasm/main.wasm", "core3d/lut_ggx.png", "core3d/modules/watermark/logo.bin", "measure/wasm/nurbs.wasm"]);
+    await copyFiles(posix.resolve(dirName, "public"), [["node_modules/@novorender/wasm/wasm_bg.wasm", "main.wasm"], "core3d/lut_ggx.png", "core3d/modules/watermark/logo.bin", "measure/wasm/nurbs.wasm"]);
     await writeIndexDeclaration(dirName);
     await writePackageJson(dirName);
     await writeReadme(dirName);

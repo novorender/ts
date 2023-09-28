@@ -27,9 +27,6 @@ export class View<
     CameraControllerTypes extends CameraControllers = BuiltinCameraControllerType,
     CameraControllerKind extends string = Extract<keyof CameraControllerTypes, string>
 > implements Disposable {
-    /** The url from which the javascript containing this class was loaded. */
-    readonly scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
-
     /** Available camera controller types. */
     controllers: CameraControllerTypes;
 
@@ -198,19 +195,16 @@ export class View<
      * Retrieve list of available background/IBL environments.
      * @public
      * @param indexUrl
-     * The absolute or relative url of the index.json file.
-     * Relative url will be relative to the novorender api script url.
-     * If undefined, "/assets/env/index.json" will be used by default.
+     * The absolute url of the index.json file.
      * @returns A promise of a list of environments.
      */
-    async availableEnvironments(indexUrl?: string): Promise<EnvironmentDescription[]> {
+    async availableEnvironments(indexUrl: URL): Promise<EnvironmentDescription[]> {
         let environments: EnvironmentDescription[] = [];
-        const url = new URL(indexUrl ?? "/assets/env/index.json", this.scriptUrl);
-        const response = await fetch(url.toString());
+        const response = await fetch(indexUrl.toString());
         if (response.ok) {
             const json = await response.json();
             environments = (json as string[]).map(name => {
-                return { name, url: new URL(name, url).toString() + "/", thumnbnailURL: new URL(`thumbnails/${name}.png`, url).toString() } as EnvironmentDescription;
+                return { name, url: new URL(name, indexUrl).toString() + "/", thumnbnailURL: new URL(`thumbnails/${name}.png`, indexUrl).toString() } as EnvironmentDescription;
             });
         }
         return environments;
@@ -229,7 +223,7 @@ export class View<
         measureView.loadScene(url); // TODO: include abort signal!
         const webgl2Bin = new URL(url);
         webgl2Bin.pathname += "webgl2_bin/";
-        const scene = await downloadScene(webgl2Bin.toString(), abortSignal);
+        const scene = await downloadScene(webgl2Bin, abortSignal);
         const stateChanges = { scene };
         flipState(stateChanges, "GLToCAD");
         this.modifyRenderState(stateChanges);

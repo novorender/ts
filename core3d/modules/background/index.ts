@@ -41,15 +41,13 @@ export class BackgroundModule implements RenderModule {
         return { bin, uniforms, program } as const;
     }
 
-    async downloadTextures(urlDir: string) {
+    async downloadTextures(baseUrl: URL) {
         if (this.abortController) {
             this.abortController.abort();
         }
         const abortController = this.abortController = new AbortController();
         const { signal } = abortController;
         try {
-            const scriptUrl = (document.currentScript as HTMLScriptElement | null)?.src ?? import.meta.url;
-            const baseUrl = new URL(urlDir, scriptUrl);
             const promises = [
                 download<TextureParamsCubeUncompressedMipMapped>(new URL("radiance.ktx", baseUrl)),
                 download<TextureParamsCubeUncompressed>(new URL("irradiance.ktx", baseUrl)),
@@ -95,7 +93,7 @@ class BackgroundModuleContext implements RenderModuleContext {
             const { url } = state.background;
             if (url) {
                 if (url != module.url) {
-                    module.downloadTextures(url).then(() => { context.changed = true; });
+                    module.downloadTextures(new URL(url)).then(() => { context.changed = true; });
                 }
             } else {
                 context.updateIBLTextures(null);
@@ -121,7 +119,6 @@ class BackgroundModuleContext implements RenderModuleContext {
         const { gl, cameraUniforms, samplerSingle, samplerMip } = context;
 
         const clearColor = state.background.color ?? [0.33, 0.33, 0.33, 1];
-        const drawBuffers = context.drawBuffers(BufferFlags.color | BufferFlags.pick);
 
         if ((!state.background.color || state.background.url) && state.camera.kind != "orthographic") {
             const { specular } = context.iblTextures;
@@ -141,12 +138,6 @@ class BackgroundModuleContext implements RenderModuleContext {
             context.addRenderStatistics(stats);
         } else {
             glClear(gl, { kind: "COLOR", drawBuffer: 0, color: clearColor });
-        }
-        glState(gl, {
-            drawBuffers: drawBuffers
-        });
-        if (drawBuffers.includes("COLOR_ATTACHMENT1")) {
-            context.clearPickBuffers();
         }
     }
 

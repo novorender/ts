@@ -14,7 +14,7 @@ layout(location = 0) out vec4 fragColor;
 
 void main() {
     vec3 rgb;
-    if(background.envBlurNormalized == 0.) {
+    if(background.envBlurNormalized == 0.f) {
         rgb = texture(textures.skybox, normalize(varyings.dir)).rgb;
     } else {
         float lod = background.envBlurNormalized * float(background.mipCount - 1);

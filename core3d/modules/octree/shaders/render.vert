@@ -79,7 +79,7 @@ void main() {
     varyings.radius = max(1.0f, gl_PointSize * 0.5f);
 #elif defined (HIGHLIGHT)
     if(vertexHighlight >= 0xFEU) {
-        gl_Position = vec4(0); // hide 0xff group by outputting degenerate triangles/lines
+        gl_Position = vec4(0); // hide 0xfe/0xff groups by outputting degenerate triangles/lines
     }
 #endif
 

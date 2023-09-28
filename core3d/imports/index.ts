@@ -46,9 +46,8 @@ export interface Core3DImports {
 export interface Core3DImportMap {
     /** The base url to be applied to the other URLs.
      * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/URL/URL}
-     * @defaultValue `import.meta.url`
      */
-    readonly baseUrl?: string | URL;
+    readonly baseUrl: URL;
 
     /** Inlined GGX lookup texture as Blob or ImageBitmap, or URL to download.
      * @defaultValue `"./lut_ggx.png"`
@@ -87,7 +86,7 @@ export interface Core3DImportMap {
  * @category Render View
  */
 export async function downloadCore3dImports(map: Core3DImportMap): Promise<Core3DImports> {
-    const baseUrl = new URL(map.baseUrl ?? "", import.meta.url);
+    const { baseUrl } = map;
     const loaderWorker = getWorker(map.loaderWorker ?? "./loaderWorker.js", baseUrl);
     const lutGGXPromise = getLutGGX(map.lutGGX ?? "./lut_ggx.png", baseUrl);
     const wasmInstancePromise = getInstance(map.wasmInstance ?? "./main.wasm", baseUrl);
@@ -153,6 +152,6 @@ async function getShaders(arg: string | URL | ShaderImports, baseUrl?: string | 
         return arg;
     }
     const url = new URL(arg, baseUrl);
-    const { shaders } = await import(url.toString());
+    const { shaders } = await import( /* webpackIgnore: true */ url.toString());
     return shaders as ShaderImports;
 }
