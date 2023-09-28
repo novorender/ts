@@ -2,6 +2,7 @@ import { AbortableDownload, Downloader } from "./download";
 import { Mutex } from "../mutex";
 import { parseNode } from "./parser";
 import type { AbortAllMessage, AbortMessage, AbortedAllMessage, AbortedMessage, BufferMessage, ParseMessage, ErrorMessage, LoadMessage, ReadyMessage, MessageRequest, MessageResponse, ParseParams, BufferSet } from "./messages";
+import type { WasmInstance } from "./wasm_loader";
 
 export interface HighlightsBuffer {
     readonly buffer: SharedArrayBuffer;
@@ -14,7 +15,7 @@ export class LoaderHandler {
     readonly downloads = new Map<string, AbortableDownload>();
     highlights: HighlightsBuffer = undefined!; // will be set right after construction by "buffer" message
 
-    constructor(readonly send: (msg: MessageResponse, transfer?: Transferable[]) => void) {
+    constructor(readonly wasm: WasmInstance, readonly send: (msg: MessageResponse, transfer?: Transferable[]) => void) {
     }
 
     receive(msg: MessageRequest) {
@@ -52,7 +53,7 @@ export class LoaderHandler {
     private parseBuffer(buffer: ArrayBuffer, params: ParseParams) {
         const { highlights } = this;
         const { id, version, separatePositionsBuffer, enableOutlines, applyFilter } = params;
-        const { childInfos, geometry } = parseNode(id, separatePositionsBuffer, enableOutlines, version, buffer, highlights, applyFilter);
+        const { childInfos, geometry } = parseNode(this.wasm, id, separatePositionsBuffer, enableOutlines, version, buffer, highlights, applyFilter);
         const readyMsg: ReadyMessage = { kind: "ready", id, childInfos, geometry };
         const transfer: Transferable[] = [];
         for (const { vertexBuffers, indices } of geometry.subMeshes) {

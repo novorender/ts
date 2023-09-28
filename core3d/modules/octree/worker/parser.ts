@@ -6,6 +6,8 @@ import { parseKTX } from "core3d/ktx";
 import type { Mutex } from "../mutex";
 import * as Current from "./2_1";
 import * as Previous from "./2_0";
+import type { WasmInstance } from "./wasm_loader";
+
 const { MaterialType, OptionalVertexAttribute, PrimitiveType, TextureSemantic } = Current;
 type Current = typeof Current;
 type Previous = typeof Previous;
@@ -354,7 +356,7 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
 type TypedArray = Uint8Array | Uint16Array | Uint32Array | Int8Array | Int16Array | Int32Array | Float32Array | Float64Array;
 
 // Candidates for wasm implementation?
-function copyToInterleavedArray<T extends TypedArray>(dst: T, src: T, byteOffset: number, byteStride: number, begin: number, end: number) {
+function copyToInterleavedArray<T extends TypedArray>(wasm: WasmInstance, dst: T, src: T, byteOffset: number, byteStride: number, begin: number, end: number) {
     const offset = byteOffset / dst.BYTES_PER_ELEMENT;
     const stride = byteStride / dst.BYTES_PER_ELEMENT;
     console.assert(Math.round(offset) == offset);
@@ -364,9 +366,36 @@ function copyToInterleavedArray<T extends TypedArray>(dst: T, src: T, byteOffset
         dst[j] = src[i];
         j += stride;
     }
+
+    // switch(Reflect.getPrototypeOf(dst)?.constructor.name) {
+    //     case "Uint8Array":
+    //         wasm.copy_to_interleaved_array_u8(dst as Uint8Array, src as Uint8Array, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Uint16Array":
+    //         wasm.copy_to_interleaved_array_u16(dst as Uint16Array, src as Uint16Array, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Uint32Array":
+    //         wasm.copy_to_interleaved_array_u32(dst as Uint32Array, src as Uint32Array, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Int8Array":
+    //         wasm.copy_to_interleaved_array_i8(dst as Int8Array, src as Int8Array, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Int16Array":
+    //         wasm.copy_to_interleaved_array_i16(dst as Int16Array, src as Int16Array, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Int32Array":
+    //         wasm.copy_to_interleaved_array_i32(dst as Int32Array, src as Int32Array, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Float32Array":
+    //         wasm.copy_to_interleaved_array_f32(dst as Float32Array, src as Float32Array, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Float64Array":
+    //         wasm.copy_to_interleaved_array_f64(dst as Float64Array, src as Float64Array, byteOffset, byteStride, begin, end);
+    //         break;
+    // }
 }
 
-function fillToInterleavedArray<T extends TypedArray>(dst: T, src: number, byteOffset: number, byteStride: number, begin: number, end: number) {
+function fillToInterleavedArray<T extends TypedArray>(wasm: WasmInstance, dst: T, src: number, byteOffset: number, byteStride: number, begin: number, end: number) {
     const offset = byteOffset / dst.BYTES_PER_ELEMENT;
     const stride = byteStride / dst.BYTES_PER_ELEMENT;
     console.assert(Math.round(offset) == offset);
@@ -376,9 +405,36 @@ function fillToInterleavedArray<T extends TypedArray>(dst: T, src: number, byteO
         dst[j] = src;
         j += stride;
     }
+
+    // switch(Reflect.getPrototypeOf(dst)?.constructor.name) {
+    //     case "Uint8Array":
+    //         wasm.fill_to_interleaved_array_u8(dst as Uint8Array, src, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Uint16Array":
+    //         wasm.fill_to_interleaved_array_u16(dst as Uint16Array, src, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Uint32Array":
+    //         wasm.fill_to_interleaved_array_u32(dst as Uint32Array, src, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Int8Array":
+    //         wasm.fill_to_interleaved_array_i8(dst as Int8Array, src, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Int16Array":
+    //         wasm.fill_to_interleaved_array_i16(dst as Int16Array, src, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Int32Array":
+    //         wasm.fill_to_interleaved_array_i32(dst as Int32Array, src, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Float32Array":
+    //         wasm.fill_to_interleaved_array_f32(dst as Float32Array, src, byteOffset, byteStride, begin, end);
+    //         break;
+    //     case "Float64Array":
+    //         wasm.fill_to_interleaved_array_f64(dst as Float64Array, src, byteOffset, byteStride, begin, end);
+    //         break;
+    // }
 }
 
-function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutlines: boolean, highlights: Highlights, predicate?: (objectId: number) => boolean): NodeGeometry {
+function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer: boolean, enableOutlines: boolean, highlights: Highlights, predicate?: (objectId: number) => boolean): NodeGeometry {
     const { vertex, vertexIndex } = schema;
 
     const filteredSubMeshes = [...getSubMeshes(schema, predicate)];
@@ -514,10 +570,10 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
                             if (components) {
                                 src = Reflect.get(src, components[c]);
                             }
-                            copyToInterleavedArray(dst, src, offs, vertexStride, beginVtx, endVtx);
+                            copyToInterleavedArray(wasm, dst, src, offs, vertexStride, beginVtx, endVtx);
                         } else {
                             const src = Reflect.get(context, attribName) as number;
-                            fillToInterleavedArray(dst, src, offs, vertexStride, beginVtx, endVtx);
+                            fillToInterleavedArray(wasm, dst, src, offs, vertexStride, beginVtx, endVtx);
                         }
                     }
                 }
@@ -551,9 +607,9 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
                 if (positionBuffer) {
                     // initialize separate positions buffer
                     const i16 = new Int16Array(positionBuffer, vertexOffset * positionStride);
-                    copyToInterleavedArray(i16, vertex.position.x, 0, positionStride, beginVtx, endVtx);
-                    copyToInterleavedArray(i16, vertex.position.y, 2, positionStride, beginVtx, endVtx);
-                    copyToInterleavedArray(i16, vertex.position.z, 4, positionStride, beginVtx, endVtx);
+                    copyToInterleavedArray(wasm, i16, vertex.position.x, 0, positionStride, beginVtx, endVtx);
+                    copyToInterleavedArray(wasm, i16, vertex.position.y, 2, positionStride, beginVtx, endVtx);
+                    copyToInterleavedArray(wasm, i16, vertex.position.z, 4, positionStride, beginVtx, endVtx);
                 }
 
                 // initialize index buffer (if any)
@@ -664,10 +720,11 @@ function getGeometry(schema: Schema, separatePositionBuffer: boolean, enableOutl
         textures[i] = { semantic, transform, params };
     }
 
+
     return { subMeshes, textures } as const satisfies NodeGeometry;
 }
 
-export function parseNode(id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, highlights: Highlights, applyFilter: boolean) {
+export function parseNode(wasm: WasmInstance, id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, highlights: Highlights, applyFilter: boolean) {
     console.assert(isSupportedVersion(version));
     // const begin = performance.now();
     const r = new BufferReader(buffer);
@@ -677,7 +734,10 @@ export function parseNode(id: string, separatePositionBuffer: boolean, enableOut
         highlights.indices[objectId] != 0xff
     ) : undefined;
     const childInfos = getChildren(id, schema, separatePositionBuffer, predicate);
-    const geometry = getGeometry(schema, separatePositionBuffer, enableOutlines, highlights, predicate);
+    const then = performance.now();
+    const geometry = getGeometry(wasm, schema, separatePositionBuffer, enableOutlines, highlights, predicate);
+    const elapsed = performance.now() - then;
+    console.log(id, "getGeometry", elapsed);
     // const end = performance.now();
     // console.log((end - begin));
     return { childInfos, geometry } as const;
