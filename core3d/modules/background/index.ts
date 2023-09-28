@@ -119,7 +119,6 @@ class BackgroundModuleContext implements RenderModuleContext {
         const { gl, cameraUniforms, samplerSingle, samplerMip } = context;
 
         const clearColor = state.background.color ?? [0.33, 0.33, 0.33, 1];
-        const drawBuffers = context.drawBuffers(BufferFlags.color | BufferFlags.pick);
 
         if ((!state.background.color || state.background.url) && state.camera.kind != "orthographic") {
             const { specular } = context.iblTextures;
@@ -139,12 +138,6 @@ class BackgroundModuleContext implements RenderModuleContext {
             context.addRenderStatistics(stats);
         } else {
             glClear(gl, { kind: "COLOR", drawBuffer: 0, color: clearColor });
-        }
-        glState(gl, {
-            drawBuffers: drawBuffers
-        });
-        if (drawBuffers.includes("COLOR_ATTACHMENT1")) {
-            context.clearPickBuffers();
         }
     }
 

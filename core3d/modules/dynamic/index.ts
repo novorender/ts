@@ -118,7 +118,6 @@ class DynamicModuleContext implements RenderModuleContext {
 
         glState(gl, {
             uniformBuffers: [cameraUniforms],
-            drawBuffers: context.drawBuffers(BufferFlags.all),
             depth: {
                 test: true,
                 writeMask: true,

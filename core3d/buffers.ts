@@ -69,7 +69,7 @@ export class RenderBuffers {
             color: resourceBin.createFrameBuffer({
                 color: [
                     { kind: "FRAMEBUFFER", texture: textures.color },
-                    { kind: "DRAW_FRAMEBUFFER", texture: textures.pick },
+                    null, // Even without MSAA, we can't render pick buffer in the same pass as color buffer. This both due to transparency dithering and pick.opacityThreshold. We cannot selectively exclude one output channel only in frag shader.
                 ],
                 depth: { kind: "DRAW_FRAMEBUFFER", texture: textures.depth },
             }),

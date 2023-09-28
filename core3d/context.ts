@@ -551,7 +551,7 @@ export class RenderContext {
 
         const { MAX_SAMPLES } = glLimits(gl);
         const effectiveSamplesMSAA = Math.max(1, Math.min(MAX_SAMPLES, Math.min(this.deviceProfile.limits.maxSamples, state.output.samplesMSAA)));
-        this.pickBuffersValid = effectiveSamplesMSAA == 1;
+        this.pickBuffersValid = false; // effectiveSamplesMSAA == 1;
 
         // handle resizes
         let resized = false;
@@ -722,9 +722,17 @@ export class RenderContext {
             }
 
             if (prevState.tonemapping.mode != TonemappingMode.color) {
+                console.log("debug");
                 // update debug display
                 const tonemapModule = this.modules?.find(m => m.module.kind == "tonemap");
                 glState(gl, { viewport: { width, height } });
+
+                // glState(gl, {
+                //     viewport: { width, height },
+                //     frameBuffer: this.buffers.frameBuffers["color"],
+                //     drawBuffers: this.drawBuffers(BufferFlags.color),
+                // });
+
                 tonemapModule?.render(prevState);
                 // reset gl state
                 glState(gl, null);

@@ -432,7 +432,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
             ],
-            drawBuffers: renderContext.drawBuffers(BufferFlags.color | BufferFlags.pick),
         });
         this.applyDefaultAttributeValues();
         gl.activeTexture(gl.TEXTURE0);
@@ -504,7 +503,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         dstRGB: "ONE_MINUS_CONSTANT_ALPHA",
                         color: [0, 0, 0, .25],
                     },
-                    // drawBuffers: renderContext.drawBuffers(BufferFlags.color),
                 });
                 for (const { mask, node } of renderNodes) {
                     this.renderNodeDebug(node);
