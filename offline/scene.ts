@@ -54,7 +54,7 @@ export class OfflineScene {
      * It compares the file manifest of local files with the online version and downloads only the difference.
      * Errors are logged in the {@link logger}.
      */
-    async sync(abortSignal: AbortSignal): Promise<boolean> {
+    async sync(abortSignal: AbortSignal, sasKey: string): Promise<boolean> {
         const { dir, manifest, logger, context } = this;
         const { requestFormatter } = context.storage;
         if (!navigator.onLine) {
@@ -73,16 +73,15 @@ export class OfflineScene {
                 }
             }
         };
-        const scanFilesPromise = Promise.resolve();
-        // const scanFilesPromise = scanFiles();
-        // await scanFilesPromise;
+        const scanFilesPromise = scanFiles();
+        await scanFilesPromise;
         // console.log(`# files: ${existingFiles.size}`);
 
         try {
             logger?.status("synchronizing");
             logger?.info?.("fetching manifest");
             // fetch online manifest
-            const manifestRequest = requestFormatter.request(dir.name, "manifest.json", true, abortSignal)
+            const manifestRequest = requestFormatter.request(dir.name, "manifest.json", sasKey, abortSignal)
             const manifestResponse = await fetch(manifestRequest);
             if (!manifestResponse.ok) {
                 throw new Error(manifestResponse.statusText);
@@ -105,7 +104,7 @@ export class OfflineScene {
             const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
             for (const [name, size] of onlineManifest.files) {
                 if (!existingFiles.has(name)) {
-                    const fileRequest = requestFormatter.request(dir.name, name, true, abortSignal);
+                    const fileRequest = requestFormatter.request(dir.name, name, sasKey, abortSignal);
                     let idx = downloadQueue.findIndex(e => !e);
                     if (idx < 0) {
                         // queue is full, so wait for another download to complete
@@ -145,7 +144,6 @@ export class OfflineScene {
             this.manifest = onlineManifest;
 
             // delete unreferenced entries
-            await scanFilesPromise;
             logger?.info?.("cleanup");
             for (const [name] of onlineManifest.files) {
                 existingFiles.delete(name);

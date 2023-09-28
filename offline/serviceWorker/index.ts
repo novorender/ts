@@ -12,8 +12,8 @@ export async function serviceWorkerHandleMessage(event: MessageEvent<ConnectResp
     const { source, data } = event;
     switch (data.kind) {
         case "connect": {
-            const { port, sasKey } = data;
-            const storage = port ? await createOPFSOfflineStorage(port, sasKey) : await createCacheOfflineStorage(sasKey);
+            const { port } = data;
+            const storage = port ? await createOPFSOfflineStorage(port) : await createCacheOfflineStorage();
             if (source && source instanceof Client) {
                 console.log(`Client ${source.id} connected to service worker!`);
                 const clientId = source.id;

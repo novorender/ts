@@ -1,3 +1,5 @@
+import { requestOfflineFile } from "core3d/offline";
+
 /** @internal */
 export class AbortableDownload {
     result: Promise<ArrayBuffer | undefined> = Promise.resolve(undefined);
@@ -19,7 +21,6 @@ export class AbortableDownload {
 export class Downloader {
     activeDownloads = 0;
     completeResolve: (() => void) | undefined;
-    public static createImageData?: (blob: Blob) => Promise<ImageData>;
 
     constructor(public baseUrl?: URL) {
     }
@@ -38,7 +39,7 @@ export class Downloader {
         const url = new URL(filename, this.baseUrl);
         if (!url.search)
             url.search = this.baseUrl?.search ?? "";
-        const response = await fetch(url.toString(), { mode: "cors" });
+        const response = await requestOfflineFile(url.pathname) ?? await fetch(url, { mode: "cors" });
         if (!response.ok) {
             throw new Error(`HTTP Error: ${response.status}: ${response.statusText} (${url})`);
         }
