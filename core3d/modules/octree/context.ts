@@ -193,7 +193,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const { prevState } = renderContext;
             const prevGroups = prevState?.highlights.groups ?? [];
 
-            updateShaderCompileConstants({ highlight: groups.length > 0 });
+            updateShaderCompileConstants({ highlight: groups.length > 0 || highlights.defaultAction != undefined });
 
             const { values } = uniforms.scene;
             values.applyDefaultHighlight = highlights.defaultAction != undefined;
@@ -244,7 +244,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
             const actions = groups.map(g => typeof g.action == "string" ? g.action : undefined);
             const prevActions = prevState?.highlights.groups.map(g => typeof g.action == "string" ? g.action : undefined) ?? [];
-            const actionsChanged = !sequenceEqual(actions, prevActions);
+            const actionsChanged = highlights.defaultAction != prevState?.highlights.defaultAction || !sequenceEqual(actions, prevActions);
 
             if (objectIdsChanged || actionsChanged) {
                 highlight.mutex.lockSpin(); // worker should not hold this lock for long, so we're fine spinning until it's available.
@@ -277,7 +277,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             this.compiling = true;
             const recompile = async () => {
                 const programs = await OctreeModule.compileShaders(renderContext, resources.bin, nextProgramFlags);
-                //console.log(`new render program flags:`, nextProgramFlags);
+                console.log(`new render program flags:`, nextProgramFlags);
                 Object.assign(resources.programs, programs);
                 renderContext.changed = true;
                 this.compiling = false;
@@ -774,7 +774,7 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
     // initialize with identity matrices
     for (let i = 0; i < numColorMatrices; i++) {
         for (let j = 0; j < numColorMatrixCols; j++) {
-            colorMatrices[(numColorMatrices * j + i) * 4 + j] = 1;
+            colorMatrices[(numColorMatrices * j + i) * 4 + j] = i == j ? 1 : 0;
         }
     }
 
