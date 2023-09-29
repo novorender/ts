@@ -50,8 +50,8 @@ export interface MeasureImportMap {
  */
 export async function downloadMeasureImports(map: MeasureImportMap): Promise<MeasureImports> {
     const { baseUrl } = map;
-    const measureWorker = getWorkerUrl(map.measureWorker ?? "./measureWorker.js", baseUrl);
-    const wasmInstancePromise = getInstance(map.nurbsWasm ?? "./nurbs.wasm", baseUrl);
+    const measureWorker = getWorkerUrl(map.measureWorker ?? "/measureWorker.js", baseUrl);
+    const wasmInstancePromise = getInstance(map.nurbsWasm ?? "/nurbs.wasm", baseUrl);
     const nurbsWasm = await wasmInstancePromise;
     return { nurbsWasm, measureWorker };
 }
@@ -64,7 +64,7 @@ async function getInstance(arg: string | URL | ArrayBuffer, baseUrl?: string | U
     if (!isUrl(arg)) {
         return arg;
     }
-    const url = new URL(arg, baseUrl);
+    const url = appendPath(arg, baseUrl);
     const response = await fetch(url, { mode: "cors" });
     if (!response.ok) {
         throw new Error(`Could not download wasm instance from: ${url}`);
@@ -75,5 +75,15 @@ async function getInstance(arg: string | URL | ArrayBuffer, baseUrl?: string | U
 }
 
 function getWorkerUrl(arg: string | URL, baseUrl?: string | URL) {
-    return new URL(arg, baseUrl);
+    return appendPath(arg, baseUrl);
+}
+
+
+/** @internal */
+function appendPath(arg: string | URL, baseUrl?: string | URL) {
+    const url = new URL(baseUrl ?? arg);
+    if (baseUrl) {
+        url.pathname += arg;
+    }
+    return url;
 }
