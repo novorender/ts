@@ -98,6 +98,11 @@ export class RenderContext {
     // shared mutable state
     /** {@link RenderState} used to render the previous frame, if any. */
     prevState: DerivedRenderState | undefined;
+
+    // shared mutable state
+    /** {@link RenderState} used to make the newest state available during render. */
+    currentState: DerivedRenderState | undefined;
+
     /** Set to true to force a re-render when state not contained in {@link RenderState} has changed, e.g. download complete etc. */
     changed = true;
     /** @internal */
@@ -551,7 +556,6 @@ export class RenderContext {
 
         const { MAX_SAMPLES } = glLimits(gl);
         const effectiveSamplesMSAA = Math.max(1, Math.min(MAX_SAMPLES, Math.min(this.deviceProfile.limits.maxSamples, state.output.samplesMSAA)));
-        this.pickBuffersValid = false; // effectiveSamplesMSAA == 1;
 
         // handle resizes
         let resized = false;
@@ -586,6 +590,9 @@ export class RenderContext {
             derivedState.matrices = matricesFromRenderState(state);
             derivedState.viewFrustum = createViewFrustum(state, derivedState.matrices);
         }
+        this.currentState = derivedState;
+        this.pickBuffersValid = false;
+
         this.updateCameraUniforms(derivedState);
         this.updateClippingUniforms(derivedState);
 
@@ -696,8 +703,8 @@ export class RenderContext {
             if (!this.modules) {
                 throw new Error("Context has not been initialized!");
             }
-            const { gl, width, height, buffers, prevState } = this;
-            if (!prevState) {
+            const { gl, width, height, buffers, currentState } = this;
+            if (!currentState) {
                 throw new Error("render() was not called!"); // we assume render() has been called first
             }
 
@@ -715,13 +722,13 @@ export class RenderContext {
             for (const module of this.modules) {
                 if (module) {
                     glState(gl, stateParams);
-                    module.pick?.(prevState);
+                    module.pick?.(currentState);
                     // reset gl state
                     glState(gl, null);
                 }
             }
 
-            if (prevState.tonemapping.mode != TonemappingMode.color) {
+            if (currentState.tonemapping.mode != TonemappingMode.color) {
                 console.log("debug");
                 // update debug display
                 const tonemapModule = this.modules?.find(m => m.module.kind == "tonemap");
@@ -733,7 +740,7 @@ export class RenderContext {
                 //     drawBuffers: this.drawBuffers(BufferFlags.color),
                 // });
 
-                tonemapModule?.render(prevState);
+                tonemapModule?.render(currentState);
                 // reset gl state
                 glState(gl, null);
             }
