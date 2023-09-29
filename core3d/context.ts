@@ -920,7 +920,7 @@ export class RenderContext {
                 const buffOffs = ix + iy * width;
                 let objectId = pickBuffer[buffOffs * 4];
                 if (objectId != 0xffffffff) {
-                    objectId = objectId & ~(1 << 31);
+                    const isReservedId = objectId >= 0xf000_0000
                     const depth = pickCameraPlane ? 0 : floats[buffOffs * 4 + 3];
                     const [nx16, ny16, nz16, deviation16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
                     const nx = wasm.float32(nx16);
@@ -943,8 +943,10 @@ export class RenderContext {
                     const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrixLastPoll);
                     const normal = vec3.fromValues(nx, ny, nz);
                     vec3.normalize(normal, normal);
+                    const clippingOutline = isReservedId ? false : (objectId & (1 << 31)) != 0;
+                    objectId = isReservedId ? objectId : objectId & ~(1 << 31);
 
-                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, deviation, depth } as const;
+                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, deviation, depth, clippingOutline } as const;
                     samples.push(sample);
                 }
             }
@@ -1022,6 +1024,8 @@ export interface PickSample {
     readonly deviation?: number;
     /** The depth/distance from the view plane. */
     readonly depth: number;
+    /** The picked pixel is part of clipping outline */
+    readonly clippingOutline: boolean;
 };
 
 /** Extra pick options. */
