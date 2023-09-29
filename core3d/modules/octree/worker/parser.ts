@@ -357,80 +357,26 @@ type TypedArray = Uint8Array | Uint16Array | Uint32Array | Int8Array | Int16Arra
 
 // Candidates for wasm implementation?
 function copyToInterleavedArray<T extends TypedArray>(wasm: WasmInstance, dst: T, src: T, byteOffset: number, byteStride: number, begin: number, end: number) {
-    // const offset = byteOffset / dst.BYTES_PER_ELEMENT;
-    // const stride = byteStride / dst.BYTES_PER_ELEMENT;
-    // console.assert(Math.round(offset) == offset);
-    // console.assert(Math.round(stride) == stride);
-    // let j = offset;
-    // for (let i = begin; i < end; i++) {
-    //     dst[j] = src[i];
-    //     j += stride;
-    // }
-
-    switch(Reflect.getPrototypeOf(dst)?.constructor.name) {
-        case "Uint8Array":
-            wasm.copy_to_interleaved_array_u8(dst as Uint8Array, src as Uint8Array, byteOffset, byteStride, begin, end);
-            break;
-        case "Uint16Array":
-            wasm.copy_to_interleaved_array_u16(dst as Uint16Array, src as Uint16Array, byteOffset, byteStride, begin, end);
-            break;
-        case "Uint32Array":
-            wasm.copy_to_interleaved_array_u32(dst as Uint32Array, src as Uint32Array, byteOffset, byteStride, begin, end);
-            break;
-        case "Int8Array":
-            wasm.copy_to_interleaved_array_i8(dst as Int8Array, src as Int8Array, byteOffset, byteStride, begin, end);
-            break;
-        case "Int16Array":
-            wasm.copy_to_interleaved_array_i16(dst as Int16Array, src as Int16Array, byteOffset, byteStride, begin, end);
-            break;
-        case "Int32Array":
-            wasm.copy_to_interleaved_array_i32(dst as Int32Array, src as Int32Array, byteOffset, byteStride, begin, end);
-            break;
-        case "Float32Array":
-            wasm.copy_to_interleaved_array_f32(dst as Float32Array, src as Float32Array, byteOffset, byteStride, begin, end);
-            break;
-        case "Float64Array":
-            wasm.copy_to_interleaved_array_f64(dst as Float64Array, src as Float64Array, byteOffset, byteStride, begin, end);
-            break;
+    const offset = byteOffset / dst.BYTES_PER_ELEMENT;
+    const stride = byteStride / dst.BYTES_PER_ELEMENT;
+    console.assert(Math.round(offset) == offset);
+    console.assert(Math.round(stride) == stride);
+    let j = offset;
+    for (let i = begin; i < end; i++) {
+        dst[j] = src[i];
+        j += stride;
     }
 }
 
 function fillToInterleavedArray<T extends TypedArray>(wasm: WasmInstance, dst: T, src: number, byteOffset: number, byteStride: number, begin: number, end: number) {
-    // const offset = byteOffset / dst.BYTES_PER_ELEMENT;
-    // const stride = byteStride / dst.BYTES_PER_ELEMENT;
-    // console.assert(Math.round(offset) == offset);
-    // console.assert(Math.round(stride) == stride);
-    // let j = offset;
-    // for (let i = begin; i < end; i++) {
-    //     dst[j] = src;
-    //     j += stride;
-    // }
-
-    switch(Reflect.getPrototypeOf(dst)?.constructor.name) {
-        case "Uint8Array":
-            wasm.fill_to_interleaved_array_u8(dst as Uint8Array, src, byteOffset, byteStride, begin, end);
-            break;
-        case "Uint16Array":
-            wasm.fill_to_interleaved_array_u16(dst as Uint16Array, src, byteOffset, byteStride, begin, end);
-            break;
-        case "Uint32Array":
-            wasm.fill_to_interleaved_array_u32(dst as Uint32Array, src, byteOffset, byteStride, begin, end);
-            break;
-        case "Int8Array":
-            wasm.fill_to_interleaved_array_i8(dst as Int8Array, src, byteOffset, byteStride, begin, end);
-            break;
-        case "Int16Array":
-            wasm.fill_to_interleaved_array_i16(dst as Int16Array, src, byteOffset, byteStride, begin, end);
-            break;
-        case "Int32Array":
-            wasm.fill_to_interleaved_array_i32(dst as Int32Array, src, byteOffset, byteStride, begin, end);
-            break;
-        case "Float32Array":
-            wasm.fill_to_interleaved_array_f32(dst as Float32Array, src, byteOffset, byteStride, begin, end);
-            break;
-        case "Float64Array":
-            wasm.fill_to_interleaved_array_f64(dst as Float64Array, src, byteOffset, byteStride, begin, end);
-            break;
+    const offset = byteOffset / dst.BYTES_PER_ELEMENT;
+    const stride = byteStride / dst.BYTES_PER_ELEMENT;
+    console.assert(Math.round(offset) == offset);
+    console.assert(Math.round(stride) == stride);
+    let j = offset;
+    for (let i = begin; i < end; i++) {
+        dst[j] = src;
+        j += stride;
     }
 }
 
@@ -726,7 +672,6 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
 
 export function parseNode(wasm: WasmInstance, id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, highlights: Highlights, applyFilter: boolean) {
     console.assert(isSupportedVersion(version));
-    // const begin = performance.now();
     const r = new BufferReader(buffer);
     var schema = version == Current.version ? Current.readSchema(r) : Previous.readSchema(r);
     let predicate: ((objectId: number) => boolean) | undefined;
@@ -738,7 +683,5 @@ export function parseNode(wasm: WasmInstance, id: string, separatePositionBuffer
     const geometry = getGeometry(wasm, schema, separatePositionBuffer, enableOutlines, highlights, predicate);
     const elapsed = performance.now() - then;
     console.log(id, "getGeometry", elapsed);
-    // const end = performance.now();
-    // console.log((end - begin));
     return { childInfos, geometry } as const;
 }
