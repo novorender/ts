@@ -679,9 +679,6 @@ export function parseNode(wasm: WasmInstance, id: string, separatePositionBuffer
         highlights.indices[objectId] != 0xff
     ) : undefined;
     const childInfos = getChildren(id, schema, separatePositionBuffer, predicate);
-    const then = performance.now();
     const geometry = getGeometry(wasm, schema, separatePositionBuffer, enableOutlines, highlights, predicate);
-    const elapsed = performance.now() - then;
-    console.log(id, "getGeometry", elapsed);
     return { childInfos, geometry } as const;
 }
