@@ -1,8 +1,8 @@
 import { AbortableDownload, Downloader } from "./download";
 import { Mutex } from "../mutex";
 import { parseNode } from "./parser";
-import type { AbortAllMessage, AbortMessage, AbortedAllMessage, AbortedMessage, BufferMessage, ParseMessage, ErrorMessage, LoadMessage, ReadyMessage, MessageRequest, MessageResponse, ParseParams, BufferSet } from "./messages";
-import type { WasmInstance } from "./wasm_loader";
+import type { AbortAllMessage, AbortMessage, AbortedAllMessage, AbortedMessage, ParseMessage, ErrorMessage, LoadMessage, ReadyMessage, MessageRequest, MessageResponse, ParseParams, BufferSet, InitMessage } from "./messages";
+import { esbuildWasmInstance, type WasmInstance } from "./wasm_loader";
 
 export interface HighlightsBuffer {
     readonly buffer: SharedArrayBuffer;
@@ -14,14 +14,15 @@ export class LoaderHandler {
     readonly downloader = new Downloader();
     readonly downloads = new Map<string, AbortableDownload>();
     highlights: HighlightsBuffer = undefined!; // will be set right after construction by "buffer" message
+    wasm: WasmInstance | undefined;
 
-    constructor(readonly wasm: WasmInstance, readonly send: (msg: MessageResponse, transfer?: Transferable[]) => void) {
+    constructor(readonly send: (msg: MessageResponse, transfer?: Transferable[]) => void) {
     }
 
     receive(msg: MessageRequest) {
         switch (msg.kind) {
-            case "buffer":
-                this.setBuffer(msg);
+            case "init":
+                this.init(msg);
                 break;
             case "parse":
                 this.parse(msg);
@@ -41,8 +42,11 @@ export class LoaderHandler {
         }
     }
 
-    private setBuffer(msg: BufferMessage) {
-        const { buffer } = msg;
+    private async init(msg: InitMessage) {
+        const {wasmData, buffer} = msg;
+
+        this.wasm = await esbuildWasmInstance(wasmData);
+
         const indices = new Uint8Array(buffer, 4);
         const mutex = new Mutex(buffer);
         this.highlights = { buffer, indices, mutex };
@@ -51,18 +55,22 @@ export class LoaderHandler {
     }
 
     private parseBuffer(buffer: ArrayBuffer, params: ParseParams) {
-        const { highlights } = this;
-        const { id, version, separatePositionsBuffer, enableOutlines, applyFilter } = params;
-        const { childInfos, geometry } = parseNode(this.wasm, id, separatePositionsBuffer, enableOutlines, version, buffer, highlights, applyFilter);
-        const readyMsg: ReadyMessage = { kind: "ready", id, childInfos, geometry };
-        const transfer: Transferable[] = [];
-        for (const { vertexBuffers, indices } of geometry.subMeshes) {
-            transfer.push(...vertexBuffers);
-            if (typeof indices != "number") {
-                transfer.push(indices.buffer);
+        if(this.wasm) {
+            const { highlights } = this;
+            const { id, version, separatePositionsBuffer, enableOutlines, applyFilter } = params;
+            const { childInfos, geometry } = parseNode(this.wasm, id, separatePositionsBuffer, enableOutlines, version, buffer, highlights, applyFilter);
+            const readyMsg: ReadyMessage = { kind: "ready", id, childInfos, geometry };
+            const transfer: Transferable[] = [];
+            for (const { vertexBuffers, indices } of geometry.subMeshes) {
+                transfer.push(...vertexBuffers);
+                if (typeof indices != "number") {
+                    transfer.push(indices.buffer);
+                }
             }
+            this.send(readyMsg, transfer);
+        }else{
+            console.error("Wasm is not initialized yet");
         }
-        this.send(readyMsg, transfer);
     }
 
     private async parse(params: ParseMessage) {

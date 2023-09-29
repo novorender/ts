@@ -4,10 +4,8 @@ import { esbuildWasmInstance } from "./wasm_loader";
 export type * from "./parser";
 export type * from "./messages";
 
-const wasm = await esbuildWasmInstance("dist");
-wasm.init();
 
-const handler = new LoaderHandler(wasm, (msg: MessageResponse, transfer?: Transferable[]) => {
+const handler = new LoaderHandler((msg: MessageResponse, transfer?: Transferable[]) => {
     postMessage(msg, { transfer });
 });
 

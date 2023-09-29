@@ -48,7 +48,7 @@ export class OctreeModule implements RenderModule {
         const maxObjects = 10_000_000;// TODO: Get from device profile?
         const maxByteLength = maxObjects + 4; // add four bytes for mutex
         const buffer = new SharedArrayBuffer(maxByteLength);
-        await loader.setBuffer(buffer);
+        await loader.init(buffer, context.imports.parserWasm);
         return new OctreeModuleContext(context, this, uniforms, resources, buffer, loader);
     }
 
