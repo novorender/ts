@@ -761,7 +761,7 @@ export class RenderContext {
         const objs = new Set<number>();
         for (let i = 0; i < pick.length; i += 4) {
             const objectId = pick[i];
-            if (objectId != 0xffffffff && (objectId & (1 << 31)) != 0) {
+            if (objectId < 0xf000_0000 && (objectId & (1 << 31)) != 0) {
                 objs.add(objectId & ~(1 << 31));
             }
         }
