@@ -22,6 +22,12 @@ export interface Core3DImports {
      */
     readonly wasmInstance: WasmInstance;
 
+    /** The web assembly instance.
+     * @remarks This web assembly can be found in `@novorender/wasm-parser/wasm_parser_bg.wasm`.
+     * @see {@link https://developer.mozilla.org/en-US/docs/WebAssembly/Loading_and_running | Loading and running WebAssembly code}
+     */
+    readonly parserWasm: ArrayBuffer;
+
     /** The scene load/parse worker.
      * @remarks This worker root can be found in `core3d/modules/octree/worker/index.ts`.
      * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Worker/Worker | Worker: Worker() constructor}
@@ -60,6 +66,11 @@ export interface Core3DImportMap {
      */
     readonly wasmInstance?: string | URL | WasmInstance;
 
+    /** Inlined WASM data, or URL to download.
+     * @defaultValue `"./parser.wasm"`
+     */
+    readonly parserWasm?: string | URL | ArrayBuffer;
+
     /** Inlined loader worker, or URL to download.
      * @defaultValue `"./loaderWorker.js"`
      */
@@ -82,7 +93,7 @@ export interface Core3DImportMap {
  * This function will attempt to download any resource not inlined from the specified urls,
  * using the specified {@link Core3DImportMap.baseUrl | baseUrl}.
  * If map is undefined, it will look for the files in the same folder as the current script.
- * 
+ *
  * @category Render View
  */
 export async function downloadCore3dImports(map: Core3DImportMap): Promise<Core3DImports> {
@@ -90,11 +101,12 @@ export async function downloadCore3dImports(map: Core3DImportMap): Promise<Core3
     const loaderWorker = getWorker(map.loaderWorker ?? "./loaderWorker.js", baseUrl);
     const lutGGXPromise = getLutGGX(map.lutGGX ?? "./lut_ggx.png", baseUrl);
     const wasmInstancePromise = getInstance(map.wasmInstance ?? "./main.wasm", baseUrl);
+    const parserWasmPromise = getArrayBuffer(map.parserWasm ?? "./parser.wasm", baseUrl);
     const shadersPromise = getShaders(map.shaders ?? "./shaders.js", baseUrl);
     const logoPromise = getLogo(map.logo ?? "./logo.bin", baseUrl);
-    const [lutGGX, wasmInstance, shaders, logo] =
-        await Promise.all([lutGGXPromise, wasmInstancePromise, shadersPromise, logoPromise]);
-    return { lutGGX, wasmInstance, loaderWorker, shaders, logo };
+    const [lutGGX, wasmInstance, parserWasm, shaders, logo] =
+        await Promise.all([lutGGXPromise, wasmInstancePromise, parserWasmPromise, shadersPromise, logoPromise]);
+    return { lutGGX, wasmInstance, parserWasm, loaderWorker, shaders, logo };
 }
 
 async function download<T extends "text" | "json" | "blob" | "arrayBuffer" | "formData">(url: URL, kind: T) {
@@ -129,6 +141,20 @@ async function getInstance(arg: string | URL | WasmInstance, baseUrl?: string | 
     const response = await fetch(url, { mode: "cors" });
     const { instance } = await WebAssembly.instantiateStreaming(response);
     return instance.exports as unknown as WasmInstance;
+}
+
+async function getArrayBuffer(arg: string | URL | ArrayBuffer, baseUrl?: string | URL) {
+    if (!isUrl(arg)) {
+        return arg;
+    }
+    const url = new URL(arg, baseUrl);
+    const response = await fetch(url, { mode: "cors" });
+    if (!response.ok) {
+        throw new Error(`Could not download wasm instance from: ${url}`);
+    }
+    return await response.arrayBuffer();
+    // const { instance } = await WebAssembly.instantiateStreaming(response);
+    // return instance.exports as unknown as WasmInstance;
 }
 
 function getWorker(arg: string | URL | Worker, baseUrl?: string | URL) {

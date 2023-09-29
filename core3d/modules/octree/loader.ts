@@ -1,4 +1,4 @@
-import type { AbortAllMessage, AbortMessage, BufferMessage, CloseMessage, LoadMessage, MessageRequest, MessageResponse, NodePayload, ParseMessage } from "./worker";
+import type { AbortAllMessage, AbortMessage, InitMessage, CloseMessage, LoadMessage, MessageRequest, MessageResponse, NodePayload, ParseMessage } from "./worker";
 import { OctreeNode } from "./node.js";
 import type { DeviceProfile } from "core3d/device.js";
 
@@ -19,11 +19,11 @@ export class NodeLoader {
         }
     }
 
-    async setBuffer(buffer: SharedArrayBuffer) {
+    async init(buffer: SharedArrayBuffer, wasmData: ArrayBuffer) {
         this.bufferPromise = new Promise<void>((resolve) => {
             this.resolveBuffer = resolve;
         })
-        const msg: BufferMessage = { kind: "buffer", buffer };
+        const msg: InitMessage = { kind: "init", buffer, wasmData };
         this.send(msg);
         await this.bufferPromise;
     }

@@ -1,7 +1,9 @@
 import { LoaderHandler } from "./handler";
 import type { MessageResponse, MessageRequest } from "./messages";
+import { esbuildWasmInstance } from "./wasm_loader";
 export type * from "./parser";
 export type * from "./messages";
+
 
 const handler = new LoaderHandler((msg: MessageResponse, transfer?: Transferable[]) => {
     postMessage(msg, { transfer });

@@ -3,8 +3,9 @@ import { type NodeData, type NodeGeometry } from "./parser";
 // request messages (main->worker)
 
 /** @internal */
-export interface BufferMessage {
-    readonly kind: "buffer";
+export interface InitMessage {
+    readonly kind: "init";
+    readonly wasmData: ArrayBuffer;
     readonly buffer: SharedArrayBuffer;
 }
 
@@ -84,6 +85,6 @@ export interface ErrorMessage {
 }
 
 /** @internal */
-export type MessageRequest = BufferMessage | ParseMessage | LoadMessage | AbortMessage | AbortAllMessage | CloseMessage;
+export type MessageRequest = InitMessage | ParseMessage | LoadMessage | AbortMessage | AbortAllMessage | CloseMessage;
 /** @internal */
 export type MessageResponse = ReadyMessage | AbortedMessage | AbortedAllMessage | ErrorMessage | BufferSet;
