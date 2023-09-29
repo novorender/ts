@@ -87,11 +87,11 @@ export interface Core3DImportMap {
  */
 export async function downloadCore3dImports(map: Core3DImportMap): Promise<Core3DImports> {
     const { baseUrl } = map;
-    const loaderWorker = getWorker(map.loaderWorker ?? "/loaderWorker.js", baseUrl);
-    const lutGGXPromise = getLutGGX(map.lutGGX ?? "/lut_ggx.png", baseUrl);
-    const wasmInstancePromise = getInstance(map.wasmInstance ?? "/main.wasm", baseUrl);
-    const shadersPromise = getShaders(map.shaders ?? "/shaders.js", baseUrl);
-    const logoPromise = getLogo(map.logo ?? "/logo.bin", baseUrl);
+    const loaderWorker = getWorker(map.loaderWorker ?? "./loaderWorker.js", baseUrl);
+    const lutGGXPromise = getLutGGX(map.lutGGX ?? "./lut_ggx.png", baseUrl);
+    const wasmInstancePromise = getInstance(map.wasmInstance ?? "./main.wasm", baseUrl);
+    const shadersPromise = getShaders(map.shaders ?? "./shaders.js", baseUrl);
+    const logoPromise = getLogo(map.logo ?? "./logo.bin", baseUrl);
     const [lutGGX, wasmInstance, shaders, logo] =
         await Promise.all([lutGGXPromise, wasmInstancePromise, shadersPromise, logoPromise]);
     return { lutGGX, wasmInstance, loaderWorker, shaders, logo };
@@ -111,7 +111,7 @@ function isUrl(url: unknown): url is string | URL {
 async function getLutGGX(arg: string | URL | Blob | ImageBitmap, baseUrl?: string | URL) {
     let blob: Blob | undefined;
     if (isUrl(arg)) {
-        const url = appendPath(arg, baseUrl);
+        const url = new URL(arg, baseUrl);
         blob = await download(url, "blob");
     } else if (arg instanceof Blob) {
         blob = arg;
@@ -125,7 +125,7 @@ async function getInstance(arg: string | URL | WasmInstance, baseUrl?: string | 
     if (!isUrl(arg)) {
         return arg;
     }
-    const url = appendPath(arg, baseUrl);
+    const url = new URL(arg, baseUrl);
     const response = await fetch(url, { mode: "cors" });
     const { instance } = await WebAssembly.instantiateStreaming(response);
     return instance.exports as unknown as WasmInstance;
@@ -135,7 +135,7 @@ function getWorker(arg: string | URL | Worker, baseUrl?: string | URL) {
     if (!isUrl(arg)) {
         return arg;
     }
-    const url = appendPath(arg, baseUrl);
+    const url = new URL(arg, baseUrl);
     return new Worker(url, { type: "module", name: "loader" });
 }
 
@@ -143,7 +143,7 @@ async function getLogo(arg: string | URL | ArrayBuffer, baseUrl?: string | URL) 
     if (!isUrl(arg)) {
         return arg;
     }
-    const url = appendPath(arg, baseUrl);
+    const url = new URL(arg, baseUrl);
     return await download(url, "arrayBuffer");
 }
 
@@ -151,17 +151,7 @@ async function getShaders(arg: string | URL | ShaderImports, baseUrl?: string | 
     if (!isUrl(arg)) {
         return arg;
     }
-    const url = appendPath(arg, baseUrl);
+    const url = new URL(arg, baseUrl);
     const { shaders } = await import( /* webpackIgnore: true */ url.toString());
     return shaders as ShaderImports;
-}
-
-
-/** @internal */
-function appendPath(arg: string | URL, baseUrl?: string | URL) {
-    const url = new URL(baseUrl ?? arg);
-    if (baseUrl) {
-        url.pathname += arg;
-    }
-    return url;
 }
