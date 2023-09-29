@@ -277,7 +277,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             this.compiling = true;
             const recompile = async () => {
                 const programs = await OctreeModule.compileShaders(renderContext, resources.bin, nextProgramFlags);
-                console.log(`new render program flags:`, nextProgramFlags);
                 Object.assign(resources.programs, programs);
                 renderContext.changed = true;
                 this.compiling = false;
@@ -524,10 +523,10 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
     pick() {
         const { resources, renderContext } = this;
-        const { gl, cameraUniforms, clippingUniforms, outlineUniforms, samplerSingle, samplerMip, iblTextures, prevState, deviceProfile } = renderContext;
+        const { gl, cameraUniforms, clippingUniforms, outlineUniforms, samplerSingle, samplerMip, iblTextures, currentState, deviceProfile } = renderContext;
         const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
         const { diffuse, specular } = iblTextures;
-        const state = prevState!;
+        const state = currentState!;
 
         for (const rootNode of Object.values(this.rootNodes)) {
             const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, rootNode);

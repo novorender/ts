@@ -379,7 +379,6 @@ export class View<
      */
     async run(abortSignal?: AbortSignal) {
         let prevState: RenderState | undefined;
-        let pickRenderState: RenderState | undefined;
         let prevRenderTime = performance.now();
         let wasCameraMoving = false;
         let idleFrameTime = 0;
@@ -404,24 +403,24 @@ export class View<
                         this.modifyRenderState({ toonOutline: { on: true } });
                     }
                     if (!wasIdle) {
+                        //Set max quality and resolution when the camera stops moving
                         this.resolutionModifier = Math.min(1, this.baseRenderResolution * 2);
                         this.resize();
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
                         wasIdle = true;
-                        if (pickRenderState && _renderContext.prevState != undefined) {
-                            _renderContext.renderPickBuffers();
-                            pickRenderState = undefined;
-                        }
+                        //If pick is not already rendered then start to make the pick buffer aviable when the camera stops 
                     }
                 } else {
                     if (wasIdle) {
+                        //Reset back to default when camera starts moving
                         this.resolutionModifier = this.baseRenderResolution;
                         this.resolutionTier = 2;
                         this.modifyRenderState({ toonOutline: { on: false } });
                         //this.activeToonOutline = true; //Related to dynamic on off toon outline, planned for performance settings
                         wasIdle = false;
                     } else {
+
                         frameIntervals.push(frameTime);
                         this.dynamicQualityAdjustment(frameIntervals);
                     }
@@ -448,9 +447,13 @@ export class View<
                         this.render?.(isIdleFrame);
                         possibleChanges = true;
                     });
-                    pickRenderState = renderStateGL;
                 } else if (possibleChanges) {
                     this.render?.(isIdleFrame);
+                    if (isIdleFrame) {
+                        //Render pick buffer if there is nothing else to render and camera is not moving. 
+                        //Make it feel better for slower devices when picking idle frame
+                        _renderContext.renderPickBuffers();
+                    }
                 }
             }
 
@@ -587,6 +590,8 @@ export class View<
         return clone;
     }
 
+
+    //Dynamically change the quality of rendering based on the last 9 frames 
     private dynamicQualityAdjustment(frameIntervals: number[]) {
         const samples = 9;
         if (frameIntervals.length == samples) {
