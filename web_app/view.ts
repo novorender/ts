@@ -299,6 +299,11 @@ export class View<
                         vec3.copy(edgeNormal2, b.normal);
                         sampleType = "edge";
                     }
+                    if (options?.pickOutline === true) {
+                        if (b.clippingOutline == false) {
+                            return a;
+                        }
+                    }
                     return a.depth < b.depth ? a : b
                 });
                 if (sampleType as any == "edge") {
@@ -307,6 +312,9 @@ export class View<
                             sampleType = "corner";
                         }
                     });
+                }
+                if (options?.pickOutline === true && centerSample.clippingOutline == false) {
+                    return undefined;
                 }
                 const worldViewMatrixNormal = context.prevState?.matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View) ?? mat3.create();
                 const flippedSample: PickSampleExt = {
