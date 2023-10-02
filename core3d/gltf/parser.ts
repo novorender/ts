@@ -155,7 +155,8 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
         return { image, sampler } as RenderStateDynamicTexture;
     }) ?? [];
 
-    const defaultMaterial: RenderStateDynamicMaterialGGX = { kind: "ggx" };
+    const defaultGGXMaterial: RenderStateDynamicMaterialGGX = { kind: "ggx" };
+    const defaultUnlitMaterial: RenderStateDynamicMaterialUnlit = { kind: "unlit" };
     const materials = gltf.materials?.map((m, i) => {
         const isUnlit = m.extensions && "KHR_materials_unlit" in m.extensions;
         const { pbrMetallicRoughness, normalTexture, occlusionTexture, emissiveTexture, emissiveFactor, alphaMode, alphaCutoff, doubleSided } = m;
@@ -252,6 +253,7 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
                 attributes,
                 indices,
             };
+            const defaultMaterial = ((p.mode ?? 4) < 4) ? defaultUnlitMaterial : defaultGGXMaterial;
             const material = materials[p.material ?? -1] ?? defaultMaterial;
             return { geometry, material } as RenderStateDynamicMeshPrimitive;
         });
