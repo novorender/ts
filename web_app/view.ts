@@ -408,7 +408,8 @@ export class View<
 
                 if (isIdleFrame) { //increase resolution and detail bias on idleFrame
                     if (deviceProfile.tier > 0 && this.renderState.toonOutline.on == false) {
-                        this.modifyRenderState({ toonOutline: { on: true } });
+                        //Enable features when on idle frame
+                        this.modifyRenderState({ toonOutline: { on: true }, outlines: { on: true } });
                     }
                     if (!wasIdle) {
                         //Set max quality and resolution when the camera stops moving
@@ -424,7 +425,8 @@ export class View<
                         //Reset back to default when camera starts moving
                         this.resolutionModifier = this.baseRenderResolution;
                         this.resolutionTier = 2;
-                        this.modifyRenderState({ toonOutline: { on: false } });
+                        //Disable features when moving to increase performance
+                        this.modifyRenderState({ toonOutline: { on: false }, outlines: { on: false } });
                         //this.activeToonOutline = true; //Related to dynamic on off toon outline, planned for performance settings
                         wasIdle = false;
                     } else {
