@@ -40,12 +40,13 @@ export type DeviationInspections = {
 export function inspectDeviations(deviations: DeviationSample[], screenScaling: number, settings: DeviationInspectionSettings): DeviationInspections {
     const sortedDeviations = deviations.sort((a, b) => settings.deviationPrioritization == "minimum" ? Math.abs(a.deviation) - Math.abs(b.deviation) : Math.abs(b.deviation) - Math.abs(a.deviation));
     const labels: DeviationLabel[] = [];
-    const linePoints: { position: vec2 }[] = [];
+    const linePoints: { position: vec2, position3d: ReadonlyVec3 }[] = [];
     const minLabelPixelRadius = 60;
     const minPixelRadiusLine = 20;
     const r2Label = minLabelPixelRadius * minLabelPixelRadius;
     const r2Line = minPixelRadiusLine * minPixelRadiusLine;
     const glCenterPos = settings.projection ? vec3.fromValues(settings.projection.centerPoint3d[0], settings.projection.centerPoint3d[2], -settings.projection.centerPoint3d[1]) : undefined;
+    const maxDistFromCl2 = 200;
     for (let i = 0; i < sortedDeviations.length; ++i) {
         const currentSample = sortedDeviations[i];
         let addLabel = true;
@@ -61,7 +62,7 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
             }
         }
         if (addLabel && glCenterPos) {
-            addLabel = vec3.squaredDistance(glCenterPos, currentSample.position) < 100;
+            addLabel = vec3.squaredDistance(glCenterPos, currentSample.position) < maxDistFromCl2;
         }
         if (addLabel) {
             labels.push({ position: vec2.clone(position), deviation: currentSample.deviation.toFixed(3) })
@@ -79,10 +80,10 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
                 }
             }
             if (addLinePoint && glCenterPos) {
-                addLinePoint = vec3.squaredDistance(glCenterPos, currentSample.position) < 100;
+                addLinePoint = vec3.squaredDistance(glCenterPos, currentSample.position) < maxDistFromCl2;
             }
             if (addLinePoint) {
-                linePoints.push({ position });
+                linePoints.push({ position, position3d: currentSample.position });
             }
         }
 
@@ -110,8 +111,15 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
         anglesIdxMap = anglesIdxMap.sort((a, b) => a.angle - b.angle);
         if (anglesIdxMap.length > 0) {
             const line: vec2[] = [];
+            const line3d: ReadonlyVec3[] = [];
             for (const a of anglesIdxMap) {
+                if (line.length > 0) {
+                    if (vec3.squaredDistance(line3d[line3d.length - 1], linePoints[a.i].position3d) > 50) {
+                        continue;
+                    }
+                }
                 line.push(linePoints[a.i].position);
+                line3d.push(linePoints[a.i].position3d);
             }
             return { labels, line };
         }
