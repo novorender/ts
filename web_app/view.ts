@@ -59,7 +59,7 @@ export class View<
     private drsLowInterval = 100;
     private lastDrsAdjustTime = 0;
     private resolutionTier: 0 | 1 | 2 = 2;
-    private activeToonOutline = true;
+    private activeOutline = true;
 
     private currentDetailBias: number = 1;
 
@@ -426,8 +426,8 @@ export class View<
                         this.resolutionModifier = this.baseRenderResolution;
                         this.resolutionTier = 2;
                         //Disable features when moving to increase performance
-                        this.modifyRenderState({ toonOutline: { on: false }, outlines: { on: false } });
-                        //this.activeToonOutline = true; //Related to dynamic on off toon outline, planned for performance settings
+                        this.modifyRenderState({ toonOutline: { on: false } });
+                        this.activeOutline = true;
                         wasIdle = false;
                     } else {
 
@@ -611,14 +611,14 @@ export class View<
             frameIntervals.splice(0, 1);
             const cooldown = 3000;
             const now = performance.now();
-            //To handle dynamic on and off on toon outline.
-            // if (this.activeToonOutline) {
-            //     const activeToon = medianInterval < this.drsLowInterval && this.resolutionTier == 2;
-            //     if (this.activeToonOutline != activeToon) {
-            //         this.activeToonOutline = activeToon;
-            //         this.modifyRenderState({ toonOutline: { on: this.activeToonOutline } });
-            //     }
-            // }
+            //To handle dynamic on and off clipping outline based on framerate.
+            if (this.activeOutline) {
+                const activeOutline = medianInterval < this.drsLowInterval && this.resolutionTier == 2;
+                if (this.activeOutline != activeOutline) {
+                    this.activeOutline = activeOutline;
+                    this.modifyRenderState({ outlines: { on: this.activeOutline } });
+                }
+            }
             if (now > this.lastDrsAdjustTime + cooldown) { // add a cooldown period before changing anything
                 this.dynamicResolutionScaling(medianInterval, now);
             }
