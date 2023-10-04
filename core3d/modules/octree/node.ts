@@ -298,7 +298,7 @@ export class OctreeNode {
                 scale, 0, 0, 0,
                 0, scale, 0, 0,
                 0, 0, scale, 0,
-                ox - tx, oy, oz - tz, 1
+                ox - tx, oy - ty, oz - tz, 1
             );
             const { values } = this.uniformsData;
             values.modelLocalMatrix = modelLocalMatrix;

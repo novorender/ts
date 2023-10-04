@@ -25,10 +25,20 @@ export async function downloadScene(url: URL, abortSignal?: AbortSignal): Promis
     if (config.up) {
         // for now we assume that the presence of an up vector means cad-space.
         // until every scene is in cad space, we rotate it back into gl-space for backward compatibility.
-        let { offset, center } = config;
-        offset = flipCADToGLVec(offset);
-        center = flipCADToGLVec(center);
-        config = { ...config, offset, center };
+        const { offset, center, boundingSphere, aabb } = config;
+        config = {
+            ...config,
+            offset: flipCADToGLVec(offset),
+            center: flipCADToGLVec(center),
+            boundingSphere: {
+                radius: boundingSphere.radius,
+                center: flipCADToGLVec(boundingSphere.center)
+            },
+            aabb: {
+                min: flipCADToGLVec(aabb.min),
+                max: flipCADToGLVec(aabb.max),
+            }
+        };
     }
     if (!isSupportedVersion(config.version)) {
         throw new Error(`Unsupported scene version: ${config.variants}!`);
