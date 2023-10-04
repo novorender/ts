@@ -1038,6 +1038,8 @@ export interface PickOptions {
     readonly async?: boolean;
     /** Return pick without depth. */
     readonly pickCameraPlane?: boolean;
+    /** Return only picked pixels with clipping outline. */
+    readonly pickOutline?: boolean;
 }
 
 /** Parameters for asynchronous shader compilation and linking. */

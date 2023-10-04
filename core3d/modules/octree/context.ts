@@ -448,7 +448,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         gl.bindTexture(gl.TEXTURE_2D, null);
 
-        if (deviceProfile.features.outline) {
+        if (deviceProfile.features.outline && state.outlines.on) {
             // transform outline plane into local space
 
             const renderOutlines = (plane: ReadonlyVec4, color: RGB, planeIndex = -1) => {
@@ -552,7 +552,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
 
-            if (deviceProfile.features.outline) {
+            if (deviceProfile.features.outline && state.outlines.on) {
                 const renderOutlines = (plane: ReadonlyVec4, color: RGB, planeIndex = -1) => {
                     const [x, y, z, offset] = plane;
                     const p = vec4.fromValues(x, y, z, -offset);

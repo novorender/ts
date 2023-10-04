@@ -616,6 +616,12 @@ export enum TonemappingMode {
  * @category Render State
  */
 export interface RenderStateOutlines {
+    /** 
+ * @ignore
+ * @privateRemarks Ability to turn all clipping outlines on and off based on conditions in the render loop.
+ * Will be overwritten every frame 
+*/
+    readonly on: boolean;
     /** Whether to do outline rendering. */
     readonly enabled: boolean;
     /** Color of outline.

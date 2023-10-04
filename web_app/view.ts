@@ -59,7 +59,7 @@ export class View<
     private drsLowInterval = 100;
     private lastDrsAdjustTime = 0;
     private resolutionTier: 0 | 1 | 2 = 2;
-    private activeToonOutline = true;
+    private activeOutline = true;
 
     private currentDetailBias: number = 1;
 
@@ -299,6 +299,11 @@ export class View<
                         vec3.copy(edgeNormal2, b.normal);
                         sampleType = "edge";
                     }
+                    if (options?.pickOutline === true) {
+                        if (b.clippingOutline == false) {
+                            return a;
+                        }
+                    }
                     return a.depth < b.depth ? a : b
                 });
                 if (sampleType as any == "edge") {
@@ -307,6 +312,9 @@ export class View<
                             sampleType = "corner";
                         }
                     });
+                }
+                if (options?.pickOutline === true && centerSample.clippingOutline == false) {
+                    return undefined;
                 }
                 const worldViewMatrixNormal = context.prevState?.matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View) ?? mat3.create();
                 const flippedSample: PickSampleExt = {
@@ -400,7 +408,8 @@ export class View<
 
                 if (isIdleFrame) { //increase resolution and detail bias on idleFrame
                     if (deviceProfile.tier > 0 && this.renderState.toonOutline.on == false) {
-                        this.modifyRenderState({ toonOutline: { on: true } });
+                        //Enable features when on idle frame
+                        this.modifyRenderState({ toonOutline: { on: true }, outlines: { on: true } });
                     }
                     if (!wasIdle) {
                         //Set max quality and resolution when the camera stops moving
@@ -416,8 +425,9 @@ export class View<
                         //Reset back to default when camera starts moving
                         this.resolutionModifier = this.baseRenderResolution;
                         this.resolutionTier = 2;
+                        //Disable features when moving to increase performance
                         this.modifyRenderState({ toonOutline: { on: false } });
-                        //this.activeToonOutline = true; //Related to dynamic on off toon outline, planned for performance settings
+                        this.activeOutline = true;
                         wasIdle = false;
                     } else {
 
@@ -601,14 +611,14 @@ export class View<
             frameIntervals.splice(0, 1);
             const cooldown = 3000;
             const now = performance.now();
-            //To handle dynamic on and off on toon outline.
-            // if (this.activeToonOutline) {
-            //     const activeToon = medianInterval < this.drsLowInterval && this.resolutionTier == 2;
-            //     if (this.activeToonOutline != activeToon) {
-            //         this.activeToonOutline = activeToon;
-            //         this.modifyRenderState({ toonOutline: { on: this.activeToonOutline } });
-            //     }
-            // }
+            //To handle dynamic on and off clipping outline based on framerate.
+            if (this.activeOutline) {
+                const activeOutline = medianInterval < this.drsLowInterval && this.resolutionTier == 2;
+                if (this.activeOutline != activeOutline) {
+                    this.activeOutline = activeOutline;
+                    this.modifyRenderState({ outlines: { on: this.activeOutline } });
+                }
+            }
             if (now > this.lastDrsAdjustTime + cooldown) { // add a cooldown period before changing anything
                 this.dynamicResolutionScaling(medianInterval, now);
             }
