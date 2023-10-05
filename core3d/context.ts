@@ -805,7 +805,7 @@ export class RenderContext {
                         // convert into world space.
                         const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrixLastPoll);
 
-                        samples.push({ x: ix, y: height - iy, deviation, position });
+                        samples.push({ x: ix, y: height - iy, deviation, position, depth });
                     }
                 }
             }
@@ -1001,6 +1001,8 @@ export interface DeviationSample {
      * @remarks This only applies to point clouds with precomputed deviation data.
      */
     readonly deviation: number;
+    /** The depth/distance from the view plane. */
+    readonly depth: number;
 }
 
 /**
