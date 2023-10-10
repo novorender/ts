@@ -6,4 +6,4 @@ export * from "./ortho";
 export * from "./flight";
 export * from "./panorama";
 export * from "./null";
-export { computeRotation, rotationFromDirection } from "./orientation";
+export { computeRotation, rotationFromDirection, PitchRollYawOrientation } from "./orientation";
