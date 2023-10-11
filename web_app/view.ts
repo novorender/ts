@@ -1,9 +1,9 @@
-import { type ReadonlyVec3, vec3, type ReadonlyQuat, mat3 } from "gl-matrix";
+import { type ReadonlyVec3, vec3, vec2, type ReadonlyQuat, mat3, type ReadonlyVec2, type ReadonlyVec4, glMatrix, vec4, mat4 } from "gl-matrix";
 import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
-import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections } from "./buffer_inspect";
+import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections, type OutlineIntersection, traceOutline } from "./buffer_inspect";
 
 /**
  * A view base class for Novorender content.
@@ -261,6 +261,49 @@ export class View<
         if (context) {
             const scale = devicePixelRatio * this.resolutionModifier;
             return inspectDeviations(await context.getDeviations(), scale, settings);
+        }
+    }
+
+    /**
+     * Create a list of intersections between the x and y axis through the tracer position
+     * @public
+     * @param tracerPosition position where to calculate intersections,  
+     * @param perspective For tracer to work in perspective the 3d tracer position and plane to intersect is required,  
+     * @returns list of intersections (right, left, up ,down) 
+     * results will be ordered from  closest to furthest from the tracer poitn
+     */
+    async traceOutline(tracerPosition: ReadonlyVec2, perspective?: { tracerPosition3d: ReadonlyVec3, plane: ReadonlyVec4 }): Promise<OutlineIntersection | undefined> {
+        const context = this._renderContext;
+        if (context) {
+            const scale = devicePixelRatio * this.resolutionModifier;
+            if (perspective) {
+                const { tracerPosition3d, plane } = perspective;
+                const dir = vec3.fromValues(plane[0], plane[1], plane[2]);
+                const u = glMatrix.equals(Math.abs(vec3.dot(vec3.fromValues(0, 0, 1), dir)), 1)
+                    ? vec3.fromValues(0, 1, 0)
+                    : vec3.fromValues(0, 0, 1);
+                const r = vec3.cross(vec3.create(), u, dir);
+                vec3.cross(u, dir, r);
+                vec3.normalize(u, u);
+
+                vec3.cross(r, u, dir);
+                vec3.normalize(r, r);
+
+                const pts = (await this.measure).draw.toMarkerPoints([vec3.add(vec3.create(), tracerPosition3d, r), vec3.add(vec3.create(), tracerPosition3d, u)])
+                if (pts[0] == undefined || pts[1] == undefined) {
+                    return undefined;
+                }
+                const left = vec2.sub(vec2.create(), tracerPosition, pts[0]);
+                vec2.normalize(left, left);
+                const right = vec2.fromValues(-left[0], -left[1]);
+                const up = vec2.sub(vec2.create(), tracerPosition, pts[1]);
+                vec2.normalize(up, up);
+                const down = vec2.fromValues(-up[0], -up[1]);
+                return traceOutline(await context.getOutlines(), tracerPosition, scale,
+                    { left, right, down, up, tracerPosition3d: vec3.fromValues(tracerPosition3d[0], tracerPosition3d[2], -tracerPosition3d[1]) });
+
+            }
+            return traceOutline(await context.getOutlines(), tracerPosition, scale);
         }
     }
 

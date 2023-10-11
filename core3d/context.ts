@@ -813,6 +813,45 @@ export class RenderContext {
         return samples;
     }
 
+    /**
+* scan the pick buffer for pixels from clipping outline
+* @returns Return pixel coordinates and world position for any clipping outline on screen 
+*/
+    async getOutlines(): Promise<OutlineSample[]> {
+        this.renderPickBuffers();
+        const pickBufferPromise = this.buffers.pickBuffers();
+        this.currentPick = (await pickBufferPromise).pick;
+        const { currentPick, width, height, canvas, wasm } = this;
+        if (currentPick === undefined || width * height * 4 != currentPick.length) {
+            return [];
+        }
+
+        const floats = new Float32Array(currentPick.buffer);
+        const samples: OutlineSample[] = [];
+        const { isOrtho, viewClipMatrixLastPoll, viewWorldMatrixLastPoll } = this;
+        for (let iy = 0; iy < height; iy++) {
+            for (let ix = 0; ix < width; ix++) {
+                const buffOffs = ix + iy * width;
+                const objectId = currentPick[buffOffs * 4];
+                if (objectId < 0xf000_0000 && (objectId & (1 << 31)) != 0) {
+                    const depth = floats[buffOffs * 4 + 3];
+
+                    const xCS = ((ix + 0.5) / width) * 2 - 1;
+                    const yCS = ((iy + 0.5) / height) * 2 - 1;
+
+                    // compute view space position and normal
+                    const scale = isOrtho ? 1 : depth;
+                    const posVS = vec3.fromValues((xCS / viewClipMatrixLastPoll[0]) * scale, (yCS / viewClipMatrixLastPoll[5]) * scale, -depth);
+                    // convert into world space.
+                    const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrixLastPoll);
+
+                    samples.push({ x: ix, y: height - iy, position, });
+                }
+            }
+        }
+        return samples;
+    }
+
     private updateCameraUniforms(state: DerivedRenderState) {
         const { cameraUniformsData, localSpaceTranslation } = this;
         const { output, camera, matrices } = state;
@@ -980,11 +1019,23 @@ export class RenderContext {
         return this.extractPick(currentPick, x, y, sampleDiscRadius, pickCameraPlane);
     }
 
-
 }
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
+}
+
+
+/**
+ * Deviation sampled from screen
+ */
+export interface OutlineSample {
+    /** x coordinate in pixel space */
+    readonly x: number;
+    /** y coordinate in pixel space */
+    readonly y: number;
+    /** World space position of underlying pixel. */
+    readonly position: ReadonlyVec3;
 }
 
 /**
