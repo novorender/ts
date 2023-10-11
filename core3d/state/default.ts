@@ -67,7 +67,7 @@ export function defaultRenderState(): RenderState {
             groups: [],
         },
         outlines: {
-            on: false,
+            on: true,
             enabled: false,
             color: [10, 10, 10], // bright white (overexposed)
             plane: [0, 0, 1, 0],

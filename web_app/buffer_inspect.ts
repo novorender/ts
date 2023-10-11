@@ -153,4 +153,3 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
 
     return { labels };
 }
-}
