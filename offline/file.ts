@@ -1,3 +1,5 @@
+import { storeOfflineFileSync } from "./worker/file";
+
 const offlineDirs = new Map<string, WeakRef<FileSystemDirectoryHandle> | null>();
 const rootPromise = navigator.storage.getDirectory();
 
@@ -15,7 +17,7 @@ async function getDirHandle(dirname: string) {
 /** @internal attempt to read file from OPFS offline storage */
 export async function requestOfflineFile(request: Request): Promise<Response | undefined> {
     const { pathname } = new URL(request.url);
-    const m = /\/([\da-f]{32})(?=\/).*\/(.+)$/.exec(pathname);
+    const m = /\/([\da-f]{32})(?=\/).*\/(.+)$/i.exec(pathname);
     if (m && m.length == 3) {
         const [_, dirname, filename] = m;
         let dirHandleRef = await offlineDirs.get(dirname);
@@ -38,8 +40,9 @@ export async function requestOfflineFile(request: Request): Promise<Response | u
                     // console.log(`loading ${filename}`);
                     return new Response(file, { status: 200, headers: { "Content-Type": "application/octet-stream" } });
                 } catch (error: unknown) {
+                    const isHashedFileName = /^[\da-f]{32}$/i.test(filename);
                     const fileNotFound = error instanceof DOMException && error.name == "NotFoundError";
-                    if (fileNotFound) {
+                    if (fileNotFound && isHashedFileName) {
                         const isDedicatedWorker = typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope;
                         if (isDedicatedWorker) {
                             const response = await fetch(request);
@@ -60,15 +63,6 @@ export async function requestOfflineFile(request: Request): Promise<Response | u
         }
     }
     // console.log(`skipping ${pathname}`);
-}
-
-// call from dedicated worker scope only!
-async function storeOfflineFileSync(response: Response, dirHandle: FileSystemDirectoryHandle, filename: string) {
-    const buffer = await response.clone().arrayBuffer();
-    const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-    const file = await fileHandle.createSyncAccessHandle();
-    file.write(new Uint8Array(buffer));
-    file.close();
 }
 
 async function storeOfflineFileASync(response: Response, dirHandle: FileSystemDirectoryHandle, filename: string) {

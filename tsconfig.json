@@ -104,7 +104,7 @@
         "webgl2",
         "web_app",
         "measure",
-        "offline/file.ts" // "dist",
+        "offline/worker/file.ts" // "dist",
         // "build_bundle.js"
     ],
     "exclude": [
