@@ -39,7 +39,8 @@ export class Downloader {
         const url = new URL(filename, this.baseUrl);
         if (!url.search)
             url.search = this.baseUrl?.search ?? "";
-        const response = await requestOfflineFile(url.pathname) ?? await fetch(url, { mode: "cors" });
+        const request = new Request(url, { mode: "cors" });
+        const response = await requestOfflineFile(request) ?? await fetch(request);
         if (!response.ok) {
             throw new Error(`HTTP Error: ${response.status}: ${response.statusText} (${url})`);
         }

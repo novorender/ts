@@ -71,7 +71,8 @@ export async function createSceneRootNodes(context: OctreeContext, config: Scene
 }
 
 async function download<T extends "arrayBuffer" | "json">(url: URL, kind: T, signal?: AbortSignal) {
-    const response = await requestOfflineFile(url.pathname) ?? await fetch(url, { mode: "cors", signal });
+    const request = new Request(url, { mode: "cors", signal });
+    const response = await requestOfflineFile(request) ?? await fetch(request);
     if (response.ok) {
         return (await response[kind]()) as T extends "arrayBuffer" ? ArrayBuffer : SceneConfig;
     } else {
