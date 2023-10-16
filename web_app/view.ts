@@ -200,7 +200,7 @@ export class View<
      */
     async availableEnvironments(indexUrl: URL): Promise<EnvironmentDescription[]> {
         let environments: EnvironmentDescription[] = [];
-        const response = await fetch(indexUrl.toString());
+        const response = await fetch(indexUrl.toString(), { mode: "cors" });
         if (response.ok) {
             const json = await response.json();
             environments = (json as string[]).map(name => {
@@ -208,6 +208,24 @@ export class View<
             });
         }
         return environments;
+    }
+
+    /**
+     * Retrieve list of network requests for given environment(s) for cache/offline purposes.
+     * @param environments The environment description objects.
+     * @remarks
+     * The returned requests are suitable for [Cache API](https://developer.mozilla.org/en-US/docs/Web/API/Cache/addAll).
+     */
+    static environmentRequests(...environments: EnvironmentDescription[]): readonly Request[] {
+        const urls: URL[] = [];
+        for (const environment of environments) {
+            const { url, thumnbnailURL } = environment;
+            urls.push(new URL("radiance.ktx", url));
+            urls.push(new URL("irradiance.ktx", url));
+            urls.push(new URL("background.ktx", url));
+            urls.push(new URL(thumnbnailURL));
+        }
+        return urls.map(url => (new Request(url, { mode: "cors" })));
     }
 
     /**
