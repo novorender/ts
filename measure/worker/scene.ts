@@ -47,6 +47,7 @@ export class MeasureTool {
   snapObjects = new Array<PickInterface>();
   nextSnapIdx = 0;
   static geometryFactory: GeometryFactory = undefined!;
+  idToHash: Map<number, string> | undefined;
 
   constructor() {
   }
@@ -55,10 +56,18 @@ export class MeasureTool {
     MeasureTool.geometryFactory = await createGeometryFactory(wasm);
   }
 
-  loadScene(baseUrl: string) {
+  async loadScene(baseUrl: string) {
     const brepUrl = new URL(baseUrl);
     brepUrl.pathname += "brep/";
     this.downloader = new Downloader(brepUrl);
+
+    try {
+      const manifest = await this.downloader.downloadJson("manifest.json") as [string, number, number][];
+      this.idToHash = new Map<number, string>(manifest.map(([hash, size, id]) => [id, hash]));
+    } catch {
+      this.idToHash = undefined;
+    }
+
     this.crossSectionTool = new RoadTool(new URL(baseUrl));
     this.data.clear();
     this.snapObjects.length = 0;
@@ -80,11 +89,17 @@ export class MeasureTool {
     }
   }
 
-  async downloadBrep(name: string): Promise<ProductData | null> {
-    try {
-      return await this.downloader.downloadJson(name);
-    } catch {
-      return null;
+  async downloadBrep(id: number): Promise<ProductData | null> {
+    const { idToHash } = this;
+    if (idToHash) {
+      const hash = idToHash.get(id);
+      return hash ? await this.downloader.downloadJson(hash) : null;
+    } else {
+      try {
+        return await this.downloader.downloadJson(`${id}.json`);
+      } catch {
+        return null;
+      }
     }
   }
 
@@ -93,7 +108,7 @@ export class MeasureTool {
   ): Promise<ProductData | undefined> {
     let product = this.data.get(id);
     if (product === undefined) {
-      product = await this.downloadBrep(`${id}.json`);
+      product = await this.downloadBrep(id);
       if (product && product.instances === undefined) {
         this.data.set(id, null);
         return undefined;

@@ -64,7 +64,7 @@ export class MeasureView {
 
     async loadScene(sceneUrl: URL) {
         const workerScene = await this.worker;
-        workerScene.loadScene(sceneUrl.toString());
+        await workerScene.loadScene(sceneUrl.toString());
     }
 
     /**
