@@ -3,10 +3,10 @@ import { type PathNameFormatter, type PathNameParser, RequestFormatter } from ".
 /**
  * Create a request formatter for the standard novorender cloud/blob storage.
  */
-export function defaultRequestFormatter() {
-    const re = /^\/(?<dir>[0-9a-f]{32})\/webgl2_bin\/(?<file>.+)$/;
+export function defaultRequestFormatter(folder: string = "webgl2_bin") {
+    const re = new RegExp(`^\/(?<dir>[0-9a-f]{32})\/${folder}\/(?<file>.+)$`);
     const parser: PathNameParser = (str) => (str.match(re)?.groups as ReturnType<PathNameParser>);
-    const formatter: PathNameFormatter = (dir, file) => (`/${dir}/webgl2_bin/${file}`);
+    const formatter: PathNameFormatter = (dir, file) => (`/${dir}/${folder}/${file}`);
     const baseUrl = new URL("https://blobs.novorender.com/");
     return new RequestFormatter(baseUrl, parser, formatter, "cors");
 }

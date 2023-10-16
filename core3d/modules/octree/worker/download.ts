@@ -1,4 +1,4 @@
-import { requestOfflineFile } from "core3d/offline";
+import { requestOfflineFile } from "offline/file";
 
 /** @internal */
 export class AbortableDownload {

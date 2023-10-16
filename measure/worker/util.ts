@@ -3,6 +3,7 @@ import type { ReadonlyVec3, ReadonlyVec2 } from "gl-matrix";
 import type { CylinderData, ProductData } from "./brep";
 import { cylinderCenterLine } from "./calculations";
 import { matFromInstance } from "./loader";
+import { requestOfflineFile } from "offline/file";
 glMatrix.setMatrixArrayType(Array);
 
 export async function swapCylinderImpl(product: ProductData, faceIdx: number, instanceIdx: number, to: "inner" | "outer"): Promise<number | undefined> {
@@ -143,24 +144,15 @@ export function reduceLineStrip(lineStrip: ReadonlyVec3[]): ReadonlyVec3[] {
 
 export class Downloader {
   activeDownloads = 0;
-  private abortController = new AbortController();
-  public static downloadImageFallback?: (url: string) => Promise<ImageData>;
-
   constructor(public baseUrl?: URL) { }
-
-  abort() {
-    this.abortController.abort();
-    this.abortController = new AbortController(); // we probably want to reuse this object, so create another abort controller.
-  }
 
   async request(
     filename: string,
-    abortController: AbortController | undefined
   ) {
     const url = new URL(filename, this.baseUrl);
+    const request = new Request(url, { mode: "cors" });
     if (!url.search) url.search = this.baseUrl?.search ?? "";
-    const signal = (abortController ?? this.abortController).signal;
-    const response = await fetch(url.toString(), { mode: "cors", signal });
+    const response = await requestOfflineFile(request) ?? await fetch(url.toString(), { mode: "cors" });
     if (!response.ok) {
       throw new Error(`HTTP Error: ${response.status}: ${response.statusText}`);
     }
@@ -169,90 +161,11 @@ export class Downloader {
 
   async downloadJson(
     filename: string,
-    abortController?: AbortController
   ): Promise<any> {
     try {
       this.activeDownloads++;
-      const response = await this.request(filename, abortController);
+      const response = await this.request(filename);
       return await response.json();
-    } finally {
-      this.activeDownloads--;
-    }
-  }
-
-  async downloadArrayBuffer(
-    filename: string,
-    abortController?: AbortController
-  ): Promise<ArrayBuffer> {
-    try {
-      this.activeDownloads++;
-      const response = await this.request(filename, abortController);
-      return await response.arrayBuffer();
-    } finally {
-      this.activeDownloads--;
-    }
-  }
-
-  async downloadBlob(
-    filename: string,
-    abortController?: AbortController
-  ): Promise<Blob> {
-    try {
-      this.activeDownloads++;
-      const response = await this.request(filename, abortController);
-      return await response.blob();
-    } finally {
-      this.activeDownloads--;
-    }
-  }
-
-  async downloadImage(
-    filename: string,
-    abortController?: AbortController
-  ): Promise<ImageBitmap | ImageData> {
-    try {
-      this.activeDownloads++;
-      if (Downloader.downloadImageFallback) {
-        const url =
-          typeof filename == "string"
-            ? new URL(filename, this.baseUrl)
-            : filename;
-        url.search = this.baseUrl?.search ?? "";
-        const image = await Downloader.downloadImageFallback(url.toString());
-        if (abortController?.signal.aborted) {
-          throw { name: "AbortError", message: "" };
-        }
-        return image;
-      } else {
-        const blob = await this.downloadBlob(filename, abortController);
-        // const image = await createImageBitmap(blob, { premultiplyAlpha: "none", colorSpaceConversion: "none" });
-        const image = await createImageBitmap(blob);
-        return image;
-      }
-    } finally {
-      this.activeDownloads--;
-    }
-  }
-
-  async downloadImageFromBlob(
-    blob: Blob,
-    abortController?: AbortController
-  ): Promise<ImageBitmap | ImageData> {
-    try {
-      this.activeDownloads++;
-      if (Downloader.downloadImageFallback) {
-        const url = URL.createObjectURL(blob);
-        const image = await Downloader.downloadImageFallback(url.toString());
-        URL.revokeObjectURL(url);
-        if (abortController?.signal.aborted) {
-          throw { name: "AbortError", message: "" };
-        }
-        return image;
-      } else {
-        // const image = await createImageBitmap(blob, { premultiplyAlpha: "none", colorSpaceConversion: "none" });
-        const image = await createImageBitmap(blob);
-        return image;
-      }
     } finally {
       this.activeDownloads--;
     }

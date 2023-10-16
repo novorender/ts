@@ -103,8 +103,8 @@
         "core3d",
         "webgl2",
         "web_app",
-        "measure"
-        // "dist",
+        "measure",
+        "offline/file.ts" // "dist",
         // "build_bundle.js"
     ],
     "exclude": [
