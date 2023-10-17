@@ -47,9 +47,19 @@ export class MeasureTool {
   snapObjects = new Array<PickInterface>();
   nextSnapIdx = 0;
   static geometryFactory: GeometryFactory = undefined!;
-  idToHash: Map<number, string> | undefined;
+  idToHash: Uint8Array | undefined;
 
   constructor() {
+  }
+
+  lookupHash(id: number) {
+    const { idToHash } = this;
+    if (idToHash && id < idToHash.length / 16) {
+      const offset = id * 16;
+      const slice = idToHash.subarray(offset, offset + 16);
+      return [...slice].map(b => b.toString(16)).join("");
+    }
+    return undefined;
   }
 
   async init(wasm: string | ArrayBuffer) {
@@ -62,8 +72,7 @@ export class MeasureTool {
     this.downloader = new Downloader(brepUrl);
 
     try {
-      const manifest = await this.downloader.downloadJson("manifest.json") as [string, number, number][];
-      this.idToHash = new Map<number, string>(manifest.map(([hash, size, id]) => [id, hash]));
+      this.idToHash = new Uint8Array(await this.downloader.downloadArrayBuffer("object_id_to_brep_hash"));
     } catch {
       this.idToHash = undefined;
     }
@@ -92,7 +101,7 @@ export class MeasureTool {
   async downloadBrep(id: number): Promise<ProductData | null> {
     const { idToHash } = this;
     if (idToHash) {
-      const hash = idToHash.get(id);
+      const hash = this.lookupHash(id);
       return hash ? await this.downloader.downloadJson(hash) : null;
     } else {
       try {

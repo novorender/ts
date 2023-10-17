@@ -4,7 +4,7 @@ import type { RootNodes } from "./modules/octree";
 import { decodeBase64 } from "./util";
 import { isSupportedVersion } from "./modules/octree";
 import { vec3, type ReadonlyVec3 } from "gl-matrix";
-import { requestOfflineFile } from "../offline/file";
+import { requestOfflineFile } from "offline/file";
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 

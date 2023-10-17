@@ -170,4 +170,9 @@ export class Downloader {
       this.activeDownloads--;
     }
   }
+
+  async downloadArrayBuffer(filename: string) {
+    const response = await this.request(filename);
+    return await response.arrayBuffer();
+  }
 }
