@@ -23,24 +23,24 @@ layout(location = 0) out vec4 fragColor;
 layout(location = 1) out uvec4 fragPick;
 
 void main() {
-    float linearDepth = -varyings.positionVS.z;
+    highp float linearDepth = -varyings.positionVS.z;
 #if defined(CLIP)
     if(linearDepth < camera.near)
         discard;
 
-    float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
+    lowp float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
     bool inside = clipping.mode == clippingModeIntersection ? clipping.numPlanes > 0U : true;
-    for(uint i = 0U; i < clipping.numPlanes; i++) {
-        inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.;
+    for(lowp uint i = 0U; i < clipping.numPlanes; i++) {
+        inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
     }
-    if (clipping.mode == clippingModeIntersection ? inside : !inside) {
+    if(clipping.mode == clippingModeIntersection ? inside : !inside) {
         discard;
     }
 #endif
 
-    vec4 baseColor;
-    uint objectId;
-    uint highlight;
+    mediump vec4 baseColor;
+    highp uint objectId;
+    lowp uint highlight;
     baseColor = varyingsFlat.color;
 #if defined (ADRENO600)
     objectId = combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low);
@@ -50,20 +50,20 @@ void main() {
 
     highlight = varyingsFlat.highlight;
 
-    vec3 normalVS = normalize(varyings.normalVS);
+    mediump vec3 normalVS = normalize(varyings.normalVS);
     // compute geometric/flat normal from derivatives
-    vec3 axisX = dFdx(varyings.positionVS);
-    vec3 axisY = dFdy(varyings.positionVS);
-    vec3 geometricNormalVS = normalize(cross(axisX, axisY));
+    mediump vec3 axisX = dFdx(varyings.positionVS);
+    mediump vec3 axisY = dFdy(varyings.positionVS);
+    mediump vec3 geometricNormalVS = normalize(cross(axisX, axisY));
 
     // ensure that vertex normal points in same direction as geometric normal (which always faces camera)
-    if(dot(normalVS, normalVS) < 0.1 || dot(normalVS, geometricNormalVS) < 0.) {
+    if(dot(normalVS, normalVS) < 0.1f || dot(normalVS, geometricNormalVS) < 0.f) {
         normalVS = geometricNormalVS;
     }
-    vec3 normalWS = normalize(camera.viewLocalMatrixNormal * normalVS);
-    vec3 geometricNormalWS = normalize(camera.viewLocalMatrixNormal * geometricNormalVS);
+    mediump vec3 normalWS = normalize(camera.viewLocalMatrixNormal * normalVS);
+    mediump vec3 geometricNormalWS = normalize(camera.viewLocalMatrixNormal * geometricNormalVS);
 
-    vec4 rgba = vec4(0);
+    mediump vec4 rgba = vec4(0);
 #if (MODE == MODE_POINTS)
     rgba = baseColor;
 #elif (MODE == MODE_TERRAIN)
@@ -76,43 +76,42 @@ void main() {
     }
 #endif
 
-
 #if defined (HIGHLIGHT)
     if(highlight == 254U) {
         discard;
     }
     if(highlight != 0U || scene.applyDefaultHighlight) {
-        float u = (float(highlight) + 0.5f) / float(maxHighlights);
-        mat4 colorTransform;
+        mediump float u = (float(highlight) + 0.5f) / float(maxHighlights);
+        mediump mat4 colorTransform;
         colorTransform[0] = texture(textures.highlights, vec2(u, 0.5f / 6.0f));
         colorTransform[1] = texture(textures.highlights, vec2(u, 1.5f / 6.0f));
         colorTransform[2] = texture(textures.highlights, vec2(u, 2.5f / 6.0f));
         colorTransform[3] = texture(textures.highlights, vec2(u, 3.5f / 6.0f));
-        vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5f / 6.0f));
+        mediump vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5f / 6.0f));
         rgba = colorTransform * rgba + colorTranslation;
     }
 #endif
 
 #if (PASS != PASS_PICK && MODE != MODE_POINTS)
-if (baseColor != vec4(0)) {
-    vec4 diffuseOpacity = rgba;
-    diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
+    if(baseColor != vec4(0)) {
+        mediump vec4 diffuseOpacity = rgba;
+        diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
 
-    vec4 specularShininess = vec4(mix(0.4f, 0.1f, baseColor.a)); // TODO: get from varyings instead
-    specularShininess.rgb = sRGBToLinear(specularShininess.rgb);
+        mediump vec4 specularShininess = vec4(mix(0.4f, 0.1f, baseColor.a)); // TODO: get from varyings instead
+        specularShininess.rgb = sRGBToLinear(specularShininess.rgb);
 
-    vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
-    vec3 N = normalize(normalWS);
+        mediump vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
+        mediump vec3 N = normalize(normalWS);
 
-    vec3 irradiance = texture(textures.ibl.diffuse, N).rgb;
-    float perceptualRoughness = clamp((1.0f - specularShininess.a), 0.0f, 1.0f);
-    perceptualRoughness *= perceptualRoughness;
-    float lod = perceptualRoughness * (scene.iblMipCount - 1.0f);
-    vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb;
+        mediump vec3 irradiance = texture(textures.ibl.diffuse, N).rgb;
+        mediump float perceptualRoughness = clamp((1.0f - specularShininess.a), 0.0f, 1.0f);
+        perceptualRoughness *= perceptualRoughness;
+        mediump float lod = perceptualRoughness * (scene.iblMipCount - 1.0f);
+        mediump vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb;
 
-    vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
-    rgba = vec4(rgb, rgba.a);
-}
+        mediump vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
+        rgba = vec4(rgb, rgba.a);
+    }
 
 #endif
 
@@ -128,15 +127,15 @@ if (baseColor != vec4(0)) {
 #endif
 
 #if (PASS == PASS_PRE)
-    if(rgba.a < 1.)
+    if(rgba.a < 1.f)
         discard;
 #elif (PASS != PASS_PICK)
-    if(rgba.a <= 0.)
+    if(rgba.a <= 0.f)
         discard;
 #endif
 
 #if defined (DITHER) && (PASS == PASS_COLOR)
-    if((rgba.a - 0.5 / 16.0) < dither(gl_FragCoord.xy))
+    if((rgba.a - 0.5f / 16.0f) < dither(gl_FragCoord.xy))
         discard;
 #endif
 

@@ -26,7 +26,7 @@ layout(location = 2) in vec4 vertexPos2;
 layout(location = 3) in uint vertexObjectId;
 layout(location = 4) in uint vertexHighlight;
 flat out vec4 line_vertices;
-flat out vec4 color;
+flat out mediump vec4 color;
 flat out uint object_id;
 
 void main() {
@@ -35,7 +35,7 @@ void main() {
     vec3 pos2 = (outline.localPlaneMatrix * node.modelLocalMatrix * vertexPos2).xyz;
     vec3 ab = pos1 - pos0;
     vec3 ac = pos2 - pos0;
-    vec3 normal = normalize(cross(ab, ac));
+    mediump vec3 normal = normalize(cross(ab, ac));
     vec3 z = vec3(pos0.z, pos1.z, pos2.z);
     bvec3 gt = greaterThan(z, vec3(0));
     bvec3 lt = lessThan(z, vec3(0));

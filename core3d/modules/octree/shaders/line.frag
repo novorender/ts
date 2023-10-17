@@ -15,8 +15,8 @@ layout(std140) uniform Node {
 };
 
 in struct {
-    vec3 positionVS;
-    vec4 color;
+    highp vec3 positionVS;
+    mediump vec4 color;
 } varyings;
 
 flat in struct {
@@ -28,14 +28,14 @@ flat in struct {
 #endif
 } varyingsFlat;
 
-layout(location = 0) out vec4 fragColor;
-layout(location = 1) out uvec4 fragPick;
+layout(location = 0) out mediump vec4 fragColor;
+layout(location = 1) out highp uvec4 fragPick;
 
 void main() {
-    float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
-    bool inside = clipping.mode == clippingModeIntersection ? (clipping.numPlanes + (outline.planeIndex >= 0 ? 1u : 0u) ) > 0U : true;
-    for(uint i = 0u; i < clipping.numPlanes; i++) {
-        if (int(i) == outline.planeIndex) {
+    lowp float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
+    bool inside = clipping.mode == clippingModeIntersection ? (clipping.numPlanes + (outline.planeIndex >= 0 ? 1u : 0u)) > 0U : true;
+    for(lowp uint i = 0u; i < clipping.numPlanes; i++) {
+        if(int(i) == outline.planeIndex) {
             inside = inside && clipping.mode != clippingModeIntersection;
         } else {
             inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
@@ -52,6 +52,6 @@ void main() {
     fragPick = uvec4(objectId, 0, 0, floatBitsToUint(linearDepth));
 #else
     uint lineObjectId = varyingsFlat.objectId | (1u << 31);
-    fragPick = uvec4(lineObjectId, packNormalAndDeviation(vec3(0), 0.), floatBitsToUint(linearDepth));
+    fragPick = uvec4(lineObjectId, packNormalAndDeviation(vec3(0), 0.f), floatBitsToUint(linearDepth));
 #endif
 }
