@@ -592,6 +592,8 @@ export class RenderContext {
         }
         this.currentState = derivedState;
         this.pickBuffersValid = false;
+        const { buffers } = this;
+        buffers.readBuffersNeedUpdate = true;
 
         this.updateCameraUniforms(derivedState);
         this.updateClippingUniforms(derivedState);
@@ -614,8 +616,7 @@ export class RenderContext {
 
         // pick frame buffer and clear z-buffer
         const { width, height } = canvas;
-        const { buffers } = this;
-        buffers.readBuffersNeedUpdate = true;
+
         const frameBufferName = effectiveSamplesMSAA > 1 ? "colorMSAA" : "color";
         const frameBuffer = buffers.frameBuffers[frameBufferName];
         buffers.invalidate(frameBufferName, BufferFlags.all);
@@ -819,9 +820,8 @@ export class RenderContext {
 */
     async getOutlines(): Promise<OutlineSample[]> {
         this.renderPickBuffers();
-        const pickBufferPromise = this.buffers.pickBuffers();
-        this.currentPick = (await pickBufferPromise).pick;
-        const { currentPick, width, height, canvas, wasm } = this;
+        this.currentPick = (await this.buffers.pickBuffers()).pick;
+        const { currentPick, width, height } = this;
         if (currentPick === undefined || width * height * 4 != currentPick.length) {
             return [];
         }
