@@ -729,7 +729,6 @@ export class RenderContext {
             }
 
             if (currentState.tonemapping.mode != TonemappingMode.color) {
-                console.log("debug");
                 // update debug display
                 const tonemapModule = this.modules?.find(m => m.module.kind == "tonemap");
                 glState(gl, { viewport: { width, height } });
