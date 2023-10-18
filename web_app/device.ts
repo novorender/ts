@@ -38,6 +38,7 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
 
     let adreno600 = false;
     let slowShaderRecompile = false;
+    let iosInterpolationBug = false;
 
     const canvas: HTMLCanvasElement = document.createElement("canvas") as HTMLCanvasElement;
     canvas.width = 1;
@@ -53,6 +54,7 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
             : gl.getParameter(gl?.VERSION);
         if (RegExp("Apple GPU").test(renderer)) {
             maxGPUBytes = 500_000_000;
+            iosInterpolationBug = true;
         }
         if (RegExp("Adreno.+6[0-9][0-9]").test(renderer)) {
             adreno600 = true;
@@ -73,7 +75,8 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
         },
         quirks: {
             adreno600,
-            slowShaderRecompile
+            slowShaderRecompile,
+            iosInterpolationBug,
         },
         detailBias,
     };
