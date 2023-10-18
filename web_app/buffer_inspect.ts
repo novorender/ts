@@ -142,7 +142,6 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
                 if (angle2d > Math.PI * 0.6) {
                     continue;
                 }
-                console.log(angle2d);
                 if (vec3.squaredDistance(prev.position3d, current.position3d) > 50) {
                     continue;
                 }
@@ -227,8 +226,20 @@ export function outlineLaser(outlinePixels: OutlineSample[], laserPosition: Read
     const getAr = (ar: OutlineSample[], checkFn: (ar: OutlineSample[], i: number) => CheckResult) => {
         const out: OutlineSample[] = [];
         if (ar.length > 0) {
-            out.push({ ...ar[0], position: vec3.fromValues(ar[0].position[0], -ar[0].position[2], ar[0].position[1]), x: Math.round(ar[0].x / screenScaling), y: Math.round(ar[0].y / screenScaling) });
-            for (let i = 1; i < ar.length; ++i) {
+            let startI = 0;
+            let prevPos = {
+                x: scaledLaserPosition[0], y: scaledLaserPosition[1]
+            };
+            while (startI < ar.length) {
+                if (Math.abs(prevPos.x - ar[startI].x) > 10 || Math.abs(prevPos.y - ar[startI].y) > 10) {
+                    out.push({ ...ar[startI], position: vec3.fromValues(ar[startI].position[0], -ar[startI].position[2], ar[startI].position[1]), x: Math.round(ar[startI].x / screenScaling), y: Math.round(ar[startI].y / screenScaling) });
+                    startI++;
+                    break;
+                }
+                prevPos = ar[startI];
+                startI++;
+            }
+            for (let i = startI; i < ar.length; ++i) {
                 const check = checkFn(ar, i);
                 if (check == CheckResult.Discard) {
                     continue;
