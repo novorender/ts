@@ -116,7 +116,13 @@ void main() {
 #endif
 
 #if (PASS == PASS_PICK)
-    if(rgba.a < scene.pickOpacityThreshold)
+    float a = 
+#if (IOS_INTERPOLATION_BUG)
+    round(rgba.a * 256.f) / 256.f; // older ipad/IOS devices don't use flat mode on float varyings and thus introduces interpolation noise that we need to round off.
+#else
+    rgba.a;
+#endif
+    if(a < scene.pickOpacityThreshold)
         discard;
 #endif
 
