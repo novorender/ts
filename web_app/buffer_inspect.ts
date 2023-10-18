@@ -161,12 +161,12 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
 }
 
 
-export function traceOutline(outlinePixels: OutlineSample[], tracerPosition: ReadonlyVec2, screenScaling: number,
+export function outlineLaser(outlinePixels: OutlineSample[], laserPosition: ReadonlyVec2, screenScaling: number,
     perspective?: { left: ReadonlyVec2, right: ReadonlyVec2, up: ReadonlyVec2, down: ReadonlyVec2, tracerPosition3d: ReadonlyVec3 }): OutlineIntersection {
 
-    const scaledTracePosition = vec2.scale(vec2.create(), tracerPosition, screenScaling);
+    const scaledLaserPosition = vec2.scale(vec2.create(), laserPosition, screenScaling);
 
-    const sqDistFromTracer = (p: { x: number, y: number, position: ReadonlyVec3 }) => vec3.dist(p.position, perspective!.tracerPosition3d);
+    const sqDistFromLaser = (p: { x: number, y: number, position: ReadonlyVec3 }) => vec3.sqrDist(p.position, perspective!.tracerPosition3d);
     const getListUsingDirection = () => {
         const filter = (p: { x: number, y: number }, s: ReadonlyVec2, dir: ReadonlyVec2) => {
             const ps = vec2.sub(vec2.create(), vec2.fromValues(p.x, p.y), s);
@@ -178,20 +178,20 @@ export function traceOutline(outlinePixels: OutlineSample[], tracerPosition: Rea
         }
 
         const sort = (a: { x: number, y: number, position: ReadonlyVec3 }, b: { x: number, y: number, position: ReadonlyVec3 }) =>
-            sqDistFromTracer(a) - sqDistFromTracer(b);
+            sqDistFromLaser(a) - sqDistFromLaser(b);
 
-        const l = outlinePixels.filter((p) => filter(p, scaledTracePosition, perspective!.left)).sort((a, b) => sort(a, b));
-        const r = outlinePixels.filter((p) => filter(p, scaledTracePosition, perspective!.right)).sort((a, b) => sort(a, b));
-        const d = outlinePixels.filter((p) => filter(p, scaledTracePosition, perspective!.down)).sort((a, b) => sort(a, b));
-        const u = outlinePixels.filter((p) => filter(p, scaledTracePosition, perspective!.up)).sort((a, b) => sort(a, b));
+        const l = outlinePixels.filter((p) => filter(p, scaledLaserPosition, perspective!.left)).sort((a, b) => sort(a, b));
+        const r = outlinePixels.filter((p) => filter(p, scaledLaserPosition, perspective!.right)).sort((a, b) => sort(a, b));
+        const d = outlinePixels.filter((p) => filter(p, scaledLaserPosition, perspective!.down)).sort((a, b) => sort(a, b));
+        const u = outlinePixels.filter((p) => filter(p, scaledLaserPosition, perspective!.up)).sort((a, b) => sort(a, b));
         return { l, r, d, u };
     }
 
     const getListWithoutDirection = () => {
-        const l = outlinePixels.filter((p) => p.x < scaledTracePosition[0] && Math.abs(p.y - scaledTracePosition[1]) < 2).sort((a, b) => b.x - a.x);
-        const r = outlinePixels.filter((p) => p.x > scaledTracePosition[0] && Math.abs(p.y - scaledTracePosition[1]) < 2).sort((a, b) => a.x - b.x);
-        const d = outlinePixels.filter((p) => Math.abs(p.x - scaledTracePosition[0]) < 2 && p.y < scaledTracePosition[1]).sort((a, b) => b.y - a.y);
-        const u = outlinePixels.filter((p) => Math.abs(p.x - scaledTracePosition[0]) < 2 && p.y > scaledTracePosition[1]).sort((a, b) => a.y - b.y);
+        const l = outlinePixels.filter((p) => p.x < scaledLaserPosition[0] && Math.abs(p.y - scaledLaserPosition[1]) < 2).sort((a, b) => b.x - a.x);
+        const r = outlinePixels.filter((p) => p.x > scaledLaserPosition[0] && Math.abs(p.y - scaledLaserPosition[1]) < 2).sort((a, b) => a.x - b.x);
+        const d = outlinePixels.filter((p) => Math.abs(p.x - scaledLaserPosition[0]) < 2 && p.y < scaledLaserPosition[1]).sort((a, b) => b.y - a.y);
+        const u = outlinePixels.filter((p) => Math.abs(p.x - scaledLaserPosition[0]) < 2 && p.y > scaledLaserPosition[1]).sort((a, b) => a.y - b.y);
         return { l, r, d, u };
     }
 
@@ -205,21 +205,21 @@ export function traceOutline(outlinePixels: OutlineSample[], tracerPosition: Rea
 
     const checkX = (ar: OutlineSample[], i: number) => {
         if (Math.abs(ar[i - 1].x - ar[i].x) < 3) {
-            return Math.abs(ar[i - 1].y - scaledTracePosition[1]) > Math.abs(ar[i - 1].y - scaledTracePosition[1]) ? CheckResult.Replace : CheckResult.Discard;
+            return Math.abs(ar[i - 1].y - scaledLaserPosition[1]) > Math.abs(ar[i - 1].y - scaledLaserPosition[1]) ? CheckResult.Replace : CheckResult.Discard;
         }
         return CheckResult.Add;
     }
 
     const checkY = (ar: OutlineSample[], i: number) => {
         if (Math.abs(ar[i - 1].y - ar[i].y) < 3) {
-            return Math.abs(ar[i - 1].x - scaledTracePosition[0]) > Math.abs(ar[i - 1].x - scaledTracePosition[0]) ? CheckResult.Replace : CheckResult.Discard;
+            return Math.abs(ar[i - 1].x - scaledLaserPosition[0]) > Math.abs(ar[i - 1].x - scaledLaserPosition[0]) ? CheckResult.Replace : CheckResult.Discard;
         }
         return CheckResult.Add;
     }
 
     const checkDir = (ar: OutlineSample[], i: number) => {
         if (Math.abs(ar[i - 1].x - ar[i].x) < 10 && Math.abs(ar[i - 1].y - ar[i].y) < 10) {
-            return sqDistFromTracer(ar[i - 1]) > sqDistFromTracer(ar[i]) ? CheckResult.Replace : CheckResult.Discard;
+            return sqDistFromLaser(ar[i - 1]) > sqDistFromLaser(ar[i]) ? CheckResult.Replace : CheckResult.Discard;
         }
         return CheckResult.Add;
     }
