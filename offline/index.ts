@@ -1,14 +1,12 @@
-import { createCacheStorage } from "./cache";
-import { createOPFSStorage } from "./opfs";
+
+import { createOPFSStorage, type OfflineStorageOPFS } from "./opfs";
 import { OfflineViewState, createOfflineViewState } from "./state";
-import type { OfflineStorage } from "./storage";
-import { defaultRequestFormatter } from "./util";
 import type { ConnectAcknowledge, ConnectRequest, ConnectResponse } from "./opfs/messages";
 
 export * from "./serviceWorker";
 export type { Logger } from "./logger";
 export type { OfflineScene } from "./scene";
-export { createCacheStorage, createOfflineViewState, defaultRequestFormatter, type OfflineViewState };
+export { createOfflineViewState, type OfflineViewState };
 
 /** @internal The current storage schema version. */
 export const schemaVersion = "1.0";
@@ -119,23 +117,11 @@ async function enableServiceWorker(serviceWorkerUrl: URL | undefined, ioWorker: 
  * @returns An offline view state context used for offline storage management UI.
  * @internal
  */
-export async function manageOfflineStorage(ioWorker: Worker | undefined) {
-    const storage = ioWorker ?
-        await createOPFSStorage(schemaVersion, defaultRequestFormatter(), ioWorker) :
-        await createCacheStorage(schemaVersion, defaultRequestFormatter());
+export async function manageOfflineStorage(ioWorker: Worker) {
+    const storage = await createOPFSStorage(schemaVersion, ioWorker)
     // The context is for UI. The engine only needs the storage itself.
     const context = await createOfflineViewState(storage);
     return context;
-}
-
-/**
- * Create a cache based offline storage.
- * @returns An offline context used for offline storage management UI.
- * @internal
- */
-export async function createCacheOfflineStorage(): Promise<OfflineStorage> {
-    const storage = await createCacheStorage(schemaVersion, defaultRequestFormatter());
-    return storage;
 }
 
 /**
@@ -144,8 +130,8 @@ export async function createCacheOfflineStorage(): Promise<OfflineStorage> {
  * @returns An offline context used for offline storage management UI.
  * @internal
  */
-export async function createOPFSOfflineStorage(worker: Worker | MessagePort): Promise<OfflineStorage> {
-    const storage = await createOPFSStorage(schemaVersion, defaultRequestFormatter(), worker);
+export async function createOPFSOfflineStorage(worker: Worker | MessagePort): Promise<OfflineStorageOPFS> {
+    const storage = await createOPFSStorage(schemaVersion, worker);
     return storage;
 }
 

@@ -1,7 +1,6 @@
-import { type OfflineStorage, type OfflineDirectory, RequestFormatter } from "../storage";
+import { type OfflineDirectory, type ResourceType, type PathNameParser } from "../storage";
 import { PromiseBag } from "./promiseBag";
 import type { CreateDirResponse, CreateDirRequest, DeleteAllRequest, DirsRequest, DirsResponse, FilesRequest, IOResponse, ReadRequest, ReadResponse, DeleteAllResponse, FilesResponse, WriteRequest, WriteResponse, DeleteFilesRequest, DeleteFilesResponse, DeleteDirRequest, DeleteDirResponse } from "./messages";
-import type { defaultRequestFormatter } from "../";
 
 /**
  * Create an OPFS based offline storage.
@@ -11,24 +10,38 @@ import type { defaultRequestFormatter } from "../";
  * @remarks
  * If you use the standard novorender cloud storage, you may use the {@link defaultRequestFormatter} to create the the requestFormatter.
  */
-export async function createOPFSStorage(version: string, requestFormatter: RequestFormatter, worker: Worker | MessagePort): Promise<OfflineStorage> {
-    const storage = new OfflineStorageOPFS(version, requestFormatter, worker);
+export async function createOPFSStorage(version: string, worker: Worker | MessagePort): Promise<OfflineStorageOPFS> {
+    const storage = new OfflineStorageOPFS(version, worker);
     await storage.init();
     return storage;
 }
 
-class OfflineStorageOPFS implements OfflineStorage {
+class OfflineStorageOPFS {
     readonly promises = new PromiseBag();
     readonly dirs = new Map<string, OfflineDirectoryOPFS>();
+    readonly baseUrl = new URL("https://blobs.novorender.com/");
+    readonly mode = "cors";
 
-    constructor(readonly version: string, readonly requestFormatter: RequestFormatter, readonly worker: Worker | MessagePort) {
+    constructor(readonly version: string, readonly worker: Worker | MessagePort) {
         worker.onmessage = (message: MessageEvent<IOResponse>) => {
             const { data } = message;
             this.promises.resolve(data.id, data);
         };
     }
 
-    // initialize existing directories from storage
+
+    parse(str: string) {
+        const re = new RegExp(`^\/(?<dir>[0-9a-f]{32})\/(?<file>.+)$`);
+        return str.match(re)?.groups as ReturnType<PathNameParser>;
+    }
+
+    format(dir: string, file: string, type: ResourceType) {
+        return `/${dir}${type ? `/${type}` : ""}/${file}`;
+    }
+
+    /**
+     * @internal initialize existing directories from storage
+     */
     async init(): Promise<void> {
         const { worker, promises, dirs } = this;
         const id = promises.newId();
@@ -44,13 +57,67 @@ class OfflineStorageOPFS implements OfflineStorage {
         }
     }
 
-    isAsset(request: Request): boolean {
-        return this.requestFormatter.tryDecode(request) != undefined;
+    /**
+    * Decode request into directory and file name.
+    * @param request A request generated from the {@link request} function.
+    * @returns Request directory and file name, if url matches asset pattern, undefined otherwise.
+    */
+    tryDecode(request: Request) {
+        const { pathname } = new URL(request.url);
+        return this.parse(pathname);
     }
 
+    /**
+ * Decode request into directory and file name.
+ * @param request A request generated from the {@link request} function.
+ * @returns Request directory and file name.
+ */
+    decode(request: Request) {
+        const result = this.tryDecode(request);
+        if (!result)
+            throw new Error("Request does not match valid pattern!");
+        return result;
+    }
+
+
+
+    /**
+     * 
+     * @param dir The storage directory name.
+     * @param file The storage file name.
+     * @param signal A signal for aborting the request.
+     * @param applyQuery Whether or not to apply query string to request url.
+     * @returns A Request to feed to fetch() API and/or to match against cache entries.
+     */
+    request(dir: string, file: string, type: ResourceType, query?: string, signal?: AbortSignal): Request {
+        const { baseUrl, mode } = this;
+        const url = new URL(this.format(dir, file, type), baseUrl);
+        if (query)
+            url.search = query;
+        return new Request(url, { mode, signal });
+    }
+
+    /**
+ * Determine if request is a potential offline asset or not.
+ * @param request The resource request
+ * @returns True, if request url matches that of a potential offline asset, False, if not.
+ * @remarks
+ * This function only check if the URL matches the pattern of potential offline assets,
+ * not if it's actually available offline or not.
+ * It's only meant as an early screening to not intercept purely online content.
+ */
+    isAsset(request: Request): boolean {
+        return this.tryDecode(request) != undefined;
+    }
+
+    /**
+ * Fetch resource from offline storage, if available.
+ * @param request The resource request
+ * @returns A response or undefined if no match was found.
+ */
     async fetch(request: Request): Promise<Response | undefined> {
-        const { worker, requestFormatter, promises } = this;
-        const { dir, file } = requestFormatter.decode(request);
+        const { worker, promises } = this;
+        const { dir, file } = this.decode(request);
         const id = promises.newId();
         const msg: ReadRequest = { kind: "read", id, dir, file };
         worker.postMessage(msg);
@@ -60,14 +127,21 @@ class OfflineStorageOPFS implements OfflineStorage {
         }
     }
 
+    /** Existing directory names in this storage. */
     get existingDirectories() {
         return this.dirs.values();
     }
 
+    /** Check if directory already exists. */
     hasDirectory(name: string): boolean {
         return this.dirs.has(name);
     }
 
+    /**
+ * Get or create a directory by name.
+ * @param name The directory name.
+ * @returns The directory storage.
+ */
     async directory(name: string): Promise<OfflineDirectory> {
         const { dirs } = this;
         let dir = dirs.get(name);
@@ -78,7 +152,7 @@ class OfflineStorageOPFS implements OfflineStorage {
         return dir;
     }
 
-    async addDirectory(name: string) {
+    private async addDirectory(name: string) {
         const { worker, promises } = this;
         const id = promises.newId();
         const msg: CreateDirRequest = { kind: "create_dir", id, dir: name };
@@ -90,6 +164,9 @@ class OfflineStorageOPFS implements OfflineStorage {
         return new OfflineDirectoryOPFS(this, name);
     }
 
+    /**
+ * Delete everything in this storage, including folders using a different/older schema.
+ */
     async deleteAll() {
         const { worker, promises } = this;
         const id = promises.newId();
@@ -105,12 +182,6 @@ class OfflineStorageOPFS implements OfflineStorage {
 
 class OfflineDirectoryOPFS implements OfflineDirectory {
     constructor(readonly context: OfflineStorageOPFS, readonly name: string) { }
-
-    request(name: string): Request {
-        const { context } = this;
-        const { requestFormatter } = context;
-        return requestFormatter.request(this.name, name);
-    }
 
     async* files(): AsyncIterableIterator<string> {
         const { context, name } = this;
@@ -177,3 +248,5 @@ class OfflineDirectoryOPFS implements OfflineDirectory {
         }
     }
 }
+
+export type { OfflineStorageOPFS };

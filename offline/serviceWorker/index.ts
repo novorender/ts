@@ -1,6 +1,6 @@
-import { createCacheOfflineStorage, createOPFSOfflineStorage } from "../";
+import type { OfflineStorageOPFS } from "offline/opfs";
+import { createOPFSOfflineStorage } from "../";
 import type { ConnectAcknowledge, ConnectRequest, ConnectResponse } from "../opfs/messages";
-import { type OfflineStorage } from "../storage";
 
 /**
  * Handle service worker messages.
@@ -13,7 +13,7 @@ export async function serviceWorkerHandleMessage(event: MessageEvent<ConnectResp
     switch (data.kind) {
         case "connect": {
             const { port } = data;
-            const storage = port ? await createOPFSOfflineStorage(port) : await createCacheOfflineStorage();
+            const storage = await createOPFSOfflineStorage(port);
             if (source && source instanceof Client) {
                 console.log(`Client ${source.id} connected to service worker!`);
                 const clientId = source.id;
@@ -48,7 +48,7 @@ export async function serviceWorkerFetch(request: Request, clientId: string, cac
 }
 
 // this global state merely works like a cache and will be recreated if the service worker is restarted.
-const clientStorages = new Map<string, OfflineStorage | null>(); // null signifies a storage has been requested but not yet resolved.
+const clientStorages = new Map<string, OfflineStorageOPFS | null>(); // null signifies a storage has been requested but not yet resolved.
 
 async function connectToClient(clientId: string) {
     const client = await clients.get(clientId);
@@ -58,7 +58,7 @@ async function connectToClient(clientId: string) {
     }
 }
 
-function getStorage(clientId: string): OfflineStorage | null | undefined {
+function getStorage(clientId: string): OfflineStorageOPFS | null | undefined {
     let storage = clientStorages.get(clientId);
     if (storage === undefined) {
         storage = null; // mark this client as connecting so we don't connect more than once.
@@ -68,9 +68,9 @@ function getStorage(clientId: string): OfflineStorage | null | undefined {
     return storage;
 }
 
-async function fetchFromStorage(request: Request, storage: OfflineStorage): Promise<Response | undefined> {
+async function fetchFromStorage(request: Request, storage: OfflineStorageOPFS): Promise<Response | undefined> {
     let response: Response | undefined;
-    const entry = storage.requestFormatter.tryDecode(request);
+    const entry = storage.tryDecode(request);
     // Is it an binary asset?
     if (entry) {
         // console.log(`  from storage`);

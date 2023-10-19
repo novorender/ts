@@ -4,7 +4,10 @@ import type { OfflineDirectory } from "./storage";
 export type SceneManifestEntry = readonly [name: string, size: number];
 
 /** A collection of scene manifest entry tuples, used to construct a scene manifest. */
-export type SceneManifestData = Iterable<SceneManifestEntry>;
+export interface SceneManifestData {
+    readonly webgl2_bin: readonly SceneManifestEntry[];
+    readonly brep: readonly SceneManifestEntry[];
+};
 
 /** A file manifest for a scene.
  * @remarks
@@ -13,11 +16,25 @@ export type SceneManifestData = Iterable<SceneManifestEntry>;
  */
 export class SceneManifest {
     /** A map of manifest filenames and their respective byte sizes. */
-    private readonly _files = new Map<string, number>;
+    private readonly _glfiles = new Map<string, number>;
+    private readonly _brepfiles = new Map<string, number>;
 
     // The manifest file entries.
-    get files(): IterableIterator<SceneManifestEntry> {
-        return this._files.entries();
+    get glFiles(): IterableIterator<SceneManifestEntry> {
+        return this._glfiles.entries();
+    }
+
+    get brepFiles(): IterableIterator<SceneManifestEntry> {
+        return this._brepfiles.entries();
+    }
+
+    get allFiles(): IterableIterator<SceneManifestEntry> {
+        const { _glfiles, _brepfiles } = this;
+        function* iterate() {
+            yield* _glfiles;
+            yield* _brepfiles;
+        }
+        return iterate();
     }
 
     /** The total byte size of all the files in this manifest. */
@@ -29,14 +46,21 @@ export class SceneManifest {
     /**
      * @param data The entries of this manifest.
      */
-    constructor(data: SceneManifestData) {
-        const { _files } = this;
+    constructor(data: SceneManifestData | undefined) {
+        const { _glfiles, _brepfiles } = this;
         let totalByteSize = 0;
         let numFiles = 0;
-        for (const [name, size] of data) {
-            _files.set(name, size);
-            totalByteSize += size;
-            numFiles++;
+        if (data) {
+            for (const [name, size] of data.webgl2_bin) {
+                _glfiles.set(name, size);
+                totalByteSize += size;
+                numFiles++;
+            }
+            for (const [name, size] of data.brep) {
+                _brepfiles.set(name, size);
+                totalByteSize += size;
+                numFiles++;
+            }
         }
         this.totalByteSize = totalByteSize;
         this.numFiles = numFiles;
@@ -54,11 +78,11 @@ export class SceneManifest {
  * The latter case indicates some prior error and is not ideal, but still better than re-downloading every file from scratch.
  */
 export async function readManifest(dir: OfflineDirectory): Promise<SceneManifest> {
-    let data: SceneManifestData = [];
+    let data: SceneManifestData | undefined;
     const buffer = await dir.read("manifest.json");
     if (buffer) {
         const json = new TextDecoder().decode(buffer);
-        data = JSON.parse(json) as SceneManifestEntry[];
+        data = JSON.parse(json) as SceneManifestData;
     }
     return new SceneManifest(data);
 }

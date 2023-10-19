@@ -6,7 +6,7 @@ export interface ConnectRequest {
 
 export interface ConnectResponse {
     readonly kind: "connect";
-    readonly port: MessagePort | undefined;
+    readonly port: MessagePort;
 }
 
 export interface ConnectAcknowledge {

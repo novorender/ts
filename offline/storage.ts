@@ -3,57 +3,12 @@
  */
 export type PathNameParser = (path: string) => { readonly dir: string, readonly file: string } | undefined;
 
+export type ResourceType = "webgl2_bin" | "brep" | "";
+
 /**
  * Callback function to formatdirectory and file name into an URL path name.
  */
-export type PathNameFormatter = (dir: string, file: string) => string;
-
-/**
- * Offline storage interface
- * @remarks
- * This object offers a basic filesystem-like abstraction for offline storage,
- * either through the Cache API or OPFS API, depending on browser/availability.
- */
-export interface OfflineStorage {
-    /** The formatter used to encode and decode requests. */
-    readonly requestFormatter: RequestFormatter;
-
-    /**
-     * Determine if request is a potential offline asset or not.
-     * @param request The resource request
-     * @returns True, if request url matches that of a potential offline asset, False, if not.
-     * @remarks
-     * This function only check if the URL matches the pattern of potential offline assets,
-     * not if it's actually available offline or not.
-     * It's only meant as an early screening to not intercept purely online content.
-     */
-    isAsset(request: Request): boolean;
-
-    /**
-     * Fetch resource from offline storage, if available.
-     * @param request The resource request
-     * @returns A response or undefined if no match was found.
-     */
-    fetch(request: Request): Promise<Response | undefined>;
-
-    /** Existing directory names in this storage. */
-    existingDirectories: IterableIterator<OfflineDirectory>;
-
-    /** Check if directory already exists. */
-    hasDirectory(name: string): boolean;
-
-    /**
-     * Get or create a directory by name.
-     * @param name The directory name.
-     * @returns The directory storage.
-     */
-    directory(name: string): Promise<OfflineDirectory>;
-
-    /**
-     * Delete everything in this storage, including folders using a different/older schema.
-     */
-    deleteAll(): Promise<void>;
-}
+export type PathNameFormatter = (dir: string, file: string, type: ResourceType) => string;
 
 /**
  * Offline directory interface.
@@ -138,9 +93,9 @@ export class RequestFormatter {
      * @param applyQuery Whether or not to apply query string to request url.
      * @returns A Request to feed to fetch() API and/or to match against cache entries.
      */
-    request(dir: string, file: string, query?: string, signal?: AbortSignal): Request {
+    request(dir: string, file: string, type: ResourceType, query?: string, signal?: AbortSignal): Request {
         const { baseUrl, formatter, mode } = this;
-        const url = new URL(formatter(dir, file), baseUrl);
+        const url = new URL(formatter(dir, file, type), baseUrl);
         if (query)
             url.search = query;
         return new Request(url, { mode, signal });

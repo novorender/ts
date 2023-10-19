@@ -1,7 +1,7 @@
 import type { Logger } from ".";
 import type { OfflineViewState } from "./state";
-import { SceneManifest, type SceneManifestData } from "./manifest";
-import type { OfflineDirectory } from "./storage";
+import { SceneManifest, type SceneManifestData, type SceneManifestEntry } from "./manifest";
+import type { OfflineDirectory, ResourceType } from "./storage";
 import { errorMessage } from "./util";
 
 /**
@@ -56,14 +56,14 @@ export class OfflineScene {
      */
     async sync(abortSignal: AbortSignal, sasKey: string): Promise<boolean> {
         const { dir, manifest, logger, context } = this;
-        const { requestFormatter } = context.storage;
+        const { storage } = context;
         if (!navigator.onLine) {
             logger?.status("offline");
             logger?.error("You must be online to synchronize files!");
             return false;
         }
 
-        const existingFiles = new Map<string, number>(manifest.files);
+        const existingFiles = new Map<string, number>(manifest.allFiles);
         async function scanFiles() {
             // scan local files in the background, since this could take some time.
             const files = dir.files();
@@ -81,7 +81,7 @@ export class OfflineScene {
             logger?.status("synchronizing");
             logger?.info?.("fetching manifest");
             // fetch online manifest
-            const manifestRequest = requestFormatter.request(dir.name, "manifest.json", sasKey, abortSignal)
+            const manifestRequest = storage.request(dir.name, "manifest.json", "", sasKey, abortSignal)
             const manifestResponse = await fetch(manifestRequest);
             if (!manifestResponse.ok) {
                 throw new Error(manifestResponse.statusText);
@@ -102,40 +102,47 @@ export class OfflineScene {
             logger?.progress?.(totalDownload, totalByteSize);
             const maxSimulataneousDownloads = 8;
             const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
-            for (const [name, size] of onlineManifest.files) {
-                if (!existingFiles.has(name)) {
-                    const fileRequest = requestFormatter.request(dir.name, name, sasKey, abortSignal);
-                    let idx = downloadQueue.findIndex(e => !e);
-                    if (idx < 0) {
-                        // queue is full, so wait for another download to complete
-                        await Promise.race(downloadQueue);
-                        idx = downloadQueue.findIndex(e => !e);
-                        console.assert(idx >= 0);
-                    }
-                    const downloadPromise = download();
-                    downloadQueue[idx] = downloadPromise;
-                    downloadPromise.finally(() => {
-                        downloadQueue[idx] = undefined;
-                    });
-                    // do downloads in "parallel"
-                    async function download() {
-                        let fileResponse = await fetch(fileRequest);
-                        if (fileResponse.ok) {
-                            const buffer = await fileResponse.arrayBuffer();
-                            await dir.write(name, buffer);
-                            totalDownload += size;
-                        } else {
-                            throw new Error(`Could not fetch ${name}!`);
+
+            async function downloadFiles(files: Iterable<SceneManifestEntry>, type: ResourceType) {
+                for (const [name, size] of files) {
+                    if (!existingFiles.has(name)) {
+                        const fileRequest = storage.request(dir.name, name, type, sasKey, abortSignal);
+                        let idx = downloadQueue.findIndex(e => !e);
+                        if (idx < 0) {
+                            // queue is full, so wait for another download to complete
+                            await Promise.race(downloadQueue);
+                            idx = downloadQueue.findIndex(e => !e);
+                            console.assert(idx >= 0);
                         }
+                        const downloadPromise = download();
+                        downloadQueue[idx] = downloadPromise;
+                        downloadPromise.finally(() => {
+                            downloadQueue[idx] = undefined;
+                        });
+                        // do downloads in "parallel"
+                        async function download() {
+                            let fileResponse = await fetch(fileRequest);
+                            if (fileResponse.ok) {
+                                const buffer = await fileResponse.arrayBuffer();
+                                await dir.write(name, buffer);
+                                totalDownload += size;
+                            } else {
+                                throw new Error(`Could not fetch ${name}!`);
+                            }
+                        }
+                    } else {
+                        totalDownload += size;
                     }
-                } else {
-                    totalDownload += size;
-                }
-                if (debounce(100)) {
-                    logger?.progress?.(totalDownload, totalByteSize);
+                    if (debounce(100)) {
+                        logger?.progress?.(totalDownload, totalByteSize);
+                    }
                 }
             }
+            downloadFiles(onlineManifest.glFiles, "webgl2_bin");
             await Promise.all(downloadQueue);
+            downloadFiles(onlineManifest.brepFiles, "brep");
+            await Promise.all(downloadQueue);
+
             logger?.progress?.(undefined, undefined);
 
             // add manifest to local files last to mark the completion of sync.
@@ -145,7 +152,7 @@ export class OfflineScene {
 
             // delete unreferenced entries
             logger?.info?.("cleanup");
-            for (const [name] of onlineManifest.files) {
+            for (const [name] of onlineManifest.allFiles) {
                 existingFiles.delete(name);
             }
             await dir.deleteFiles(existingFiles.keys());

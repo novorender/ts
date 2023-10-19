@@ -1,14 +1,14 @@
 import { type Logger } from "./logger";
 import { SceneManifest, readManifest } from "./manifest";
+import type { OfflineStorageOPFS } from "./opfs";
 import { OfflineScene } from "./scene";
-import { type OfflineStorage } from "./storage";
 import { errorMessage } from "./util";
 
 /**
  * Create and initialize an offline view state object.
  * @param storage The offline storage to use.
  */
-export async function createOfflineViewState(storage: OfflineStorage) {
+export async function createOfflineViewState(storage: OfflineStorageOPFS) {
     const storageEstimate = "estimate" in navigator.storage ? await navigator.storage.estimate() : undefined;
     const context = new OfflineViewState(storage, storageEstimate);
     const { scenes } = context;
@@ -38,7 +38,7 @@ export class OfflineViewState {
 
     constructor(
         /** The offline storage used. */
-        readonly storage: OfflineStorage,
+        readonly storage: OfflineStorageOPFS,
         /** The initially estimated storage usage and quotas, if available. You may use `navigator.estimate()` to get the latest update, although this doesn't necessarily reflect recent changes, hence the term "estimate". See [MDN](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/estimate) for more details. */
         readonly initialStorageEstimate: StorageEstimate | undefined,
     ) {
@@ -62,7 +62,7 @@ export class OfflineViewState {
             // const request = storage.requestFormatter.request(id, "manifest.json");
             // const manifestData = await fetchManifestData(request);
             logger?.status("adding scene");
-            const manifest = new SceneManifest([]);
+            const manifest = new SceneManifest(undefined);
             const dir = await storage.directory(id);
             try {
                 const scene = new OfflineScene(this, dir, manifest);

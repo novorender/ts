@@ -57,7 +57,7 @@ export class MeasureTool {
     if (idToHash && id < idToHash.length / 16) {
       const offset = id * 16;
       const slice = idToHash.subarray(offset, offset + 16);
-      return [...slice].map(b => b.toString(16)).join("");
+      return [...slice].map(b => b.toString(16)).join("").toUpperCase();
     }
     return undefined;
   }
