@@ -52,8 +52,8 @@ void main() {
 
     mediump vec3 normalVS = normalize(varyings.normalVS);
     // compute geometric/flat normal from derivatives
-    mediump vec3 axisX = dFdx(varyings.positionVS);
-    mediump vec3 axisY = dFdy(varyings.positionVS);
+    highp vec3 axisX = dFdx(varyings.positionVS); // adreno GPU doesn't like this to be mediump, for some reason, so we use highp instead
+    highp vec3 axisY = dFdy(varyings.positionVS); // ditto
     mediump vec3 geometricNormalVS = normalize(cross(axisX, axisY));
 
     // ensure that vertex normal points in same direction as geometric normal (which always faces camera)
