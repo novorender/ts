@@ -124,6 +124,9 @@ export class OctreeModule implements RenderModule {
         if (deviceProfile.quirks.adreno600) {
             flags.push("ADRENO600");
         }
+        if (deviceProfile.quirks.iosInterpolationBug) {
+            flags.push("IOS_INTERPOLATION_BUG");
+        }
         const defines = [
             { name: "PASS", value: pass.toString() },
             { name: "MODE", value: mode.toString() },

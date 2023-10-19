@@ -144,6 +144,7 @@ export class RenderBuffers {
                         promises.splice(i, 1);
                         promiseCallbacks.resolve();
                     }
+                    this.readBuffersNeedUpdate = true;
                 }
             }, 100);
             const promise = new Promise<void>((resolve, reject) => {

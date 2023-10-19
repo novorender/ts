@@ -66,16 +66,16 @@ void main() {
         }
     }
 
-        // compute point size
-    float linearSize = scene.metricSize + node.tolerance * scene.toleranceFactor;
-    float projectedSize = max(0.f, camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 0.5f / gl_Position.w);
+    // compute point size
+    mediump float linearSize = scene.metricSize + node.tolerance * scene.toleranceFactor;
+    mediump float projectedSize = max(0.f, camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 0.5f / gl_Position.w);
     gl_PointSize = min(scene.maxPixelSize, max(1.0f, scene.pixelSize + projectedSize));
 
-        // Convert position to window coordinates
+    // Convert position to window coordinates
     vec2 halfsize = camera.viewSize * 0.5f;
     varyings.screenPos = halfsize + ((gl_Position.xy / gl_Position.w) * halfsize);
 
-        // Convert radius to window coordinates
+    // Convert radius to window coordinates
     varyings.radius = max(1.0f, gl_PointSize * 0.5f);
 #elif defined (HIGHLIGHT)
     if(vertexHighlight >= 0xFEU) {

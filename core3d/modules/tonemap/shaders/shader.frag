@@ -6,7 +6,7 @@ uniform TonemappingTextures textures;
 
 in TonemappingVaryings varyings;
 
-layout(location = 0) out vec4 fragColor;
+layout(location = 0) out lowp vec4 fragColor;
 
 uint hash(uint x) {
     x += (x << 10u);
@@ -19,25 +19,25 @@ uint hash(uint x) {
 
 // ACES tone map (faster approximation)
 // see: https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
-vec3 toneMapACES_Narkowicz(vec3 color) {
-    const float A = 2.51;
-    const float B = 0.03;
-    const float C = 2.43;
-    const float D = 0.59;
-    const float E = 0.14;
-    return clamp((color * (A * color + B)) / (color * (C * color + D) + E), 0.0, 1.0);
+mediump vec3 toneMapACES_Narkowicz(mediump vec3 color) {
+    const mediump float A = 2.51f;
+    const mediump float B = 0.03f;
+    const mediump float C = 2.43f;
+    const mediump float D = 0.59f;
+    const mediump float E = 0.14f;
+    return clamp((color * (A * color + B)) / (color * (C * color + D) + E), 0.0f, 1.0f);
 }
 
 // ACES filmic tone map approximation
 // see https://github.com/TheRealMJP/BakingLab/blob/master/BakingLab/ACES.hlsl
-vec3 RRTAndODTFit(vec3 color) {
-    vec3 a = color * (color + 0.0245786) - 0.000090537;
-    vec3 b = color * (0.983729 * color + 0.4329510) + 0.238081;
+mediump vec3 RRTAndODTFit(mediump vec3 color) {
+    mediump vec3 a = color * (color + 0.0245786f) - 0.000090537f;
+    mediump vec3 b = color * (0.983729f * color + 0.4329510f) + 0.238081f;
     return a / b;
 }
 
 void main() {
-    vec4 color = vec4(1, 0, 0, 1);
+    mediump vec4 color = vec4(1, 0, 0, 1);
     switch(tonemapping.mode) {
         case tonemapModeColor: {
             color = texture(textures.color, varyings.uv);
@@ -50,17 +50,17 @@ void main() {
             if(any(isnan(xyz))) {
                 color.rgb = vec3(0);
             } else {
-                color.rgb = xyz * .5 + .5;
+                color.rgb = xyz * .5f + .5f;
             }
             break;
         }
         case tonemapModeDepth: {
             float linearDepth = uintBitsToFloat(texture(textures.pick, varyings.uv).w);
             if(isinf(linearDepth)) {
-                color.rgb = vec3(0, 0, 0.25);
+                color.rgb = vec3(0, 0, 0.25f);
             } else {
                 float i = (linearDepth / tonemapping.maxLinearDepth);
-                color.rgb = vec3(pow(i, 0.5));
+                color.rgb = vec3(pow(i, 0.5f));
             }
             break;
         }
@@ -71,16 +71,16 @@ void main() {
             } else {
                 // color.rgb = vec3(0,1,1);
                 uint rgba = hash(~objectId);
-                float r = float((rgba >> 16U) & 0xffU) / 255.;
-                float g = float((rgba >> 8U) & 0xffU) / 255.;
-                float b = float((rgba >> 0U) & 0xffU) / 255.;
+                float r = float((rgba >> 16U) & 0xffU) / 255.f;
+                float g = float((rgba >> 8U) & 0xffU) / 255.f;
+                float b = float((rgba >> 0U) & 0xffU) / 255.f;
                 color.rgb = vec3(r, g, b);
             }
             break;
         }
         case tonemapModeDeviation: {
             float deviation = unpackNormalAndDeviation(texture(textures.pick, varyings.uv).yz).w;
-            color.rgb = deviation > 0. ? vec3(0, deviation / tonemapMaxDeviation, 0) : vec3(-deviation / tonemapMaxDeviation, 0, 0);
+            color.rgb = deviation > 0.f ? vec3(0, deviation / tonemapMaxDeviation, 0) : vec3(-deviation / tonemapMaxDeviation, 0, 0);
             break;
         }
         case tonemapModeZbuffer: {

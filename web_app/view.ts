@@ -1,9 +1,9 @@
-import { type ReadonlyVec3, vec3, type ReadonlyQuat, mat3 } from "gl-matrix";
+import { type ReadonlyVec3, vec3, vec2, type ReadonlyQuat, mat3, type ReadonlyVec2, type ReadonlyVec4, glMatrix, vec4, mat4 } from "gl-matrix";
 import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
-import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections } from "./buffer_inspect";
+import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections, type OutlineIntersection, outlineLaser } from "./buffer_inspect";
 
 /**
  * A view base class for Novorender content.
@@ -265,6 +265,49 @@ export class View<
     }
 
     /**
+     * Create a list of intersections between the x and y axis through the tracer position
+     * @public
+     * @param laserPosition position where to calculate intersections,  
+     * @param perspective For tracer to work in perspective the 3d tracer position and plane to intersect is required,  
+     * @returns list of intersections (right, left, up ,down) 
+     * results will be ordered from  closest to furthest from the tracer poitn
+     */
+    async outlineLaser(laserPosition: ReadonlyVec2, perspective?: { laserPosition3d: ReadonlyVec3, plane: ReadonlyVec4 }): Promise<OutlineIntersection | undefined> {
+        const context = this._renderContext;
+        if (context) {
+            const scale = devicePixelRatio * this.resolutionModifier;
+            if (perspective) {
+                const { laserPosition3d, plane } = perspective;
+                const dir = vec3.fromValues(plane[0], plane[1], plane[2]);
+                const u = glMatrix.equals(Math.abs(vec3.dot(vec3.fromValues(0, 0, 1), dir)), 1)
+                    ? vec3.fromValues(0, 1, 0)
+                    : vec3.fromValues(0, 0, 1);
+                const r = vec3.cross(vec3.create(), u, dir);
+                vec3.cross(u, dir, r);
+                vec3.normalize(u, u);
+
+                vec3.cross(r, u, dir);
+                vec3.normalize(r, r);
+
+                const pts = (await this.measure).draw.toMarkerPoints([vec3.add(vec3.create(), laserPosition3d, r), vec3.add(vec3.create(), laserPosition3d, u)])
+                if (pts[0] == undefined || pts[1] == undefined) {
+                    return undefined;
+                }
+                const left = vec2.sub(vec2.create(), laserPosition, pts[0]);
+                vec2.normalize(left, left);
+                const right = vec2.fromValues(-left[0], -left[1]);
+                const up = vec2.sub(vec2.create(), laserPosition, pts[1]);
+                vec2.normalize(up, up);
+                const down = vec2.fromValues(-up[0], -up[1]);
+                return outlineLaser(await context.getOutlines(), laserPosition, scale,
+                    { left, right, down, up, tracerPosition3d: vec3.fromValues(laserPosition3d[0], laserPosition3d[2], -laserPosition3d[1]) });
+
+            }
+            return outlineLaser(await context.getOutlines(), laserPosition, scale);
+        }
+    }
+
+    /**
      * Get all object ids currently on screen
      * @public
      * @returns returns a set of all object ids on the screen 
@@ -426,8 +469,12 @@ export class View<
 
                 if (isIdleFrame) { //increase resolution and detail bias on idleFrame
                     if (deviceProfile.tier > 0 && this.renderState.toonOutline.on == false) {
-                        //Enable features when on idle frame
-                        this.modifyRenderState({ toonOutline: { on: true }, outlines: { on: true } });
+                        //Enable toonOutline when on idle frame
+                        this.modifyRenderState({ toonOutline: { on: true } });
+                    }
+                    if (deviceProfile.tier > 0 && this.renderState.outlines.on == false) {
+                        //Enable outline when on idle frame
+                        this.modifyRenderState({ outlines: { on: true } });
                     }
                     if (!wasIdle) {
                         //Set max quality and resolution when the camera stops moving
@@ -631,9 +678,8 @@ export class View<
             const now = performance.now();
             //To handle dynamic on and off clipping outline based on framerate.
             if (this.activeOutline) {
-                const activeOutline = medianInterval < this.drsLowInterval && this.resolutionTier == 2;
-                if (this.activeOutline != activeOutline) {
-                    this.activeOutline = activeOutline;
+                if (this.activeOutline && (medianInterval > this.drsHighInterval && this.resolutionTier < 2)) {
+                    this.activeOutline = false;
                     this.modifyRenderState({ outlines: { on: this.activeOutline } });
                 }
             }

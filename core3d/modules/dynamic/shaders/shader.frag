@@ -15,8 +15,8 @@ uniform DynamicTextures textures;
 in DynamicVaryings varyings;
 flat in DynamicVaryingsFlat varyingsFlat;
 
-layout(location = 0) out vec4 fragColor;
-layout(location = 1) out uvec4 fragPick;
+layout(location = 0) out mediump vec4 fragColor;
+layout(location = 1) out highp uvec4 fragPick;
 
 float clampedDot(vec3 x, vec3 y) {
     return clamp(dot(x, y), 0.0f, 1.0f);
@@ -85,20 +85,20 @@ NormalInfo getNormalInfo(vec3 v) {
 }
 
 struct MaterialInfo {
-    float perceptualRoughness;      // roughness value, as authored by the model creator (input to shader)
-    vec3 f0;                        // full reflectance color (n incidence angle)
+    mediump float perceptualRoughness;      // roughness value, as authored by the model creator (input to shader)
+    mediump vec3 f0;                        // full reflectance color (n incidence angle)
 
-    float alphaRoughness;           // roughness mapped to a more linear change in the roughness (proposed by [2])
-    vec3 albedoColor;
+    mediump float alphaRoughness;           // roughness mapped to a more linear change in the roughness (proposed by [2])
+    mediump vec3 albedoColor;
 
-    vec3 f90;                       // reflectance color at grazing angle
-    float metallic;
+    mediump vec3 f90;                       // reflectance color at grazing angle
+    mediump float metallic;
 
-    vec3 n;
-    vec3 baseColor; // getBaseColor()
+    mediump vec3 n;
+    mediump vec3 baseColor; // getBaseColor()
 };
 
-MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, float f0_ior) {
+MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, mediump float f0_ior) {
     info.metallic = material.metallicFactor;
     info.perceptualRoughness = material.roughnessFactor;
 
@@ -120,41 +120,41 @@ MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, float f0_ior) {
     return info;
 }
 
-vec3 getIBLRadianceGGX(vec3 n, vec3 v, float perceptualRoughness, vec3 specularColor) {
+mediump vec3 getIBLRadianceGGX(mediump vec3 n, vec3 v, mediump float perceptualRoughness, mediump vec3 specularColor) {
     float NdotV = clampedDot(n, v);
     vec3 reflection = normalize(reflect(-v, n));
     vec2 brdfSamplePoint = clamp(vec2(NdotV, perceptualRoughness), vec2(0.0f, 0.0f), vec2(1.0f, 1.0f));
-    vec2 brdf = texture(textures.lut_ggx, brdfSamplePoint).rg;
-    float lod = clamp(perceptualRoughness * float(material.radianceMipCount), 0.0f, float(material.radianceMipCount));
-    vec4 specularSample = textureLod(textures.ibl.specular, reflection, lod);
-    vec3 specularLight = specularSample.rgb;
+    mediump vec2 brdf = texture(textures.lut_ggx, brdfSamplePoint).rg;
+    mediump float lod = clamp(perceptualRoughness * float(material.radianceMipCount), 0.0f, float(material.radianceMipCount));
+    mediump vec4 specularSample = textureLod(textures.ibl.specular, reflection, lod);
+    mediump vec3 specularLight = specularSample.rgb;
     return specularLight * (specularColor * brdf.x + brdf.y);
 }
 
-vec3 getIBLRadianceLambertian(vec3 n, vec3 diffuseColor) {
+mediump vec3 getIBLRadianceLambertian(mediump vec3 n, mediump vec3 diffuseColor) {
     vec3 diffuseLight = texture(textures.ibl.diffuse, n).rgb;
     return diffuseLight * diffuseColor;
 }
 
 void main() {
-    vec4 baseColor = material.baseColorFactor * varyings.color0;
+    mediump vec4 baseColor = material.baseColorFactor * varyings.color0;
 
     if(material.baseColorUVSet >= 0) {
         vec2 uv = material.baseColorUVSet < 1 ? varyings.texCoord0 : varyings.texCoord1;
-        vec4 bc = texture(textures.base_color, uv);
+        mediump vec4 bc = texture(textures.base_color, uv);
         baseColor *= vec4(sRGBToLinear(bc.rgb), bc.a);
     }
     if(baseColor.a < material.alphaCutoff)
         discard;
 
-    vec3 v = normalize(varyings.toCamera);
+    mediump vec3 v = normalize(varyings.toCamera);
     NormalInfo normalInfo = getNormalInfo(v);
     vec3 n = normalInfo.n;
     vec3 normal = normalInfo.n;
     // vec3 l = normalize(uSunDir);   // Direction from surface point to light
     // vec3 h = normalize(l + v);     // Direction of the vector between l and v, called halfway vector
 
-    vec4 outColor;
+    mediump vec4 outColor;
 
 #if defined(PBR_METALLIC_ROUGHNESS)
 
@@ -162,8 +162,8 @@ void main() {
     materialInfo.baseColor = baseColor.rgb;
 
     // The default index of refraction of 1.5 yields a dielectric normal incidence reflectance of 0.04.
-    float ior = 1.5f;
-    float f0_ior = 0.04f;
+    mediump float ior = 1.5f;
+    mediump float f0_ior = 0.04f;
 
     materialInfo = getMetallicRoughnessInfo(materialInfo, f0_ior);
 
@@ -175,7 +175,7 @@ void main() {
     materialInfo.alphaRoughness = materialInfo.perceptualRoughness * materialInfo.perceptualRoughness;
 
     // Compute reflectance.
-    float reflectance = max(max(materialInfo.f0.r, materialInfo.f0.g), materialInfo.f0.b);
+    mediump float reflectance = max(max(materialInfo.f0.r, materialInfo.f0.g), materialInfo.f0.b);
 
     // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
     materialInfo.f90 = vec3(clamp(reflectance * 50.0f, 0.0f, 1.0f));
@@ -183,9 +183,9 @@ void main() {
     materialInfo.n = n;
 
     // LIGHTING
-    vec3 f_specular = vec3(0.0f);
-    vec3 f_diffuse = vec3(0.0f);
-    vec3 f_emissive = vec3(0.0f);
+    mediump vec3 f_specular = vec3(0.0f);
+    mediump vec3 f_diffuse = vec3(0.0f);
+    mediump vec3 f_emissive = vec3(0.0f);
 
     f_specular += getIBLRadianceGGX(n, v, materialInfo.perceptualRoughness, materialInfo.f0);
     f_diffuse += getIBLRadianceLambertian(n, materialInfo.albedoColor);
@@ -211,12 +211,12 @@ void main() {
         f_emissive *= sRGBToLinear(texture(textures.emissive, uv).rgb);
     }
 
-    vec3 color = (f_emissive + f_diffuse + f_specular) + ambientLight * materialInfo.albedoColor;
+    mediump vec3 color = (f_emissive + f_diffuse + f_specular) + ambientLight * materialInfo.albedoColor;
 
     // Apply optional PBR terms for additional (optional) shading
     if(material.occlusionUVSet >= 0) {
         vec2 uv = material.occlusionUVSet == 0 ? varyings.texCoord0 : varyings.texCoord1;
-        float ao = texture(textures.occlusion, uv).r;
+        mediump float ao = texture(textures.occlusion, uv).r;
         color = mix(color, color * ao, material.occlusionStrength);
     }
 

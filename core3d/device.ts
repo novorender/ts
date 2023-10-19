@@ -103,4 +103,6 @@ export interface DeviceQuirks {
     readonly adreno600: boolean;
     /** Older Android webgl drivers struggle to compile large shader programs, even asynchronously. To avoid stuttering, disable aggressive recompile, at the expense of overall render performance. */
     readonly slowShaderRecompile: boolean;
+    /** Older IOS/Ipad devices don't implement flat shading for float varyings properly and thus introduces interpolation noise, which needs to be rounded off. */
+    readonly iosInterpolationBug: boolean;
 }

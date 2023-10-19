@@ -15,12 +15,12 @@ layout(std140) uniform Node {
 };
 
 layout(location = 0) in vec4 vertexPositions;
-layout(location = 1) in vec4 color;
+layout(location = 1) in mediump vec4 color;
 layout(location = 2) in uint vertexObjectId;
 
 out struct {
-    vec3 positionVS;
-    vec4 color;
+    highp vec3 positionVS;
+    mediump vec4 color;
 } varyings;
 
 #if defined (ADRENO600)
