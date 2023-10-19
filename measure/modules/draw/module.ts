@@ -163,7 +163,7 @@ export class DrawModule extends BaseModule {
      * @param setting settings on how the entity is supposed to be displayed
      * @returns  hierarcical structure of the element, describing how it should be drawn in 2d, including labels and angles
      */
-    getDrawObjectFromPoints(points: ReadonlyVec3[], closed = true, angles = true, generateLineLabels = false): DrawProduct | undefined {
+    getDrawObjectFromPoints(points: ReadonlyVec3[], closed = true, angles = true, generateLineLabels = false, decimals = 3): DrawProduct | undefined {
         if (points.length === 0) {
             return undefined;
         }
@@ -176,7 +176,7 @@ export class DrawModule extends BaseModule {
             if (generateLineLabels) {
                 const labels: string[] = [];
                 for (let i = 1; i < points.length; ++i) {
-                    labels.push(vec3.dist(points[i - 1], points[i]).toFixed(3));
+                    labels.push(vec3.dist(points[i - 1], points[i]).toFixed(decimals));
                 }
                 text = [labels];
             }
