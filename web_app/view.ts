@@ -59,7 +59,6 @@ export class View<
     private drsLowInterval = 100;
     private lastDrsAdjustTime = 0;
     private resolutionTier: 0 | 1 | 2 = 2;
-    private activeOutline = true;
 
     private currentDetailBias: number = 1;
 
@@ -490,12 +489,10 @@ export class View<
                         //Reset back to default when camera starts moving
                         this.resolutionModifier = this.baseRenderResolution;
                         this.resolutionTier = 2;
-                        //Disable features when moving to increase performance
-                        this.modifyRenderState({ toonOutline: { on: false } });
-                        this.activeOutline = true;
+                        //Disable features when moving to increase performance, outlines are only disabled in pinhole
+                        this.modifyRenderState({ toonOutline: { on: false }, outlines: { on: this.renderState.camera.kind == "orthographic" } });
                         wasIdle = false;
                     } else {
-
                         frameIntervals.push(frameTime);
                         this.dynamicQualityAdjustment(frameIntervals);
                     }
@@ -677,12 +674,6 @@ export class View<
             const cooldown = 3000;
             const now = performance.now();
             //To handle dynamic on and off clipping outline based on framerate.
-            if (this.activeOutline) {
-                if (this.activeOutline && (medianInterval > this.drsHighInterval && this.resolutionTier < 2)) {
-                    this.activeOutline = false;
-                    this.modifyRenderState({ outlines: { on: this.activeOutline } });
-                }
-            }
             if (now > this.lastDrsAdjustTime + cooldown) { // add a cooldown period before changing anything
                 this.dynamicResolutionScaling(medianInterval, now);
             }
