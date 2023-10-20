@@ -6,7 +6,7 @@ const rootPromise = navigator.storage.getDirectory();
 // flag to indicate if OPFS async (main thread) is not available (Safari)
 let OPFSAsyncWriteSupported = true;
 
-async function getDirHandle(dirname: string) {
+async function tryGetDirHandle(dirname: string) {
     try {
         const root = await rootPromise;
         return await root.getDirectoryHandle(dirname);
@@ -15,31 +15,20 @@ async function getDirHandle(dirname: string) {
 }
 
 /** @internal attempt to read file from OPFS offline storage */
-export async function requestOfflineFile(request: Request): Promise<Response | undefined> {
+export async function requestOfflineFile(request: Request, cacheFromOnline = true): Promise<Response | undefined> {
     const { pathname } = new URL(request.url);
     const m = /\/([\da-f]{32})(?=\/).*\/(.+)$/i.exec(pathname);
     if (m && m.length == 3) {
         const [_, dirname, filename] = m;
-        let dirHandleRef = await offlineDirs.get(dirname);
-        // is this scene marked as offline?
-        if (dirHandleRef !== null) {
-            let dirHandle = dirHandleRef?.deref();
-            if (!dirHandle) {
-                dirHandle = await getDirHandle(dirname);
-                if (dirHandle) {
-                    dirHandleRef = new WeakRef(dirHandle);
-                    offlineDirs.set(dirname, dirHandleRef);
-                } else {
-                    offlineDirs.set(dirname, null);
-                }
-            }
-            if (dirHandle) {
-                try {
-                    const fileHandle = await dirHandle.getFileHandle(filename);
-                    const file = await fileHandle.getFile();
-                    // console.log(`loading ${filename}`);
-                    return new Response(file, { status: 200, headers: { "Content-Type": "application/octet-stream" } });
-                } catch (error: unknown) {
+        const dirHandle = await getDirHandle(dirname);
+        if (dirHandle) {
+            try {
+                const fileHandle = await dirHandle.getFileHandle(filename);
+                const file = await fileHandle.getFile();
+                // console.log(`loading ${filename}`);
+                return new Response(file, { status: 200, headers: { "Content-Type": "application/octet-stream" } });
+            } catch (error: unknown) {
+                if (cacheFromOnline) {
                     const isHashedFileName = /^[\da-f]{32}$/i.test(filename);
                     const fileNotFound = error instanceof DOMException && error.name == "NotFoundError";
                     if (fileNotFound && isHashedFileName) {
@@ -56,6 +45,7 @@ export async function requestOfflineFile(request: Request): Promise<Response | u
                         } else {
                             // We could call storeOfflineFileASync() here, but generally, we don't want to store files accessed from the main thread unless part of a full sync.
                             // Or, put more generally, we don't want to cache anything that's not hashed.
+                            // Besides, async writes are not support on safari yet.
                         }
                     }
                 }
@@ -63,6 +53,24 @@ export async function requestOfflineFile(request: Request): Promise<Response | u
         }
     }
     // console.log(`skipping ${pathname}`);
+}
+
+async function getDirHandle(dirname: string): Promise<FileSystemDirectoryHandle | undefined> {
+    let dirHandleRef = await offlineDirs.get(dirname);
+    // is this scene marked as offline?
+    if (dirHandleRef !== null) {
+        let dirHandle = dirHandleRef?.deref();
+        if (!dirHandle) {
+            dirHandle = await tryGetDirHandle(dirname);
+            if (dirHandle) {
+                dirHandleRef = new WeakRef(dirHandle);
+                offlineDirs.set(dirname, dirHandleRef);
+            } else {
+                offlineDirs.set(dirname, null);
+            }
+        }
+        return dirHandle;
+    }
 }
 
 async function storeOfflineFileASync(response: Response, dirHandle: FileSystemDirectoryHandle, filename: string) {
