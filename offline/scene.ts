@@ -86,7 +86,9 @@ export class OfflineScene {
         const manifestRequest = storage.request(dir.name, "manifest.json", "", sasKey, abortSignal)
         const manifestResponse = await fetch(manifestRequest);
         if (!manifestResponse.ok) {
-            throw new Error(manifestResponse.statusText);
+            logger?.status("invalid format");
+            logger?.error(`Failed to retrieve manifest file ${manifestResponse.statusText}`);
+            return undefined;
         }
         const manifestData = await manifestResponse.json() as SceneManifestData;
         if (abortSignal.aborted) {
