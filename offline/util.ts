@@ -1,4 +1,4 @@
-import { type PathNameFormatter, type PathNameParser, RequestFormatter, type ResourceType } from "./storage";
+import { type PathNameFormatter, type PathNameParser, type ResourceType } from "./storage";
 
 /**
  * Create a request formatter for the standard novorender cloud/blob storage.

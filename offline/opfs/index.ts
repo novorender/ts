@@ -1,6 +1,6 @@
-import { type OfflineDirectory, type ResourceType, type PathNameParser } from "../storage";
+import { type ResourceType, type PathNameParser } from "../storage";
 import { PromiseBag } from "./promiseBag";
-import type { CreateDirResponse, CreateDirRequest, DeleteAllRequest, DirsRequest, DirsResponse, FilesRequest, IOResponse, ReadRequest, ReadResponse, DeleteAllResponse, FilesResponse, WriteRequest, WriteResponse, DeleteFilesRequest, DeleteFilesResponse, DeleteDirRequest, DeleteDirResponse } from "./messages";
+import type { CreateDirResponse, CreateDirRequest, DeleteAllRequest, DirsRequest, DirsResponse, FilesRequest, IOResponse, ReadRequest, ReadResponse, DeleteAllResponse, FilesResponse, WriteRequest, WriteResponse, DeleteFilesRequest, DeleteFilesResponse, DeleteDirRequest, DeleteDirResponse, FileSizesRequest, FileSizesResponse } from "./messages";
 
 /**
  * Create an OPFS based offline storage.
@@ -142,7 +142,7 @@ class OfflineStorageOPFS {
  * @param name The directory name.
  * @returns The directory storage.
  */
-    async directory(name: string): Promise<OfflineDirectory> {
+    async directory(name: string): Promise<OfflineDirectoryOPFS> {
         const { dirs } = this;
         let dir = dirs.get(name);
         if (!dir) {
@@ -180,9 +180,24 @@ class OfflineStorageOPFS {
     }
 }
 
-class OfflineDirectoryOPFS implements OfflineDirectory {
-    constructor(readonly context: OfflineStorageOPFS, readonly name: string) { }
 
+/**
+ * Offline directory interface.
+ * @remarks
+ * This objects offers a basic file folder-like abstraction for offline storage.
+ */
+class OfflineDirectoryOPFS {
+
+    constructor(
+        readonly context: OfflineStorageOPFS,
+        /** The name of this folder. */
+        readonly name: string) { }
+
+    /**
+     * Retrive the file names of this directory.
+     * @remarks
+     * Potentially slow?
+     */
     async* files(): AsyncIterableIterator<string> {
         const { context, name } = this;
         const { worker, promises } = context;
@@ -198,6 +213,32 @@ class OfflineDirectoryOPFS implements OfflineDirectory {
         }
     }
 
+
+    /**
+     * Retrive the file sizes.
+     * @param fileNames Optional list of files, or all files in dir if undefined.
+     * @returns List of files sizes or undefined for files not found.
+     */
+    async* filesSizes(fileNames?: readonly string[]): AsyncIterableIterator<number | undefined> {
+        const { context, name } = this;
+        const { worker, promises } = context;
+        const id = promises.newId();
+        const msg: FileSizesRequest = { kind: "file_sizes", id, dir: name, files: fileNames };
+        worker.postMessage(msg);
+        const response = await promises.create<FileSizesResponse>(id);
+        if (response.error) {
+            throw new Error(response.error);
+        }
+        for (const size of response.sizes) {
+            yield size;
+        }
+    }
+
+    /**
+     * Read the specified file as an ArrayBuffer.
+     * @param name The file name to read.
+     * @returns The file content, or undefined if file does not exist.
+     */
     async read(name: string): Promise<ArrayBuffer | undefined> {
         const { context } = this;
         const { worker, promises } = context;
@@ -211,6 +252,14 @@ class OfflineDirectoryOPFS implements OfflineDirectory {
         return response.buffer;
     }
 
+    /**
+     * Write the content of a file.
+     * @param name: The file name to write.
+     * @param buffer: The new content of this file.
+     * @remarks
+     * The input buffer may be transferred to an underlying worker and become inaccessible from the calling thread.
+     * Thus, you should pass a copy if you need to retain the original.
+     */
     async write(name: string, buffer: ArrayBuffer): Promise<void> {
         const { context } = this;
         const { worker, promises } = context;
@@ -223,6 +272,10 @@ class OfflineDirectoryOPFS implements OfflineDirectory {
         }
     }
 
+    /**
+     * Delete the specified file.
+     * @param names The file names to delete.
+     */
     async deleteFiles(names: Iterable<string>): Promise<void> {
         const { context } = this;
         const { worker, promises } = context;
@@ -235,6 +288,9 @@ class OfflineDirectoryOPFS implements OfflineDirectory {
         }
     }
 
+    /**
+     * Delete folder and everything inside it.
+     */
     async delete(): Promise<void> {
         const { context } = this;
         const { worker, promises } = context;
@@ -249,4 +305,4 @@ class OfflineDirectoryOPFS implements OfflineDirectory {
     }
 }
 
-export type { OfflineStorageOPFS };
+export type { OfflineStorageOPFS, OfflineDirectoryOPFS };

@@ -4,6 +4,7 @@ import { builtinControllers, ControllerInput, type BaseController, type PickCont
 import { flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
 import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections, type OutlineIntersection, outlineLaser } from "./buffer_inspect";
+import { downloadOfflineImports } from "offline"
 
 /**
  * A view base class for Novorender content.
@@ -705,7 +706,8 @@ export class View<
     static async downloadImports(map: ViewImportmap): Promise<ViewImports> {
         const core3dPromise = downloadCore3dImports(map);
         const measurePromise = downloadMeasureImports(map);
-        const [core3d, measure] = await Promise.all([core3dPromise, measurePromise]);
+        const offlinePromise = downloadOfflineImports(map);
+        const [core3d, measure, offline] = await Promise.all([core3dPromise, measurePromise, offlinePromise]);
         return {
             ...core3d,
             ...measure

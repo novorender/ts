@@ -29,7 +29,7 @@ export async function createOfflineViewState(storage: OfflineStorageOPFS) {
  * Error and status updates are reported to the {@link logger} property.
  * By default it's undefined, so to display status, events and progress, you must assign your own object implementing the {@link Logger} interface.
  */
-export class OfflineViewState {
+class OfflineViewState {
     /** Map of active offline scenes */
     readonly scenes = new Map<string, OfflineScene>();
 
@@ -103,4 +103,6 @@ export class OfflineViewState {
         }
     }
 }
+
+export type { OfflineViewState };
 

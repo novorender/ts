@@ -1,5 +1,5 @@
 import type { OfflineStorageOPFS } from "../opfs";
-import { createOPFSOfflineStorage } from "../";
+import { createOPFSOfflineStorage } from "../main";
 import type { ConnectAcknowledge, ConnectRequest, ConnectResponse } from "../opfs/messages";
 
 /**

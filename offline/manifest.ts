@@ -1,4 +1,4 @@
-import type { OfflineDirectory } from "./storage";
+import type { OfflineDirectoryOPFS } from "./opfs";
 
 /** An scene manifest entry tuple, consisting of [filename/hash, byteSize]. */
 export type SceneManifestEntry = readonly [name: string, size: number];
@@ -77,7 +77,7 @@ export class SceneManifest {
  * If not, the files in the directory will be enumerated and used to create a partial manifest.
  * The latter case indicates some prior error and is not ideal, but still better than re-downloading every file from scratch.
  */
-export async function readManifest(dir: OfflineDirectory): Promise<SceneManifest> {
+export async function readManifest(dir: OfflineDirectoryOPFS): Promise<SceneManifest> {
     let data: SceneManifestData | undefined;
     const buffer = await dir.read("manifest.json");
     if (buffer) {
