@@ -270,6 +270,19 @@ mediump vec3 sRGBToLinear(mediump vec3 srgbIn) {
     return vec3(pow(srgbIn.xyz, vec3(GAMMA)));
 }
 
+mediump float toLinear(mediump float f) {
+    if(f <= 0.0404482362771082f) {
+        return f / 12.92f;
+    }
+
+    return pow(((f + 0.055f) / 1.055f), 2.4f);
+}
+
+// sRGB to linear approximation (http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html)
+mediump vec3 sRGBToLinearComplex(mediump vec3 srgbIn) {
+    return vec3(toLinear(srgbIn.r), toLinear(srgbIn.g), toLinear(srgbIn.b));
+}
+
 // gradients
 const mediump float numGradients = 2.f;
 const mediump float deviationV = 0.f / numGradients + .5f / numGradients;

@@ -142,7 +142,7 @@ void main() {
     if(material.baseColorUVSet >= 0) {
         vec2 uv = material.baseColorUVSet < 1 ? varyings.texCoord0 : varyings.texCoord1;
         mediump vec4 bc = texture(textures.base_color, uv);
-        baseColor *= vec4(sRGBToLinear(bc.rgb), bc.a);
+        baseColor *= vec4(sRGBToLinearComplex(bc.rgb), bc.a);
     }
     if(baseColor.a < material.alphaCutoff)
         discard;
