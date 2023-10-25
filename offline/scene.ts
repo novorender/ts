@@ -62,7 +62,7 @@ export class OfflineScene {
     /**
      * Reads the manifest file.
      * @param abortSignal A signal to abort downloads/synchronization.
-     * @returns Total number of bytes in scene, if it fails it returns undefined, aborted returns 0.
+     * @returns Total number of bytes in scene, if it fails it returns undefined
      */
     async readManifest(abortSignal: AbortSignal, sasKey: string) {
         try {
@@ -71,11 +71,10 @@ export class OfflineScene {
                 const manifest = new SceneManifest(data);
                 return manifest.totalByteSize;
             }
-            return 0;
         }
         catch {
-            return undefined;
         }
+        return undefined;
     }
 
     private async downloadManifest(abortSignal: AbortSignal, sasKey: string) {
