@@ -16,6 +16,8 @@ export interface Mesh {
     readonly vao: WebGLVertexArrayObject;
     readonly vaoPosOnly: WebGLVertexArrayObject | null;
     readonly vaoTriangles: WebGLVertexArrayObject | null;
+    readonly posVB: WebGLBuffer;
+    readonly idxBuf: WebGLBuffer | null;
     readonly highlightVB: WebGLBuffer | null;
     readonly highlightTriVB: WebGLBuffer | null;
     readonly numVertices: number;
@@ -63,23 +65,24 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
         // // add extra highlight vertex buffer and attribute
         // const highlightVB = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: subMesh.numVertices });
         // attributes.push({ kind: "UNSIGNED_INT", buffer: highlightVB, componentType: "UNSIGNED_BYTE" });
-        const highlightVB = buffers[vertexAttributes.highlight!.buffer];
-        const highlightTriVB = triangles0 ? buffers[vertexAttributes.highlightTri!.buffer] : null;
+        const posVB = position.buffer;
+        const highlightVB = highlight!.buffer;
+        const highlightTriVB = triangles0 ? highlightTri!.buffer : null;
 
         const vao = resourceBin.createVertexArray({ attributes: renderAttributes, indices: ib });
         const vaoPosOnly = position.buffer != 0 ? resourceBin.createVertexArray({ attributes: [position], indices: ib }) : null;
         const vaoTriangles = triangleAttributes ? resourceBin.createVertexArray({ attributes: triangleAttributes }) : null;
-        resourceBin.subordinate(vao, ...buffers.filter(buf => buf != highlightVB && buf != highlightTriVB));
-        if (ib) {
-            resourceBin.subordinate(vao, ib);
-        }
+        resourceBin.subordinate(vao, ...buffers.filter(buf => buf != posVB && buf != highlightVB && buf != highlightTriVB));
+        // if (ib) {
+        //     resourceBin.subordinate(vao, ib);
+        // }
 
         const drawParams: DrawParams = ib ?
             { kind: "elements", mode: subMesh.primitiveType, indexType, count } :
             { kind: "arrays", mode: subMesh.primitiveType, count };
         const baseColorTextureIndex = subMesh.baseColorTexture as number;
         const baseColorTexture = textures[baseColorTextureIndex] ?? null;
-        yield { vao, vaoPosOnly, vaoTriangles, highlightVB, highlightTriVB, drawParams, drawRanges, numVertices, numTriangles, objectRanges, materialType: materialType as unknown as MaterialType, baseColorTexture } as const satisfies Mesh;
+        yield { vao, vaoPosOnly, vaoTriangles, idxBuf: ib ?? null, posVB, highlightVB, highlightTriVB, drawParams, drawRanges, numVertices, numTriangles, objectRanges, materialType: materialType as unknown as MaterialType, baseColorTexture } as const satisfies Mesh;
     }
 }
 
@@ -115,8 +118,8 @@ export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, hig
 
 /** @internal */
 export function deleteMesh(resourceBin: ResourceBin, mesh: Mesh) {
-    const { vao, vaoPosOnly, vaoTriangles, highlightVB, highlightTriVB, baseColorTexture } = mesh;
-    resourceBin.delete(vao, vaoPosOnly, vaoTriangles, highlightVB, highlightTriVB, baseColorTexture);
+    const { vao, vaoPosOnly, vaoTriangles, idxBuf, posVB, highlightVB, highlightTriVB, baseColorTexture } = mesh;
+    resourceBin.delete(vao, vaoPosOnly, vaoTriangles, idxBuf, posVB, highlightVB, highlightTriVB, baseColorTexture);
 }
 
 /** @internal */

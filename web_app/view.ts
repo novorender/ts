@@ -401,7 +401,6 @@ export class View<
      * @remarks
      * The function will also set the {@link RenderStateCamera.kind | camera projection model}.
      */
-
     async switchCameraController<T extends CameraControllerKind>(
         kind: T,
         initialState?: CameraControllerInitialValues,
@@ -444,7 +443,7 @@ export class View<
      * Start the main render loop for the view.
      * @param abortSignal Signal to abort any pending downloads and exit render loop.
      * @remarks
-     * This method will not exit until you call {@link exit}.
+     * This method will not exit until you signal the abortSignal.
      */
     async run(abortSignal?: AbortSignal) {
         let prevState: RenderState | undefined;
@@ -463,34 +462,34 @@ export class View<
                 this.modifyRenderState(cameraChanges);
             }
 
-            const isIdleFrame = idleFrameTime > 500;
+            const isIdleFrame = idleFrameTime > 500 && !this._activeController.moving;
             if (_renderContext && !_renderContext.isContextLost()) {
                 _renderContext.poll(); // poll for events, such as async reads and shader linking
 
-                if (isIdleFrame) { //increase resolution and detail bias on idleFrame
+                if (isIdleFrame) { // increase resolution and detail bias on idle frame
                     if (deviceProfile.tier > 0 && this.renderState.toonOutline.on == false) {
-                        //Enable toonOutline when on idle frame
+                        // enable toonOutline when on idle frame
                         this.modifyRenderState({ toonOutline: { on: true } });
                     }
                     if (deviceProfile.tier > 0 && this.renderState.outlines.on == false) {
-                        //Enable outline when on idle frame
+                        // enable outline when on idle frame.
                         this.modifyRenderState({ outlines: { on: true } });
                     }
                     if (!wasIdle) {
-                        //Set max quality and resolution when the camera stops moving
+                        // set max quality and resolution when the camera stops moving
                         this.resolutionModifier = Math.min(1, this.baseRenderResolution * 2);
                         this.resize();
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
                         wasIdle = true;
-                        //If pick is not already rendered then start to make the pick buffer aviable when the camera stops 
+                        // if pick is not already rendered then start to make the pick buffer available when the camera stops
                     }
                 } else {
                     if (wasIdle) {
-                        //Reset back to default when camera starts moving
+                        // reset back to default when camera starts moving
                         this.resolutionModifier = this.baseRenderResolution;
                         this.resolutionTier = 2;
-                        //Disable features when moving to increase performance, outlines are only disabled in pinhole
+                        // disable features when moving to increase performance - outlines are only disabled in pinhole
                         this.modifyRenderState({ toonOutline: { on: false }, outlines: { on: this.renderState.camera.kind == "orthographic" } });
                         wasIdle = false;
                     } else {
@@ -523,8 +522,8 @@ export class View<
                 } else if (possibleChanges) {
                     this.render?.(isIdleFrame);
                     if (isIdleFrame) {
-                        //Render pick buffer if there is nothing else to render and camera is not moving. 
-                        //Make it feel better for slower devices when picking idle frame
+                        // render pick buffer if there is nothing else to render and camera is not moving
+                        // make it feel better for slower devices when picking idle frame
                         _renderContext.renderPickBuffers();
                     }
                 }
