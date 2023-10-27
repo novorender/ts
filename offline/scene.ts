@@ -187,6 +187,7 @@ export class OfflineScene {
             }
             await downloadFiles(onlineManifest.glFiles, "webgl2_bin");
             await downloadFiles(onlineManifest.brepFiles, "brep");
+            await downloadFiles(onlineManifest.dbFiles, "db");
             await Promise.all(downloadQueue);
 
             logger?.progress?.(undefined, undefined);

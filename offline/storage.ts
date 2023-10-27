@@ -3,7 +3,7 @@
  */
 export type PathNameParser = (path: string) => { readonly dir: string, readonly file: string } | undefined;
 
-export type ResourceType = "webgl2_bin" | "brep" | "";
+export type ResourceType = "webgl2_bin" | "brep" | "db" | "";
 
 /**
  * Callback function to formatdirectory and file name into an URL path name.
