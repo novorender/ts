@@ -105,7 +105,11 @@ export class MeasureTool {
     const { idToHash } = this;
     if (idToHash) {
       const hash = this.lookupHash(id);
-      return hash ? await this.downloader.downloadJson(hash) : null;
+      try {
+        return hash ? await this.downloader.downloadJson(hash) : null;
+      } catch {
+        return null;
+      }
     } else {
       try {
         return await this.downloader.downloadJson(`${id}.json`);
