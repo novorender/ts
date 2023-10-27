@@ -105,17 +105,17 @@ export async function getSurfaceDrawParts(product: ProductData, instanceIdx: num
             }
 
         }
-        if (vertices.length > 3) {
-            let prev = vec3.sub(vec3.create(), vertices[vertices.length - 1], vertices[0]);
+        if (vertices.length > 4 && vertices.length < 15) { //We assume that more than 15 is either a tesselated complex object or a tesselated circle 
+            let prev = vec3.sub(vec3.create(), vertices[vertices.length - 2], vertices[0]);
             let next = vec3.create();
             for (let i = 0; i < vertices.length - 1; ++i) {
                 next = vec3.sub(vec3.create(), vertices[i + 1], vertices[i]);
                 if (hasLineOnEitherSide[i]) {
                     text.push(vec3.length(next).toFixed(3));
-                    const prevIdx = i == 0 ? vertices.length - 1 : i - 1;
+                    const prevIdx = i == 0 ? vertices.length - 2 : i - 1;
                     if (hasLineOnEitherSide[prevIdx] && hasLineOnEitherSide[i + 1]) {
                         const angle = vec3.angle(prev, next) * (180 / Math.PI);
-                        if (angle > 0.1 && (angle > 92 || angle < 88)) {
+                        if (angle > 0.1) {
                             drawParts.push({
                                 text: angle.toFixed(1) + "°", drawType: "angle", vertices3D:
                                     [vec3.clone(vertices[i]), vec3.clone(vertices[prevIdx]), vec3.clone(vertices[i + 1])]

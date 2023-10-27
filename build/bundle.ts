@@ -9,6 +9,7 @@ export async function bundle(outdir: string, production = process.env.ENV == "pr
             ["public/loaderWorker"]: resolve(outdir, "core3d/modules/octree/worker/index.ts"),
             ["public/shaders"]: resolve(outdir, "core3d/imports/shaders.ts"),
             ["public/measureWorker"]: resolve(outdir, "measure/worker/service.ts"),
+            ["public/IOWorker"]: resolve(outdir, "offline/opfs/worker/index.ts"),
         },
         define: {
             'NPM_PACKAGE_VERSION': `"${process.env.VERSION ?? process.env.npm_package_version}"`

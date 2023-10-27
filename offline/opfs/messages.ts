@@ -35,6 +35,14 @@ export interface FilesRequest {
 }
 
 /** @internal */
+export interface FileSizesRequest {
+    readonly kind: "file_sizes";
+    readonly id: number;
+    readonly dir: string;
+    readonly files?: readonly string[];
+}
+
+/** @internal */
 export interface ReadRequest {
     readonly kind: "read";
     readonly id: number;
@@ -73,7 +81,7 @@ export interface DeleteAllRequest {
 }
 
 /** @internal */
-export type IORequest = CreateDirRequest | DirsRequest | FilesRequest | ReadRequest | WriteRequest | DeleteFilesRequest | DeleteDirRequest | DeleteAllRequest;
+export type IORequest = CreateDirRequest | DirsRequest | FilesRequest | FileSizesRequest | ReadRequest | WriteRequest | DeleteFilesRequest | DeleteDirRequest | DeleteAllRequest;
 
 
 /** @internal */
@@ -96,6 +104,14 @@ export interface FilesResponse {
     readonly kind: "files";
     readonly id: number;
     readonly files: readonly string[];
+    readonly error?: string;
+}
+
+/** @internal */
+export interface FileSizesResponse {
+    readonly kind: "file_sizes";
+    readonly id: number;
+    readonly sizes: readonly (number | undefined)[];
     readonly error?: string;
 }
 
@@ -136,4 +152,4 @@ export interface DeleteAllResponse {
 }
 
 /** @internal */
-export type IOResponse = CreateDirResponse | DirsResponse | FilesResponse | ReadResponse | WriteResponse | DeleteFilesResponse | DeleteDirResponse | DeleteAllResponse;
+export type IOResponse = CreateDirResponse | DirsResponse | FilesResponse | FileSizesResponse | ReadResponse | WriteResponse | DeleteFilesResponse | DeleteDirResponse | DeleteAllResponse;

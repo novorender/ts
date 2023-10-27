@@ -1,8 +1,9 @@
-import type { Logger } from ".";
+import type { Logger } from "./";
 import type { OfflineViewState } from "./state";
 import { SceneManifest, type SceneManifestData, type SceneManifestEntry } from "./manifest";
-import type { OfflineDirectory, ResourceType } from "./storage";
+import type { ResourceType } from "./storage";
 import { errorMessage } from "./util";
+import type { OfflineDirectoryOPFS } from "./opfs";
 
 /**
  * An offline scene.
@@ -14,12 +15,11 @@ import { errorMessage } from "./util";
 export class OfflineScene {
     /** Logger for errors and status updates. */
     logger: Logger | undefined;
-
     constructor(
         /** The offline context for this scene. */
         readonly context: OfflineViewState,
         /** The storage directory for this scene. */
-        readonly dir: OfflineDirectory,
+        readonly dir: OfflineDirectoryOPFS,
         /** The file manifest this scene.
          * @remarks
          * Initially, this may be empty or partial.
@@ -43,6 +43,58 @@ export class OfflineScene {
         scenes.delete(name);
         context.logger?.status("scene deleted");
         return;
+    }
+
+    /**
+     * Get total used bytes
+     */
+    async getUsedSize() {
+        const sizes = this.dir.filesSizes();
+        let totalUsedSize = 0;
+        for await (const size of sizes) {
+            if (size) {
+                totalUsedSize += size;
+            }
+        }
+        return totalUsedSize;
+    }
+
+    /**
+     * Reads the manifest file.
+     * @param abortSignal A signal to abort downloads/synchronization.
+     * @returns Total number of bytes in scene, if it fails it returns undefined
+     */
+    async readManifest(abortSignal: AbortSignal, sasKey: string) {
+        try {
+            const data = await this.downloadManifest(abortSignal, sasKey);
+            if (data) {
+                const manifest = new SceneManifest(data);
+                return manifest.totalByteSize;
+            }
+        }
+        catch {
+        }
+        return undefined;
+    }
+
+    private async downloadManifest(abortSignal: AbortSignal, sasKey: string) {
+        const { dir, logger, context } = this;
+        const { storage } = context;
+        logger?.info?.("fetching manifest");
+        // fetch online manifest
+        const manifestRequest = storage.request(dir.name, "manifest.json", "", sasKey, abortSignal)
+        const manifestResponse = await fetch(manifestRequest);
+        if (!manifestResponse.ok) {
+            logger?.status("invalid format");
+            logger?.error(`Failed to retrieve manifest file ${manifestResponse.statusText}`);
+            return undefined;
+        }
+        const manifestData = await manifestResponse.json() as SceneManifestData;
+        if (abortSignal.aborted) {
+            logger?.status("aborted");
+            return undefined;
+        }
+        return manifestData;
     }
 
     /**
@@ -79,19 +131,14 @@ export class OfflineScene {
 
         try {
             logger?.status("synchronizing");
-            logger?.info?.("fetching manifest");
-            // fetch online manifest
-            const manifestRequest = storage.request(dir.name, "manifest.json", "", sasKey, abortSignal)
-            const manifestResponse = await fetch(manifestRequest);
-            if (!manifestResponse.ok) {
-                throw new Error(manifestResponse.statusText);
-            }
-            const manifestData = await manifestResponse.json() as SceneManifestData;
-            if (abortSignal.aborted) {
-                logger?.status("aborted");
+            let manifestData = await this.downloadManifest(abortSignal, sasKey);
+            if (manifestData == undefined) {
                 return false;
             }
-            const onlineManifest = new SceneManifest(manifestData);
+
+            this.manifest = new SceneManifest(manifestData);
+            const { manifest: onlineManifest } = this;
+
             const { totalByteSize } = onlineManifest;
 
             const debounce = debouncer();
@@ -138,9 +185,9 @@ export class OfflineScene {
                     }
                 }
             }
-            downloadFiles(onlineManifest.glFiles, "webgl2_bin");
-            await Promise.all(downloadQueue);
-            downloadFiles(onlineManifest.brepFiles, "brep");
+            await downloadFiles(onlineManifest.glFiles, "webgl2_bin");
+            await downloadFiles(onlineManifest.brepFiles, "brep");
+            await downloadFiles(onlineManifest.dbFiles, "db");
             await Promise.all(downloadQueue);
 
             logger?.progress?.(undefined, undefined);
@@ -148,7 +195,6 @@ export class OfflineScene {
             // add manifest to local files last to mark the completion of sync.
             const manifestBuffer = new TextEncoder().encode(JSON.stringify(manifestData)).buffer;
             await dir.write("manifest.json", manifestBuffer);
-            this.manifest = onlineManifest;
 
             // delete unreferenced entries
             logger?.info?.("cleanup");

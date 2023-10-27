@@ -1,4 +1,4 @@
-import type { ConnectResponse, CreateDirResponse, DeleteAllResponse, DeleteDirResponse, DeleteFilesResponse, DirsResponse, FilesResponse, IORequest, IOResponse, ReadResponse, WriteResponse } from "./messages";
+import type { ConnectResponse, CreateDirResponse, DeleteAllResponse, DeleteDirResponse, DeleteFilesResponse, DirsResponse, FileSizesResponse, FilesResponse, IORequest, IOResponse, ReadResponse, WriteResponse } from "../messages";
 
 /** @internal Handle messages on behalf of IO worker. */
 export async function handleIOWorkerMessages(message: MessageEvent<ConnectResponse | IORequest>) {
@@ -22,7 +22,7 @@ export async function handleIOWorkerMessages(message: MessageEvent<ConnectRespon
             // handle I/O messages from main thread
             const { response, transfer } = await handleIORequest(data);
             if (response) {
-                self.postMessage(response, transfer);
+                self.postMessage(response, { transfer });
             }
             break;
         }
@@ -85,6 +85,17 @@ async function handleIORequest(data: IORequest): Promise<ResponseMessage> {
                 error = ex.message ?? ex.toString();
             }
             response = { kind: "files", id: data.id, files, error } as const satisfies FilesResponse;
+            break;
+        }
+        case "file_sizes": {
+            let error: string | undefined;
+            let sizes: (number | undefined)[] = [];
+            try {
+                sizes = await fileSizes(data.dir, data.files);
+            } catch (ex: any) {
+                error = ex.message ?? ex.toString();
+            }
+            response = { kind: "file_sizes", id: data.id, sizes, error } as const satisfies FileSizesResponse;
             break;
         }
         case "read": {
@@ -202,6 +213,28 @@ async function readFile(dir: string, filename: string) {
     }
     // const file = await fileHandle.getFile();
     // return file.arrayBuffer(); // Safari doesn't support transferrable streams, so we resort to arraybuffer instead.
+}
+
+async function fileSizes(dir: string, files?: readonly string[]) {
+    const sizes: (number | undefined)[] = [];
+    files ??= await fileNames(dir);
+    for (const filename of files) {
+        let size: number | undefined;
+        try {
+            const dirHandle = await getDirHandle(dir);
+            const fileHandle = await dirHandle.getFileHandle(filename);
+            const accessHandle = await fileHandle.createSyncAccessHandle();
+            size = accessHandle.getSize();
+            accessHandle.close();
+        } catch (error: unknown) {
+            if (!(error instanceof DOMException && error.name == "NotFoundError")) {
+                console.log({ error });
+                throw error;
+            }
+        }
+        sizes.push(size);
+    }
+    return sizes;
 }
 
 async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {

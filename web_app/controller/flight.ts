@@ -10,7 +10,7 @@ import { ControllerInput, MouseButtons } from "./input";
  */
 export class FlightController extends BaseController {
     /** @internal */
-    protected arrowKeyScale = 0.4;
+    protected arrowKeyScale = 1.0;
     /** @internal */
     protected pivotButton: MouseButtons = MouseButtons.right;
     /** @internal */
