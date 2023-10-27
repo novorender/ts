@@ -36,6 +36,7 @@ import { getFaceToFaceCollisionValues } from "./collision";
 import { getPickInterface, pick, type PickInterface } from "./snaps";
 import { RoadTool } from "./roads/scene";
 import type { CameraValues, CollisionValues, CrossSlope, DrawObject, DrawPart, DuoMeasurementValues, EdgeValues, FaceValues, LoadStatus, ManholeMeasureValues, MeasureEntity, MeasureSettings, ObjectId, ParameterBounds, Profile, RoadCrossSection, RoadProfiles, SnapTolerance } from "measure";
+import type { Curve3D } from "./curves";
 
 glMatrix.setMatrixArrayType(Array);
 export const epsilon = 0.0001;
@@ -375,29 +376,73 @@ export class MeasureTool {
     return [];
   }
 
-  async tesselateCurveSegment(
-    id: ObjectId,
-    curveSegmentIdx: number,
+  tesselateCurveSegment(
+    product: ProductData,
+    curveSeg: Curve3D,
     instanceIdx: number
-  ): Promise<ReadonlyVec3[]> {
+  ): ReadonlyVec3[] {
+    if (curveSeg) {
+      const curve = {
+        curve: curveSeg,
+        geometryTransformation: matFromInstance(
+          product.instances[instanceIdx]
+        ),
+        instanceIndex: instanceIdx,
+      };
+      return getEdgeStrip(curve, 1);
+    }
+    return [];
+  }
+
+  async getCurveFromSegment(id: ObjectId,
+    curveSegmentIdx: number) {
     const product = await this.getProduct(id);
     if (product) {
       const curveSeg = MeasureTool.geometryFactory.getCurve3DFromSegment(
         product,
         curveSegmentIdx
       );
-      if (curveSeg) {
-        const curve = {
-          curve: curveSeg,
-          geometryTransformation: matFromInstance(
-            product.instances[instanceIdx]
-          ),
-          instanceIndex: instanceIdx,
-        };
-        return getEdgeStrip(curve, 1);
+      return curveSeg;
+    }
+  }
+
+  async getCurveSegmentDrawObject(id: ObjectId,
+    curveSegmentIdx: number,
+    instanceIdx: number,
+    segmentLabelInterval?: number): Promise<DrawObject> {
+    const product = await this.getProduct(id);
+    if (product) {
+      const curve = await this.getCurveFromSegment(id, curveSegmentIdx);
+      if (curve) {
+        const wsVertices = await this.tesselateCurveSegment(
+          product,
+          curve,
+          instanceIdx
+        );
+        const drawObject = {
+          kind: "curveSegment",
+          parts: [{ vertices3D: wsVertices, drawType: "lines" }]
+        } as DrawObject;
+        if (segmentLabelInterval && segmentLabelInterval > 0) {
+          const texts: string[] = [];
+          const vertices3D: ReadonlyVec3[] = [];
+          for (let p = curve.beginParam; p < curve.endParam; p += segmentLabelInterval) {
+            const pos = vec3.create();
+            curve.eval(p, pos, undefined);
+            vertices3D.push(pos);
+            texts.push(`P = ${p.toFixed(0)}`);
+          }
+          drawObject.parts.push({ drawType: "text", vertices3D, text: [texts] });
+          return { ...drawObject, kind: "complex" };
+        }
+        return drawObject;
       }
     }
-    return [];
+
+    return {
+      kind: "curveSegment",
+      parts: [{ vertices3D: [], drawType: "lines" }]
+    };
   }
 
   async curveSegmentProfile(

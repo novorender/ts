@@ -55,15 +55,12 @@ export class DrawModule extends BaseModule {
                 };
             }
             case "curveSegment": {
-                const wsVertices = await workerScene.tesselateCurveSegment(
+                return await workerScene.getCurveSegmentDrawObject(
                     entity.ObjectId,
                     entity.pathIndex,
-                    entity.instanceIndex
+                    entity.instanceIndex,
+                    setting?.segmentLabelInterval
                 );
-                return {
-                    kind: "curveSegment",
-                    parts: [{ vertices3D: wsVertices, drawType: "lines" }]
-                };
             }
         }
     }

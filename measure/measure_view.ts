@@ -191,4 +191,6 @@ export type CylinerMeasureType = {
 export interface MeasureSettings {
     /** Where to measure cylinder from, in case of measure between two cylinder, same option will be used for both*/
     cylinderMeasure: CylinerMeasureType;
+    /** Setting to get labels along the curve when drawing segments*/
+    segmentLabelInterval?: number
 }
