@@ -2,7 +2,7 @@ import type { DerivedRenderState, RenderContext, RenderStateGroupAction, RenderS
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
-import { glClear, glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
+import { glClear, glDelete, glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
 import { getMultiDrawParams, MaterialType } from "./mesh";
 import { type ReadonlyVec3, vec3, vec4, type ReadonlyVec4 } from "gl-matrix";
 import type { NodeLoader } from "./loader";
@@ -11,11 +11,11 @@ import { computeGradientColors, gradientRange } from "./gradient";
 import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass } from "./module";
 import { Mutex } from "./mutex";
 import { decodeBase64 } from "core3d/util";
-import { BufferFlags } from "core3d/buffers";
+import { OutlineRenderer } from "./outlines";
 
 const enum UBO { camera, clipping, scene, node };
 
-interface RenderNode {
+export interface RenderNode {
     readonly mask: number;
     readonly node: OctreeNode;
 };
@@ -31,6 +31,7 @@ export interface RootNodes {
 
 /** @internal */
 export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
+    outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>();
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
     currentProgramFlags = OctreeModule.defaultProgramFlags;
     nextProgramFlags = OctreeModule.defaultProgramFlags;
@@ -185,6 +186,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         if (renderContext.hasStateChanged({ localSpaceTranslation })) {
             this.localSpaceChanged = localSpaceTranslation !== this.localSpaceTranslation;
             this.localSpaceTranslation = localSpaceTranslation;
+            this.outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>; // all outline renderers has to go
         }
 
         if (renderContext.hasStateChanged({ highlights })) {
@@ -362,20 +364,19 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const nodes: RenderNode[] = [];
         function iterate(node: OctreeNode): boolean {
             let rendered = false;
-            if (node.visibility != Visibility.none) {
+            if (node.visibility != Visibility.none && node.hasGeometry) {
                 let mask = node.data.childMask;
                 if (node.shouldSplit(projectedSizeSplitThreshold)) {
                     for (const child of node.children) {
-                        if (child.hasGeometry) {
-                            rendered = true;
-                            if (iterate(child)) {
-                                mask &= ~(1 << child.data.childIndex);
-                            }
+                        if (iterate(child)) {
+                            mask &= ~(1 << child.data.childIndex);
                         }
                     }
                 }
                 rendered = true;
-                nodes.push({ mask, node });
+                if (mask) {
+                    nodes.push({ mask, node });
+                }
             }
             return rendered;
         }
@@ -456,18 +457,37 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const p = vec4.fromValues(x, y, z, -offset);
                 renderContext.updateOutlinesUniforms(p, color, planeIndex);
 
-                // render clipping outlines
-                glState(gl, {
-                    uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
-                    depth: {
-                        test: false,
-                        writeMask: false
-                    },
-                });
                 const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
-                for (const { mask, node } of renderNodes) {
-                    if (node.intersectsPlane(p)) {
-                        this.renderNodeClippingOutline(node, mask);
+
+                const useNewOutlines = false;
+                if (useNewOutlines) {
+                    const begin = performance.now();
+                    const { outlineRenderers } = this;
+                    let outlineRenderer = outlineRenderers.get(plane);
+                    if (!outlineRenderer) {
+                        outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p);
+                        outlineRenderers.set(plane, outlineRenderer);
+                    }
+                    const [...lineClusters] = outlineRenderer.intersectTriangles(renderNodes);
+                    const { count, vao } = outlineRenderer.makeVAO(lineClusters);
+                    outlineRenderer.renderLines(count, vao);
+                    glDelete(gl, vao);
+                    const end = performance.now();
+                    console.log(`lines: ${count} time:${end - begin}`);
+                } else {
+                    // render clipping outlines
+                    glState(gl, {
+                        uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
+                        depth: {
+                            test: false,
+                            writeMask: false
+                        },
+                    });
+
+                    for (const { mask, node } of renderNodes) {
+                        if (node.intersectsPlane(p)) {
+                            this.renderNodeClippingOutline(node, mask);
+                        }
                     }
                 }
             }

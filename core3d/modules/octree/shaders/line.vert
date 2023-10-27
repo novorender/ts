@@ -10,10 +10,6 @@ layout(std140) uniform Outline {
     OutlineUniforms outline;
 };
 
-layout(std140) uniform Node {
-    NodeUniforms node;
-};
-
 layout(location = 0) in vec4 vertexPositions;
 layout(location = 1) in mediump vec4 color;
 layout(location = 2) in uint vertexObjectId;

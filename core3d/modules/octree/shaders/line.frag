@@ -10,10 +10,6 @@ layout(std140) uniform Outline {
     OutlineUniforms outline;
 };
 
-layout(std140) uniform Node {
-    NodeUniforms node;
-};
-
 in struct {
     highp vec3 positionVS;
     mediump vec4 color;

@@ -291,17 +291,8 @@ export class OctreeNode {
         }
 
         if (context.localSpaceChanged || !this.hasValidModelLocalMatrix) {
-            let { offset, scale } = data;
-            const [ox, oy, oz] = offset;
-            const [tx, ty, tz] = state.localSpaceTranslation;
-            const modelLocalMatrix = mat4.fromValues(
-                scale, 0, 0, 0,
-                0, scale, 0, 0,
-                0, 0, scale, 0,
-                ox - tx, oy - ty, oz - tz, 1
-            );
             const { values } = this.uniformsData;
-            values.modelLocalMatrix = modelLocalMatrix;
+            values.modelLocalMatrix = this.getModelLocalMatrix(state.localSpaceTranslation);
             if (uniforms) {
                 glUpdateBuffer(context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniforms });
             }
@@ -358,6 +349,19 @@ export class OctreeNode {
         } else {
             this.state = NodeState.collapsed;
         }
+    }
+
+    getModelLocalMatrix(localSpaceTranslation: ReadonlyVec3) {
+        let { offset, scale } = this.data;
+        const [ox, oy, oz] = offset;
+        const [tx, ty, tz] = localSpaceTranslation;
+        const modelLocalMatrix = mat4.fromValues(
+            scale, 0, 0, 0,
+            0, scale, 0, 0,
+            0, 0, scale, 0,
+            ox - tx, oy - ty, oz - tz, 1
+        );
+        return modelLocalMatrix;
     }
 
     applyHighlights(highlights: Uint8Array | undefined) {
