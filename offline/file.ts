@@ -55,6 +55,22 @@ export async function requestOfflineFile(request: Request, cacheFromOnline = tru
     // console.log(`skipping ${pathname}`);
 }
 
+/** @internal */
+export async function hasOfflineDir(dirname: string): Promise<boolean> {
+    const dirHandle = await getDirHandle(dirname);
+    return !!dirHandle;
+}
+
+/** @internal */
+export async function getOfflineFile(dirname: string, filename: string): Promise<File> {
+    const dirHandle = await getDirHandle(dirname);
+    if (!dirHandle)
+        throw new Error(`Directory "${dirname}" not found!`);
+    const fileHandle = await dirHandle.getFileHandle(filename);
+    const file = await fileHandle.getFile();
+    return file;
+}
+
 async function getDirHandle(dirname: string): Promise<FileSystemDirectoryHandle | undefined> {
     let dirHandleRef = await offlineDirs.get(dirname);
     // is this scene marked as offline?
