@@ -51,6 +51,15 @@ export class CoreModule extends BaseModule {
         return await workerScene.pickEntity(id, pos, tolerance);
     }
 
+    /** 
+    * @param id The object id of selected object
+    * @returns the measure entity for given object if it is a single curveSegment 
+    */
+    async pickCurveSegment(id: ObjectId) {
+        const workerScene = await this.worker;
+        return await workerScene.getCurveSegmentEntity(id);
+    }
+
     /** Returns the measure entity for given object and location if the current object is selected
      *  This is much faster than pickMeasureEntity and can be used for hover
      * @param id The object id of selected object

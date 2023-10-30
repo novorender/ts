@@ -866,7 +866,7 @@ async function getCurveToSurfaceMeasureValues(
           faceData,
           cylinderMat,
           unitToScale(productB.units),
-          setting ? setting.cylinderMeasure : "center"
+          setting?.cylinderMeasure ? setting.cylinderMeasure : "center"
         );
       }
       case "lineStrip_cylinder": {
@@ -886,7 +886,7 @@ async function getCurveToSurfaceMeasureValues(
             faceData,
             cylinderMat,
             unitToScale(productB.units),
-            setting ? setting.cylinderMeasure : "center"
+            setting?.cylinderMeasure ? setting.cylinderMeasure : "center"
           );
           if (measureValue.distance && measureValue.distance < minDist) {
             bestMeasureValues = measureValue;
@@ -1333,8 +1333,8 @@ export async function getFaceToFaceMeasureValues(
           surfaceB.product,
           surfaceB.faceData,
           unitToScale(surfaceB.product.units),
-          surfaceA.setting ? surfaceA.setting.cylinderMeasure : "center",
-          surfaceB.setting ? surfaceB.setting.cylinderMeasure : "center"
+          surfaceA.setting?.cylinderMeasure ? surfaceA.setting.cylinderMeasure : "center",
+          surfaceB.setting?.cylinderMeasure ? surfaceB.setting.cylinderMeasure : "center"
         );
       }
 
@@ -1358,7 +1358,7 @@ export async function getFaceToFaceMeasureValues(
           surfaceB.instanceIdx,
           unitToScale(surfaceA.product.units),
           canUseCylinderSettings,
-          surfaceA.setting && canUseCylinderSettings
+          surfaceA.setting?.cylinderMeasure && canUseCylinderSettings
             ? surfaceA.setting.cylinderMeasure
             : "center"
         );

@@ -142,7 +142,7 @@ export class FollowModule extends BaseModule {
     ): Promise<FollowParametricObject | undefined> {
         const workerScene = await this.worker;
         if (ids.length == 1) {
-            const entity = await workerScene.viableFollowPathEntity(ids[0]);
+            const entity = await workerScene.getCurveSegmentEntity(ids[0]);
             if (entity != undefined && entity.drawKind != "vertex") {
                 return this.followParametricEntity(ids[0], entity);
             }

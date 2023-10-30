@@ -91,7 +91,8 @@ export class DrawModule extends BaseModule {
             projMat,
             camera.near,
             width, height,
-            camera.kind == "orthographic"
+            camera.kind == "orthographic",
+            camera.far
         );
     }
 
@@ -381,7 +382,8 @@ function toPathPointsFromMatrices(
     near: number,
     width: number,
     height: number,
-    ortho: boolean
+    ortho: boolean,
+    cameraFar: number
 ): { screenPoints: ReadonlyVec2[], points2d: ReadonlyVec2[], removedIndices: number[], addedIndices: number[] } | undefined {
     const clip = (p: vec3, p0: vec3) => {
         const d = vec3.sub(vec3.create(), p0, p);
@@ -393,14 +395,20 @@ function toPathPointsFromMatrices(
     const removedIndices: number[] = [];
     const addedIndices: number[] = [];
     const sv = points.map((v) => vec3.transformMat4(vec3.create(), v, camMat));
-    if (ortho) {
-        for (const p of sv) {
-            if (p[2] > 0 && p[2] < 0.1) {
-                p[2] = -0.0001;
+
+    const screenPoints = sv.reduce((tail, head, i) => {
+        if (ortho) {
+            for (let i = 0; i < sv.length; ++i) {
+                //Avoid objects very near the camera, put them behind instead
+                if (sv[i][2] > 0 && sv[i][2] < 0.1) {
+                    sv[i][2] = -0.0001;
+                }
+                if (sv[i][2] > cameraFar) {
+                    removedIndices.push(i);
+                    return tail;
+                }
             }
         }
-    }
-    const screenPoints = sv.reduce((tail, head, i) => {
         if (head[2] > SCREEN_SPACE_EPSILON) {
             if (i === 0 || sv[i - 1][2] > 0) {
                 removedIndices.push(i);
@@ -455,7 +463,8 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                 camera.near,
                 width,
                 height,
-                camera.kind == "orthographic"
+                camera.kind == "orthographic",
+                camera.far
             );
             if (points) {
                 const { screenPoints, removedIndices, addedIndices } = points;
@@ -494,7 +503,8 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                         camera.near,
                         width,
                         height,
-                        camera.kind == "orthographic"
+                        camera.kind == "orthographic",
+                        camera.far
                     );
                     if (voidPoints) {
                         const { screenPoints, removedIndices, addedIndices } = voidPoints;
