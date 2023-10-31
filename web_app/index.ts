@@ -4,7 +4,7 @@
  */
 import { glMatrix } from "gl-matrix";
 export * from "../core3d";
-export * from "../offline/main";
+export * from "../offline";
 export * from "../measure";
 export * from "./device";
 export * from "./view";

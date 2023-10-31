@@ -412,8 +412,7 @@ export class View<
         const measure = this._measureView;
         const sample = await this.pick(x, y, options);
         if (sample && measure) {
-            const measureView = await measure;
-            return (await measureView.core.pickMeasureEntity(sample.objectId, sample.position)).entity;
+            return (await measure.core.pickMeasureEntity(sample.objectId, sample.position)).entity;
         }
     }
 
