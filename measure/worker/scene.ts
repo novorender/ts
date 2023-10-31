@@ -337,7 +337,7 @@ export class MeasureTool {
         return [];
     }
 
-    async viableFollowPathEntity(
+    async getCurveSegmentEntity(
         id: ObjectId
     ): Promise<MeasureEntity | undefined> {
         const product = await this.getProduct(id);
