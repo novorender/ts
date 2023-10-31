@@ -216,7 +216,6 @@ export class ControllerInput {
 
     private mousemove = (e: MouseEvent) => {
         if (e.buttons < 1) return;
-        if (Math.abs(e.movementX) > 100 || Math.abs(e.movementY) > 100) return;
         this.updateModifierKeys(e);
         if (this._mouseButtonDown && this.usePointerLock) {
             (e.currentTarget as HTMLElement).requestPointerLock();
