@@ -10,7 +10,7 @@ export interface OfflineImports {
      * @remarks This worker root can be found in `offline/opfs/worker/index.js`.
      * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Worker/Worker | Worker: Worker() constructor}
      */
-    readonly ioWorker: URL;
+    readonly ioWorker: Worker;
 }
 
 
@@ -40,7 +40,8 @@ export interface OfflineImportMap {
  */
 export async function downloadOfflineImports(map: OfflineImportMap): Promise<OfflineImports> {
     const { baseUrl } = map;
-    const ioWorker = getWorkerUrl(map.ioWorker ?? "./ioWorker.js", baseUrl);
+    const url = getWorkerUrl(map.ioWorker ?? "./ioWorker.js", baseUrl);
+    const ioWorker = new Worker(url, { type: "module", name: "IO" });
     return { ioWorker };
 }
 

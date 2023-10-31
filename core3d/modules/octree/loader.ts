@@ -103,7 +103,7 @@ export class NodeLoader {
             return Promise.resolve(undefined);
         }
         const url = new URL(node.context.url);
-        url.pathname += node.path;
+        url.pathname += "webgl2_bin/" + node.path;
         const { byteSize } = data;
         const enableOutlines = deviceProfile.features.outline;
         const applyFilter = true;

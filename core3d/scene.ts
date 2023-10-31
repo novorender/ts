@@ -10,7 +10,8 @@ type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
 /**
  * Download scene from url.
- * @param url Url of scene Root folder, e.g. `https://blobs.novorender.com/<sceneid>/`
+ * @param baseUrl Url of the containing folder, e.g. `https://blobs.novorender.com/<sceneid>/`
+ * @param configPath The relative path to the scene json file, e.g. `webgl2_bin/<scenehash>`
  * @param abortSignal Optional abort signal.
  * @returns A render state scene ready to be assigned to {@link RenderState.scene}.
  * @remarks
@@ -18,10 +19,10 @@ type Mutable<T> = { -readonly [P in keyof T]: T[P] };
  * It may take several frames for any geometry to appear, and several seconds for it to fully resolve.
  * @category Render State
  */
-export async function downloadScene(url: URL, abortSignal?: AbortSignal): Promise<RenderStateScene> {
-    const fullUrl = new URL(url);
-    fullUrl.pathname += "scene.json";
-    let config = (await download(fullUrl, "json", abortSignal)) as SceneConfig;
+export async function downloadScene(baseUrl: URL, configPath: string, abortSignal?: AbortSignal): Promise<RenderStateScene> {
+    const url = new URL(baseUrl);
+    url.pathname += configPath;
+    let config = (await download(url, "json", abortSignal)) as SceneConfig;
     if (config.up) {
         // for now we assume that the presence of an up vector means cad-space.
         // until every scene is in cad space, we rotate it back into gl-space for backward compatibility.
@@ -43,7 +44,7 @@ export async function downloadScene(url: URL, abortSignal?: AbortSignal): Promis
     if (!isSupportedVersion(config.version)) {
         throw new Error(`Unsupported scene version: ${config.variants}!`);
     }
-    return { url: url.toString(), config } as const;
+    return { url: baseUrl.toString(), config } as const;
 }
 
 function flipCADToGLVec(v: ReadonlyVec3): ReadonlyVec3 {
