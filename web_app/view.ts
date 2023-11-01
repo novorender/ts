@@ -7,7 +7,7 @@ import { inspectDeviations, type DeviationInspectionSettings, type DeviationInsp
 import { downloadOfflineImports, manageOfflineStorage, type OfflineImportMap, type OfflineImports, type OfflineViewState, type SceneIndex } from "offline"
 import { loadSceneDataOffline, type DataContext } from "data";
 import * as DataAPI from "data/api";
-import { hasOfflineDir, requestOfflineFile } from "offline/file";
+import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
 
 /**
  * A view base class for Novorender content.
@@ -294,6 +294,7 @@ export class View<
                 throw new Error(response.statusText);
             return response;
         }
+
         const indexResponse = await getFile(version);
         const index = await indexResponse.json() as SceneIndex;
         // TODO: assign index to public member?
@@ -304,27 +305,40 @@ export class View<
         flipState(stateChanges, "GLToCAD");
         this.modifyRenderState(stateChanges);
 
-        if (measure) {
-            const measureView = await createMeasureView(this._drawContext2d, this.imports);
-            await measureView.loadScene(baseSceneUrl, measure.brepLut); // TODO: include abort signal!
-            this._measureView = measureView;
-        }
-
-        if (data) {
-            const dataContext = await loadSceneDataOffline(sceneId, data.jsonLut, data.json); // TODO: Add online variant
-            this._dataContext = dataContext;
-        }
-
-        if (offline) {
-            this._offline = {
-                manifestUrl: relativeUrl(offline.manifest),
-                isEnabled: async () => {
-                    return await hasOfflineDir(sceneId);
-                },
+        try {
+            if (measure) {
+                const measureView = await createMeasureView(this._drawContext2d, this.imports);
+                await measureView.loadScene(baseSceneUrl, measure.brepLut); // TODO: include abort signal!
+                this._measureView = measureView;
             }
+
+            if (data) {
+                const dataContext = await loadSceneDataOffline(sceneId, data.jsonLut, data.json); // TODO: Add online variant
+                this._dataContext = dataContext;
+            }
+
+            if (offline) {
+                this._offline = {
+                    manifestUrl: relativeUrl(offline.manifest),
+                    isEnabled: async () => {
+                        return await hasOfflineDir(sceneId);
+                    },
+                }
+            }
+            return stateChanges.scene.config;
+        }
+        catch (error) {
+            const offlineSetupError = error instanceof OfflineFileNotFoundError;
+            if (offlineSetupError) {
+                console.warn(`Scene has corruped offline storage, deleting`);
+                if (offline) {
+                    const scenes = (await this.manageOfflineStorage()).scenes;
+                    scenes.get(sceneId)?.delete();
+                }
+            }
+            throw error;
         }
 
-        return stateChanges.scene.config;
     }
 
 

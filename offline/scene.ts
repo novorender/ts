@@ -176,7 +176,7 @@ export class OfflineScene {
 
             async function downloadFiles(files: Iterable<SceneManifestEntry>, type: ResourceType) {
                 for (let retry = 0; retry < 3; retry++) {
-                    async function downloadFile(name: string) {
+                    async function downloadFile(name: string, size: number) {
                         const fileRequest = storage.request(dir.name, name, type, sasKey, abortSignal);
                         let idx = downloadQueue.findIndex(e => !e);
                         if (idx < 0) {
@@ -185,19 +185,19 @@ export class OfflineScene {
                             idx = downloadQueue.findIndex(e => !e);
                             console.assert(idx >= 0);
                         }
-                        const downloadPromise = download();
+                        const downloadPromise = download(size);
                         downloadQueue[idx] = downloadPromise;
                         downloadPromise.finally(() => {
                             downloadQueue[idx] = undefined;
                         });
                         // do downloads in "parallel"
-                        async function download() {
+                        async function download(size: number) {
                             try {
                                 let fileResponse = await fetch(fileRequest);
                                 if (fileResponse.ok) {
                                     const buffer = await fileResponse.arrayBuffer();
                                     await dir.write(name, buffer);
-                                    totalDownload += buffer.byteLength;
+                                    totalDownload += size;
                                 } else {
                                     errorQueue.push(name);
                                 }
@@ -215,7 +215,7 @@ export class OfflineScene {
                             break;
                         }
                         if (!existingFiles.has(name)) {
-                            await downloadFile(name);
+                            await downloadFile(name, size);
                         } else {
                             totalDownload += size;
                         }
