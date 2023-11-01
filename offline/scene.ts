@@ -172,7 +172,7 @@ export class OfflineScene {
             const maxSimulataneousDownloads = 8;
             const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
             const maxErrors = 100;
-            const errorQueue: string[] = [];
+            const errorQueue: { name: string, size: number }[] = [];
 
             async function downloadFiles(files: Iterable<SceneManifestEntry>, type: ResourceType) {
                 for (let retry = 0; retry < 3; retry++) {
@@ -199,13 +199,13 @@ export class OfflineScene {
                                     await dir.write(name, buffer);
                                     totalDownload += size;
                                 } else {
-                                    errorQueue.push(name);
+                                    errorQueue.push({ name, size });
                                 }
                             } catch (error: unknown) {
                                 if (typeof error == "object" && error instanceof DOMException && error.name == "AbortError") {
                                     throw error;
                                 }
-                                errorQueue.push(name);
+                                errorQueue.push({ name, size });
                             }
                         }
                     }
@@ -229,8 +229,8 @@ export class OfflineScene {
                     // attempt to re-download failed files.
                     const errors = [...errorQueue];
                     errorQueue.length = 0;
-                    for (const name of errors) {
-                        await downloadFile(name);
+                    for (const error of errors) {
+                        await downloadFile(error.name, error.size);
                     }
                 }
             }
