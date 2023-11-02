@@ -468,12 +468,18 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                         outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p);
                         outlineRenderers.set(plane, outlineRenderer);
                     }
+                    let lineCount = 0;
                     const [...lineClusters] = outlineRenderer.intersectTriangles(renderNodes);
-                    const { count, vao } = outlineRenderer.makeVAO(lineClusters);
-                    outlineRenderer.renderLines(count, vao);
-                    glDelete(gl, vao);
+                    {
+                        const { count, vao } = outlineRenderer.makeLinesVAO(lineClusters);
+                        lineCount = count;
+                        outlineRenderer.renderLines(count, vao);
+                        outlineRenderer.renderPoints(count, vao);
+                        glDelete(gl, vao);
+                    }
+
                     const end = performance.now();
-                    console.log(`lines: ${count} time:${end - begin}`);
+                    console.log(`lines: ${lineCount} time:${end - begin}`);
                 } else {
                     // render clipping outlines
                     glState(gl, {
