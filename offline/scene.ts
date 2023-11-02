@@ -172,11 +172,11 @@ export class OfflineScene {
             const maxSimulataneousDownloads = 8;
             const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
             const maxErrors = 100;
-            const errorQueue: string[] = [];
+            const errorQueue: { name: string, size: number }[] = [];
 
             async function downloadFiles(files: Iterable<SceneManifestEntry>, type: ResourceType) {
                 for (let retry = 0; retry < 3; retry++) {
-                    async function downloadFile(name: string) {
+                    async function downloadFile(name: string, size: number) {
                         const fileRequest = storage.request(dir.name, name, type, sasKey, abortSignal);
                         let idx = downloadQueue.findIndex(e => !e);
                         if (idx < 0) {
@@ -185,27 +185,27 @@ export class OfflineScene {
                             idx = downloadQueue.findIndex(e => !e);
                             console.assert(idx >= 0);
                         }
-                        const downloadPromise = download();
+                        const downloadPromise = download(size);
                         downloadQueue[idx] = downloadPromise;
                         downloadPromise.finally(() => {
                             downloadQueue[idx] = undefined;
                         });
                         // do downloads in "parallel"
-                        async function download() {
+                        async function download(size: number) {
                             try {
                                 let fileResponse = await fetch(fileRequest);
                                 if (fileResponse.ok) {
                                     const buffer = await fileResponse.arrayBuffer();
                                     await dir.write(name, buffer);
-                                    totalDownload += buffer.byteLength;
+                                    totalDownload += size;
                                 } else {
-                                    errorQueue.push(name);
+                                    errorQueue.push({ name, size });
                                 }
                             } catch (error: unknown) {
                                 if (typeof error == "object" && error instanceof DOMException && error.name == "AbortError") {
                                     throw error;
                                 }
-                                errorQueue.push(name);
+                                errorQueue.push({ name, size });
                             }
                         }
                     }
@@ -215,7 +215,7 @@ export class OfflineScene {
                             break;
                         }
                         if (!existingFiles.has(name)) {
-                            await downloadFile(name);
+                            await downloadFile(name, size);
                         } else {
                             totalDownload += size;
                         }
@@ -229,8 +229,8 @@ export class OfflineScene {
                     // attempt to re-download failed files.
                     const errors = [...errorQueue];
                     errorQueue.length = 0;
-                    for (const name of errors) {
-                        await downloadFile(name);
+                    for (const error of errors) {
+                        await downloadFile(error.name, error.size);
                     }
                 }
             }
