@@ -295,50 +295,63 @@ export class View<
             return response;
         }
 
-        const indexResponse = await getFile(version);
-        const index = await indexResponse.json() as SceneIndex;
-        // TODO: assign index to public member?
-        const { render, measure, data, offline } = index;
-
-        const scene = await downloadScene(baseSceneUrl, render.webgl2, abortSignal);
-        const stateChanges = { scene };
-        flipState(stateChanges, "GLToCAD");
-        this.modifyRenderState(stateChanges);
-
         try {
-            if (measure) {
-                const measureView = await createMeasureView(this._drawContext2d, this.imports);
-                await measureView.loadScene(baseSceneUrl, measure.brepLut); // TODO: include abort signal!
-                this._measureView = measureView;
-            }
+            const indexResponse = await getFile(version);
+            const index = await indexResponse.json() as SceneIndex;
+            // TODO: assign index to public member?
+            const { render, measure, data, offline } = index;
 
-            if (data) {
-                const dataContext = await loadSceneDataOffline(sceneId, data.jsonLut, data.json); // TODO: Add online variant
-                this._dataContext = dataContext;
-            }
 
-            if (offline) {
-                this._offline = {
-                    manifestUrl: relativeUrl(offline.manifest),
-                    isEnabled: async () => {
-                        return await hasOfflineDir(sceneId);
-                    },
+            const scene = await downloadScene(baseSceneUrl, render.webgl2, abortSignal);
+            const stateChanges = { scene };
+            flipState(stateChanges, "GLToCAD");
+            this.modifyRenderState(stateChanges);
+
+            try {
+                if (measure) {
+                    const measureView = await createMeasureView(this._drawContext2d, this.imports);
+                    await measureView.loadScene(baseSceneUrl, measure.brepLut); // TODO: include abort signal!
+                    this._measureView = measureView;
                 }
+
+                if (data) {
+                    const dataContext = await loadSceneDataOffline(sceneId, data.jsonLut, data.json); // TODO: Add online variant
+                    this._dataContext = dataContext;
+                }
+
+                if (offline) {
+                    this._offline = {
+                        manifestUrl: relativeUrl(offline.manifest),
+                        isEnabled: async () => {
+                            return await hasOfflineDir(sceneId);
+                        },
+                    }
+                }
+                return stateChanges.scene.config;
             }
+            catch (error) {
+                const offlineSetupError = error instanceof OfflineFileNotFoundError;
+                if (offlineSetupError) {
+                    console.warn(`Scene has corruped offline storage, deleting`);
+                    if (offline) {
+                        const scenes = (await this.manageOfflineStorage()).scenes;
+                        scenes.get(sceneId)?.delete();
+                    }
+                }
+                throw error;
+            }
+        }
+        catch (error) { //Legacy load
+            const scene = await downloadScene(baseSceneUrl, "webgl2_bin/scene.json", abortSignal);
+            const stateChanges = { scene };
+            flipState(stateChanges, "GLToCAD");
+            this.modifyRenderState(stateChanges);
+
+            const measureView = await createMeasureView(this._drawContext2d, this.imports);
+            await measureView.loadScene(baseSceneUrl, "brep/");
+            this._measureView = measureView;
             return stateChanges.scene.config;
         }
-        catch (error) {
-            const offlineSetupError = error instanceof OfflineFileNotFoundError;
-            if (offlineSetupError) {
-                console.warn(`Scene has corruped offline storage, deleting`);
-                if (offline) {
-                    const scenes = (await this.manageOfflineStorage()).scenes;
-                    scenes.get(sceneId)?.delete();
-                }
-            }
-            throw error;
-        }
-
     }
 
 
