@@ -307,39 +307,35 @@ export class View<
             flipState(stateChanges, "GLToCAD");
             this.modifyRenderState(stateChanges);
 
-            try {
-                if (measure) {
-                    const measureView = await createMeasureView(this._drawContext2d, this.imports);
-                    await measureView.loadScene(baseSceneUrl, measure.brepLut); // TODO: include abort signal!
-                    this._measureView = measureView;
-                }
+            if (measure) {
+                const measureView = await createMeasureView(this._drawContext2d, this.imports);
+                await measureView.loadScene(baseSceneUrl, measure.brepLut); // TODO: include abort signal!
+                this._measureView = measureView;
+            }
 
+            try {
                 if (data) {
                     const dataContext = await loadSceneDataOffline(sceneId, data.jsonLut, data.json); // TODO: Add online variant
                     this._dataContext = dataContext;
                 }
-
-                if (offline) {
-                    this._offline = {
-                        manifestUrl: relativeUrl(offline.manifest),
-                        isEnabled: async () => {
-                            return await hasOfflineDir(sceneId);
-                        },
-                    }
-                }
-                return stateChanges.scene.config;
-            }
-            catch (error) {
+            } catch (error) {
                 const offlineSetupError = error instanceof OfflineFileNotFoundError;
-                if (offlineSetupError) {
-                    console.warn(`Scene has corruped offline storage, deleting`);
-                    if (offline) {
-                        const scenes = (await this.manageOfflineStorage()).scenes;
-                        scenes.get(sceneId)?.delete();
-                    }
+                //Only means that offline data is not downloaded
+                if (!offlineSetupError) {
+                    throw error;
                 }
-                throw error;
             }
+
+            if (offline) {
+                this._offline = {
+                    manifestUrl: relativeUrl(offline.manifest),
+                    isEnabled: async () => {
+                        return await hasOfflineDir(sceneId);
+                    },
+                }
+            }
+            return stateChanges.scene.config;
+
         }
         catch (error) { //Legacy load
             const scene = await downloadScene(baseSceneUrl, "webgl2_bin/scene.json", abortSignal);
