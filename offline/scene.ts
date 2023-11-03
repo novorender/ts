@@ -149,7 +149,7 @@ export class OfflineScene {
                 if (!filename.endsWith(".json")) {
                     existingFiles.set(filename, 0);
                 }
-                if (debounce(5000)) {
+                if (debounce(1000)) {
                     logger?.progress?.(existingFiles.size, undefined, "scan");
                 }
                 if (abortSignal.aborted) {
