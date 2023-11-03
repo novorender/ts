@@ -1,6 +1,6 @@
 
-import { type ReadonlyVec3, vec3, type ReadonlyQuat, glMatrix } from "gl-matrix";
-import { BaseController, type ControllerInitParams, type MutableCameraState } from "./base";
+import { type ReadonlyVec3, vec3, type ReadonlyQuat, glMatrix, vec2 } from "gl-matrix";
+import { BaseController, easeInOut, type ControllerInitParams, type MutableCameraState, easeOut } from "./base";
 import { mergeRecursive, type BoundingSphere, type RenderStateCamera } from "core3d";
 import { PitchRollYawOrientation, decomposeRotation } from "./orientation";
 import { ControllerInput } from "./input";
@@ -19,10 +19,13 @@ export class OrthoController extends BaseController {
     private params: OrthoControllerParams = {
         stepInterval: 1,
         usePointerLock: false,
+        touchRotate: false,
+        touchDeAcceleration: false
     };
     private _position: ReadonlyVec3 = vec3.create();
     private _orientation = new PitchRollYawOrientation();
     private _fov = 50;
+    private _touchVelocity = vec2.create();
 
     /**
      * @param input The input source.
@@ -131,7 +134,20 @@ export class OrthoController extends BaseController {
         this.changed();
     }
 
-    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat): void {
+    override touchChanged(event: TouchEvent): void {
+        if (this.params.touchDeAcceleration) {
+            const { _touchVelocity, height, _position, _orientation } = this;
+            if (event.touches.length == 0 && _touchVelocity[0] != 0 && _touchVelocity[1] != 0) {
+                const scale = this._fov / height;
+                const deltaPos = vec3.transformQuat(vec3.create(), vec3.fromValues(_touchVelocity[0] * scale * -1, _touchVelocity[1] * scale, 0), _orientation.rotation);
+                vec3.scale(deltaPos, deltaPos, 10);
+                this.moveTo(vec3.add(vec3.create(), _position, deltaPos), 500, undefined, easeOut);
+                this._touchVelocity = vec2.create();
+            }
+        }
+    }
+
+    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat, easeFunction?: (t: number) => number): void {
         const { _orientation, _position } = this;
         if (flyTime) {
             let targetPitch = _orientation.pitch;
@@ -145,7 +161,8 @@ export class OrthoController extends BaseController {
             this.setFlyTo({
                 totalFlightTime: flyTime,
                 end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
-                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw }
+                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw },
+                easeFunction: easeFunction ? easeFunction : easeInOut
             });
         }
         else {
@@ -166,7 +183,8 @@ export class OrthoController extends BaseController {
             this.setFlyTo({
                 totalFlightTime: flyTime,
                 end: { pos: vec3.clone(targetPosition), pitch: _orientation.pitch, yaw: _orientation.yaw + 0.05 },
-                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw }
+                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw },
+                easeFunction: easeInOut
             });
         } else {
             const dist = boundingSphere.radius / Math.tan(glMatrix.toRadian(_fov) / 2);
@@ -185,11 +203,14 @@ export class OrthoController extends BaseController {
             return;
         }
 
+        this._touchVelocity = vec2.fromValues(axes.touch_1_move_x, axes.touch_1_move_y);
 
         let tx = -axes.keyboard_ad + axes.mouse_lmb_move_x + axes.mouse_rmb_move_x + axes.mouse_mmb_move_x + axes.touch_1_move_x;
         let ty = -axes.keyboard_ws + axes.mouse_lmb_move_y + axes.mouse_rmb_move_y + axes.mouse_mmb_move_y + axes.touch_1_move_y;
         const tz = (axes.touch_pinch3 * 0.1) + (hasShift ? axes.mouse_wheel * 0.01 : 0);
-        const rz = -axes.keyboard_arrow_left_right / 2;
+        //Assume that very low rotate over the course of a frame is unintentional when zooming
+        const touchRotate = (this.params.touchRotate && Math.abs(axes.touch_2_rotate) > 0.004 ? (axes.touch_2_rotate * 300) : 0);
+        const rz = -axes.keyboard_arrow_left_right / 2 + touchRotate;
         const zoom = (hasShift ? 0 : axes.mouse_wheel) + axes.touch_pinch2 - axes.keyboard_qe;
         const [zoomX, zoomY] = zoomPos;
 
@@ -262,5 +283,15 @@ export interface OrthoControllerParams {
      * @defaultValue false
      */
     readonly usePointerLock: boolean;
+
+    /** Whether two finger rotate will rotate camera or not.
+     * @defaultValue false
+     */
+    readonly touchRotate: boolean;
+
+    /** Enable de acceleration when letting go while moving in touch
+     * @defaultValue false
+     */
+    readonly touchDeAcceleration: boolean
 }
 

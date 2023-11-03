@@ -141,8 +141,9 @@ export abstract class BaseController {
                 const { currentFlightTime, totalFlightTime, begin, end, current } = _flyTo;
                 if (currentFlightTime < totalFlightTime) {
                     const lerp = (a: number, b: number, t: number) => (a + (b - a) * t);
-                    const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
-                    const t = easeInOut(currentFlightTime / totalFlightTime);
+                    //const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+                    const easeInOut = (t: number) => (1 - Math.pow(1 - t, 3));
+                    let t = easeInOut(currentFlightTime / totalFlightTime);
                     const pos = vec3.lerp(vec3.create(), begin.pos, end.pos, t);
                     const pitch = lerp(begin.pitch, end.pitch, t);
                     let yaw = lerp(begin.yaw, end.yaw, t);
@@ -280,6 +281,24 @@ export interface Orientation {
     readonly yaw: number;
 }
 
+/**
+ * Function that can be used for flyto will speed up and down
+ * @param t input parameter
+ * @returns modified parameter
+ */
+export function easeInOut(t: number) {
+    return (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+}
+
+/**
+ * Function that can be used for flyto will speed down
+ * @param t input parameter
+ * @returns modified parameter
+ */
+export function easeOut(t: number) {
+    return (1 - Math.pow(1 - t, 3));
+}
+
 /** Camera fly-to transition/animation parameter
  * @category Camera Controllers
  */
@@ -290,6 +309,7 @@ export interface FlyToParams {
     readonly begin: Orientation;
     /** The transition end camera orientation. */
     readonly end: Orientation;
+    readonly easeFunction: (t: number) => number;
 }
 
 /** @internal */

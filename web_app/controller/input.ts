@@ -1,4 +1,4 @@
-import { vec2 } from "gl-matrix";
+import { vec2, type ReadonlyVec2 } from "gl-matrix";
 
 /**
  * The input source of camera controllers.
@@ -27,9 +27,8 @@ export class ControllerInput {
     private _mouseButtonDown = false;
     private _zoomY = 0;
     private _zoomX = 0;
-    private readonly _touchMovePrev = [0, 0] as [number, number];
+    private readonly _prevTouchCenter = [0, 0] as vec2;
     private _touchZoomDistancePrev = 0;
-    private prevTouchCenter: vec2 | undefined = undefined;
 
     private _mouseWheelLastActive = 0;
     private static readonly _gestureKeys = ["KeyW", "KeyS", "KeyA", "KeyD", "KeyQ", "KeyE", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
@@ -216,7 +215,6 @@ export class ControllerInput {
 
     private mousemove = (e: MouseEvent) => {
         if (e.buttons < 1) return;
-        if (Math.abs(e.movementX) > 100 || Math.abs(e.movementY) > 100) return;
         this.updateModifierKeys(e);
         if (this._mouseButtonDown && this.usePointerLock) {
             (e.currentTarget as HTMLElement).requestPointerLock();
@@ -237,20 +235,20 @@ export class ControllerInput {
 
     private touchstart = async (event: TouchEvent) => {
         this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
-        const { touchPoints, _touchMovePrev } = this;
+        const { touchPoints, _prevTouchCenter } = this;
         this.callbacks?.touchChanged?.(event);
 
         switch (touchPoints.length) {
             case 1:
-                _touchMovePrev[0] = touchPoints[0].x;
-                _touchMovePrev[1] = touchPoints[0].y;
+                _prevTouchCenter[0] = touchPoints[0].x;
+                _prevTouchCenter[1] = touchPoints[0].y;
                 break;
             default: // 2 or more
                 const dx = touchPoints[0].x - touchPoints[1].x;
                 const dy = touchPoints[0].y - touchPoints[1].y;
                 this._touchZoomDistancePrev = Math.sqrt(dx * dx + dy * dy);
-                _touchMovePrev[0] = (touchPoints[0].x + touchPoints[1].x) / 2;
-                _touchMovePrev[1] = (touchPoints[0].y + touchPoints[1].y) / 2;
+                _prevTouchCenter[0] = (touchPoints[0].x + touchPoints[1].x) / 2;
+                _prevTouchCenter[1] = (touchPoints[0].y + touchPoints[1].y) / 2;
                 break;
         }
         await this.callbacks?.moveBegin?.(event);
@@ -258,21 +256,21 @@ export class ControllerInput {
 
     private touchend = async (event: TouchEvent) => {
         this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
-        const { touchPoints, _touchMovePrev } = this;
+        const { touchPoints, _prevTouchCenter } = this;
         this.callbacks?.touchChanged?.(event);
         switch (touchPoints.length) {
             case 0:
                 break;
             case 1:
-                _touchMovePrev[0] = touchPoints[0].x;
-                _touchMovePrev[1] = touchPoints[0].y;
+                _prevTouchCenter[0] = touchPoints[0].x;
+                _prevTouchCenter[1] = touchPoints[0].y;
                 break;
             default:
                 const dx = touchPoints[0].x - touchPoints[1].x;
                 const dy = touchPoints[0].y - touchPoints[1].y;
                 this._touchZoomDistancePrev = Math.sqrt(dx * dx + dy * dy);
-                _touchMovePrev[0] = (touchPoints[0].x + touchPoints[1].x) / 2;
-                _touchMovePrev[1] = (touchPoints[0].y + touchPoints[1].y) / 2;
+                _prevTouchCenter[0] = (touchPoints[0].x + touchPoints[1].x) / 2;
+                _prevTouchCenter[1] = (touchPoints[0].y + touchPoints[1].y) / 2;
                 break;
         }
     };
@@ -284,8 +282,9 @@ export class ControllerInput {
 
     private touchmove = (event: TouchEvent) => {
         if (event.cancelable) event.preventDefault();
-        this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
-        const { touchPoints, _touchMovePrev } = this;
+        const prevTouchPoints = this.touchPoints;
+        this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: touch.clientX, y: touch.clientY }));
+        const { touchPoints, _prevTouchCenter } = this;
         let { x, y } = touchPoints[0];
 
         const { axes } = this;
@@ -298,11 +297,7 @@ export class ControllerInput {
             y = (touchPoints[0].y + touchPoints[1].y) / 2;
 
             const touchCenter = vec2.fromValues(x, y);
-            let dist = 0;
-            if (this.prevTouchCenter) {
-                dist = vec2.dist(this.prevTouchCenter, touchCenter);
-            }
-            this.prevTouchCenter = touchCenter;
+            const dist = vec2.dist(_prevTouchCenter, touchCenter);
 
             const deltaWheel = this._touchZoomDistancePrev - touchZoomDistance; // / this.domElement.clientHeight;
             this._touchZoomDistancePrev = touchZoomDistance;
@@ -315,23 +310,49 @@ export class ControllerInput {
                     axes.touch_pinch3 += deltaWheel;
                 }
             }
+            else if (prevTouchPoints.length == 2 && touchPoints.length == 2) {
+                const a1 = prevTouchPoints[0].x - _prevTouchCenter[0];
+                const b1 = prevTouchPoints[0].y - _prevTouchCenter[1];
+                const c1 = touchPoints[0].x - touchCenter[0];
+                const d1 = touchPoints[0].y - touchCenter[1];
+
+                const a2 = prevTouchPoints[1].x - _prevTouchCenter[0];
+                const b2 = prevTouchPoints[1].y - _prevTouchCenter[1];
+                const c2 = touchPoints[1].x - touchCenter[0];
+                const d2 = touchPoints[1].y - touchCenter[1];
+
+                let i = 0;
+
+                const angleDiff = (a: number, b: number, c: number, d: number) => {
+                    const v1 = vec2.fromValues(a, b);
+                    vec2.normalize(v1, v1);
+                    const v2 = vec2.fromValues(c, d);
+                    vec2.normalize(v2, v2);
+                    const cp = v1[0] * v2[1] - v2[0] * v1[1];
+                    const dp = vec2.dot(v1, v2);
+                    return Math.atan2(cp, dp);
+                }
+                const angle1 = angleDiff(a1, b1, c1, d1);
+                const angle2 = angleDiff(a2, b2, c2, d2);
+                axes.touch_2_rotate = angle1 + angle2;
+            }
         }
         switch (touchPoints.length) {
             case 1:
-                axes.touch_1_move_x += x - _touchMovePrev[0];
-                axes.touch_1_move_y += y - _touchMovePrev[1];
+                axes.touch_1_move_x += x - _prevTouchCenter[0];
+                axes.touch_1_move_y += y - _prevTouchCenter[1];
                 break;
             case 2:
-                axes.touch_2_move_x += x - _touchMovePrev[0];
-                axes.touch_2_move_y += y - _touchMovePrev[1];
+                axes.touch_2_move_x += x - _prevTouchCenter[0];
+                axes.touch_2_move_y += y - _prevTouchCenter[1];
                 break;
             case 3:
-                axes.touch_3_move_x += x - _touchMovePrev[0];
-                axes.touch_3_move_y += y - _touchMovePrev[1];
+                axes.touch_3_move_x += x - _prevTouchCenter[0];
+                axes.touch_3_move_y += y - _prevTouchCenter[1];
                 break;
         }
-        _touchMovePrev[0] = x;
-        _touchMovePrev[1] = y;
+        _prevTouchCenter[0] = x;
+        _prevTouchCenter[1] = y;
     };
 
     /** Apply time-related state updates.
@@ -375,6 +396,7 @@ export class ControllerInput {
         axes.touch_1_move_y = 0;
         axes.touch_2_move_x = 0;
         axes.touch_2_move_y = 0;
+        axes.touch_2_rotate = 0;
         axes.touch_3_move_x = 0;
         axes.touch_3_move_y = 0;
         axes.touch_pinch2 = 0;
@@ -441,6 +463,7 @@ type ControllerAxesName =
     | "touch_1_move_y"
     | "touch_2_move_x"
     | "touch_2_move_y"
+    | "touch_2_rotate"
     | "touch_3_move_x"
     | "touch_3_move_y"
     | "touch_pinch2"
