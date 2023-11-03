@@ -84,16 +84,17 @@ export class OctreeModule implements RenderModule {
 
         const { textureUniforms, uniformBufferBlocks } = OctreeModule;
         const shadersPromise = OctreeModule.compileShaders(context, bin);
-        const [/*color, pick, pre,*/ intersect, line, debug, corePrograms] = await Promise.all([
+        const [/*color, pick, pre,*/ intersect, line, point, debug, corePrograms] = await Promise.all([
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.color, ShaderMode.triangles) }),
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pick, ShaderMode.triangles) }),
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pre, ShaderMode.triangles) }),
             context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks: ["Camera", "Clipping", "Outline", "Node"], textureUniforms, transformFeedback: { varyings: ["line_vertices", "color", "object_id"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
             context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
+            context.makeProgramAsync(bin, { ...shaders.point, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
             context.makeProgramAsync(bin, { ...shaders.debug, uniformBufferBlocks }),
             shadersPromise,
         ]);
-        const programs: Programs = { ...corePrograms, intersect, line, debug };
+        const programs: Programs = { ...corePrograms, intersect, line, point, debug };
         // const programs = { color, pick, pre, intersect, line, debug };
         // const programs = { intersect, line, debug };
         return {
@@ -168,6 +169,7 @@ type ModePrograms = { readonly [P in keyof typeof ShaderMode]: WebGLProgram };
 export interface Programs extends PassPrograms {
     readonly intersect: WebGLProgram;
     readonly line: WebGLProgram;
+    readonly point: WebGLProgram;
     readonly debug: WebGLProgram;
 }
 

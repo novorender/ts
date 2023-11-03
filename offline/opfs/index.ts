@@ -68,10 +68,10 @@ class OfflineStorageOPFS {
     }
 
     /**
- * Decode request into directory and file name.
- * @param request A request generated from the {@link request} function.
- * @returns Request directory and file name.
- */
+     * Decode request into directory and file name.
+     * @param request A request generated from the {@link request} function.
+     * @returns Request directory and file name.
+     */
     decode(request: Request) {
         const result = this.tryDecode(request);
         if (!result)
@@ -82,7 +82,7 @@ class OfflineStorageOPFS {
 
 
     /**
-     * 
+     * Create a resource request.
      * @param dir The storage directory name.
      * @param file The storage file name.
      * @param signal A signal for aborting the request.
@@ -98,23 +98,23 @@ class OfflineStorageOPFS {
     }
 
     /**
- * Determine if request is a potential offline asset or not.
- * @param request The resource request
- * @returns True, if request url matches that of a potential offline asset, False, if not.
- * @remarks
- * This function only check if the URL matches the pattern of potential offline assets,
- * not if it's actually available offline or not.
- * It's only meant as an early screening to not intercept purely online content.
- */
+     * Determine if request is a potential offline asset or not.
+     * @param request The resource request
+     * @returns True, if request url matches that of a potential offline asset, False, if not.
+     * @remarks
+     * This function only check if the URL matches the pattern of potential offline assets,
+     * not if it's actually available offline or not.
+     * It's only meant as an early screening to not intercept purely online content.
+     */
     isAsset(request: Request): boolean {
         return this.tryDecode(request) != undefined;
     }
 
     /**
- * Fetch resource from offline storage, if available.
- * @param request The resource request
- * @returns A response or undefined if no match was found.
- */
+     * Fetch resource from offline storage, if available.
+     * @param request The resource request
+     * @returns A response or undefined if no match was found.
+     */
     async fetch(request: Request): Promise<Response | undefined> {
         const { worker, promises } = this;
         const { dir, file } = this.decode(request);
@@ -138,10 +138,10 @@ class OfflineStorageOPFS {
     }
 
     /**
- * Get or create a directory by name.
- * @param name The directory name.
- * @returns The directory storage.
- */
+     * Get or create a directory by name.
+     * @param name The directory name.
+     * @returns The directory storage.
+     */
     async directory(name: string): Promise<OfflineDirectoryOPFS> {
         const { dirs } = this;
         let dir = dirs.get(name);
@@ -165,8 +165,8 @@ class OfflineStorageOPFS {
     }
 
     /**
- * Delete everything in this storage, including folders using a different/older schema.
- */
+     * Delete everything in this storage, including folders using a different/older schema.
+     */
     async deleteAll() {
         const { worker, promises } = this;
         const id = promises.newId();

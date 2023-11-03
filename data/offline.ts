@@ -2,31 +2,33 @@ import { hasOfflineDir, getOfflineFile } from "offline/file";
 import type { DataContext, MetaDataEntry } from "./main";
 import { streamLines } from "./util";
 
-export async function loadSceneDataOffline(sceneId: string, jsonFilename: string, lutFilename: string): Promise<DataContext | undefined> {
+export async function loadSceneDataOffline(sceneId: string, lutPath: string, jsonPath: string): Promise<DataContext | undefined> {
     if (await hasOfflineDir(sceneId)) {
-        const jsonFile = await getOfflineFile(sceneId, jsonFilename);
-        const lutFile = await getOfflineFile(sceneId, lutFilename);
-        return new DataContextOffline(jsonFile, lutFile);
+        const lutFile = await getOfflineFile(sceneId, getFilenameFromPath(lutPath));
+        const jsonFile = await getOfflineFile(sceneId, getFilenameFromPath(jsonPath));
+        return new DataContextOffline(lutFile, jsonFile);
         // return new DataContextOfflineMemory(jsonFile, lutFile);
     }
+}
+
+function getFilenameFromPath(path: string) {
+    return path.substring(path.lastIndexOf('/') + 1);
 }
 
 class DataContextOffline implements DataContext {
     readonly utf8Decoder = new TextDecoder();
 
     constructor(
-        readonly jsonFile: File,
         readonly lutFile: File,
+        readonly jsonFile: File,
     ) {
     }
 
     async getObjectMetaData(objectIndex: number): Promise<MetaDataEntry> {
         const { lutFile, jsonFile, utf8Decoder } = this;
-        const lutBuf = await lutFile.slice(objectIndex * 16, objectIndex * 16 + 16).arrayBuffer();
-        const [offset, length] = new BigUint64Array(lutBuf);
-        const start = Number(offset);
-        const end = start + Number(length);
-        const jsonBuf = await jsonFile.slice(start, end).arrayBuffer();
+        const lutBuf = await lutFile.slice(objectIndex * 8, objectIndex * 8 + 16).arrayBuffer();
+        const [begin, end] = new BigUint64Array(lutBuf);
+        const jsonBuf = await jsonFile.slice(Number(begin), Number(end)).arrayBuffer();
         const utf8Segment = new Uint8Array(jsonBuf);
         const text = utf8Decoder.decode(utf8Segment);
         const json = JSON.parse(text) as MetaDataEntry;
@@ -52,17 +54,17 @@ class DataContextOfflineMemory implements DataContext {
     readonly dbPromise: Promise<ArrayBuffer>;
 
     constructor(
-        readonly jsonFile: File,
         readonly lutFile: File,
+        readonly jsonFile: File,
     ) {
         this.lutPromise = lutFile.arrayBuffer();
         this.dbPromise = jsonFile.arrayBuffer();
     }
 
     async getObjectMetaData(objectIndex: number): Promise<MetaDataEntry> {
-        const { utf8Decoder, dbPromise, lutPromise } = this;
-        const db = await dbPromise;
+        const { utf8Decoder, lutPromise, dbPromise } = this;
         const lut = await lutPromise;
+        const db = await dbPromise;
         const [offset, length] = new BigUint64Array(lut, objectIndex * 16, 2);
         const utf8Segment = new Uint8Array(db, Number(offset), Number(length));
         const text = utf8Decoder.decode(utf8Segment);
@@ -71,9 +73,9 @@ class DataContextOfflineMemory implements DataContext {
     }
 
     async *allObjectMetaData(): AsyncIterableIterator<MetaDataEntry> {
-        const { utf8Decoder, dbPromise, lutPromise } = this;
-        const db = await dbPromise;
+        const { utf8Decoder, lutPromise, dbPromise } = this;
         const lut = await lutPromise;
+        const db = await dbPromise;
         const numObjects = lut.byteLength / 16;
         for (let i = 0; i < numObjects; i++) {
             const [offset, length] = new BigUint64Array(lut, i * 16, 2);

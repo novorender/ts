@@ -4,6 +4,7 @@ import { SceneManifest, type SceneManifestData, type SceneManifestEntry } from "
 import type { ResourceType } from "./storage";
 import { errorMessage } from "./util";
 import type { OfflineDirectoryOPFS } from "./opfs";
+import { requestOfflineFile } from "./file";
 
 /**
  * An offline scene.
@@ -28,7 +29,7 @@ export class OfflineScene {
         public manifest: SceneManifest
     ) { }
 
-    /** The scene id. */
+    /** Get the scene id. */
     get id() {
         return this.dir.name;
     }
@@ -46,7 +47,11 @@ export class OfflineScene {
     }
 
     /**
-     * Get total used bytes
+     * Get total number of used bytes.
+     * @remarks
+     * This file will scan through all the offline files to sum of their total size,
+     * which can take a long time to complete.
+     * Use manifest data instead if a valid manifest if available.
      */
     async getUsedSize() {
         const sizes = this.dir.filesSizes();
@@ -61,12 +66,13 @@ export class OfflineScene {
 
     /**
      * Reads the manifest file.
+     * @param manifestUrl The url to the offline manifest, with sas key.
      * @param abortSignal A signal to abort downloads/synchronization.
      * @returns Total number of bytes in scene, if it fails it returns undefined
      */
-    async readManifest(abortSignal: AbortSignal, sasKey: string) {
+    async readManifest(manifestUrl: URL, abortSignal: AbortSignal) {
         try {
-            const data = await this.downloadManifest(abortSignal, sasKey);
+            const data = await this.downloadManifest(manifestUrl, abortSignal);
             if (data) {
                 const manifest = new SceneManifest(data);
                 return manifest.totalByteSize;
@@ -77,20 +83,22 @@ export class OfflineScene {
         return undefined;
     }
 
-    private async downloadManifest(abortSignal: AbortSignal, sasKey: string) {
-        const { dir, logger, context } = this;
+    private async downloadManifest(manifestUrl: URL, signal: AbortSignal) {
+        const { logger, context } = this;
         const { storage } = context;
+        const { mode } = storage;
         logger?.info?.("fetching manifest");
-        // fetch online manifest
-        const manifestRequest = storage.request(dir.name, "manifest.json", "", sasKey, abortSignal)
-        const manifestResponse = await fetch(manifestRequest);
+        // fetch manifest, either offline (hashed), or online
+        const manifestRequest = new Request(manifestUrl, { mode, signal });
+        // const manifestResponse = await requestOfflineFile(manifestRequest) ?? await fetch(manifestRequest);
+        const manifestResponse = await fetch(manifestRequest); // always fetch online (for now)
         if (!manifestResponse.ok) {
             logger?.status("invalid format");
             logger?.error(`Failed to retrieve manifest file ${manifestResponse.statusText}`);
             return undefined;
         }
         const manifestData = await manifestResponse.json() as SceneManifestData;
-        if (abortSignal.aborted) {
+        if (signal.aborted) {
             logger?.status("aborted");
             return undefined;
         }
@@ -99,6 +107,7 @@ export class OfflineScene {
 
     /**
      * Incrementally synchronize scene files with online storage.
+     * @param sceneIndexUrl The url to the scene index.json file, complete with sas key.
      * @param abortSignal A signal to abort downloads/synchronization.
      * @returns True, if completed successfully, false if not.
      * @remarks
@@ -106,7 +115,7 @@ export class OfflineScene {
      * It compares the file manifest of local files with the online version and downloads only the difference.
      * Errors are logged in the {@link logger}.
      */
-    async sync(abortSignal: AbortSignal, sasKey: string): Promise<boolean> {
+    async sync(sceneIndexUrl: URL, abortSignal: AbortSignal): Promise<boolean> {
         const { dir, manifest, logger, context } = this;
         const { storage } = context;
         if (!navigator.onLine) {
@@ -115,13 +124,37 @@ export class OfflineScene {
             return false;
         }
 
+        const sasKey = sceneIndexUrl.search ? sceneIndexUrl.search.substring(1) : undefined;
+        const sceneIndexResponse = await fetch(sceneIndexUrl, { mode: "cors", signal: abortSignal });
+        if (!sceneIndexResponse.ok) {
+            throw new Error(`HTTP error: ${sceneIndexResponse.status}!`);
+        }
+        const sceneIndex = await sceneIndexResponse.json();
+        const { offline } = sceneIndex;
+        const manifestUrl = new URL(sceneIndexUrl);
+        let idx = sceneIndexUrl.pathname.lastIndexOf("/");
+        if (idx >= 0) {
+            manifestUrl.pathname = sceneIndexUrl.pathname.slice(0, idx + 1);
+        }
+        const manifestName = offline.manifest;
+        manifestUrl.pathname += manifestName;
+        const debounce = debouncer();
+
         const existingFiles = new Map<string, number>(manifest.allFiles);
         async function scanFiles() {
             // scan local files in the background, since this could take some time.
+            logger?.status("scanning");
             const files = dir.files();
             for await (const filename of files) {
                 if (!filename.endsWith(".json")) {
                     existingFiles.set(filename, 0);
+                }
+                if (debounce(5000)) {
+                    logger?.progress?.(existingFiles.size, undefined, "scan");
+                }
+                if (abortSignal.aborted) {
+                    logger?.status("aborted");
+                    return false;
                 }
             }
         };
@@ -131,28 +164,27 @@ export class OfflineScene {
 
         try {
             logger?.status("synchronizing");
-            let manifestData = await this.downloadManifest(abortSignal, sasKey);
+            let manifestData = await this.downloadManifest(manifestUrl, abortSignal);
             if (manifestData == undefined) {
                 return false;
             }
 
-            this.manifest = new SceneManifest(manifestData);
-            const { manifest: onlineManifest } = this;
-
+            const onlineManifest = new SceneManifest(manifestData);
             const { totalByteSize } = onlineManifest;
 
-            const debounce = debouncer();
 
             // start incremental download
             logger?.info?.("fetching new files");
             let totalDownload = 0;
-            logger?.progress?.(totalDownload, totalByteSize);
+            logger?.progress?.(totalDownload, totalByteSize, "download");
             const maxSimulataneousDownloads = 8;
             const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
+            const maxErrors = 100;
+            const errorQueue: { name: string, size: number }[] = [];
 
             async function downloadFiles(files: Iterable<SceneManifestEntry>, type: ResourceType) {
-                for (const [name, size] of files) {
-                    if (!existingFiles.has(name)) {
+                for (let retry = 0; retry < 3; retry++) {
+                    async function downloadFile(name: string, size: number) {
                         const fileRequest = storage.request(dir.name, name, type, sasKey, abortSignal);
                         let idx = downloadQueue.findIndex(e => !e);
                         if (idx < 0) {
@@ -161,27 +193,52 @@ export class OfflineScene {
                             idx = downloadQueue.findIndex(e => !e);
                             console.assert(idx >= 0);
                         }
-                        const downloadPromise = download();
+                        const downloadPromise = download(size);
                         downloadQueue[idx] = downloadPromise;
                         downloadPromise.finally(() => {
                             downloadQueue[idx] = undefined;
                         });
                         // do downloads in "parallel"
-                        async function download() {
-                            let fileResponse = await fetch(fileRequest);
-                            if (fileResponse.ok) {
-                                const buffer = await fileResponse.arrayBuffer();
-                                await dir.write(name, buffer);
-                                totalDownload += size;
-                            } else {
-                                throw new Error(`Could not fetch ${name}!`);
+                        async function download(size: number) {
+                            try {
+                                let fileResponse = await fetch(fileRequest);
+                                if (fileResponse.ok) {
+                                    const buffer = await fileResponse.arrayBuffer();
+                                    await dir.write(name, buffer);
+                                    totalDownload += size;
+                                } else {
+                                    errorQueue.push({ name, size });
+                                }
+                            } catch (error: unknown) {
+                                if (typeof error == "object" && error instanceof DOMException && error.name == "AbortError") {
+                                    throw error;
+                                }
+                                errorQueue.push({ name, size });
                             }
                         }
-                    } else {
-                        totalDownload += size;
                     }
-                    if (debounce(100)) {
-                        logger?.progress?.(totalDownload, totalByteSize);
+
+                    for (const [name, size] of files) {
+                        if (errorQueue.length > maxErrors) {
+                            break;
+                        }
+                        if (!existingFiles.has(name)) {
+                            await downloadFile(name, size);
+                        } else {
+                            totalDownload += size;
+                        }
+                        if (debounce(100)) {
+                            logger?.progress?.(totalDownload, totalByteSize, "download");
+                        }
+                    }
+                    if (errorQueue.length == 0) {
+                        break;
+                    }
+                    // attempt to re-download failed files.
+                    const errors = [...errorQueue];
+                    errorQueue.length = 0;
+                    for (const error of errors) {
+                        await downloadFile(error.name, error.size);
                     }
                 }
             }
@@ -190,23 +247,37 @@ export class OfflineScene {
             await downloadFiles(onlineManifest.dbFiles, "db");
             await Promise.all(downloadQueue);
 
-            logger?.progress?.(undefined, undefined);
+            logger?.progress?.(totalByteSize, totalByteSize, "download");
 
-            // add manifest to local files last to mark the completion of sync.
+            // add manifest.
             const manifestBuffer = new TextEncoder().encode(JSON.stringify(manifestData)).buffer;
-            await dir.write("manifest.json", manifestBuffer);
+            await dir.write(manifestName, manifestBuffer); // TODO: use hashed version?
+
+            if (errorQueue.length > 0) {
+                throw new Error(`Failed to download ${errorQueue.length} files!`);
+            }
+
+            // add index.json to local files last to mark the completion of sync.
+            const indexBuffer = new TextEncoder().encode(JSON.stringify(sceneIndex)).buffer;
+            await dir.write("index.json", indexBuffer);
+
+            // only update current manifest after all files have been successfully written
+            this.manifest = onlineManifest;
+
+            // TODO: Check quirks related to hashed manifest etc...
 
             // delete unreferenced entries
             logger?.info?.("cleanup");
             for (const [name] of onlineManifest.allFiles) {
                 existingFiles.delete(name);
             }
+            existingFiles.delete(manifestName);
             await dir.deleteFiles(existingFiles.keys());
 
             logger?.status("synchronized");
             return true;
         } catch (error: unknown) {
-            if (typeof error == "object" && error instanceof DOMException && error.code == DOMException.ABORT_ERR) {
+            if (typeof error == "object" && error instanceof DOMException && error.name == "AbortError") {
                 logger?.status("aborted");
             } else {
                 logger?.status("error");

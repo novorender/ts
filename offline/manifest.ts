@@ -1,3 +1,4 @@
+import type { SceneIndex } from "offline";
 import type { OfflineDirectoryOPFS } from "./opfs";
 
 /** An scene manifest entry tuple, consisting of [filename/hash, byteSize]. */
@@ -83,8 +84,6 @@ export class SceneManifest {
         this.totalByteSize = totalByteSize;
         this.numFiles = numFiles;
     }
-
-
 }
 
 /**
@@ -96,20 +95,27 @@ export class SceneManifest {
  * The latter case indicates some prior error and is not ideal, but still better than re-downloading every file from scratch.
  */
 export async function readManifest(dir: OfflineDirectoryOPFS): Promise<SceneManifest> {
+    async function readJson(filename: string): Promise<Object | undefined> {
+        const buffer = await dir.read(filename);
+        if (buffer) {
+            const json = new TextDecoder().decode(buffer);
+            try {
+                return JSON.parse(json) as Object;
+            } catch { }
+        }
+    }
+
     let data: SceneManifestData | undefined;
-    const buffer = await dir.read("manifest.json");
-    if (buffer) {
-        const json = new TextDecoder().decode(buffer);
-        try {
-            data = JSON.parse(json) as SceneManifestData;
-        } catch { }
+    const index = await readJson("index.json") as SceneIndex | undefined;
+    if (index && index.offline) {
+        data = await readJson(index.offline.manifest) as SceneManifestData | undefined;
     }
     return new SceneManifest(data);
 }
 
 /**
  * Fetch file manifest online.
- * @param request The fetch() API request for the online "manifest.json" file.
+ * @param request The fetch() API request for the online manifest file.
  */
 export async function fetchManifest(request: Request): Promise<SceneManifest> {
     const response = await fetch(request);

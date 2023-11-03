@@ -6,6 +6,12 @@ const rootPromise = navigator.storage.getDirectory();
 // flag to indicate if OPFS async (main thread) is not available (Safari)
 let OPFSAsyncWriteSupported = true;
 
+export class OfflineFileNotFoundError extends Error {
+    constructor(readonly filename: string) {
+        super(`Could not find ${filename} on OPFS storage!`);
+    }
+}
+
 async function tryGetDirHandle(dirname: string) {
     try {
         const root = await rootPromise;
@@ -66,9 +72,20 @@ export async function getOfflineFile(dirname: string, filename: string): Promise
     const dirHandle = await getDirHandle(dirname);
     if (!dirHandle)
         throw new Error(`Directory "${dirname}" not found!`);
-    const fileHandle = await dirHandle.getFileHandle(filename);
-    const file = await fileHandle.getFile();
-    return file;
+    try {
+        const fileHandle = await dirHandle.getFileHandle(filename);
+        const file = await fileHandle.getFile();
+        return file;
+    }
+    catch (error: unknown) {
+        const fileNotFound = error instanceof DOMException && error.name == "NotFoundError";
+        if (fileNotFound) {
+            throw new OfflineFileNotFoundError(filename);
+        }
+
+        console.error(`${error}, Could not find ${filename} on OPFS storage!`);
+        throw error;
+    }
 }
 
 async function getDirHandle(dirname: string): Promise<FileSystemDirectoryHandle | undefined> {

@@ -4,7 +4,10 @@ import { builtinControllers, ControllerInput, type BaseController, type PickCont
 import { flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
 import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections, type OutlineIntersection, outlineLaser } from "./buffer_inspect";
-import { downloadOfflineImports } from "offline"
+import { downloadOfflineImports, manageOfflineStorage, type OfflineImportMap, type OfflineImports, type OfflineViewState, type SceneIndex } from "offline"
+import { loadSceneDataOffline, type DataContext } from "data";
+import * as DataAPI from "data/api";
+import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
 
 /**
  * A view base class for Novorender content.
@@ -38,7 +41,9 @@ export class View<
     private _stateChanges: RenderStateChanges | undefined;
     private _activeController: BaseController;
     private _statistics: { readonly render: RenderStatistics, readonly view: ViewStatistics } | undefined = undefined;
-    private _measureViewPromise: Promise<MeasureView>;
+    private _measureView: MeasureView | undefined;
+    private _dataContext: DataContext | undefined;
+    private _offline: OfflineContext | undefined;
     private _drawContext2d: {
         width: number,
         height: number,
@@ -74,7 +79,7 @@ export class View<
     public constructor(
         /** The HTMLCanvasElement used for rendering. */
         readonly canvas: HTMLCanvasElement,
-        deviceProfile: DeviceProfile, readonly imports: Core3DImports & MeasureImports,
+        deviceProfile: DeviceProfile, readonly imports: Core3DImports & MeasureImports & OfflineImports,
         controllersFactory: CameraControllersFactory<CameraControllerTypes> = (builtinControllers as unknown as CameraControllersFactory<CameraControllerTypes>)
     ) {
         if (!isSecureContext)
@@ -101,7 +106,6 @@ export class View<
             this.recalcBaseRenderResolution();
         });
         resizeObserver.observe(canvas);
-        this._measureViewPromise = createMeasureView(this._drawContext2d, this.imports);
     }
 
     /** Dispose of the view's GPU resources. */
@@ -116,9 +120,33 @@ export class View<
         this._renderContext = undefined;
     }
 
-    // Measure view for the currently loaded scene, used for parametric measure
-    get measure() {
-        return this._measureViewPromise;
+    /** Get static data API functions that are independent of scene. */
+    static get data(): typeof DataAPI {
+        return DataAPI;
+    }
+
+    /**
+     * Get the current measure view, or undefined if no scene has been loaded or has no measurement data.
+     * @see {@link loadSceneFromURL}.
+     */
+    get measure(): MeasureView | undefined {
+        return this._measureView;
+    }
+
+    /**
+     * Get the current data context, or undefined if no scene has been loaded or has no meta data.
+     * @see {@link loadSceneFromURL}.
+     */
+    get data(): DataContext | undefined {
+        return this._dataContext;
+    }
+
+    /**
+     * Get the current offline context, or undefined if no scene has been loaded.
+     * @see {@link loadSceneFromURL}.
+     */
+    get offline(): OfflineContext | undefined {
+        return this._offline;
     }
 
     // The active camera controller.
@@ -156,6 +184,14 @@ export class View<
     set deviceProfile(value: DeviceProfile) {
         this._deviceProfile = value;
         this._setDeviceProfile?.(value); // this will in turn trigger this.useDeviceProfile
+    }
+
+    /**
+     * Manage offline storage.
+     * @returns An offline view state context used for offline storage management UI.
+     */
+    async manageOfflineStorage() {
+        return await manageOfflineStorage(this.imports.ioWorker);
     }
 
     /** Determine if camera is looking straight down. */
@@ -198,7 +234,7 @@ export class View<
      * The absolute url of the index.json file.
      * @returns A promise of a list of environments.
      */
-    async availableEnvironments(indexUrl: URL): Promise<EnvironmentDescription[]> {
+    static async availableEnvironments(indexUrl: URL): Promise<EnvironmentDescription[]> {
         let environments: EnvironmentDescription[] = [];
         const response = await fetch(indexUrl.toString(), { mode: "cors" });
         if (response.ok) {
@@ -208,6 +244,11 @@ export class View<
             });
         }
         return environments;
+    }
+
+    /** @deprecated Use static {@link View.availableEnvironments} instead. */
+    async availableEnvironments(indexUrl: URL): Promise<EnvironmentDescription[]> {
+        return View.availableEnvironments(indexUrl);
     }
 
     /**
@@ -229,23 +270,84 @@ export class View<
     }
 
     /**
-     * Load a scene from a url.
+     * Load a scene.
     * @public
-    * @param url The absolute url to the folder containing the scene.
+    * @param baseUrl The absolute base url to the folder containing the scenes with optional sas-key, e.g. `https://blobs.novorender.com/?sv=...`.
+    * @param sceneId The scene id/guid.
+    * @param version The hash of the desired scene version.
     * @param abortSignal Optional abort controller.
     * @remarks
     * The url typically contains the scene id as the latter part of the path, i.e. `https://.../<scene_guid>/`.
     */
-    async loadSceneFromURL(url: URL, abortSignal?: AbortSignal): Promise<SceneConfig> {
-        const measureView = await this._measureViewPromise;
-        measureView.loadScene(url); // TODO: include abort signal!
-        const webgl2Bin = new URL(url);
-        webgl2Bin.pathname += "webgl2_bin/";
-        const scene = await downloadScene(webgl2Bin, abortSignal);
-        const stateChanges = { scene };
-        flipState(stateChanges, "GLToCAD");
-        this.modifyRenderState(stateChanges);
-        return stateChanges.scene.config;
+    async loadScene(baseUrl: URL, sceneId: string, version: string, abortSignal?: AbortSignal): Promise<SceneConfig> {
+        const baseSceneUrl = new URL(baseUrl);
+        baseSceneUrl.pathname += `${sceneId}/`;
+        function relativeUrl(path: string) {
+            const url = new URL(baseSceneUrl);
+            url.pathname += path; // preserve sas key
+            return url;
+        }
+        async function getFile(path: string): Promise<Response> {
+            const request = new Request(relativeUrl(path), { mode: "cors", signal: abortSignal });
+            const response = await requestOfflineFile(request) ?? await fetch(request);
+            if (!response.ok)
+                throw new Error(response.statusText);
+            return response;
+        }
+
+        try {
+            const indexResponse = await getFile(version);
+            const index = await indexResponse.json() as SceneIndex;
+            // TODO: assign index to public member?
+            const { render, measure, data, offline } = index;
+
+
+            const scene = await downloadScene(baseSceneUrl, render.webgl2, abortSignal);
+            const stateChanges = { scene };
+            flipState(stateChanges, "GLToCAD");
+            this.modifyRenderState(stateChanges);
+
+            if (measure) {
+                const measureView = await createMeasureView(this._drawContext2d, this.imports);
+                await measureView.loadScene(baseSceneUrl, measure.brepLut); // TODO: include abort signal!
+                this._measureView = measureView;
+            }
+
+            try {
+                if (data) {
+                    const dataContext = await loadSceneDataOffline(sceneId, data.jsonLut, data.json); // TODO: Add online variant
+                    this._dataContext = dataContext;
+                }
+            } catch (error) {
+                const offlineSetupError = error instanceof OfflineFileNotFoundError;
+                //Only means that offline data is not downloaded
+                if (!offlineSetupError) {
+                    throw error;
+                }
+            }
+
+            if (offline) {
+                this._offline = {
+                    manifestUrl: relativeUrl(offline.manifest),
+                    isEnabled: async () => {
+                        return await hasOfflineDir(sceneId);
+                    },
+                }
+            }
+            return stateChanges.scene.config;
+
+        }
+        catch (error) { //Legacy load
+            const scene = await downloadScene(baseSceneUrl, "webgl2_bin/scene.json", abortSignal);
+            const stateChanges = { scene };
+            flipState(stateChanges, "GLToCAD");
+            this.modifyRenderState(stateChanges);
+
+            const measureView = await createMeasureView(this._drawContext2d, this.imports);
+            await measureView.loadScene(baseSceneUrl, "brep/");
+            this._measureView = measureView;
+            return stateChanges.scene.config;
+        }
     }
 
 
@@ -274,7 +376,8 @@ export class View<
      */
     async outlineLaser(laserPosition: ReadonlyVec2, perspective?: { laserPosition3d: ReadonlyVec3, plane: ReadonlyVec4 }): Promise<OutlineIntersection | undefined> {
         const context = this._renderContext;
-        if (context) {
+        const measure = this._measureView;
+        if (context && measure) {
             const scale = devicePixelRatio * this.resolutionModifier;
             if (perspective) {
                 const { laserPosition3d, plane } = perspective;
@@ -289,7 +392,7 @@ export class View<
                 vec3.cross(r, u, dir);
                 vec3.normalize(r, r);
 
-                const pts = (await this.measure).draw.toMarkerPoints([vec3.add(vec3.create(), laserPosition3d, r), vec3.add(vec3.create(), laserPosition3d, u)])
+                const pts = await measure.draw.toMarkerPoints([vec3.add(vec3.create(), laserPosition3d, r), vec3.add(vec3.create(), laserPosition3d, u)])
                 if (pts[0] == undefined || pts[1] == undefined) {
                     return undefined;
                 }
@@ -329,10 +432,10 @@ export class View<
      * @returns Parametric measure entity, if non exists in the current location, the poisiton will be retuned.
      */
     async pickMeasureEntity(x: number, y: number, options?: PickOptions): Promise<MeasureEntity | undefined> {
+        const measure = this._measureView;
         const sample = await this.pick(x, y, options);
-        if (sample) {
-            const measureView = await this._measureViewPromise;
-            return (await measureView.core.pickMeasureEntity(sample.objectId, sample.position)).entity;
+        if (sample && measure) {
+            return (await measure.core.pickMeasureEntity(sample.objectId, sample.position)).entity;
         }
     }
 
@@ -709,7 +812,8 @@ export class View<
         const [core3d, measure, offline] = await Promise.all([core3dPromise, measurePromise, offlinePromise]);
         return {
             ...core3d,
-            ...measure
+            ...measure,
+            ...offline,
         }
     }
 }
@@ -788,5 +892,12 @@ export interface CameraControllerOptions {
     readonly autoInit?: boolean;
 }
 
-export type ViewImports = Core3DImports & MeasureImports;
-export type ViewImportmap = Core3DImportMap & MeasureImportMap;
+export type ViewImports = Core3DImports & MeasureImports & OfflineImports;
+export type ViewImportmap = Core3DImportMap & MeasureImportMap & OfflineImportMap;
+
+
+export interface OfflineContext {
+    readonly manifestUrl: URL;
+    isEnabled(): Promise<boolean>;
+    // TODO: Add last sync date and size?
+}

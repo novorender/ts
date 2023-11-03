@@ -59,15 +59,11 @@ class OfflineViewState {
             logger?.error("scene already added");
         }
         try {
-            // const request = storage.requestFormatter.request(id, "manifest.json");
-            // const manifestData = await fetchManifestData(request);
             logger?.status("adding scene");
             const manifest = new SceneManifest(undefined);
             const dir = await storage.directory(id);
             try {
                 const scene = new OfflineScene(this, dir, manifest);
-                // const manifestBuffer = new TextEncoder().encode(JSON.stringify(manifestData));
-                // scene.dir.write("manifest.json", manifestBuffer);
                 scenes.set(id, scene);
                 logger?.status("scene added");
                 return scene;

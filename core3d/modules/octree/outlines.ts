@@ -188,41 +188,40 @@ export class OutlineRenderer {
         return lineClusters;
     }
 
-    makeVAO(lineClusters: readonly LineCluster[]) {
+    makeLinesVAO(lineClusters: readonly LineCluster[]) {
         let count = 0;
         let vao: WebGLVertexArrayObject | null = null;
         if (lineClusters.length > 0) {
             const { context } = this;
             const { gl } = context.renderContext;
-            let numVertices = 0;
+            let totalLines = 0;
             for (const { vertices } of lineClusters) {
-                numVertices += vertices.length;
+                totalLines += vertices.length / 4;
             }
-            const byteStride = 6 * 4;
-            const vb = new ArrayBuffer((numVertices / 2) * byteStride);
-            const f32 = new Float32Array(vb);
-            const u32 = new Uint32Array(vb);
-            let i = 0;
+            const pos = new Float32Array(totalLines * 4);
+            const color = new Uint32Array(totalLines);
+            const objectId = new Uint32Array(totalLines);
+            let lineOffset = 0;
             for (const { vertices } of lineClusters) {
-                for (let j = 0; j < vertices.length; j += 2) {
-                    f32[i++] = vertices[j + 0];
-                    f32[i++] = vertices[j + 1];
-                    if (j % 4 == 2) {
-                        count++;
-                        u32[i++] = 0xff00_00ff; // color
-                        u32[i++] = 0xffff_ffff; // object id
-                    }
-                }
+                const numLines = vertices.length / 4;
+                pos.set(vertices, lineOffset * 4);
+                color.fill(0xff00_00ff, lineOffset, lineOffset + numLines);
+                objectId.fill(0xffff_ffff, lineOffset, lineOffset + numLines);
+                lineOffset += numLines;
             }
-            const buffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: vb, usage: "STREAM_DRAW" });
+            console.assert(totalLines == lineOffset);
+            count = totalLines;
+            const posBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: pos, usage: "STREAM_DRAW" });
+            const colorBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: color, usage: "STREAM_DRAW" });
+            const objectIdBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: objectId, usage: "STREAM_DRAW" });
             vao = glCreateVertexArray(gl, {
                 attributes: [
-                    { kind: "FLOAT", componentCount: 4, componentType: "FLOAT", normalized: false, buffer, byteOffset: 0, byteStride, divisor: 1 },
-                    { kind: "FLOAT", componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, buffer, byteOffset: 16, byteStride, divisor: 1 },
-                    { kind: "UNSIGNED_INT", componentCount: 1, componentType: "UNSIGNED_INT", buffer, byteOffset: 20, byteStride, divisor: 1 },
+                    { kind: "FLOAT", componentCount: 4, componentType: "FLOAT", normalized: false, buffer: posBuffer, byteOffset: 0, byteStride: 16, divisor: 1 },
+                    { kind: "FLOAT", componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, buffer: colorBuffer, byteOffset: 0, byteStride: 4, divisor: 1 },
+                    { kind: "UNSIGNED_INT", componentCount: 1, componentType: "UNSIGNED_INT", buffer: objectIdBuffer, byteOffset: 0, byteStride: 4, divisor: 1 },
                 ],
             });
-            glDelete(gl, buffer);
+            glDelete(gl, [posBuffer, colorBuffer, objectIdBuffer]); // the vertex array already references these buffers, so we release our reference on them early.
         }
         return {
             count,
@@ -254,6 +253,28 @@ export class OutlineRenderer {
         const stats = glDraw(gl, { kind: "arrays_instanced", mode: "LINES", count: 2, instanceCount: count });
         renderContext.addRenderStatistics(stats);
     }
+
+    renderPoints(count: number, vao: WebGLVertexArrayObject | null) {
+        if (!vao)
+            return;
+        const { context } = this;
+        const { renderContext } = context;
+        const { programs } = context.resources;
+        const { gl, cameraUniforms, clippingUniforms, outlineUniforms } = renderContext;
+        glState(gl, {
+            // drawbuffers: both?
+            uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
+            program: programs.point,
+            vertexArrayObject: vao,
+            depth: {
+                test: false,
+                writeMask: false
+            },
+        });
+        const stats = glDraw(gl, { kind: "arrays_instanced", mode: "POINTS", count: 1, instanceCount: count });
+        renderContext.addRenderStatistics(stats);
+    }
+
 }
 
 function getMeshBuffers(gl: WebGL2RenderingContext, mesh: Mesh) {

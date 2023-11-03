@@ -46,7 +46,6 @@ export class MeasureView {
      */
     road: RoadModule;
 
-
     /** @ignore */
     private workers: ReturnType<typeof createWorkers>;
 
@@ -62,9 +61,10 @@ export class MeasureView {
         this.road = new RoadModule(worker, this);
     }
 
-    async loadScene(sceneUrl: URL) {
+    async loadScene(baseUrl: URL, brepLutPath: string, abortSignal?: AbortSignal) {
         const workerScene = await this.worker;
-        await workerScene.loadScene(sceneUrl.toString());
+        // TODO: download resources here instead of in worker, to support abort signal.
+        await workerScene.loadScene(baseUrl.toString(), brepLutPath);
     }
 
     /**

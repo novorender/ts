@@ -3,10 +3,10 @@ import type { AABB, BoundingSphere } from "core3d";
 /** Object render id/index. */
 export type ObjectId = number;
 
-/** The Data context for a scene. */
+/** The Data API context for a scene. */
 export interface DataContext {
     /**
-     * Get the associated meta data from object id
+     * Get the associated meta data from object id.
      * @param objectIndex The object render id/index.
      * @returns The associated meta data.
      */
@@ -18,6 +18,7 @@ export interface DataContext {
      */
     allObjectMetaData(): AsyncIterableIterator<MetaDataEntry>;
 }
+
 
 /** Meta data associated with an object. */
 export interface MetaDataEntry {
@@ -40,7 +41,7 @@ export interface MetaDataEntry {
     readonly properties: readonly [key: string, value: string][];
 
 
-    // Do we need the entries below?
+    // TODO: Do we need the entries below, or should we move them into extended interfaces?
 
     /** The hierarchical nesting level, if applicable */
     readonly level?: number;
