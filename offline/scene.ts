@@ -152,6 +152,10 @@ export class OfflineScene {
                 if (debounce(5000)) {
                     logger?.progress?.(existingFiles.size, undefined, "scan");
                 }
+                if (abortSignal.aborted) {
+                    logger?.status("aborted");
+                    return false;
+                }
             }
         };
         const scanFilesPromise = scanFiles();
