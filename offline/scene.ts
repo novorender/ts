@@ -138,14 +138,19 @@ export class OfflineScene {
         }
         const manifestName = offline.manifest;
         manifestUrl.pathname += manifestName;
+        const debounce = debouncer();
 
         const existingFiles = new Map<string, number>(manifest.allFiles);
         async function scanFiles() {
             // scan local files in the background, since this could take some time.
+            logger?.status("scanning");
             const files = dir.files();
             for await (const filename of files) {
                 if (!filename.endsWith(".json")) {
                     existingFiles.set(filename, 0);
+                }
+                if (debounce(5000)) {
+                    logger?.progress?.(existingFiles.size, undefined, "scan");
                 }
             }
         };
@@ -163,12 +168,11 @@ export class OfflineScene {
             const onlineManifest = new SceneManifest(manifestData);
             const { totalByteSize } = onlineManifest;
 
-            const debounce = debouncer();
 
             // start incremental download
             logger?.info?.("fetching new files");
             let totalDownload = 0;
-            logger?.progress?.(totalDownload, totalByteSize);
+            logger?.progress?.(totalDownload, totalByteSize, "download");
             const maxSimulataneousDownloads = 8;
             const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
             const maxErrors = 100;
@@ -220,7 +224,7 @@ export class OfflineScene {
                             totalDownload += size;
                         }
                         if (debounce(100)) {
-                            logger?.progress?.(totalDownload, totalByteSize);
+                            logger?.progress?.(totalDownload, totalByteSize, "download");
                         }
                     }
                     if (errorQueue.length == 0) {
@@ -239,7 +243,7 @@ export class OfflineScene {
             await downloadFiles(onlineManifest.dbFiles, "db");
             await Promise.all(downloadQueue);
 
-            logger?.progress?.(undefined, undefined);
+            logger?.progress?.(totalByteSize, totalByteSize, "download");
 
             // add manifest.
             const manifestBuffer = new TextEncoder().encode(JSON.stringify(manifestData)).buffer;

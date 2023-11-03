@@ -27,7 +27,8 @@ export interface Logger {
      * Update progress for potentially long running processes, such as synchronization.
      * @param value The progress as a factor between 0 and {@link max}, or undefined to hide progress bar.
      * @param max The maximum value, or `undefined` if value is also undefined.
+     * @param operation The operation currently being progressed.
      */
-    progress?(value: number | undefined, max: number | undefined): void;
+    progress?(value: number | undefined, max: number | undefined, operation: "scan" | "download"): void;
 }
 
