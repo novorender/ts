@@ -64,8 +64,15 @@ async function getDirHandle(name: string) {
     return dirHandle;
 }
 
-async function getGetJournalHandle(name: string) {
+async function getGetJournalHandle(name: string, reset: boolean) {
     let journalHandle = journalHandles.get(name);
+    if (journalHandle && reset) {
+        const { handle, lock } = await journalHandle.lock();
+        handle.close();
+        const unlock = await lock;
+        unlock();
+        journalHandle = undefined;
+    }
     if (!journalHandle) {
         const dirHandle = await getDirHandle(name);
         const fileHandle = await dirHandle.getFileHandle("journal", { create: true });
@@ -136,7 +143,7 @@ async function handleIORequest(data: IORequest): Promise<ResponseMessage> {
             let error: string | undefined;
             let buffer: ArrayBuffer | undefined;
             try {
-                buffer = await readFile(data.dir, data.file);
+                buffer = data.file == "journal" ? await readJournal(data.dir) : await readFile(data.dir, data.file);
                 if (buffer) {
                     transfer.push(buffer);
                 }
@@ -284,8 +291,28 @@ async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {
     await appendJournal(dir, file, bytesWritten);
 }
 
+async function readJournal(dir: string) {
+    try {
+        const journalHandle = await getGetJournalHandle(dir, true);
+        const { handle, lock } = await journalHandle.lock();
+        const size = handle.getSize();
+        const buffer = new Uint8Array(size);
+        handle.read(buffer);
+        const unlock = await lock;
+        unlock();
+        return buffer.buffer;
+    } catch (error: unknown) {
+        if (error instanceof DOMException && error.name == "NotFoundError") {
+            return undefined;
+        } else {
+            console.log({ error });
+            throw error;
+        }
+    }
+}
+
 async function appendJournal(dir: string, file: string, size: number) {
-    const journalHandle = await getGetJournalHandle(dir);
+    const journalHandle = await getGetJournalHandle(dir, false);
     const { handle, lock } = await journalHandle.lock();
     const text = `${file},${size}\n`;
     const bytes = new TextEncoder().encode(text);
