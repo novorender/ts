@@ -247,6 +247,17 @@ async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {
     accessHandle.flush();
     accessHandle.close();
     console.assert(bytesWritten == buffer.byteLength);
+    await appendJournal(dirHandle, file, bytesWritten);
+}
+
+async function appendJournal(dirHandle: FileSystemDirectoryHandle, file: string, size: number) {
+    const fileHandle = await dirHandle.getFileHandle("journal", { create: true });
+    const accessHandle = await fileHandle.createSyncAccessHandle();
+    const text = `${file},${size}\n`;
+    const bytes = new TextEncoder().encode(text);
+    accessHandle.write(bytes, { at: accessHandle.getSize() });
+    accessHandle.flush();
+    accessHandle.close();
 }
 
 async function deleteFiles(dir: string, files: readonly string[]) {
@@ -268,3 +279,4 @@ async function deleteAll() {
         root.removeEntry(name, { recursive: true });
     }
 }
+

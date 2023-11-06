@@ -141,26 +141,15 @@ export class OfflineScene {
         const debounce = debouncer();
 
         const existingFiles = new Map<string, number>(manifest.allFiles);
-        async function scanFiles() {
-            // scan local files in the background, since this could take some time.
-            logger?.status("scanning");
-            const files = dir.files();
-            for await (const filename of files) {
-                if (!filename.endsWith(".json")) {
-                    existingFiles.set(filename, 0);
-                }
-                if (debounce(1000)) {
-                    logger?.progress?.(existingFiles.size, undefined, "scan");
-                }
-                if (abortSignal.aborted) {
-                    logger?.status("aborted");
-                    return false;
-                }
+
+        logger?.status("scanning");
+        const entries = await dir.getJournalEntries();
+        for (const { name, size } of entries) {
+            existingFiles.set(name, size);
+            if (debounce(1000)) {
+                logger?.progress?.(existingFiles.size, undefined, "scan");
             }
-        };
-        const scanFilesPromise = scanFiles();
-        await scanFilesPromise;
-        // console.log(`# files: ${existingFiles.size}`);
+        }
 
         try {
             logger?.status("synchronizing");
@@ -272,7 +261,8 @@ export class OfflineScene {
                 existingFiles.delete(name);
             }
             existingFiles.delete(manifestName);
-            await dir.deleteFiles(existingFiles.keys());
+            const filesToDelete = [...existingFiles.keys(), "journal"];
+            await dir.deleteFiles(filesToDelete);
 
             logger?.status("synchronized");
             return true;
@@ -289,9 +279,9 @@ export class OfflineScene {
 }
 
 function debouncer() {
-    let prevTime = performance.now();
+    let prevTime = Date.now();
     return function (minInterval: number) {
-        const now = performance.now();
+        const now = Date.now();
         if (now - prevTime > minInterval) {
             prevTime = now;
             return true;

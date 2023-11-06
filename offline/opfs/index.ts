@@ -29,7 +29,6 @@ class OfflineStorageOPFS {
         };
     }
 
-
     parse(str: string) {
         const re = new RegExp(`^\/(?<dir>[0-9a-f]{32})\/(?<file>.+)$`);
         return str.match(re)?.groups as ReturnType<PathNameParser>;
@@ -213,6 +212,32 @@ class OfflineDirectoryOPFS {
         }
     }
 
+    /**
+     * Retrive the name and size of files downloaded to this directory.
+     * @remarks
+     * Will be cleared uplon fully downloading a scene as manifest can be used instead.
+     */
+    async getJournalEntries(): Promise<IterableIterator<{ name: string, size: number }>> {
+        const journal = await this.read("journal");
+        function* iterate() {
+            if (journal) {
+                const buffer = new Uint8Array(journal);
+                const decoder = new TextDecoder();
+                let prevIndex = 0;
+                while (prevIndex < buffer.length) {
+                    let index = buffer.indexOf(10, prevIndex);
+                    const line = buffer.subarray(prevIndex, index);
+                    const text = decoder.decode(line, { stream: true });
+                    const [name, sizeStr] = text.split(",");
+                    const size = Number.parseInt(sizeStr);
+                    prevIndex = index + 1;
+                    yield { name, size };
+                }
+            }
+        }
+        return iterate();
+    }
+
 
     /**
      * Retrive the file sizes.
@@ -220,17 +245,24 @@ class OfflineDirectoryOPFS {
      * @returns List of files sizes or undefined for files not found.
      */
     async* filesSizes(fileNames?: readonly string[]): AsyncIterableIterator<number | undefined> {
-        const { context, name } = this;
-        const { worker, promises } = context;
-        const id = promises.newId();
-        const msg: FileSizesRequest = { kind: "file_sizes", id, dir: name, files: fileNames };
-        worker.postMessage(msg);
-        const response = await promises.create<FileSizesResponse>(id);
-        if (response.error) {
-            throw new Error(response.error);
-        }
-        for (const size of response.sizes) {
-            yield size;
+        if (fileNames) {
+            const { context, name } = this;
+            const { worker, promises } = context;
+            const id = promises.newId();
+            const msg: FileSizesRequest = { kind: "file_sizes", id, dir: name, files: fileNames };
+            worker.postMessage(msg);
+            const response = await promises.create<FileSizesResponse>(id);
+            if (response.error) {
+                throw new Error(response.error);
+            }
+            for (const size of response.sizes) {
+                yield size;
+            }
+        } else {
+            const entries = await this.getJournalEntries();
+            for (const { size } of entries) {
+                yield size
+            }
         }
     }
 
