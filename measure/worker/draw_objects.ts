@@ -1,7 +1,7 @@
 import { type ReadonlyVec3, vec2, vec3 } from "gl-matrix";
 import type { CylinderData, FaceData, LoopData, ProductData } from "./brep";
 import { cylinderCenterLine } from "./calculations";
-import { matFromInstance } from "./loader";
+import { matFromInstance, unitToScale } from "./loader";
 import { getEdgeStrip } from "./outline";
 import type { DrawObject, DrawPart, DrawVoid, ManholeMeasureValues, MeasureSettings } from "measure";
 import { MeasureTool } from "./scene";
@@ -32,7 +32,7 @@ export async function getCylinderDrawParts(product: ProductData, instanceIdx: nu
             to: cylinderEnd[2],
             horizontalDisplay: diff[2] < planarLength,
         },
-        text: [[`L ${length.toFixed(3)}m   ⌀ ${(cylinderData.radius * 2).toFixed(3)}m   ${vertical ? "" : `% ${((Math.abs(diff[2] / planarLength)) * 100).toFixed(2)}`}`]]
+        text: [[`L ${length.toFixed(3)}m   ⌀ ${((cylinderData.radius * 2) * unitToScale(product.units)).toFixed(3)}m   ${vertical ? "" : `% ${((Math.abs(diff[2] / planarLength)) * 100).toFixed(2)}`}`]]
     });
     for (const halfEdgeIdx of loop.halfEdges) {
         const halfEdgeData = product.halfEdges[halfEdgeIdx];
