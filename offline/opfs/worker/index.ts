@@ -31,6 +31,28 @@ export async function handleIOWorkerMessages(message: MessageEvent<ConnectRespon
 
 const rootPromise = navigator.storage.getDirectory();
 const dirHandles = new Map<string, FileSystemDirectoryHandle>();
+const journalHandles = new Map<string, LockedHandle>();
+
+class LockedHandle {
+    constructor(handle: FileSystemSyncAccessHandle) {
+        this.handle = handle;
+        this.lockPromise = Promise.resolve();
+    }
+
+    private lockPromise: Promise<void>;
+    private handle: FileSystemSyncAccessHandle;
+    async lock() {
+        let release;
+        const next = new Promise<void>(resolve => {
+            release = () => {
+                resolve();
+            };
+        });
+        const lock = this.lockPromise.then(() => release);
+        this.lockPromise = next;
+        return { handle: this.handle, lock };
+    }
+}
 
 async function getDirHandle(name: string) {
     let dirHandle = dirHandles.get(name);
@@ -40,6 +62,18 @@ async function getDirHandle(name: string) {
         dirHandles.set(name, dirHandle);
     }
     return dirHandle;
+}
+
+async function getGetJournalHandle(name: string) {
+    let journalHandle = journalHandles.get(name);
+    if (!journalHandle) {
+        const dirHandle = await getDirHandle(name);
+        const fileHandle = await dirHandle.getFileHandle("journal", { create: true });
+        const accessHandle = await fileHandle.createSyncAccessHandle();
+        journalHandle = new LockedHandle(accessHandle);
+        journalHandles.set(name, journalHandle);
+    }
+    return journalHandle;
 }
 
 function exhaustiveGuard(_value: never): never {
@@ -247,17 +281,18 @@ async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {
     accessHandle.flush();
     accessHandle.close();
     console.assert(bytesWritten == buffer.byteLength);
-    await appendJournal(dirHandle, file, bytesWritten);
+    await appendJournal(dir, file, bytesWritten);
 }
 
-async function appendJournal(dirHandle: FileSystemDirectoryHandle, file: string, size: number) {
-    const fileHandle = await dirHandle.getFileHandle("journal", { create: true });
-    const accessHandle = await fileHandle.createSyncAccessHandle();
+async function appendJournal(dir: string, file: string, size: number) {
+    const journalHandle = await getGetJournalHandle(dir);
+    const { handle, lock } = await journalHandle.lock();
     const text = `${file},${size}\n`;
     const bytes = new TextEncoder().encode(text);
-    accessHandle.write(bytes, { at: accessHandle.getSize() });
-    accessHandle.flush();
-    accessHandle.close();
+    handle.write(bytes, { at: handle.getSize() });
+    handle.flush();
+    const unlock = await lock;
+    unlock();
 }
 
 async function deleteFiles(dir: string, files: readonly string[]) {
