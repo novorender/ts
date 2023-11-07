@@ -195,7 +195,12 @@ export class OfflineScene {
                                     if (size > 10_000_000) {
                                         const stream = await fileResponse.body;
                                         if (stream) {
-                                            const addBytes = (bytes: number) => { totalDownload += bytes; };
+                                            const addBytes = (bytes: number) => {
+                                                totalDownload += bytes;
+                                                if (debounce(100)) {
+                                                    logger?.progress?.(totalDownload, totalByteSize, "download");
+                                                }
+                                            };
                                             await dir.writeStream(name, stream, size, abortSignal, addBytes);
                                         }
                                     } else {
