@@ -1,3 +1,4 @@
+/// <reference lib="webworker" />
 // call from dedicated worker scope only!
 export async function storeOfflineFileSync(response: Response, dirHandle: FileSystemDirectoryHandle, filename: string) {
     const buffer = await response.clone().arrayBuffer();

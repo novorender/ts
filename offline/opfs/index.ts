@@ -1,6 +1,6 @@
 import { type ResourceType, type PathNameParser } from "../storage";
 import { PromiseBag } from "./promiseBag";
-import type { CreateDirResponse, CreateDirRequest, DeleteAllRequest, DirsRequest, DirsResponse, FilesRequest, IOResponse, ReadRequest, ReadResponse, DeleteAllResponse, FilesResponse, WriteRequest, WriteResponse, DeleteFilesRequest, DeleteFilesResponse, DeleteDirRequest, DeleteDirResponse, FileSizesRequest, FileSizesResponse } from "./messages";
+import type { CreateDirResponse, CreateDirRequest, DeleteAllRequest, DirsRequest, DirsResponse, FilesRequest, IOResponse, ReadRequest, ReadResponse, DeleteAllResponse, FilesResponse, WriteRequest, WriteResponse, DeleteFilesRequest, DeleteFilesResponse, DeleteDirRequest, DeleteDirResponse, FileSizesRequest, FileSizesResponse, OpenStreamRequest, CloseStreamRequest, CloseStreamResponse, AppendStreamRequest } from "./messages";
 
 /**
  * Create an OPFS based offline storage.
@@ -303,6 +303,43 @@ class OfflineDirectoryOPFS {
             throw new Error(response.error);
         }
     }
+
+
+    /**
+     * Stream the content of a file.
+     * @param name: The file name to write.
+     * @param stream: The new content of this file.
+     * @param size: The total byte size of the new file.
+     * @remarks
+     * The input buffer may be transferred to an underlying worker and become inaccessible from the calling thread.
+     * Thus, you should pass a copy if you need to retain the original.
+     */
+    async writeStream(name: string, stream: ReadableStream, size: number): Promise<void> {
+        const { context } = this;
+        const { worker, promises } = context;
+        const openMsg: OpenStreamRequest = { kind: "open_write_stream", id: promises.newId(), dir: this.name, file: name, size }
+        worker.postMessage(openMsg);
+        const reader = stream.getReader();
+        for (; ;) {
+            const { done, value } = await reader.read();
+            if (done) {
+                break;
+            }
+            const buffer = value as Uint8Array;
+            const appendMsg: AppendStreamRequest = { kind: "append_stream", id: promises.newId(), dir: this.name, file: name, buffer }
+            worker.postMessage(appendMsg, [buffer]);
+        }
+
+        const closeId = promises.newId();
+        const closeMsg: CloseStreamRequest = { kind: "close_write_stream", id: closeId, dir: this.name, file: name }
+        worker.postMessage(closeMsg);
+        const response = await promises.create<CloseStreamResponse>(closeId);
+        if (response.error) {
+            throw new Error(response.error);
+        }
+    }
+
+
 
     /**
      * Delete the specified file.

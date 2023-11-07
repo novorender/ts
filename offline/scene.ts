@@ -192,8 +192,15 @@ export class OfflineScene {
                             try {
                                 let fileResponse = await fetch(fileRequest);
                                 if (fileResponse.ok) {
-                                    const buffer = await fileResponse.arrayBuffer();
-                                    await dir.write(name, buffer);
+                                    if (size > 20_000_000) {
+                                        const stream = await fileResponse.body;
+                                        if (stream) {
+                                            await dir.writeStream(name, stream, size);
+                                        }
+                                    } else {
+                                        const buffer = await fileResponse.arrayBuffer();
+                                        await dir.write(name, buffer);
+                                    }
                                     totalDownload += size;
                                 } else {
                                     errorQueue.push({ name, size });
