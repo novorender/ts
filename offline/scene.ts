@@ -55,7 +55,7 @@ export class OfflineScene {
      */
     async getUsedSize() {
         const sizes = this.dir.filesSizes();
-        let totalUsedSize = 0;
+        let totalUsedSize = this.manifest.totalByteSize;
         for await (const size of sizes) {
             if (size) {
                 totalUsedSize += size;
