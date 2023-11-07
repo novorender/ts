@@ -88,6 +88,22 @@ async function getGetJournalHandle(name: string, reset: boolean) {
     return journalHandle;
 }
 
+
+async function closeJournal(name: string) {
+    let journalHandle = journalHandles.get(name);
+    if (journalHandle) {
+        const { handle, unlock } = await journalHandle.lock();
+        handle.close();
+        const dirHandle = await getDirHandle(name);
+        dirHandle.removeEntry("journal");
+        unlock();
+        journalHandles.delete(name);
+    }
+    return journalHandle;
+}
+
+
+
 function exhaustiveGuard(_value: never): never {
     throw new Error(`Unknown IO request message: ${JSON.stringify(_value)}`);
 }
@@ -354,8 +370,13 @@ async function finalizeFile(streamHandle: StreamHandle) {
     const { accessHandle, offset, dir, file, size } = streamHandle;
     accessHandle.flush();
     accessHandle.close();
-    console.assert(size == offset);
-    await appendJournal(dir, file, size);
+    if (size == offset) {
+        await appendJournal(dir, file, size);
+    }
+    else {
+        const dirHandle = await getDirHandle(dir);
+        dirHandle.removeEntry(file);
+    }
 }
 
 async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {
@@ -417,6 +438,7 @@ async function appendJournal(dir: string, file: string, size: number) {
 
 async function deleteFiles(dir: string, files: readonly string[]) {
     const dirHandle = await getDirHandle(dir);
+    closeJournal(dir);
     for (const file of files) {
         dirHandle.removeEntry(file);
     }
@@ -424,6 +446,7 @@ async function deleteFiles(dir: string, files: readonly string[]) {
 
 async function deleteDir(dir: string) {
     const root = await rootPromise;
+    closeJournal(dir);
     root.removeEntry(dir, { recursive: true });
 }
 
@@ -431,6 +454,7 @@ async function deleteAll() {
     const root = await rootPromise;
     const entries = await dirEntries(root);
     for (const [name] of entries) {
+        closeJournal(name);
         root.removeEntry(name, { recursive: true });
     }
 }

@@ -174,7 +174,7 @@ export class OfflineScene {
             async function downloadFiles(files: Iterable<SceneManifestEntry>, type: ResourceType) {
                 for (let retry = 0; retry < 3; retry++) {
                     async function downloadFile(name: string, size: number) {
-                        const fileRequest = storage.request(dir.name, name, type, sasKey, abortSignal);
+                        const fileRequest = storage.request(dir.name, name, type, sasKey);
                         let idx = downloadQueue.findIndex(e => !e);
                         if (idx < 0) {
                             // queue is full, so wait for another download to complete
@@ -192,18 +192,22 @@ export class OfflineScene {
                             try {
                                 let fileResponse = await fetch(fileRequest);
                                 if (fileResponse.ok) {
-                                    if (size > 20_000_000) {
+                                    if (size > 10_000_000) {
                                         const stream = await fileResponse.body;
                                         if (stream) {
-                                            await dir.writeStream(name, stream, size);
+                                            const addBytes = (bytes: number) => { totalDownload += bytes; };
+                                            await dir.writeStream(name, stream, size, abortSignal, addBytes);
                                         }
                                     } else {
                                         const buffer = await fileResponse.arrayBuffer();
                                         await dir.write(name, buffer);
+                                        totalDownload += size;
                                     }
-                                    totalDownload += size;
                                 } else {
                                     errorQueue.push({ name, size });
+                                }
+                                if (abortSignal.aborted) {
+                                    throw new DOMException("Download aborted!", "AbortError");
                                 }
                             } catch (error: unknown) {
                                 if (typeof error == "object" && error instanceof DOMException && error.name == "AbortError") {
@@ -233,6 +237,7 @@ export class OfflineScene {
                     // attempt to re-download failed files.
                     const errors = [...errorQueue];
                     errorQueue.length = 0;
+                    await Promise.all(downloadQueue);
                     for (const error of errors) {
                         await downloadFile(error.name, error.size);
                     }
@@ -268,8 +273,7 @@ export class OfflineScene {
                 existingFiles.delete(name);
             }
             existingFiles.delete(manifestName);
-            const filesToDelete = [...existingFiles.keys(), "journal"];
-            await dir.deleteFiles(filesToDelete);
+            await dir.deleteFiles(existingFiles.keys());
 
             logger?.status("synchronized");
             return true;

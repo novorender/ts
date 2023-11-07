@@ -1,6 +1,6 @@
 import { type ResourceType, type PathNameParser } from "../storage";
 import { PromiseBag } from "./promiseBag";
-import type { CreateDirResponse, CreateDirRequest, DeleteAllRequest, DirsRequest, DirsResponse, FilesRequest, IOResponse, ReadRequest, ReadResponse, DeleteAllResponse, FilesResponse, WriteRequest, WriteResponse, DeleteFilesRequest, DeleteFilesResponse, DeleteDirRequest, DeleteDirResponse, FileSizesRequest, FileSizesResponse, OpenStreamRequest, CloseStreamRequest, CloseStreamResponse, AppendStreamRequest } from "./messages";
+import type { CreateDirResponse, CreateDirRequest, DeleteAllRequest, DirsRequest, DirsResponse, FilesRequest, IOResponse, ReadRequest, ReadResponse, DeleteAllResponse, FilesResponse, WriteRequest, WriteResponse, DeleteFilesRequest, DeleteFilesResponse, DeleteDirRequest, DeleteDirResponse, FileSizesRequest, FileSizesResponse, OpenStreamRequest, CloseStreamRequest, CloseStreamResponse, AppendStreamRequest, OpenStreamResponse, AppendStreamResponse } from "./messages";
 
 /**
  * Create an OPFS based offline storage.
@@ -314,28 +314,44 @@ class OfflineDirectoryOPFS {
      * The input buffer may be transferred to an underlying worker and become inaccessible from the calling thread.
      * Thus, you should pass a copy if you need to retain the original.
      */
-    async writeStream(name: string, stream: ReadableStream, size: number): Promise<void> {
+    async writeStream(name: string, stream: ReadableStream, size: number, abortSignal?: AbortSignal, progress?: (bytes: number) => void): Promise<void> {
         const { context } = this;
         const { worker, promises } = context;
-        const openMsg: OpenStreamRequest = { kind: "open_write_stream", id: promises.newId(), dir: this.name, file: name, size }
+        const openId = promises.newId();
+        const openMsg: OpenStreamRequest = { kind: "open_write_stream", id: openId, dir: this.name, file: name, size }
         worker.postMessage(openMsg);
+        const openResponse = await promises.create<OpenStreamResponse>(openId);
+        if (openResponse.error) {
+            throw new Error(openResponse.error);
+        }
         const reader = stream.getReader();
+
         for (; ;) {
             const { done, value } = await reader.read();
             if (done) {
                 break;
             }
-            const buffer = value as Uint8Array;
-            const appendMsg: AppendStreamRequest = { kind: "append_stream", id: promises.newId(), dir: this.name, file: name, buffer }
+            if (abortSignal?.aborted) {
+                break;
+            }
+            const buffer = (value as Uint8Array).buffer;
+            const streamId = promises.newId();
+            const appendMsg: AppendStreamRequest = { kind: "append_stream", id: streamId, dir: this.name, file: name, buffer }
             worker.postMessage(appendMsg, [buffer]);
+            promises.create<AppendStreamRequest>(streamId)
+                .then(() => progress?.(buffer.byteLength))
+                .catch((reason) => {
+                    throw reason;
+                });
+
         }
 
         const closeId = promises.newId();
         const closeMsg: CloseStreamRequest = { kind: "close_write_stream", id: closeId, dir: this.name, file: name }
         worker.postMessage(closeMsg);
-        const response = await promises.create<CloseStreamResponse>(closeId);
-        if (response.error) {
-            throw new Error(response.error);
+        const closeResponse = await promises.create<CloseStreamResponse>(closeId);
+        if (closeResponse.error) {
+            throw new Error(closeResponse.error);
         }
     }
 
