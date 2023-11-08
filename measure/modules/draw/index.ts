@@ -53,10 +53,14 @@ export interface DrawPart {
     readonly elevation?: { from: number; to: number; horizontalDisplay: boolean };
     /** Void in the draw part,  only valid for filled kind*/
     readonly voids?: DrawVoid[];
+    /** World coordinates*/
+    readonly vertices3D: ReadonlyVec3[];
+
     /** View space coordinates, in pixel values, empty if the entire part is out of view*/
     vertices2D?: ReadonlyVec2[];
-    /** World coordinates*/
-    vertices3D: ReadonlyVec3[];
+
+    /** Indices reffering to vertices3D and text if it is a list*/
+    indicesOnScreen?: number[];
 }
 
 /** Draw context for keeping updated canvas widht height and camera properties */
