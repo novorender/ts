@@ -289,15 +289,31 @@ export class View<
         }
         async function getFile(path: string): Promise<Response> {
             const request = new Request(relativeUrl(path), { mode: "cors", signal: abortSignal });
-            let response = await fetch(request);
-            if (!response.ok) {
+            let response: Response | undefined;
+            let err: unknown | undefined;
+            try {
+                response = await fetch(request);
+            }
+            catch (error) {
+                err = error;
+                //Try offline
+            }
+            if (response == undefined || !response.ok) {
                 const offlineResponse = await requestOfflineFile(request);
                 if (offlineResponse) {
                     response = offlineResponse;
                 }
             }
-            if (!response.ok) {
-                throw new Error(response.statusText);
+            if (response == undefined || !response.ok) {
+                if (response) {
+                    throw new Error(response.statusText);
+                }
+                else if (err) {
+                    throw err;
+                }
+                else {
+                    throw new Error("Failed to load scene");
+                }
             }
             return response;
         }
