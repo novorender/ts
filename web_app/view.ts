@@ -289,9 +289,16 @@ export class View<
         }
         async function getFile(path: string): Promise<Response> {
             const request = new Request(relativeUrl(path), { mode: "cors", signal: abortSignal });
-            const response = await requestOfflineFile(request) ?? await fetch(request);
-            if (!response.ok)
+            let response = await fetch(request);
+            if (!response.ok) {
+                const offlineResponse = await requestOfflineFile(request);
+                if (offlineResponse) {
+                    response = offlineResponse;
+                }
+            }
+            if (!response.ok) {
                 throw new Error(response.statusText);
+            }
             return response;
         }
 
