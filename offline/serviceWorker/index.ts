@@ -1,3 +1,4 @@
+/// <reference types="@types/serviceworker" />
 import type { OfflineStorageOPFS } from "../opfs";
 import { createOPFSOfflineStorage } from "../main";
 import type { ConnectAcknowledge, ConnectRequest, ConnectResponse } from "../opfs/messages";
