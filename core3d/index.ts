@@ -1,11 +1,12 @@
 /**
  * The Core3D module loads and renders 3D assets.
- * 
+ *
  * @packageDocumentation
  */
 export * from "./init";
 export * from "./state";
 export * from "./context";
+export { RenderContextWebGPU } from "./context_webgpu";
 export * from "./modules";
 export * from "./device";
 export * from "./imports";
