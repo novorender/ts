@@ -6,7 +6,7 @@
 export * from "./init";
 export * from "./state";
 export * from "./context";
-export { RenderContextWebGPU } from "./context_webgpu";
+export { RenderContextWebGPU } from "./webgpu/context";
 export * from "./modules";
 export * from "./device";
 export * from "./imports";

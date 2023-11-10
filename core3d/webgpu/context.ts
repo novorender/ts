@@ -1,17 +1,17 @@
-import { CoordSpace, TonemappingMode, type RGB } from ".";
-import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports } from ".";
+import { CoordSpace, TonemappingMode, type RGB } from "..";
+import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports } from "..";
 import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits } from "webgl2";
 import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "webgl2";
-import { matricesFromRenderState } from "./matrices";
-import { createViewFrustum } from "./viewFrustum";
-import { BufferFlags, RenderBuffers } from "./buffers";
-import type { WasmInstance } from "./wasm";
+import { matricesFromRenderState } from "../matrices";
+import { createViewFrustum } from "../viewFrustum";
+import { BufferFlags, RenderBuffers } from "../buffers";
+import type { WasmInstance } from "../wasm";
 import type { ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
 import { mat3, mat4, vec3, vec4 } from "gl-matrix";
-import { ResourceBin } from "./resource";
-import type { DeviceProfile } from "./device";
-import { orthoNormalBasisMatrixFromPlane } from "./util";
-import { createDefaultModules } from "./modules/default";
+import { ResourceBin } from "../resource";
+import type { DeviceProfile } from "../device";
+import { orthoNormalBasisMatrixFromPlane } from "../util";
+import { createDefaultModules } from "../modules/default";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 
