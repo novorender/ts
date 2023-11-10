@@ -86,6 +86,7 @@ export class RenderContextWebGPU {
     private viewClipMatrixLastPoll = mat4.create();
     private viewWorldMatrixLastPoll = mat4.create();
     private lostJustHappened = true;
+    private emulatingContextLoss = false;
 
     // constant gl resources
     // TODO
@@ -261,10 +262,11 @@ export class RenderContextWebGPU {
             this.modules = undefined;
             this.lostJustHappened = true;
 
-            console.log("Context lost just reinitializing by now");
+            console.log(`Context lost just reinitializing by now, reason: ${value.reason}, message: ${value.message}`);
 
-            // if(value.reason != "destroyed") {}
-            this.init();
+            if(value.reason != "destroyed" || this.emulatingContextLoss) {
+                this.init();
+            }
         });
 
         const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
@@ -274,6 +276,7 @@ export class RenderContextWebGPU {
         });
 
         this.lostJustHappened = false;
+        this.emulatingContextLoss = false;
 
         console.log("WebGPU initialized");
 
@@ -548,6 +551,7 @@ export class RenderContextWebGPU {
     emulateLostContext(value: "lose" | "restore") {
         // TODO: Is this correct? loseContext is just destroy but restoreContext?
         if (value == "lose") {
+            this.emulatingContextLoss = true;
             this.device?.destroy();
         }else{
             this.init();
