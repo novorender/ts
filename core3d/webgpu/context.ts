@@ -1,17 +1,19 @@
-import { CoordSpace, TonemappingMode, type RGB } from "..";
+import { CoordSpace, TonemappingMode, type RGB, defaultRenderState } from "..";
 import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports } from "..";
-import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits } from "webgl2";
-import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "webgl2";
 import { matricesFromRenderState } from "../matrices";
 import { createViewFrustum } from "../viewFrustum";
-import { BufferFlags, RenderBuffers } from "../buffers";
+import { BufferFlags, RenderBuffers } from "./buffers";
 import type { WasmInstance } from "../wasm";
 import type { ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
 import { mat3, mat4, vec3, vec4 } from "gl-matrix";
-import { ResourceBin } from "../resource";
+import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "../device";
 import { orthoNormalBasisMatrixFromPlane } from "../util";
 import { createDefaultModules } from "../modules/default";
+
+// TODO: This is imported from webgl2 but it's totally independent, maybe move it to a common folder
+import type { DrawStatistics } from "webgl2";
+import shader from "core3d/modules/tonemap/shaders/shader.wgsl";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 
@@ -37,10 +39,10 @@ export class RenderContextWebGPU {
     adapter: GPUAdapter | undefined;
     device: GPUDevice | undefined;
     context: GPUCanvasContext | undefined;
-    /** WebGL common WGSL code header used across shaders. */
+    /** WebGPU common WGSL code header used across shaders. */
     readonly commonChunk: string;
-    /** WebGL basic fallback IBL textures to use while loading proper IBL textures. */
-    readonly defaultIBLTextureParams: TextureParamsCubeUncompressed;
+    /** WebGPU basic fallback IBL textures to use while loading proper IBL textures. */
+    defaultIBLTextureParams: GPUTextureDescriptor | undefined;
     /** Web assembly instance. */
     readonly wasm: WasmInstance;
 
@@ -52,14 +54,13 @@ export class RenderContextWebGPU {
     // private outlinesUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
     private readonly asyncPrograms: AsyncProgramInfo[] = [];
-
-    // TODO
-    // private readonly resourceBins = new Set<ResourceBin>();
-    // private readonly defaultResourceBin;
-    // private readonly iblResourceBin;
+    private readonly resourceBins = new Set<ResourceBin>();
+    private defaultResourceBin: ResourceBin | undefined;
+    private iblResourceBin: ResourceBin | undefined;
     private pickBuffersValid = false;
     private currentPick: Uint32Array | undefined;
-    private activeTimers = new Set<Timer>();
+    // TODO
+    // private activeTimers = new Set<Timer>();
     private currentFrameTime = 0;
     private statistics = {
         points: 0,
@@ -87,6 +88,10 @@ export class RenderContextWebGPU {
     private viewWorldMatrixLastPoll = mat4.create();
     private lostJustHappened = true;
     private emulatingContextLoss = false;
+    private toneMappingPipeline: GPURenderPipeline | undefined;
+    private toneMappingBindGroup: GPUBindGroup | undefined;
+    private toneMappingUniforms: GPUBuffer | undefined;
+    private toneMappingUniformsStaging: GPUBuffer | undefined;
 
     // constant gl resources
     // TODO
@@ -119,8 +124,7 @@ export class RenderContextWebGPU {
      * @remarks
      * Note that these buffers will be recreated whenever the {@link RenderState.output} size changes.
      */
-    // TODO
-    // buffers: RenderBuffers = undefined!;
+    buffers: RenderBuffers = undefined!;
 
     /** WebGL textures used for image based lighting ({@link https://en.wikipedia.org/wiki/Image-based_lighting | IBL}).
      * @remarks
@@ -131,9 +135,9 @@ export class RenderContextWebGPU {
     // TODO
     // iblTextures: { // these are changed by the background module, once download is complete
     //     /** WebGL cubemap texture containing the irradiance/diffuse values of current IBL environment. */
-    //     readonly diffuse: WebGLTexture;
+    //     readonly diffuse: GPUTexture;
     //     /** WebGL cubemap texture containing the radiance/specular values of current IBL environment. */
-    //     readonly specular: WebGLTexture;
+    //     readonly specular: GPUTexture;
     //     /** # mip maps in current specular texture. */
     //     readonly numMipMaps: number;
     //     /** # True if these are the default IBL textures. */
@@ -150,12 +154,6 @@ export class RenderContextWebGPU {
         readonly imports: Core3DImports,
         // webGLOptions?: WebGLContextAttributes,
     ) {
-        // this.initWebGPU();
-
-        // TODO
-        // const defaultBin = this.defaultResourceBin = this.resourceBin("context");
-        // const iblBin = this.iblResourceBin = this.resourceBin("ibl");
-
         // TODO: Check equivalents to loseContext and provokingVertex in WebGPU the others
         // are supported by default
         // console.assert(extensions.loseContext != null, extensions.multiDraw != null, extensions.colorBufferFloat != null);
@@ -174,19 +172,6 @@ export class RenderContextWebGPU {
         // this.samplerSingle = defaultBin.createSampler({ minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         // this.samplerMip = defaultBin.createSampler({ minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
 
-        // create default ibl textures
-        const top = new Uint8Array([192, 192, 192, 255]);
-        const side = new Uint8Array([128, 128, 128, 255]);
-        const bottom = new Uint8Array([64, 64, 64, 255]);
-        const image = [side, side, top, bottom, side, side] as const;
-        const textureParams = this.defaultIBLTextureParams = { kind: "TEXTURE_CUBE_MAP", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: image } as const;
-        // TODO:
-        // this.iblTextures = {
-        //     diffuse: iblBin.createTexture(textureParams),
-        //     specular: iblBin.createTexture(textureParams),
-        //     numMipMaps: 1,
-        //     default: true,
-        // };
 
         // camera uniforms
         // TODO
@@ -278,6 +263,16 @@ export class RenderContextWebGPU {
         this.lostJustHappened = false;
         this.emulatingContextLoss = false;
 
+        const effectiveSamplesMSAA = this.effectiveSamplesMSAA(defaultRenderState());
+
+        this.buffers = new RenderBuffers(
+            this.device,
+            this.context.getCurrentTexture().width,
+            this.context.getCurrentTexture().height,
+            effectiveSamplesMSAA,
+            this.resourceBin("FrameBuffers")
+        );
+
         console.log("WebGPU initialized");
 
         // initialize modules
@@ -285,6 +280,29 @@ export class RenderContextWebGPU {
             RenderContextWebGPU.defaultModules ??= createDefaultModules();
             modules = RenderContextWebGPU.defaultModules;
         }
+
+
+        const defaultBin = this.defaultResourceBin = this.resourceBin("context");
+        const iblBin = this.iblResourceBin = this.resourceBin("ibl");
+
+        // create default ibl textures
+        const top = new Uint8Array([192, 192, 192, 255]);
+        const side = new Uint8Array([128, 128, 128, 255]);
+        const bottom = new Uint8Array([64, 64, 64, 255]);
+        const image = [side, side, top, bottom, side, side] as const;
+        const textureParams = this.defaultIBLTextureParams = {
+            label: "Default IBL texture",
+            size: { width: 1, height: 1 },
+            format: "rgba8unorm",
+            usage: GPUTextureUsage.TEXTURE_BINDING
+        } as const;
+        // this.iblTextures = {
+        //     diffuse: iblBin.createTexture(textureParams),
+        //     specular: iblBin.createTexture(textureParams),
+        //     numMipMaps: 1,
+        //     default: true,
+        // };
+
         // TODO
         // const modulePromises = modules.map((m, i) => {
         //     const ret = m.withContext(this);
@@ -292,6 +310,79 @@ export class RenderContextWebGPU {
         // });
         // this.linkAsyncPrograms();
         // this.modules = await Promise.all(modulePromises);
+
+        // Create tonemapping render pipeline
+        const toneMappingSM = defaultBin.createShaderModule({
+            label: "Tonemapping shader module",
+            code: shader,
+        });
+        this.toneMappingPipeline = defaultBin.createRenderPipeline({
+            label: "Tonemapping pipeline",
+            layout: "auto",
+            vertex: {
+                module: toneMappingSM,
+                entryPoint: "vertexMain",
+            },
+            fragment: {
+                module: toneMappingSM,
+                entryPoint: "fragmentMain",
+                targets: [{
+                    format: canvasFormat
+                }]
+            },
+            // We are drawing full screen with a cw triangle but not really using culling
+            // primitive: {
+            //     cullMode: "front",
+            //     frontFace: "cw"
+            // }
+        });
+
+        this.toneMappingUniformsStaging = defaultBin.createBuffer({
+            size: 12,
+            usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+            mappedAtCreation: true,
+        });
+        this.toneMappingUniforms = defaultBin.createBuffer({
+            size: 12,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        const toneMappingUniformsData = new Float32Array(3);
+        const toneMappingUniformsDataU32 = new Uint32Array(toneMappingUniformsData.buffer);
+        // exposure
+        toneMappingUniformsData[0] = 1.
+        // mode
+        toneMappingUniformsDataU32[1] = 0; // tonemapModeColor
+        // maxLinearDepth
+        toneMappingUniformsData[2] = 1.
+        const gpuBuffer = new Float32Array(this.toneMappingUniformsStaging.getMappedRange());
+        gpuBuffer.set(toneMappingUniformsData);
+        this.toneMappingUniformsStaging.unmap();
+        const encoder = this.device.createCommandEncoder();
+        encoder.copyBufferToBuffer(this.toneMappingUniformsStaging, 0, this.toneMappingUniforms, 0, 12);
+        this.device.queue.submit([encoder.finish()]);
+
+
+
+        this.toneMappingBindGroup = this.device.createBindGroup({
+            label: "Tone mapping bind group",
+            layout: this.toneMappingPipeline.getBindGroupLayout(0),
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.buffers.textureViews.color
+                },
+                {
+                    binding: 1,
+                    resource: this.defaultResourceBin.createSampler({
+                        label: "Tone mapping color texture sampler",
+                    })
+                },
+                {
+                    binding: 2,
+                    resource: { buffer: this.toneMappingUniforms }
+                }
+            ]
+        })
     }
 
     private linkAsyncPrograms() {
@@ -334,23 +425,30 @@ export class RenderContextWebGPU {
      * This may take some time, however, so calling this function is recommended if you plan to create a new context shortly thereafter.
      */
     dispose() {
-        // TODO
-        // const { buffers, modules, activeTimers, defaultResourceBin, iblResourceBin } = this;
+        const { buffers, modules, /*activeTimers,*/ defaultResourceBin, iblResourceBin } = this;
+        // TODO: This is surely not needed in webgpu
         // this.poll(); // finish async stuff
+
+        // TODO
         // for (const timer of activeTimers) {
         //     timer.dispose();
         // }
         // activeTimers.clear();
-        // if (modules) {
-        //     for (const module of modules) {
-        //         module?.dispose();
-        //     }
-        //     this.modules = undefined;
-        // }
-        // buffers?.dispose();
-        // iblResourceBin.dispose();
-        // defaultResourceBin.dispose();
-        // console.assert(this.resourceBins.size == 0);
+
+        if (modules) {
+            for (const module of modules) {
+                module?.dispose();
+            }
+            this.modules = undefined;
+        }
+        buffers?.dispose();
+        if(iblResourceBin) {
+            iblResourceBin.dispose();
+        }
+        if(defaultResourceBin) {
+            defaultResourceBin.dispose();
+        }
+        console.assert(this.resourceBins.size == 0);
     }
 
     /** Return the current pixel width of the drawing buffer. */
@@ -380,46 +478,51 @@ export class RenderContextWebGPU {
     }
 
     /** @internal */
-    drawBuffers(buffers: BufferFlags = (BufferFlags.all)): readonly (ColorAttachment | "NONE")[] {
-        const activeBuffers = buffers; // & this.drawBuffersMask;
-        return [
-            activeBuffers & BufferFlags.color ? "COLOR_ATTACHMENT0" : "NONE",
-            activeBuffers & BufferFlags.pick ? "COLOR_ATTACHMENT1" : "NONE",
-        ] as const;
-    }
+    // TODO
+    // drawBuffers(buffers: BufferFlags = (BufferFlags.all)): readonly (ColorAttachment | "NONE")[] {
+    //     const activeBuffers = buffers; // & this.drawBuffersMask;
+    //     return [
+    //         activeBuffers & BufferFlags.color ? "COLOR_ATTACHMENT0" : "NONE",
+    //         activeBuffers & BufferFlags.pick ? "COLOR_ATTACHMENT1" : "NONE",
+    //     ] as const;
+    // }
 
     /** Helper function to update WebGL uniform buffer from proxies. */
-    updateUniformBuffer(uniformBuffer: WebGLBuffer, proxy: UniformsProxy) {
-        // TODO
-        // if (!proxy.dirtyRange.isEmpty) {
-        //     const { begin, end } = proxy.dirtyRange;
-        //     glUpdateBuffer(this.gl, { kind: "UNIFORM_BUFFER", srcData: proxy.buffer, targetBuffer: uniformBuffer, srcElementOffset: begin, dstByteOffset: begin, byteSize: end - begin });
-        //     proxy.dirtyRange.clear();
-        // }
-    }
+    // TODO
+    // updateUniformBuffer(uniformBuffer: WebGLBuffer, proxy: UniformsProxy) {
+    //     if (!proxy.dirtyRange.isEmpty) {
+    //         const { begin, end } = proxy.dirtyRange;
+    //         glUpdateBuffer(this.gl, { kind: "UNIFORM_BUFFER", srcData: proxy.buffer, targetBuffer: uniformBuffer, srcElementOffset: begin, dstByteOffset: begin, byteSize: end - begin });
+    //         proxy.dirtyRange.clear();
+    //     }
+    // }
 
     /** Explicitly update WebGL IBL textures from specified parameters. */
-    updateIBLTextures(params: { readonly diffuse: TextureParamsCubeUncompressed, readonly specular: TextureParamsCubeUncompressedMipMapped } | null) {
-        // TODO
-        // const { iblResourceBin } = this;
-        // iblResourceBin.deleteAll();
-        // if (params) {
-        //     const { diffuse, specular } = params;
-        //     this.iblTextures = {
-        //         diffuse: iblResourceBin.createTexture(diffuse),
-        //         specular: iblResourceBin.createTexture(specular),
-        //         numMipMaps: typeof specular.mipMaps == "number" ? specular.mipMaps : specular.mipMaps.length,
-        //         default: false,
-        //     };
-        // } else {
-        //     this.iblTextures = {
-        //         diffuse: iblResourceBin.createTexture(this.defaultIBLTextureParams),
-        //         specular: iblResourceBin.createTexture(this.defaultIBLTextureParams),
-        //         numMipMaps: 1,
-        //         default: true,
-        //     };
-        // }
-    }
+    // TODO
+    // updateIBLTextures(params: { readonly diffuse: GPUTextureDescriptor, readonly specular: GPUTextureDescriptor } | null) {
+    //     // TODO
+    //     const { iblResourceBin } = this;
+    //     if(!iblResourceBin) {
+    //         throw "Not initialized yet"
+    //     }
+    //     iblResourceBin.deleteAll();
+    //     if (params) {
+    //         const { diffuse, specular } = params;
+    //         this.iblTextures = {
+    //             diffuse: iblResourceBin.createTexture(diffuse),
+    //             specular: iblResourceBin.createTexture(specular),
+    //             numMipMaps: specular.mipLevelCount ?? 1,
+    //             default: false,
+    //         };
+    //     } else {
+    //         this.iblTextures = {
+    //             diffuse: iblResourceBin.createTexture(this.defaultIBLTextureParams),
+    //             specular: iblResourceBin.createTexture(this.defaultIBLTextureParams),
+    //             numMipMaps: 1,
+    //             default: true,
+    //         };
+    //     }
+    // }
 
     /**
      * Helper function to check for changes in render state.
@@ -453,66 +556,68 @@ export class RenderContextWebGPU {
 
     /** Create a new named resource bin. */
     resourceBin(name: string) {
-        // TODO
-        // return new ResourceBin(this.gl, name, this.resourceBins);
+        if (!this.device) {
+            throw "Device not initialized yet, probably init hasn't been called or awaited"
+        }
+        return new ResourceBin(this.device, name, this.resourceBins);
     }
 
     /** Compile WebGL/GLSL shader program asynchronously. */
-    makeProgramAsync(resourceBin: ResourceBin, params: AsyncProgramParams) {
-        // TODO
-        // const { gl, commonChunk } = this;
-        // const { vertexShader, fragmentShader } = params;
-        // const header = { commonChunk, ...params.header } as const; // inject common shader code here, if not defined in params.
-        // const programAsync = resourceBin.createProgramAsync({ header, vertexShader, fragmentShader });
-        // const { program } = programAsync;
+    // TODO
+    // makeProgramAsync(resourceBin: ResourceBin, params: AsyncProgramParams) {
+    //     const { gl, commonChunk } = this;
+    //     const { vertexShader, fragmentShader } = params;
+    //     const header = { commonChunk, ...params.header } as const; // inject common shader code here, if not defined in params.
+    //     const programAsync = resourceBin.createProgramAsync({ header, vertexShader, fragmentShader });
+    //     const { program } = programAsync;
 
-        // // do pre-link bindings here
-        // const { attributes, transformFeedback, uniformBufferBlocks, textureUniforms } = params;
-        // if (attributes) {
-        //     let i = 0;
-        //     for (const name of attributes) {
-        //         gl.bindAttribLocation(program, i++, name);
-        //     }
-        // }
-        // if (transformFeedback) {
-        //     const { varyings, bufferMode } = transformFeedback;
-        //     gl.transformFeedbackVaryings(program, varyings, gl[bufferMode]);
-        // }
+    //     // do pre-link bindings here
+    //     const { attributes, transformFeedback, uniformBufferBlocks, textureUniforms } = params;
+    //     if (attributes) {
+    //         let i = 0;
+    //         for (const name of attributes) {
+    //             gl.bindAttribLocation(program, i++, name);
+    //         }
+    //     }
+    //     if (transformFeedback) {
+    //         const { varyings, bufferMode } = transformFeedback;
+    //         gl.transformFeedbackVaryings(program, varyings, gl[bufferMode]);
+    //     }
 
-        // return new Promise<WebGLProgram>((resolve, reject) => {
-        //     // do post-link bindings here
-        //     function postLink() {
-        //         gl.useProgram(program);
+    //     return new Promise<WebGLProgram>((resolve, reject) => {
+    //         // do post-link bindings here
+    //         function postLink() {
+    //             gl.useProgram(program);
 
-        //         if (uniformBufferBlocks) {
-        //             let idx = 0;
-        //             for (const name of uniformBufferBlocks) {
-        //                 if (name) {
-        //                     const blockIndex = gl.getUniformBlockIndex(program, name);
-        //                     if (blockIndex != gl.INVALID_INDEX) {
-        //                         gl.uniformBlockBinding(program, blockIndex, idx);
-        //                     } else {
-        //                         console.warn(`Shader has no uniform block named: ${name}!`);
-        //                     }
-        //                 }
-        //                 idx++;
-        //             }
-        //         }
+    //             if (uniformBufferBlocks) {
+    //                 let idx = 0;
+    //                 for (const name of uniformBufferBlocks) {
+    //                     if (name) {
+    //                         const blockIndex = gl.getUniformBlockIndex(program, name);
+    //                         if (blockIndex != gl.INVALID_INDEX) {
+    //                             gl.uniformBlockBinding(program, blockIndex, idx);
+    //                         } else {
+    //                             console.warn(`Shader has no uniform block named: ${name}!`);
+    //                         }
+    //                     }
+    //                     idx++;
+    //                 }
+    //             }
 
-        //         if (textureUniforms) {
-        //             let i = 0;
-        //             for (const name of textureUniforms) {
-        //                 const location = gl.getUniformLocation(program, name);
-        //                 gl.uniform1i(location, i++);
-        //             }
-        //         }
+    //             if (textureUniforms) {
+    //                 let i = 0;
+    //                 for (const name of textureUniforms) {
+    //                     const location = gl.getUniformLocation(program, name);
+    //                     gl.uniform1i(location, i++);
+    //                 }
+    //             }
 
-        //         gl.useProgram(null);
-        //         resolve(program);
-        //     }
-        //     this.asyncPrograms.push({ ...programAsync, resolve: postLink, reject });
-        // });
-    }
+    //             gl.useProgram(null);
+    //             resolve(program);
+    //         }
+    //         this.asyncPrograms.push({ ...programAsync, resolve: postLink, reject });
+    //     });
+    // }
 
     private resetStatistics() {
         const { statistics } = this;
@@ -567,23 +672,23 @@ export class RenderContextWebGPU {
         this.pollTimers();
     }
 
-    private beginTimer(): Timer {
-        // TODO
-        // const timer = glCreateTimer(this.gl, false);
-        // this.activeTimers.add(timer);
-        // timer.begin();
-        // return timer;
-        throw "TODO"
-    }
+    // TODO
+    // private beginTimer(): Timer {
+    //     const timer = glCreateTimer(this.gl, false);
+    //     this.activeTimers.add(timer);
+    //     timer.begin();
+    //     return timer;
+    // }
 
     private pollTimers() {
-        const { activeTimers } = this;
-        for (const timer of [...activeTimers]) {
-            if (timer.poll()) {
-                activeTimers.delete(timer);
-                timer.dispose();
-            }
-        }
+        // TODO: surely not needed as eveything is now async
+        // const { activeTimers } = this;
+        // for (const timer of [...activeTimers]) {
+        //     if (timer.poll()) {
+        //         activeTimers.delete(timer);
+        //         timer.dispose();
+        //     }
+        // }
     }
 
     /** Wait for the next frame to be ready for rendering.
@@ -606,13 +711,20 @@ export class RenderContextWebGPU {
         });
     }
 
+    effectiveSamplesMSAA(state: RenderState) {
+        // Apparently querying MSAA max samples is not supported yet:
+        // https://github.com/gpuweb/gpuweb/pull/932
+        const { MAX_SAMPLES } = { MAX_SAMPLES: 4 };
+        return Math.max(1, Math.min(MAX_SAMPLES, Math.min(this.deviceProfile.limits.maxSamples, state.output.samplesMSAA)));
+    }
+
     /**
      * Render a new frame using the specified render state.
      * @param state An object describing what the frame should look like.
      * @returns A promise to the performance related statistics involved in rendering this frame.
      */
     public async render(state: RenderState): Promise<RenderStatistics> {
-        if (!this.adapter || !this.device || !this.context) {
+        if (!this.adapter || !this.device || !this.context || !this.toneMappingPipeline || !this.toneMappingBindGroup) {
             throw new Error("Context has not been initialized!");
         }
         const beginTime = performance.now();
@@ -621,21 +733,63 @@ export class RenderContextWebGPU {
 
         this.resetStatistics();
 
+        const effectiveSamplesMSAA = this.effectiveSamplesMSAA(state);
+
+        // handle resizes
+        let resized = false;
+        const { output } = state;
+        // TODO
+        // if (this.hasStateChanged({ output })) {
+        //     const { width, height } = output;
+        //     console.assert(Number.isInteger(width) && Number.isInteger(height));
+        //     canvas.width = width;
+        //     canvas.height = height;
+        //     resized = true;
+        //     this.changed = true;
+        //     this.buffers?.dispose();
+        //     this.buffers = new RenderBuffers(this.device, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
+        // }
+
         const encoder = this.device.createCommandEncoder();
         if (!encoder){
             throw "Couldn't create a command encoder"
         }
 
-        const pass = encoder.beginRenderPass({
-            colorAttachments: [{
-               view: this.context.getCurrentTexture().createView(),
-               loadOp: "clear",
-               storeOp: "store",
-               clearValue: { r: 1.0, g: 0, b: 0.4, a: 1 },
-            }]
+        // Main render pass
+        const mainPass = encoder.beginRenderPass({
+            colorAttachments: [
+                {
+                    view: this.buffers.colorRenderAttachment(),
+                    loadOp: "clear",
+                    storeOp: "store",
+                    clearValue: { r: 1.0, g: 0, b: 0.4, a: 1 },
+                    resolveTarget: this.buffers.colorResolveAttachment()
+                },
+            ],
+            depthStencilAttachment: {
+                view: this.buffers.depthRenderAttachment(),
+                depthLoadOp: "clear",
+                depthStoreOp: "store",
+                depthClearValue: 1.,
+            }
         });
 
-        pass.end();
+        mainPass.end();
+
+        // Tone mapping render pass
+        const toneMappingPass = encoder.beginRenderPass({
+            colorAttachments: [{
+                // TODO: Is this a performance problem? Cache the view?
+                view: this.context.getCurrentTexture().createView(),
+                loadOp: "load",
+                storeOp: "store",
+            }],
+        })
+
+        toneMappingPass.setPipeline(this.toneMappingPipeline);
+        toneMappingPass.setBindGroup(0, this.toneMappingBindGroup);
+        toneMappingPass.draw(3);
+        toneMappingPass.end();
 
         // const commandBuffer = encoder.finish();
 
@@ -1077,28 +1231,29 @@ export interface PickOptions {
     readonly pickOutline?: boolean;
 }
 
+// TODO: probably not needed
 /** Parameters for asynchronous shader compilation and linking. */
-export interface AsyncProgramParams {
-    /** Common GLSL header information to be inserted before the body code. */
-    readonly header?: Partial<ShaderHeaderParams>;
-    /** The vertex shader. */
-    readonly vertexShader: string;
-    /** The fragment shader (optional with transform feedback shaders). */
-    readonly fragmentShader?: string;
-    /** The names of the vertex attributes to be bound prior to linking using gl.bindAttribLocation(). */
-    readonly attributes?: readonly string[]; // The names of the vertex attributes to be bound using gl.bindAttribLocation().
-    /** The names of the shader uniform blocks to be bound prior to linking using gl.uniformBlockBinding(), in the order which they appear */
-    readonly uniformBufferBlocks?: readonly string[];
-    /** Texture uniforms to be bound post-linking. */
-    readonly textureUniforms?: readonly string[]; // Texture uniforms will be bound to the index in which they appear in the name array.
-    /** Transform feedback buffers to be bound post-linking. */
-    readonly transformFeedback?: {
-        /** Should output attributes be written into a single interleaved buffer or separate buffers? */
-        readonly bufferMode: "INTERLEAVED_ATTRIBS" | "SEPARATE_ATTRIBS";
-        /** Name of output attribute names (varyings). */
-        readonly varyings: readonly string[];
-    };
-}
+// export interface AsyncProgramParams {
+//     /** Common GLSL header information to be inserted before the body code. */
+//     readonly header?: Partial<ShaderHeaderParams>;
+//     /** The vertex shader. */
+//     readonly vertexShader: string;
+//     /** The fragment shader (optional with transform feedback shaders). */
+//     readonly fragmentShader?: string;
+//     /** The names of the vertex attributes to be bound prior to linking using gl.bindAttribLocation(). */
+//     readonly attributes?: readonly string[]; // The names of the vertex attributes to be bound using gl.bindAttribLocation().
+//     /** The names of the shader uniform blocks to be bound prior to linking using gl.uniformBlockBinding(), in the order which they appear */
+//     readonly uniformBufferBlocks?: readonly string[];
+//     /** Texture uniforms to be bound post-linking. */
+//     readonly textureUniforms?: readonly string[]; // Texture uniforms will be bound to the index in which they appear in the name array.
+//     /** Transform feedback buffers to be bound post-linking. */
+//     readonly transformFeedback?: {
+//         /** Should output attributes be written into a single interleaved buffer or separate buffers? */
+//         readonly bufferMode: "INTERLEAVED_ATTRIBS" | "SEPARATE_ATTRIBS";
+//         /** Name of output attribute names (varyings). */
+//         readonly varyings: readonly string[];
+//     };
+// }
 
 /** @internal */
 interface AsyncProgramInfo {
