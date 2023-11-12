@@ -1,4 +1,4 @@
-type GPUResource = GPUTexture | GPUBuffer | GPUShaderModule | GPUSampler | GPURenderPipeline | GPUComputePipeline;
+type GPUResource = GPUTexture | GPUBuffer | GPUShaderModule | GPUSampler | GPURenderPipeline | GPUComputePipeline | GPUBindGroup;
 
 /**
  * A WebGL resource tracking helper class.
@@ -54,8 +54,16 @@ export class ResourceBin {
         return this.add(this.device.createRenderPipeline(params), { kind: "RenderPipeline" })
     }
 
+    async createRenderPipelineAsync(params: GPURenderPipelineDescriptor) {
+        return this.add(await this.device.createRenderPipelineAsync(params), { kind: "RenderPipeline" })
+    }
+
     createComputePipeline(params: GPUComputePipelineDescriptor) {
         return this.add(this.device.createComputePipeline(params), { kind: "ComputePipeline" })
+    }
+
+    createBindGroup(params: GPUBindGroupDescriptor) {
+        return this.add(this.device.createBindGroup(params), { kind: "BindGroup" })
     }
 
     private add<T extends GPUResource>(resource: T, info: ResourceInfo): T {
@@ -185,6 +193,7 @@ const resourceKinds = [
     "Texture",
     "RenderPipeline",
     "ComputePipeline",
+    "BindGroup",
 ] as const;
 
 const internalFormatTexelBytes = {

@@ -1,5 +1,5 @@
 import type { WasmInstance } from "core3d";
-import type { ShaderImports } from "core3d/shaders";
+import type { ShaderImports, ShaderImportsWGSL } from "core3d/shaders";
 import type { TextureImageSource } from "webgl2";
 
 /**
@@ -43,6 +43,11 @@ export interface Core3DImports {
      * @remarks The shaders can be found in `core3d/imports/shaders.ts`.
      */
     readonly shaders: ShaderImports;
+
+    /** WGSL shader imports.
+     * @remarks The shaders can be found in `core3d/imports/shaders.ts`.
+     */
+    readonly shadersWGSL: ShaderImportsWGSL;
 }
 
 
@@ -85,6 +90,11 @@ export interface Core3DImportMap {
      * @defaultValue `"./shaders.js"`
      */
     readonly shaders?: string | URL | ShaderImports;
+
+    /** Inlined shaders, or URL to download.
+     * @defaultValue `"./shaders.js"`
+     */
+    readonly shadersWGSL?: string | URL | ShaderImportsWGSL;
 }
 
 /** Download any missing imports.
@@ -103,10 +113,11 @@ export async function downloadCore3dImports(map: Core3DImportMap): Promise<Core3
     const wasmInstancePromise = getInstance(map.wasmInstance ?? "./main.wasm", baseUrl);
     const parserWasmPromise = getArrayBuffer(map.parserWasm ?? "./parser.wasm", baseUrl);
     const shadersPromise = getShaders(map.shaders ?? "./shaders.js", baseUrl);
+    const shadersWGSLPromise = getShadersWGSL(map.shadersWGSL ?? "./shaders.js", baseUrl);
     const logoPromise = getLogo(map.logo ?? "./logo.bin", baseUrl);
-    const [lutGGX, wasmInstance, parserWasm, shaders, logo] =
-        await Promise.all([lutGGXPromise, wasmInstancePromise, parserWasmPromise, shadersPromise, logoPromise]);
-    return { lutGGX, wasmInstance, parserWasm, loaderWorker, shaders, logo };
+    const [lutGGX, wasmInstance, parserWasm, shaders, shadersWGSL, logo] =
+        await Promise.all([lutGGXPromise, wasmInstancePromise, parserWasmPromise, shadersPromise, shadersWGSLPromise, logoPromise]);
+    return { lutGGX, wasmInstance, parserWasm, loaderWorker, shaders, shadersWGSL, logo };
 }
 
 async function download<T extends "text" | "json" | "blob" | "arrayBuffer" | "formData">(url: URL, kind: T) {
@@ -180,4 +191,13 @@ async function getShaders(arg: string | URL | ShaderImports, baseUrl?: string | 
     const url = new URL(arg, baseUrl);
     const { shaders } = await import( /* webpackIgnore: true */ url.toString());
     return shaders as ShaderImports;
+}
+
+async function getShadersWGSL(arg: string | URL | ShaderImportsWGSL, baseUrl?: string | URL) {
+    if (!isUrl(arg)) {
+        return arg;
+    }
+    const url = new URL(arg, baseUrl);
+    const { shadersWGSL } = await import( /* webpackIgnore: true */ url.toString());
+    return shadersWGSL as ShaderImportsWGSL;
 }

@@ -1,5 +1,6 @@
 import { CoordSpace, TonemappingMode, type RGB, defaultRenderState } from "..";
-import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports } from "..";
+import type { DerivedRenderState, RenderState, Core3DImports } from "..";
+import type { RenderModuleContext, RenderModule } from "../modules/webgpu";
 import { matricesFromRenderState } from "../matrices";
 import { createViewFrustum } from "../viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
@@ -9,11 +10,10 @@ import { mat3, mat4, vec3, vec4 } from "gl-matrix";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "../device";
 import { orthoNormalBasisMatrixFromPlane } from "../util";
-import { createDefaultModules } from "../modules/default";
+import { createDefaultModules, createDefaultModulesWebGPU } from "../modules/default";
 
 // TODO: This is imported from webgl2 but it's totally independent, maybe move it to a common folder
-import type { DrawStatistics } from "webgl2";
-import shader from "core3d/modules/tonemap/shaders/shader.wgsl";
+import type { DrawStatistics, UniformsProxy } from "webgl2";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 
@@ -88,10 +88,6 @@ export class RenderContextWebGPU {
     private viewWorldMatrixLastPoll = mat4.create();
     private lostJustHappened = true;
     private emulatingContextLoss = false;
-    private toneMappingPipeline: GPURenderPipeline | undefined;
-    private toneMappingBindGroup: GPUBindGroup | undefined;
-    private toneMappingUniforms: GPUBuffer | undefined;
-    private toneMappingUniformsStaging: GPUBuffer | undefined;
 
     // constant gl resources
     // TODO
@@ -212,6 +208,10 @@ export class RenderContextWebGPU {
         // this.outlineUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.outlinesUniformsData.buffer.byteLength });
     }
 
+    canvasFormat() {
+        return navigator.gpu.getPreferredCanvasFormat();
+    }
+
     /** Initialize render context with specified render modules.
      * @remarks
      * The default/built-in render modules can be retrieved using {@link createDefaultModules}.
@@ -277,7 +277,7 @@ export class RenderContextWebGPU {
 
         // initialize modules
         if (!modules) {
-            RenderContextWebGPU.defaultModules ??= createDefaultModules();
+            RenderContextWebGPU.defaultModules ??= createDefaultModulesWebGPU();
             modules = RenderContextWebGPU.defaultModules;
         }
 
@@ -303,119 +303,11 @@ export class RenderContextWebGPU {
         //     default: true,
         // };
 
-        // TODO
-        // const modulePromises = modules.map((m, i) => {
-        //     const ret = m.withContext(this);
-        //     return isPromise(ret) ? ret : Promise.resolve(ret);
-        // });
-        // this.linkAsyncPrograms();
-        // this.modules = await Promise.all(modulePromises);
-
-        // Create tonemapping render pipeline
-        const toneMappingSM = defaultBin.createShaderModule({
-            label: "Tonemapping shader module",
-            code: shader,
+        const modulePromises = modules.map((m, i) => {
+            const ret = m.withContext(this);
+            return isPromise(ret) ? ret : Promise.resolve(ret);
         });
-        this.toneMappingPipeline = defaultBin.createRenderPipeline({
-            label: "Tonemapping pipeline",
-            layout: "auto",
-            vertex: {
-                module: toneMappingSM,
-                entryPoint: "vertexMain",
-            },
-            fragment: {
-                module: toneMappingSM,
-                entryPoint: "fragmentMain",
-                targets: [{
-                    format: canvasFormat
-                }]
-            },
-            // We are drawing full screen with a cw triangle but not really using culling
-            // primitive: {
-            //     cullMode: "front",
-            //     frontFace: "cw"
-            // }
-        });
-
-        this.toneMappingUniformsStaging = defaultBin.createBuffer({
-            size: 12,
-            usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
-            mappedAtCreation: true,
-        });
-        this.toneMappingUniforms = defaultBin.createBuffer({
-            size: 12,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
-        const toneMappingUniformsData = new Float32Array(3);
-        const toneMappingUniformsDataU32 = new Uint32Array(toneMappingUniformsData.buffer);
-        // exposure
-        toneMappingUniformsData[0] = 1.
-        // mode
-        toneMappingUniformsDataU32[1] = 0; // tonemapModeColor
-        // maxLinearDepth
-        toneMappingUniformsData[2] = 1.
-        const gpuBuffer = new Float32Array(this.toneMappingUniformsStaging.getMappedRange());
-        gpuBuffer.set(toneMappingUniformsData);
-        this.toneMappingUniformsStaging.unmap();
-        const encoder = this.device.createCommandEncoder();
-        encoder.copyBufferToBuffer(this.toneMappingUniformsStaging, 0, this.toneMappingUniforms, 0, 12);
-        this.device.queue.submit([encoder.finish()]);
-
-
-
-        this.toneMappingBindGroup = this.device.createBindGroup({
-            label: "Tone mapping bind group",
-            layout: this.toneMappingPipeline.getBindGroupLayout(0),
-            entries: [
-                {
-                    binding: 0,
-                    resource: this.buffers.textureViews.color
-                },
-                {
-                    binding: 1,
-                    resource: this.defaultResourceBin.createSampler({
-                        label: "Tone mapping color texture sampler",
-                    })
-                },
-                {
-                    binding: 2,
-                    resource: { buffer: this.toneMappingUniforms }
-                }
-            ]
-        })
-    }
-
-    private linkAsyncPrograms() {
-        // link all programs here (this is supposedly faster than interleaving compiles and links)
-        // TODO
-        // const { gl, asyncPrograms } = this;
-        // for (const { program } of this.asyncPrograms) {
-        //     gl.linkProgram(program);
-        // }
-        // gl.useProgram(null);
-
-        // // wait for completion
-        // const ext = glExtensions(gl).parallelShaderCompile;
-        // function pollAsyncPrograms() {
-        //     for (let i = 0; i < asyncPrograms.length; i++) {
-        //         const { program, resolve, reject } = asyncPrograms[i];
-        //         if (ext) {
-        //             if (!gl.getProgramParameter(program, ext.COMPLETION_STATUS_KHR))
-        //                 continue;
-        //         }
-        //         const [info] = asyncPrograms.splice(i--, 1);
-        //         const error = glCheckProgram(gl, info);
-        //         if (error) {
-        //             reject(error);
-        //         } else {
-        //             resolve();
-        //         }
-        //     }
-        //     if (asyncPrograms.length > 0) {
-        //         setTimeout(pollAsyncPrograms);
-        //     }
-        // }
-        // pollAsyncPrograms();
+        this.modules = await Promise.all(modulePromises);
     }
 
     /**
@@ -488,14 +380,24 @@ export class RenderContextWebGPU {
     // }
 
     /** Helper function to update WebGL uniform buffer from proxies. */
-    // TODO
-    // updateUniformBuffer(uniformBuffer: WebGLBuffer, proxy: UniformsProxy) {
-    //     if (!proxy.dirtyRange.isEmpty) {
-    //         const { begin, end } = proxy.dirtyRange;
-    //         glUpdateBuffer(this.gl, { kind: "UNIFORM_BUFFER", srcData: proxy.buffer, targetBuffer: uniformBuffer, srcElementOffset: begin, dstByteOffset: begin, byteSize: end - begin });
-    //         proxy.dirtyRange.clear();
-    //     }
-    // }
+    async updateUniformBuffer(encoder: GPUCommandEncoder, uniformBufferStaging: GPUBuffer, uniformBuffer: GPUBuffer, proxy: UniformsProxy) {
+        // TODO Is it better to do this on the same encoder as the renderer or perhaps do it on a thread?
+        if(!this.device) {
+            throw "Device not initialized yet"
+        }
+        if (!proxy.dirtyRange.isEmpty) {
+            const { begin, end } = proxy.dirtyRange;
+            const size = end - begin;
+            await uniformBufferStaging.mapAsync(GPUMapMode.WRITE, begin, size);
+            const gpuBuffer = new Uint8Array(uniformBufferStaging.getMappedRange());
+            gpuBuffer.set(new Uint8Array(proxy.buffer));
+            uniformBufferStaging.unmap();
+            // const encoder = this.device.createCommandEncoder();
+            encoder.copyBufferToBuffer(uniformBufferStaging, begin, uniformBuffer, begin, size);
+            // this.device.queue.submit([encoder.finish()]);
+            proxy.dirtyRange.clear();
+        }
+    }
 
     /** Explicitly update WebGL IBL textures from specified parameters. */
     // TODO
@@ -724,7 +626,7 @@ export class RenderContextWebGPU {
      * @returns A promise to the performance related statistics involved in rendering this frame.
      */
     public async render(state: RenderState): Promise<RenderStatistics> {
-        if (!this.adapter || !this.device || !this.context || !this.toneMappingPipeline || !this.toneMappingBindGroup) {
+        if (!this.modules || !this.adapter || !this.device || !this.context) {
             throw new Error("Context has not been initialized!");
         }
         const beginTime = performance.now();
@@ -748,11 +650,23 @@ export class RenderContextWebGPU {
         //     this.changed = true;
         //     this.buffers?.dispose();
         //     this.buffers = new RenderBuffers(this.device, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
+        //     TODO: refresh modules so they recreate their bindGroups to the new render buffers if needed
         // }
+
+        type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+        const derivedState = state as Mutable<DerivedRenderState>;
+        derivedState.effectiveSamplesMSAA = effectiveSamplesMSAA;
 
         const encoder = this.device.createCommandEncoder();
         if (!encoder){
             throw "Couldn't create a command encoder"
+        }
+
+        // update modules from state
+        if (!this.pause) {
+            for (const module of this.modules) {
+                await module?.update(encoder, derivedState);
+            }
         }
 
         // Main render pass
@@ -776,22 +690,11 @@ export class RenderContextWebGPU {
 
         mainPass.end();
 
-        // Tone mapping render pass
-        const toneMappingPass = encoder.beginRenderPass({
-            colorAttachments: [{
-                // TODO: Is this a performance problem? Cache the view?
-                view: this.context.getCurrentTexture().createView(),
-                loadOp: "load",
-                storeOp: "store",
-            }],
-        })
-
-        toneMappingPass.setPipeline(this.toneMappingPipeline);
-        toneMappingPass.setBindGroup(0, this.toneMappingBindGroup);
-        toneMappingPass.draw(3);
-        toneMappingPass.end();
-
-        // const commandBuffer = encoder.finish();
+        for (const module of this.modules) {
+            if (module) {
+                module.render(encoder, derivedState);
+            }
+        }
 
         this.device.queue.submit([encoder.finish()]);
 
