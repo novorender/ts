@@ -150,7 +150,7 @@ export class RenderContextWebGPU {
         readonly imports: Core3DImports,
         // webGLOptions?: WebGLContextAttributes,
     ) {
-        // TODO: Check equivalents to loseContext and provokingVertex in WebGPU the others
+        // TODO: Check equivalents to provokingVertex in WebGPU the others
         // are supported by default
         // console.assert(extensions.loseContext != null, extensions.multiDraw != null, extensions.colorBufferFloat != null);
         // const { provokingVertex } = extensions;
@@ -463,63 +463,6 @@ export class RenderContextWebGPU {
         }
         return new ResourceBin(this.device, name, this.resourceBins);
     }
-
-    /** Compile WebGL/GLSL shader program asynchronously. */
-    // TODO
-    // makeProgramAsync(resourceBin: ResourceBin, params: AsyncProgramParams) {
-    //     const { gl, commonChunk } = this;
-    //     const { vertexShader, fragmentShader } = params;
-    //     const header = { commonChunk, ...params.header } as const; // inject common shader code here, if not defined in params.
-    //     const programAsync = resourceBin.createProgramAsync({ header, vertexShader, fragmentShader });
-    //     const { program } = programAsync;
-
-    //     // do pre-link bindings here
-    //     const { attributes, transformFeedback, uniformBufferBlocks, textureUniforms } = params;
-    //     if (attributes) {
-    //         let i = 0;
-    //         for (const name of attributes) {
-    //             gl.bindAttribLocation(program, i++, name);
-    //         }
-    //     }
-    //     if (transformFeedback) {
-    //         const { varyings, bufferMode } = transformFeedback;
-    //         gl.transformFeedbackVaryings(program, varyings, gl[bufferMode]);
-    //     }
-
-    //     return new Promise<WebGLProgram>((resolve, reject) => {
-    //         // do post-link bindings here
-    //         function postLink() {
-    //             gl.useProgram(program);
-
-    //             if (uniformBufferBlocks) {
-    //                 let idx = 0;
-    //                 for (const name of uniformBufferBlocks) {
-    //                     if (name) {
-    //                         const blockIndex = gl.getUniformBlockIndex(program, name);
-    //                         if (blockIndex != gl.INVALID_INDEX) {
-    //                             gl.uniformBlockBinding(program, blockIndex, idx);
-    //                         } else {
-    //                             console.warn(`Shader has no uniform block named: ${name}!`);
-    //                         }
-    //                     }
-    //                     idx++;
-    //                 }
-    //             }
-
-    //             if (textureUniforms) {
-    //                 let i = 0;
-    //                 for (const name of textureUniforms) {
-    //                     const location = gl.getUniformLocation(program, name);
-    //                     gl.uniform1i(location, i++);
-    //                 }
-    //             }
-
-    //             gl.useProgram(null);
-    //             resolve(program);
-    //         }
-    //         this.asyncPrograms.push({ ...programAsync, resolve: postLink, reject });
-    //     });
-    // }
 
     private resetStatistics() {
         const { statistics } = this;
@@ -1133,30 +1076,6 @@ export interface PickOptions {
     /** Return only picked pixels with clipping outline. */
     readonly pickOutline?: boolean;
 }
-
-// TODO: probably not needed
-/** Parameters for asynchronous shader compilation and linking. */
-// export interface AsyncProgramParams {
-//     /** Common GLSL header information to be inserted before the body code. */
-//     readonly header?: Partial<ShaderHeaderParams>;
-//     /** The vertex shader. */
-//     readonly vertexShader: string;
-//     /** The fragment shader (optional with transform feedback shaders). */
-//     readonly fragmentShader?: string;
-//     /** The names of the vertex attributes to be bound prior to linking using gl.bindAttribLocation(). */
-//     readonly attributes?: readonly string[]; // The names of the vertex attributes to be bound using gl.bindAttribLocation().
-//     /** The names of the shader uniform blocks to be bound prior to linking using gl.uniformBlockBinding(), in the order which they appear */
-//     readonly uniformBufferBlocks?: readonly string[];
-//     /** Texture uniforms to be bound post-linking. */
-//     readonly textureUniforms?: readonly string[]; // Texture uniforms will be bound to the index in which they appear in the name array.
-//     /** Transform feedback buffers to be bound post-linking. */
-//     readonly transformFeedback?: {
-//         /** Should output attributes be written into a single interleaved buffer or separate buffers? */
-//         readonly bufferMode: "INTERLEAVED_ATTRIBS" | "SEPARATE_ATTRIBS";
-//         /** Name of output attribute names (varyings). */
-//         readonly varyings: readonly string[];
-//     };
-// }
 
 /** @internal */
 interface AsyncProgramInfo {
