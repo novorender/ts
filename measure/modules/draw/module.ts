@@ -380,27 +380,25 @@ function toOnscreenText(points: ReadonlyVec3[],
     near: number,
     width: number,
     height: number,
+    ortho: boolean,
     cameraFar: number) {
-
-    const clip = (p: vec3, p0: vec3) => {
-        const d = vec3.sub(vec3.create(), p0, p);
-        vec3.scale(d, d, (-near - p[2]) / d[2]);
-        return vec3.add(d, d, p);
-    };
 
     const intdices: number[] = [];
     const sv = points.map((v) => vec3.transformMat4(vec3.create(), v, camMat));
 
     const screenPoints = sv.reduce((tail, head, i) => {
         //Avoid objects very near the camera or past the far plane
-        if (sv[i][2] > cameraFar || (sv[i][2] > 0 && sv[i][2] < 0.1)) {
+        if (ortho && (head[2] < -cameraFar || head[2] > 0)) {
             return tail;
         }
-        if (head[2] > SCREEN_SPACE_EPSILON) {
+        if (head[2] > 0.1) {
+            return tail;
+        }
+        const _p = toScreen(projMat, width, height, head);
+        if (_p[0] < 0 || _p[0] > width || _p[1] < 0 || _p[1] > height) {
             return tail;
         }
         intdices.push(i);
-        const _p = toScreen(projMat, width, height, head);
         return tail.concat([_p]);
     }, [] as ReadonlyVec2[]);
     if (screenPoints.length) {
@@ -435,7 +433,7 @@ function toPathPointsFromMatrices(
             if (sv[i][2] > 0 && sv[i][2] < 0.1) {
                 sv[i][2] = -0.0001;
             }
-            if (sv[i][2] > cameraFar) {
+            if (sv[i][2] < -cameraFar) {
                 removedIndices.push(i);
                 return tail;
             }
@@ -495,6 +493,7 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                     camera.near,
                     width,
                     height,
+                    camera.kind == "orthographic",
                     camera.far
                 );
                 drawPart.vertices2D = points?.screenPoints;
