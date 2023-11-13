@@ -541,6 +541,10 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                         }
                     }
                 }
+                else {
+                    drawPart.indicesOnScreen = undefined;
+                    drawPart.vertices2D = undefined;
+                }
                 if (drawPart.voids) {
                     drawPart.voids.forEach((drawVoid, j) => {
                         const voidPoints = toPathPointsFromMatrices(
@@ -568,7 +572,9 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                                     }
                                 }, [] as string[]);
                             }
-
+                        }
+                        else {
+                            drawVoid.vertices2D = undefined;
                         }
                     });
                 }
