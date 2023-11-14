@@ -8,6 +8,7 @@ import { WatermarkModule } from "./watermark";
 import { DynamicModule } from "./dynamic";
 import { ToonModule } from "./toon_outline";
 
+import { BackgroundModule as BackgroundModuleWebGPU } from "./background/webgpu";
 import { TonemapModule as TonemapModuleWebGPU } from "./tonemap/webgpu";
 
 /** Return the default/built-in render modules in the order they should be rendered.
@@ -33,6 +34,7 @@ export function createDefaultModules() {
  */
 export function createDefaultModulesWebGPU() {
     return [
+        new BackgroundModuleWebGPU(),
         new TonemapModuleWebGPU(),
     ];
 }

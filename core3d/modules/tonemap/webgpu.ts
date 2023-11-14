@@ -29,7 +29,6 @@ export class TonemapModule implements RenderModule {
             label: "Tonemapping uniforms staging buffer",
             size: uniformsProxy.buffer.byteLength,
             usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
-            // mappedAtCreation: true,
         });
         const uniforms = bin.createBuffer({
             label: "Tonemapping uniforms buffer",
@@ -87,7 +86,7 @@ export class TonemapModule implements RenderModule {
                 }
             ]
         })
-        return { bin, uniformsStaging, uniforms, sampler, pipeline, bindGroup } as const;
+        return { bin, uniformsStaging, uniforms, sampler, pipeline, bindGroup };
     }
 }
 
@@ -99,8 +98,8 @@ class TonemapModuleContext implements RenderModuleContext {
     constructor(readonly context: RenderContextWebGPU, readonly module: TonemapModule, readonly uniforms: Uniforms, readonly resources: Resources) { }
 
     async update(encoder: GPUCommandEncoder, state: DerivedRenderState) {
-        const { context } = this;
-        const { uniformsStaging, uniforms } = this.resources
+        const { context, resources } = this;
+        const { uniformsStaging, uniforms, pipeline, sampler } = resources
         const { camera, tonemapping } = state;
 
         if (context.hasStateChanged({ camera, tonemapping })) {
@@ -110,6 +109,26 @@ class TonemapModuleContext implements RenderModuleContext {
             values.mode = tonemapping.mode;
             values.maxLinearDepth = camera.far;
             await context.updateUniformBuffer(encoder, uniformsStaging, uniforms, this.uniforms);
+
+
+            resources.bindGroup = resources.bin.createBindGroup({
+                label: "Tone mapping bind group",
+                layout: pipeline.getBindGroupLayout(0),
+                entries: [
+                    {
+                        binding: 0,
+                        resource: context.buffers.textureViews.color
+                    },
+                    {
+                        binding: 1,
+                        resource: sampler,
+                    },
+                    {
+                        binding: 2,
+                        resource: { buffer: uniforms }
+                    }
+                ]
+            })
         }
     }
 

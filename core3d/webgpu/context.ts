@@ -13,7 +13,8 @@ import { orthoNormalBasisMatrixFromPlane } from "../util";
 import { createDefaultModules, createDefaultModulesWebGPU } from "../modules/default";
 
 // TODO: This is imported from webgl2 but it's totally independent, maybe move it to a common folder
-import type { DrawStatistics, UniformsProxy } from "webgl2";
+import { glUBOProxy, type DrawStatistics, type UniformsProxy } from "webgl2";
+import type { Image } from "./gpu_image";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 
@@ -42,14 +43,14 @@ export class RenderContextWebGPU {
     /** WebGPU common WGSL code header used across shaders. */
     readonly commonChunk: string;
     /** WebGPU basic fallback IBL textures to use while loading proper IBL textures. */
-    defaultIBLTextureParams: GPUTextureDescriptor | undefined;
+    defaultIBLTextureParams: GPUTextureDescriptor;
     /** Web assembly instance. */
     readonly wasm: WasmInstance;
 
     private static defaultModules: readonly RenderModule[] | undefined;
     private modules: readonly RenderModuleContext[] | undefined;
+    private cameraUniformsData: ReturnType<typeof glUBOProxy> | undefined;
     // TODO
-    // private cameraUniformsData;
     // private clippingUniformsData;
     // private outlinesUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
@@ -90,19 +91,20 @@ export class RenderContextWebGPU {
     private emulatingContextLoss = false;
 
     // constant gl resources
-    // TODO
     /** WebGL uniform buffer for camera related uniforms. */
-    // readonly cameraUniforms: WebGLBuffer;
+    cameraStagingUniforms: GPUBuffer | undefined;
+    cameraUniforms: GPUBuffer | undefined;
+    // TODO
     // /** WebGL uniform buffer for clipping related uniforms. */
     // readonly clippingUniforms: WebGLBuffer;
     // /** WebGL uniform buffer for outline related uniforms. */
     // readonly outlineUniforms: WebGLBuffer;
     // /** WebGL GGX/PBR shading lookup table texture. */
     // readonly lut_ggx: WebGLTexture;
-    // /** WebGL Sampler used to sample mipmapped diffuse IBL texture. */
-    // readonly samplerMip: WebGLSampler; // use to read diffuse texture
-    // /** WebGL Sampler used to sample other, non-mipmapped IBL textures. */
-    // readonly samplerSingle: WebGLSampler; // use to read the other textures
+    /** WebGPU Sampler used to sample mipmapped diffuse IBL texture. */
+    samplerMip: GPUSampler | undefined; // use to read diffuse texture
+    /** WebGPU Sampler used to sample other, non-mipmapped IBL textures. */
+    samplerSingle: GPUSampler | undefined; // use to read the other textures
 
     // shared mutable state
     /** {@link RenderState} used to render the previous frame, if any. */
@@ -128,17 +130,16 @@ export class RenderContextWebGPU {
      *
      * The process to create the textures are similar to that of {@link https://github.com/KhronosGroup/glTF-IBL-Sampler}/
      */
-    // TODO
-    // iblTextures: { // these are changed by the background module, once download is complete
-    //     /** WebGL cubemap texture containing the irradiance/diffuse values of current IBL environment. */
-    //     readonly diffuse: GPUTexture;
-    //     /** WebGL cubemap texture containing the radiance/specular values of current IBL environment. */
-    //     readonly specular: GPUTexture;
-    //     /** # mip maps in current specular texture. */
-    //     readonly numMipMaps: number;
-    //     /** # True if these are the default IBL textures. */
-    //     readonly default: boolean;
-    // };
+    iblTextures: { // these are changed by the background module, once download is complete
+        /** WebGL cubemap texture containing the irradiance/diffuse values of current IBL environment. */
+        readonly diffuse: GPUTexture;
+        /** WebGL cubemap texture containing the radiance/specular values of current IBL environment. */
+        readonly specular: GPUTexture;
+        /** # mip maps in current specular texture. */
+        readonly numMipMaps: number;
+        /** # True if these are the default IBL textures. */
+        readonly default: boolean;
+    } | undefined;
 
     /** @internal */
     constructor(
@@ -160,28 +161,20 @@ export class RenderContextWebGPU {
         this.commonChunk = imports.shaders.common;
         this.wasm = imports.wasmInstance;
 
+        this.defaultIBLTextureParams = {
+            label: "Default IBL texture",
+            size: { width: 1, height: 1, depthOrArrayLayers: 6 },
+            format: "rgba8unorm",
+            usage: GPUTextureUsage.TEXTURE_BINDING
+        } as const;
+
         // ggx lookup texture and ibl samplers
         // TODO: create textures for ggx LUTs
         // gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
         // const lutParams = { kind: "TEXTURE_2D", internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: imports.lutGGX } as const;
         // this.lut_ggx = defaultBin.createTexture(lutParams);
-        // this.samplerSingle = defaultBin.createSampler({ minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
-        // this.samplerMip = defaultBin.createSampler({ minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
 
 
-        // camera uniforms
-        // TODO
-        // this.cameraUniformsData = glUBOProxy({
-        //     clipViewMatrix: "mat4",
-        //     viewClipMatrix: "mat4",
-        //     localViewMatrix: "mat4",
-        //     viewLocalMatrix: "mat4",
-        //     localViewMatrixNormal: "mat3",
-        //     viewLocalMatrixNormal: "mat3",
-        //     windowSize: "vec2",
-        //     near: "float",
-        // });
-        // this.cameraUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.cameraUniformsData.buffer.byteLength });
 
         // clipping uniforms
         // TODO
@@ -273,8 +266,6 @@ export class RenderContextWebGPU {
             this.resourceBin("FrameBuffers")
         );
 
-        console.log("WebGPU initialized");
-
         // initialize modules
         if (!modules) {
             RenderContextWebGPU.defaultModules ??= createDefaultModulesWebGPU();
@@ -290,18 +281,48 @@ export class RenderContextWebGPU {
         const side = new Uint8Array([128, 128, 128, 255]);
         const bottom = new Uint8Array([64, 64, 64, 255]);
         const image = [side, side, top, bottom, side, side] as const;
-        const textureParams = this.defaultIBLTextureParams = {
-            label: "Default IBL texture",
-            size: { width: 1, height: 1 },
-            format: "rgba8unorm",
-            usage: GPUTextureUsage.TEXTURE_BINDING
-        } as const;
-        // this.iblTextures = {
-        //     diffuse: iblBin.createTexture(textureParams),
-        //     specular: iblBin.createTexture(textureParams),
-        //     numMipMaps: 1,
-        //     default: true,
-        // };
+        const textureParams = this.defaultIBLTextureParams;
+        this.iblTextures = {
+            diffuse: iblBin.createTexture(textureParams),
+            specular: iblBin.createTexture(textureParams),
+            numMipMaps: 1,
+            default: true,
+        };
+        this.samplerSingle = defaultBin.createSampler({
+            minFilter: "linear",
+            magFilter: "linear",
+            addressModeU: "clamp-to-edge",
+            addressModeV: "clamp-to-edge"
+        });
+        this.samplerMip = defaultBin.createSampler({
+            minFilter: "linear",
+            magFilter: "linear",
+            mipmapFilter: "linear",
+            addressModeU: "clamp-to-edge",
+            addressModeV: "clamp-to-edge"
+        });
+
+        // camera uniforms
+        this.cameraUniformsData = glUBOProxy({
+            clipViewMatrix: "mat4",
+            viewClipMatrix: "mat4",
+            localViewMatrix: "mat4",
+            viewLocalMatrix: "mat4",
+            localViewMatrixNormal: "mat3",
+            viewLocalMatrixNormal: "mat3",
+            windowSize: "vec2",
+            near: "float",
+        });
+        this.cameraStagingUniforms = defaultBin.createBuffer({
+            label: "Camera uniforms staging buffer",
+            size: this.cameraUniformsData.buffer.byteLength,
+            usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+        });
+        this.cameraUniforms = defaultBin.createBuffer({
+            label: "Camera uniforms buffer",
+            size: this.cameraUniformsData.buffer.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
 
         const modulePromises = modules.map((m, i) => {
             const ret = m.withContext(this);
@@ -388,9 +409,12 @@ export class RenderContextWebGPU {
         if (!proxy.dirtyRange.isEmpty) {
             const { begin, end } = proxy.dirtyRange;
             const size = end - begin;
-            await uniformBufferStaging.mapAsync(GPUMapMode.WRITE, begin, size);
-            const gpuBuffer = new Uint8Array(uniformBufferStaging.getMappedRange());
-            gpuBuffer.set(new Uint8Array(proxy.buffer));
+            // TODO: this should probably map the needed range only but the range is sometimes not
+            // a multiple of the minimum allowed. Probably we need to find the previous multiple of the
+            // beginning and the next multiple of the size
+            await uniformBufferStaging.mapAsync(GPUMapMode.WRITE);
+            const gpuBuffer = new Uint8Array(uniformBufferStaging.getMappedRange()).subarray(begin, end);
+            gpuBuffer.set(new Uint8Array(proxy.buffer).subarray(begin, end));
             uniformBufferStaging.unmap();
             // const encoder = this.device.createCommandEncoder();
             encoder.copyBufferToBuffer(uniformBufferStaging, begin, uniformBuffer, begin, size);
@@ -399,32 +423,31 @@ export class RenderContextWebGPU {
         }
     }
 
-    /** Explicitly update WebGL IBL textures from specified parameters. */
-    // TODO
-    // updateIBLTextures(params: { readonly diffuse: GPUTextureDescriptor, readonly specular: GPUTextureDescriptor } | null) {
-    //     // TODO
-    //     const { iblResourceBin } = this;
-    //     if(!iblResourceBin) {
-    //         throw "Not initialized yet"
-    //     }
-    //     iblResourceBin.deleteAll();
-    //     if (params) {
-    //         const { diffuse, specular } = params;
-    //         this.iblTextures = {
-    //             diffuse: iblResourceBin.createTexture(diffuse),
-    //             specular: iblResourceBin.createTexture(specular),
-    //             numMipMaps: specular.mipLevelCount ?? 1,
-    //             default: false,
-    //         };
-    //     } else {
-    //         this.iblTextures = {
-    //             diffuse: iblResourceBin.createTexture(this.defaultIBLTextureParams),
-    //             specular: iblResourceBin.createTexture(this.defaultIBLTextureParams),
-    //             numMipMaps: 1,
-    //             default: true,
-    //         };
-    //     }
-    // }
+    /** Explicitly update WebGPU IBL textures from specified parameters. */
+    updateIBLTextures(params: { readonly diffuse: Image, readonly specular: Image } | null) {
+        // TODO
+        const { iblResourceBin } = this;
+        if(!iblResourceBin) {
+            throw "Not initialized yet"
+        }
+        iblResourceBin.deleteAll();
+        if (params) {
+            const { diffuse, specular } = params;
+            this.iblTextures = {
+                diffuse: iblResourceBin.createTextureFromImage(diffuse),
+                specular: iblResourceBin.createTextureFromImage(specular),
+                numMipMaps: specular.descriptor.mipLevelCount ?? 1,
+                default: false,
+            };
+        } else {
+            this.iblTextures = {
+                diffuse: iblResourceBin.createTexture(this.defaultIBLTextureParams),
+                specular: iblResourceBin.createTexture(this.defaultIBLTextureParams),
+                numMipMaps: 1,
+                default: true,
+            };
+        }
+    }
 
     /**
      * Helper function to check for changes in render state.
@@ -583,27 +606,47 @@ export class RenderContextWebGPU {
         // handle resizes
         let resized = false;
         const { output } = state;
-        // TODO
-        // if (this.hasStateChanged({ output })) {
-        //     const { width, height } = output;
-        //     console.assert(Number.isInteger(width) && Number.isInteger(height));
-        //     canvas.width = width;
-        //     canvas.height = height;
-        //     resized = true;
-        //     this.changed = true;
-        //     this.buffers?.dispose();
-        //     this.buffers = new RenderBuffers(this.device, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
-        //     TODO: refresh modules so they recreate their bindGroups to the new render buffers if needed
-        // }
+        if (this.hasStateChanged({ output })) {
+            const { width, height } = output;
+            console.assert(Number.isInteger(width) && Number.isInteger(height));
+            canvas.width = width;
+            canvas.height = height;
+            resized = true;
+            this.changed = true;
+            this.buffers?.dispose();
+            this.buffers = new RenderBuffers(this.device, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
+        }
 
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
         const derivedState = state as Mutable<DerivedRenderState>;
         derivedState.effectiveSamplesMSAA = effectiveSamplesMSAA;
+        if (resized || state.camera !== prevState?.camera) {
+            const snapDist = 1024; // make local space roughly within 1KM of camera
+            const dir = vec3.sub(vec3.create(), state.camera.position, this.localSpaceTranslation).map(c => Math.abs(c));
+            const dist = Math.max(dir[0], dir[2]) //Skip Y as we will not get an issue with large Y offset and we elevations internally in shader.
+            // don't change localspace unless camera is far enough away. we want to avoid flipping back and forth across snap boundaries.
+            if (dist >= snapDist) {
+                function snap(v: number) {
+                    return Math.round(v / snapDist) * snapDist;
+                }
+                this.localSpaceTranslation = vec3.fromValues(snap(state.camera.position[0]), 0, snap(state.camera.position[2]));
+            }
+
+            derivedState.localSpaceTranslation = this.localSpaceTranslation; // update the object reference to indicate that values have changed
+            derivedState.matrices = matricesFromRenderState(state);
+            derivedState.viewFrustum = createViewFrustum(state, derivedState.matrices);
+        }
+        this.currentState = derivedState;
+        this.pickBuffersValid = false;
+        const { buffers } = this;
+        buffers.readBuffersNeedUpdate = true;
 
         const encoder = this.device.createCommandEncoder();
         if (!encoder){
             throw "Couldn't create a command encoder"
         }
+
+        await this.updateCameraUniforms(encoder, derivedState);
 
         // update modules from state
         if (!this.pause) {
@@ -611,27 +654,6 @@ export class RenderContextWebGPU {
                 await module?.update(encoder, derivedState);
             }
         }
-
-        // Main render pass
-        const mainPass = encoder.beginRenderPass({
-            colorAttachments: [
-                {
-                    view: this.buffers.colorRenderAttachment(),
-                    loadOp: "clear",
-                    storeOp: "store",
-                    clearValue: { r: 1.0, g: 0, b: 0.4, a: 1 },
-                    resolveTarget: this.buffers.colorResolveAttachment()
-                },
-            ],
-            depthStencilAttachment: {
-                view: this.buffers.depthRenderAttachment(),
-                depthLoadOp: "clear",
-                depthStoreOp: "store",
-                depthClearValue: 1.,
-            }
-        });
-
-        mainPass.end();
 
         for (const module of this.modules) {
             if (module) {
@@ -828,25 +850,27 @@ export class RenderContextWebGPU {
         throw "TODO";
     }
 
-    private updateCameraUniforms(state: DerivedRenderState) {
-        // TODO
-        // const { cameraUniformsData, localSpaceTranslation } = this;
-        // const { output, camera, matrices } = state;
-        // const { values } = cameraUniformsData;
-        // const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
-        // const viewWorldMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.World);
-        // const worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), localSpaceTranslation));
-        // const localWorldMatrix = mat4.fromTranslation(mat4.create(), localSpaceTranslation);
-        // values.clipViewMatrix = matrices.getMatrix(CoordSpace.Clip, CoordSpace.View);
-        // values.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
-        // values.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
-        // values.localViewMatrix = mat4.multiply(mat4.create(), worldViewMatrix, localWorldMatrix);
-        // values.viewLocalMatrix = mat4.multiply(mat4.create(), worldLocalMatrix, viewWorldMatrix,);
-        // values.localViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
-        // values.viewLocalMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
-        // values.windowSize = [output.width, output.height];
-        // values.near = camera.near;
-        // this.updateUniformBuffer(this.cameraUniforms, this.cameraUniformsData);
+    private async updateCameraUniforms(encoder: GPUCommandEncoder, state: DerivedRenderState) {
+        if(!this.cameraStagingUniforms || !this.cameraUniforms) {
+            throw "Camera buffers not initialized yet"
+        }
+        const { cameraUniformsData, localSpaceTranslation } = this;
+        const { output, camera, matrices } = state;
+        const { values } = cameraUniformsData;
+        const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
+        const viewWorldMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.World);
+        const worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), localSpaceTranslation));
+        const localWorldMatrix = mat4.fromTranslation(mat4.create(), localSpaceTranslation);
+        values.clipViewMatrix = matrices.getMatrix(CoordSpace.Clip, CoordSpace.View);
+        values.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
+        values.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
+        values.localViewMatrix = mat4.multiply(mat4.create(), worldViewMatrix, localWorldMatrix);
+        values.viewLocalMatrix = mat4.multiply(mat4.create(), worldLocalMatrix, viewWorldMatrix,);
+        values.localViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
+        values.viewLocalMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
+        values.windowSize = [output.width, output.height];
+        values.near = camera.near;
+        await this.updateUniformBuffer(encoder, this.cameraStagingUniforms, this.cameraUniforms, this.cameraUniformsData);
     }
 
     private updateClippingUniforms(state: DerivedRenderState) {

@@ -1,3 +1,5 @@
+import type { Image } from "./gpu_image";
+
 type GPUResource = GPUTexture | GPUBuffer | GPUShaderModule | GPUSampler | GPURenderPipeline | GPUComputePipeline | GPUBindGroup;
 
 /**
@@ -48,6 +50,65 @@ export class ResourceBin {
 
     createTexture(params: GPUTextureDescriptor) {
         return this.add(this.device.createTexture(params), { kind: "Texture", byteSize: textureBytes(params) });
+    }
+
+    createTextureFromImage(image: Image) {
+        image.descriptor.usage |= GPUTextureUsage.COPY_DST;
+        const texture = this.add(this.device.createTexture(image.descriptor), { kind: "Texture", byteSize: textureBytes(image.descriptor) });
+        if(image.data instanceof ArrayBuffer || ArrayBuffer.isView(image.data)) {
+            this.device.queue.writeTexture(
+                { texture },
+                image.data,
+                {
+                    offset: 0,
+                    bytesPerRow: texture.width * bytesPerTexel(image.descriptor),
+                    rowsPerImage: texture.height,
+                },
+                { width: texture.width, height: texture.height, depthOrArrayLayers: texture.depthOrArrayLayers },
+            );
+        }else if(Array.isArray(image.data) && (image.data[0] instanceof ArrayBuffer || ArrayBuffer.isView(image.data[0]))) {
+            // Cubemap
+            let faceNum = 0;
+            for (const face of image.data) {
+                this.device.queue.writeTexture(
+                    { texture, origin: { x: 0, y: 0, z: faceNum } },
+                    face,
+                    {
+                        offset: 0,
+                        bytesPerRow: texture.width * bytesPerTexel(image.descriptor),
+                        rowsPerImage: texture.height,
+                    },
+                    { width: texture.width, height: texture.height, depthOrArrayLayers: 1 },
+                );
+                faceNum += 1;
+            }
+        }else if(Array.isArray(image.data)){
+            // Cubemap mips
+            let levelNum = 0;
+            for(const level of image.data) {
+                let faceNum = 0;
+                let levelWidth = texture.width >> levelNum;
+                let levelHeight = texture.height >> levelNum;
+                for (const face of level) {
+                    this.device.queue.writeTexture(
+                        { texture, origin: { x: 0, y: 0, z: faceNum }, mipLevel: levelNum },
+                        face,
+                        {
+                            offset: 0,
+                            bytesPerRow: levelWidth * bytesPerTexel(image.descriptor),
+                            rowsPerImage: levelHeight,
+                        },
+                        { width: levelWidth, height: levelHeight, depthOrArrayLayers: 1 },
+                    );
+                    faceNum += 1;
+                }
+                levelNum += 1;
+            }
+        }else{
+            throw "Texture type not supported yet"
+        }
+
+        return texture
     }
 
     createRenderPipeline(params: GPURenderPipelineDescriptor) {
@@ -128,6 +189,10 @@ export class ResourceBin {
     }
 }
 
+function bytesPerTexel(params: GPUTextureDescriptor) {
+    return Math.ceil(internalFormatTexelBytes[params.format])
+}
+
 function textureBytes(params: GPUTextureDescriptor) {
     let width, height, depthOrArrayLayers;
     if("width" in params.size) {
@@ -152,8 +217,7 @@ function textureBytes(params: GPUTextureDescriptor) {
     for (let level = 0; level < levels; level++) {
         totalTexels += topLeveltexels >> level;
     }
-    const bytesPerTexel = Math.ceil(internalFormatTexelBytes[params.format]);
-    return Math.ceil(totalTexels * bytesPerTexel);
+    return Math.ceil(totalTexels * bytesPerTexel(params));
 }
 
 // only makes sense if entire buffers are use exclusively for this vao.

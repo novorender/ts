@@ -7,7 +7,7 @@ struct TonemappingUniforms {
 
 struct VertexOutput {
     @builtin(position) pos: vec4f,
-    @location(0) uv: vec2f, // New line!
+    @location(0) uv: vec2f,
 };
 
 
