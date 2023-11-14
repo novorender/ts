@@ -1,7 +1,24 @@
-import type { RenderContextWebGPU } from "core3d/webgpu";
+import type { RenderBuffers, RenderContextWebGPU, ResourceBin } from "core3d/webgpu";
 import type { RenderModuleContext, RenderModule } from "../webgpu";
 import { glUBOProxy, type UniformTypes } from "webgl2";
 import type { DerivedRenderState } from "core3d";
+
+function createBindGroup(bin: ResourceBin, pipeline: GPURenderPipeline, buffers: RenderBuffers, uniforms: GPUBuffer) {
+    return bin.createBindGroup({
+        label: "Tone mapping bind group",
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+            {
+                binding: 0,
+                resource: buffers.textureViews.color
+            },
+            {
+                binding: 1,
+                resource: { buffer: uniforms }
+            }
+        ]
+    })
+}
 
 /** @internal */
 export class TonemapModule implements RenderModule {
@@ -62,30 +79,9 @@ export class TonemapModule implements RenderModule {
                     format: context.canvasFormat()
                 }]
             },
-            // We are drawing full screen with a cw triangle but not really using culling
-            // primitive: {
-            //     cullMode: "front",
-            //     frontFace: "cw"
-            // }
         });
-        const bindGroup = bin.createBindGroup({
-            label: "Tone mapping bind group",
-            layout: pipeline.getBindGroupLayout(0),
-            entries: [
-                {
-                    binding: 0,
-                    resource: context.buffers.textureViews.color
-                },
-                {
-                    binding: 1,
-                    resource: sampler,
-                },
-                {
-                    binding: 2,
-                    resource: { buffer: uniforms }
-                }
-            ]
-        })
+
+        const bindGroup = createBindGroup(bin, pipeline, context.buffers, uniforms);
         return { bin, uniformsStaging, uniforms, sampler, pipeline, bindGroup };
     }
 }
@@ -109,26 +105,7 @@ class TonemapModuleContext implements RenderModuleContext {
             values.mode = tonemapping.mode;
             values.maxLinearDepth = camera.far;
             await context.updateUniformBuffer(encoder, uniformsStaging, uniforms, this.uniforms);
-
-
-            resources.bindGroup = resources.bin.createBindGroup({
-                label: "Tone mapping bind group",
-                layout: pipeline.getBindGroupLayout(0),
-                entries: [
-                    {
-                        binding: 0,
-                        resource: context.buffers.textureViews.color
-                    },
-                    {
-                        binding: 1,
-                        resource: sampler,
-                    },
-                    {
-                        binding: 2,
-                        resource: { buffer: uniforms }
-                    }
-                ]
-            })
+            resources.bindGroup = createBindGroup(resources.bin, pipeline, context.buffers, uniforms);
         }
     }
 

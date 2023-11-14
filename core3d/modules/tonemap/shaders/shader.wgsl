@@ -24,10 +24,6 @@ const tonemapModeZbuffer: u32 = 5u;
 var colorTexture: texture_2d<f32>;
 @group(0)
 @binding(1)
-var colorSampler: sampler;
-
-@group(0)
-@binding(2)
 var<uniform> tonemapping: TonemappingUniforms;
 
 fn hash(x: u32) -> u32 {
@@ -85,7 +81,8 @@ struct FragInput {
 @fragment
 fn fragmentMain(input: FragInput) -> @location(0) vec4f {
     var color = vec4(1., 0., 0., 1.);
-    color = textureSampleLevel(colorTexture, colorSampler, input.uv, 0.);
+    let uv = vec2<i32>(input.uv * vec2f(textureDimensions(colorTexture)));
+    color = textureLoad(colorTexture, uv, 0);
     var rgb = RRTAndODTFit(color.rgb * tonemapping.exposure);
     rgb = linearTosRGB(rgb);
     return vec4(rgb, color.a);
