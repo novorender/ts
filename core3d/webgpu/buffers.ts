@@ -33,14 +33,15 @@ export class RenderBuffers {
     readonly readBuffers;
     // readonly pipelines;
     private typedArrays;
-    private pickFence: {
-        readonly sync: WebGLSync,
-        readonly promises: { readonly resolve: () => void, readonly reject: (reason: string) => void }[],
-    } | undefined;
+    //TODO
+    // private pickFence: {
+    //     readonly sync: WebGLSync,
+    //     readonly promises: { readonly resolve: () => void, readonly reject: (reason: string) => void }[],
+    // } | undefined;
 
     /** @internal */
     constructor(
-        /** The underlying webgl2 rendering context. */
+        /** The underlying webgpu device. */
         readonly device: GPUDevice,
         /** The buffer width in pixels. */
         readonly width: number,
@@ -60,7 +61,7 @@ export class RenderBuffers {
                 size: {width, height},
                 // format: "rg11b10ufloat", // TODO: Not supported as render attachment
                 format: "rgba16float",
-                usage: samples > 1 ? GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING : GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+                usage: samples > 1 ? GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING : GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
             }),
             pick: resourceBin.createTexture({
                 label: "Pick buffer",
@@ -77,7 +78,7 @@ export class RenderBuffers {
                     height
                 },
                 format: "depth32float",
-                usage: samples > 1 ? GPUTextureUsage.COPY_DST : GPUTextureUsage.RENDER_ATTACHMENT,
+                usage: samples > 1 ? GPUTextureUsage.RENDER_ATTACHMENT : GPUTextureUsage.RENDER_ATTACHMENT,
             }),
             colorMSAA: samples > 1 ? resourceBin.createTexture({
                 label: "MSAA color buffer",
@@ -186,38 +187,26 @@ export class RenderBuffers {
     }
 
     /** @internal */
-    // This is done automatically on last pass on the context but only for color maybe we need one
-    // for depth only in case we need to access depth as a texture for postprocessing
-    // resolveMSAA() {
-    //     const { device, textureViews } = this;
-    //     const {colorMSAA, color, depthMSAA, depth} = textureViews;
-    //     if (colorMSAA && depthMSAA) {
-    //         const encoder = device.createCommandEncoder();
-    //         if (!encoder){
-    //             throw "Couldn't create a command encoder"
-    //         }
+    resolveMSAA(encoder: GPUCommandEncoder) {
+        const { textureViews } = this;
+        const {colorMSAA, color, depthMSAA, depth} = textureViews;
+        if (colorMSAA && depthMSAA) {
+            const pass = encoder.beginRenderPass({
+                label: "Resolve MSAA Pass",
+                colorAttachments: [
+                    {
+                        view: colorMSAA,
+                        resolveTarget: color,
+                        loadOp: "load",
+                        storeOp: "store",
+                        clearValue: {r: 0., g: 0., b: 0., a: 1.},
+                    },
+                ]
+            });
 
-    //         encoder.beginRenderPass({
-    //             label: "Resolve MSAA Pass",
-    //             colorAttachments: [
-    //                 {
-    //                     view: colorMSAA,
-    //                     resolveTarget: color,
-    //                     loadOp: "clear",
-    //                     storeOp: "store",
-    //                     clearValue: {r: 0., g: 0., b: 0., a: 1.},
-    //                 },
-    //                 {
-    //                     view: depthMSAA,
-    //                     resolveTarget: depth,
-    //                     loadOp: "clear",
-    //                     storeOp: "store",
-    //                     clearValue: {r: 0., g: 0., b: 0., a: 1.},
-    //                 }
-    //             ]
-    //         });
-    //     }
-    // }
+            pass.end()
+        }
+    }
 
     /** @internal */
     // invalidate(frameBuffer: keyof RenderBuffers["frameBuffers"], buffers: BufferFlags) {

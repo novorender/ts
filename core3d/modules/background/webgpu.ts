@@ -1,8 +1,29 @@
-import { GPUImageFromTextureParams, type Image, type RenderContextWebGPU } from "core3d/webgpu";
+import { GPUImageFromTextureParams, ResourceBin, type Image, type RenderContextWebGPU, RenderBuffers } from "core3d/webgpu";
 import type { RenderModuleContext, RenderModule } from "../webgpu";
 import { glUBOProxy, type TextureParams, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped, type UniformTypes } from "webgl2";
 import type { DerivedRenderState } from "core3d";
 import { parseKTX } from "core3d/ktx";
+
+async function createPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, buffers: RenderBuffers) {
+    return await bin.createRenderPipelineAsync({
+        label: "Background pipeline",
+        layout: "auto",
+        vertex: {
+            module: shaderModule,
+            entryPoint: "vertexMain",
+        },
+        fragment: {
+            module: shaderModule,
+            entryPoint: "fragmentMain",
+            targets: [{
+                format: buffers.textures.color.format,
+            }],
+        },
+        multisample: {
+            count: buffers.samples,
+        }
+    });
+}
 
 /** @internal */
 export class BackgroundModule implements RenderModule {
@@ -48,25 +69,11 @@ export class BackgroundModule implements RenderModule {
             label: "Background shader module",
             code: shader,
         });
-        const pipeline = await bin.createRenderPipelineAsync({
-            label: "Background pipeline",
-            layout: "auto",
-            vertex: {
-                module: shaderModule,
-                entryPoint: "vertexMain",
-            },
-            fragment: {
-                module: shaderModule,
-                entryPoint: "fragmentMain",
-                targets: [{
-                    format: context.buffers.textures.colorMSAA?.format ?? context.buffers.textures.color.format
-                }]
-            },
-        });
+        const pipeline = await createPipeline(bin, shaderModule, context.buffers);
 
         const skybox = bin.createTexture(context.defaultIBLTextureParams);
 
-        return { bin, uniformsStaging, uniforms, pipeline, skybox };
+        return { bin, uniformsStaging, uniforms, pipeline, shaderModule, skybox };
     }
 
     async downloadTextures(baseUrl: URL) {
@@ -188,9 +195,14 @@ class BackgroundModuleContext implements RenderModuleContext {
             texturesChanged = true;
         }
 
+        if(context.buffersChanged()) {
+            resources.pipeline = await createPipeline(bin, resources.shaderModule, context.buffers);
+        }
+
         if(texturesChanged) {
             this.bindGroup = this.createBindGroup()
         }
+
     }
 
     render(encoder: GPUCommandEncoder, state: DerivedRenderState) {

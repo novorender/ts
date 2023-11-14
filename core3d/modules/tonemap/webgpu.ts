@@ -112,6 +112,9 @@ class TonemapModuleContext implements RenderModuleContext {
     render(encoder: GPUCommandEncoder) {
         const { context } = this.context;
         const { pipeline, bindGroup } = this.resources;
+
+        this.context.buffers.resolveMSAA(encoder);
+
         const pass = encoder.beginRenderPass({
             colorAttachments: [{
                 // TODO: Is this a performance problem? Cache the view?

@@ -117,6 +117,8 @@ export class RenderContextWebGPU {
 
     /** Set to true to force a re-render when state not contained in {@link RenderState} has changed, e.g. download complete etc. */
     changed = true;
+    /** Set to true to signal modules that the underlying render buffers have changed so they recreate their pipelines if needed. */
+    private _buffersChanged = false;
     /** @internal */
     pause = false; // true to freeze all module updates, e.g. downloading of new geometry etc.
     /** WebGL render and pick buffers
@@ -212,6 +214,10 @@ export class RenderContextWebGPU {
 
     canvasFormat() {
         return navigator.gpu.getPreferredCanvasFormat();
+    }
+
+    buffersChanged() {
+        return this._buffersChanged
     }
 
     /** Initialize render context with specified render modules.
@@ -632,6 +638,7 @@ export class RenderContextWebGPU {
             this.changed = true;
             this.buffers?.dispose();
             this.buffers = new RenderBuffers(this.device, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
+            this._buffersChanged = true;
         }
 
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
@@ -739,6 +746,8 @@ export class RenderContextWebGPU {
 
         // TODO: This waits for ever
         // const [gpuDrawTime, frameInterval] = await Promise.all([Promise.resolve(0), intervalPromise]);
+
+        this._buffersChanged = false;
 
         return {
             cpuTime: {

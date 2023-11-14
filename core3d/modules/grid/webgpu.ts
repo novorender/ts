@@ -1,8 +1,44 @@
-import { type RenderContextWebGPU } from "core3d/webgpu";
+import { ResourceBin, type RenderContextWebGPU, RenderBuffers } from "core3d/webgpu";
 import type { RenderModuleContext, RenderModule } from "../webgpu";
 import { glUBOProxy, type UniformTypes } from "webgl2";
 import type { DerivedRenderState } from "core3d";
 import { mat4, vec3 } from "gl-matrix";
+
+async function createPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, buffers: RenderBuffers) {
+    return await bin.createRenderPipelineAsync({
+        label: "Grid pipeline",
+        layout: "auto",
+        vertex: {
+            module: shaderModule,
+            entryPoint: "vertexMain",
+        },
+        fragment: {
+            module: shaderModule,
+            entryPoint: "fragmentMain",
+            targets: [{
+                format: buffers.textures.color.format,
+                blend: {
+                    color: {
+                        srcFactor: "src-alpha",
+                        dstFactor: "one-minus-src-alpha",
+                    },
+                    alpha: {
+                        srcFactor: "zero",
+                        dstFactor: "one"
+                    }
+                }
+            }]
+        },
+        depthStencil: {
+            depthWriteEnabled: false,
+            format: buffers.textures.depth.format,
+            depthCompare: "less-equal",
+        },
+        multisample: {
+            count: buffers.samples
+        }
+    });
+}
 
 /** @internal */
 export class GridModule implements RenderModule {
@@ -46,37 +82,8 @@ export class GridModule implements RenderModule {
             label: "Grid shader module",
             code: shader,
         });
-        const pipeline = await bin.createRenderPipelineAsync({
-            label: "Grid pipeline",
-            layout: "auto",
-            vertex: {
-                module: shaderModule,
-                entryPoint: "vertexMain",
-            },
-            fragment: {
-                module: shaderModule,
-                entryPoint: "fragmentMain",
-                targets: [{
-                    format: context.buffers.textures.colorMSAA?.format ?? context.buffers.textures.color.format,
-                    blend: {
-                        color: {
-                            srcFactor: "src-alpha",
-                            dstFactor: "one-minus-src-alpha",
-                        },
-                        alpha: {
-                            srcFactor: "zero",
-                            dstFactor: "one"
-                        }
-                    }
-                }]
-            },
-            depthStencil: {
-                depthWriteEnabled: false,
-                format: context.buffers.textures.depth.format,
-                depthCompare: "less-equal",
-            },
-        });
-        return { bin, uniformsStaging, uniforms, pipeline } as const;
+        const pipeline = await createPipeline(bin, shaderModule, context.buffers);
+        return { bin, uniformsStaging, uniforms, shaderModule, pipeline };
     }
 }
 
@@ -111,7 +118,7 @@ class GridModuleContext implements RenderModuleContext {
 
     async update(encoder: GPUCommandEncoder, state: DerivedRenderState) {
         const { context, resources } = this;
-        const { uniformsStaging, uniforms } = resources;
+        const { uniformsStaging, uniforms, bin, shaderModule } = resources;
         const { grid, localSpaceTranslation } = state;
         if (context.hasStateChanged({ grid, localSpaceTranslation })) {
             const { values } = this.uniforms;
@@ -126,6 +133,9 @@ class GridModuleContext implements RenderModuleContext {
             values.size2 = grid.size2;
             values.distance = grid.distance;
             context.updateUniformBuffer(encoder, uniformsStaging, uniforms, this.uniforms);
+        }
+        if(context.buffersChanged()) {
+            resources.pipeline = await createPipeline(bin, shaderModule, context.buffers);
         }
     }
 
