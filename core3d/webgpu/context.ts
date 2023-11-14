@@ -417,6 +417,9 @@ export class RenderContextWebGPU {
     /** Helper function to update WebGL uniform buffer from proxies. */
     async updateUniformBuffer(encoder: GPUCommandEncoder, uniformBufferStaging: GPUBuffer, uniformBuffer: GPUBuffer, proxy: UniformsProxy) {
         // TODO Is it better to do this on the same encoder as the renderer or perhaps do it on a thread?
+        // TODO: Does it make sense to have a common staging buffer big enough to hold any uniforms in
+        // all the modules and use it for every update or will it make things slower by needing to wait for
+        // one uniform to be copied before uploading the next?
         if(!this.device) {
             throw "Device not initialized yet"
         }

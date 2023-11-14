@@ -10,6 +10,7 @@ import { ToonModule } from "./toon_outline";
 
 import { BackgroundModule as BackgroundModuleWebGPU } from "./background/webgpu";
 import { TonemapModule as TonemapModuleWebGPU } from "./tonemap/webgpu";
+import { GridModule as GridModuleWebGPU } from "./grid/webgpu";
 
 /** Return the default/built-in render modules in the order they should be rendered.
  * @category Render Module
@@ -35,6 +36,7 @@ export function createDefaultModules() {
 export function createDefaultModulesWebGPU() {
     return [
         new BackgroundModuleWebGPU(),
+        new GridModuleWebGPU(),
         new TonemapModuleWebGPU(),
     ];
 }

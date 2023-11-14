@@ -81,7 +81,8 @@ export class RenderBuffers {
             }),
             colorMSAA: samples > 1 ? resourceBin.createTexture({
                 label: "MSAA color buffer",
-                format: "rg11b10ufloat",
+                // format: "rg11b10ufloat", // TODO: Not supported as render attachment
+                format: "rgba16float",
                 size: {width, height},
                 sampleCount: samples,
                 usage: GPUTextureUsage.RENDER_ATTACHMENT,

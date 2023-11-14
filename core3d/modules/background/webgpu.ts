@@ -1,6 +1,6 @@
 import { GPUImageFromTextureParams, type Image, type RenderContextWebGPU } from "core3d/webgpu";
 import type { RenderModuleContext, RenderModule } from "../webgpu";
-import { glUBOProxy, type CubeImages, type TextureParams, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped, type UniformTypes } from "webgl2";
+import { glUBOProxy, type TextureParams, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped, type UniformTypes } from "webgl2";
 import type { DerivedRenderState } from "core3d";
 import { parseKTX } from "core3d/ktx";
 
@@ -44,8 +44,6 @@ export class BackgroundModule implements RenderModule {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-
-
         const shaderModule = bin.createShaderModule({
             label: "Background shader module",
             code: shader,
@@ -68,42 +66,7 @@ export class BackgroundModule implements RenderModule {
 
         const skybox = bin.createTexture(context.defaultIBLTextureParams);
 
-        const bindGroup = bin.createBindGroup({
-            label: "Background bind group",
-            layout: pipeline.getBindGroupLayout(0),
-            entries: [
-                {
-                    binding: 0,
-                    resource: { buffer: context.cameraUniforms! }
-                },
-                {
-                    binding: 1,
-                    resource: { buffer: uniforms },
-                },
-                {
-                    binding: 2,
-                    resource: skybox.createView({
-                        dimension: "cube"
-                    })
-                },
-                {
-                    binding: 3,
-                    resource: context.samplerSingle!
-                },
-                {
-                    binding: 4,
-                    resource: context.iblTextures!.specular.createView({
-                        dimension: "cube"
-                    })
-                },
-                {
-                    binding: 5,
-                    resource: context.samplerMip!
-                }
-            ]
-        })
-
-        return { bin, uniformsStaging, uniforms, pipeline, bindGroup, skybox };
+        return { bin, uniformsStaging, uniforms, pipeline, skybox };
     }
 
     async downloadTextures(baseUrl: URL) {
@@ -146,9 +109,50 @@ type Resources = Awaited<ReturnType<BackgroundModule["createResources"]>>;
 
 class BackgroundModuleContext implements RenderModuleContext {
     skybox: GPUTexture;
+    bindGroup: GPUBindGroup;
 
     constructor(readonly context: RenderContextWebGPU, readonly module: BackgroundModule, readonly uniforms: Uniforms, readonly resources: Resources) {
         this.skybox = resources.skybox;
+        this.bindGroup = this.createBindGroup()
+    }
+
+    createBindGroup() {
+        const { context, resources, skybox } = this;
+        const { bin, pipeline } = resources;
+        return bin.createBindGroup({
+            label: "Background bind group",
+            layout: pipeline.getBindGroupLayout(0),
+            entries: [
+                {
+                    binding: 0,
+                    resource: { buffer: context.cameraUniforms! }
+                },
+                {
+                    binding: 1,
+                    resource: { buffer: resources.uniforms },
+                },
+                {
+                    binding: 2,
+                    resource: skybox.createView({
+                        dimension: "cube"
+                    })
+                },
+                {
+                    binding: 3,
+                    resource: context.samplerSingle!
+                },
+                {
+                    binding: 4,
+                    resource: context.iblTextures!.specular.createView({
+                        dimension: "cube"
+                    })
+                },
+                {
+                    binding: 5,
+                    resource: context.samplerMip!
+                }
+            ]
+        });
     }
 
     async update(encoder: GPUCommandEncoder, state: DerivedRenderState) {
@@ -185,46 +189,13 @@ class BackgroundModuleContext implements RenderModuleContext {
         }
 
         if(texturesChanged) {
-            resources.bindGroup = bin.createBindGroup({
-                label: "Background bind group",
-                layout: resources.pipeline.getBindGroupLayout(0),
-                entries: [
-                    {
-                        binding: 0,
-                        resource: { buffer: context.cameraUniforms! }
-                    },
-                    {
-                        binding: 1,
-                        resource: { buffer: resources.uniforms },
-                    },
-                    {
-                        binding: 2,
-                        resource: this.skybox.createView({
-                            dimension: "cube"
-                        })
-                    },
-                    {
-                        binding: 3,
-                        resource: context.samplerSingle!
-                    },
-                    {
-                        binding: 4,
-                        resource: context.iblTextures!.specular.createView({
-                            dimension: "cube"
-                        })
-                    },
-                    {
-                        binding: 5,
-                        resource: context.samplerMip!
-                    }
-                ]
-            })
+            this.bindGroup = this.createBindGroup()
         }
     }
 
     render(encoder: GPUCommandEncoder, state: DerivedRenderState) {
-        const { context, resources, skybox } = this;
-        const { pipeline, bindGroup } = resources;
+        const { context, resources, bindGroup } = this;
+        const { pipeline } = resources;
 
         const clearColor = state.background.color ?? [0.33, 0.33, 0.33, 1];
 
@@ -234,7 +205,8 @@ class BackgroundModuleContext implements RenderModuleContext {
                     view: context.buffers.colorRenderAttachment(),
                     loadOp: "load",
                     storeOp: "store",
-                    resolveTarget: context.buffers.colorResolveAttachment()
+                    // TODO: we need to explicitly resolve at the end before tonemappinng
+                    // resolveTarget: context.buffers.colorResolveAttachment()
                 }]
             });
 
@@ -252,7 +224,8 @@ class BackgroundModuleContext implements RenderModuleContext {
                     loadOp: "clear",
                     storeOp: "store",
                     clearValue: { r: clearColor[0], g: clearColor[1], b: clearColor[2], a: clearColor[3] },
-                    resolveTarget: context.buffers.colorResolveAttachment()
+                    // TODO: we need to explicitly resolve at the end before tonemappinng
+                    // resolveTarget: context.buffers.colorResolveAttachment()
                 }]
             });
 
