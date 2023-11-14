@@ -49,9 +49,9 @@ export class RenderContextWebGPU {
 
     private static defaultModules: readonly RenderModule[] | undefined;
     private modules: readonly RenderModuleContext[] | undefined;
-    private cameraUniformsData: ReturnType<typeof glUBOProxy> | undefined;
+    private cameraUniformsData: ReturnType<typeof glUBOProxy>;
+    private clippingUniformsData;
     // TODO
-    // private clippingUniformsData;
     // private outlinesUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
     private readonly asyncPrograms: AsyncProgramInfo[] = [];
@@ -91,15 +91,16 @@ export class RenderContextWebGPU {
     private emulatingContextLoss = false;
 
     // constant gl resources
-    /** WebGL uniform buffer for camera related uniforms. */
+    /** WebGPU uniform buffer for camera related uniforms. */
     cameraStagingUniforms: GPUBuffer | undefined;
     cameraUniforms: GPUBuffer | undefined;
+    // /** WebGPU uniform buffer for clipping related uniforms. */
+    clippingStagingUniforms: GPUBuffer | undefined;
+    clippingUniforms: GPUBuffer | undefined;
     // TODO
-    // /** WebGL uniform buffer for clipping related uniforms. */
-    // readonly clippingUniforms: WebGLBuffer;
-    // /** WebGL uniform buffer for outline related uniforms. */
+    // /** WebGPU uniform buffer for outline related uniforms. */
     // readonly outlineUniforms: WebGLBuffer;
-    // /** WebGL GGX/PBR shading lookup table texture. */
+    // /** WebGPU GGX/PBR shading lookup table texture. */
     // readonly lut_ggx: WebGLTexture;
     /** WebGPU Sampler used to sample mipmapped diffuse IBL texture. */
     samplerMip: GPUSampler | undefined; // use to read diffuse texture
@@ -174,21 +175,29 @@ export class RenderContextWebGPU {
         // const lutParams = { kind: "TEXTURE_2D", internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: imports.lutGGX } as const;
         // this.lut_ggx = defaultBin.createTexture(lutParams);
 
-
+        // camera uniforms
+        this.cameraUniformsData = glUBOProxy({
+            clipViewMatrix: "mat4",
+            viewClipMatrix: "mat4",
+            localViewMatrix: "mat4",
+            viewLocalMatrix: "mat4",
+            localViewMatrixNormal: "mat3",
+            viewLocalMatrixNormal: "mat3",
+            windowSize: "vec2",
+            near: "float",
+        });
 
         // clipping uniforms
-        // TODO
-        // this.clippingUniformsData = glUBOProxy({
-        //     "planes.0": "vec4",
-        //     "planes.1": "vec4",
-        //     "planes.2": "vec4",
-        //     "planes.3": "vec4",
-        //     "planes.4": "vec4",
-        //     "planes.5": "vec4",
-        //     numPlanes: "uint",
-        //     mode: "uint",
-        // });
-        // this.clippingUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.clippingUniformsData.buffer.byteLength });
+        this.clippingUniformsData = glUBOProxy({
+            "planes.0": "vec4",
+            "planes.1": "vec4",
+            "planes.2": "vec4",
+            "planes.3": "vec4",
+            "planes.4": "vec4",
+            "planes.5": "vec4",
+            numPlanes: "uint",
+            mode: "uint",
+        });
 
         // outlines uniforms
         // TODO
@@ -288,6 +297,8 @@ export class RenderContextWebGPU {
             numMipMaps: 1,
             default: true,
         };
+
+        // Create samplers for non mips and mips textures
         this.samplerSingle = defaultBin.createSampler({
             minFilter: "linear",
             magFilter: "linear",
@@ -303,16 +314,6 @@ export class RenderContextWebGPU {
         });
 
         // camera uniforms
-        this.cameraUniformsData = glUBOProxy({
-            clipViewMatrix: "mat4",
-            viewClipMatrix: "mat4",
-            localViewMatrix: "mat4",
-            viewLocalMatrix: "mat4",
-            localViewMatrixNormal: "mat3",
-            viewLocalMatrixNormal: "mat3",
-            windowSize: "vec2",
-            near: "float",
-        });
         this.cameraStagingUniforms = defaultBin.createBuffer({
             label: "Camera uniforms staging buffer",
             size: this.cameraUniformsData.buffer.byteLength,
@@ -324,6 +325,19 @@ export class RenderContextWebGPU {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
+        // clipping uniforms
+        this.clippingStagingUniforms = defaultBin.createBuffer({
+            label: "Clipping uniforms staging buffer",
+            size: this.clippingUniformsData.buffer.byteLength,
+            usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+        });
+        this.clippingUniforms = defaultBin.createBuffer({
+            label: "Clipping uniforms buffer",
+            size: this.clippingUniformsData.buffer.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
+        // load modules
         const modulePromises = modules.map((m, i) => {
             const ret = m.withContext(this);
             return isPromise(ret) ? ret : Promise.resolve(ret);
@@ -647,6 +661,13 @@ export class RenderContextWebGPU {
         }
 
         await this.updateCameraUniforms(encoder, derivedState);
+        await this.updateClippingUniforms(encoder, derivedState);
+
+        // update internal state
+        this.isOrtho = derivedState.camera.kind == "orthographic";
+        mat4.copy(this.viewClipMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.Clip));
+        mat4.copy(this.viewWorldMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.World));
+        mat3.copy(this.viewWorldMatrixNormal, derivedState.matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World));
 
         // update modules from state
         if (!this.pause) {
@@ -655,6 +676,32 @@ export class RenderContextWebGPU {
             }
         }
 
+        // TODO: GL sets the viewport and framebuffer here
+
+        // Clear z buffer
+        const depthPass = encoder.beginRenderPass({
+            colorAttachments: [],
+            depthStencilAttachment: {
+                view: buffers.depthRenderAttachment(),
+                depthClearValue: 1.,
+                depthLoadOp: "clear",
+                depthStoreOp: "store",
+            }
+        });
+
+        depthPass.end();
+
+        // apply module render z-buffer pre-pass
+        if (this.usePrepass) {
+            for (const module of this.modules) {
+                if (module && module.prepass) {
+                    // TODO: GL sets the framebuffer here
+                    module.prepass(derivedState);
+                }
+            }
+        }
+
+        // render modules
         for (const module of this.modules) {
             if (module) {
                 module.render(encoder, derivedState);
@@ -663,6 +710,12 @@ export class RenderContextWebGPU {
 
         this.device.queue.submit([encoder.finish()]);
 
+        // invalidate color and depth buffers only (we may need pick buffers for picking)
+        // TODO
+        // this.buffers.invalidate("colorMSAA", BufferFlags.color | BufferFlags.depth);
+        // this.buffers.invalidate("color", BufferFlags.color | BufferFlags.depth);
+
+        this.prevState = derivedState;
         const endTime = performance.now();
 
         const intervalPromise = new Promise<number>((resolve) => {
@@ -670,16 +723,28 @@ export class RenderContextWebGPU {
         });
 
         const stats = { ...this.statistics, bufferBytes: 0, textureBytes: 0 };
-        const [gpuDrawTime, frameInterval] = await Promise.all([0, intervalPromise]);
+        for (const bin of this.resourceBins) {
+            for (const { kind, byteSize } of bin.resourceInfo) {
+                if (kind == "Buffer") {
+                    stats.bufferBytes += byteSize!;
+                }
+                if (kind == "Texture") {
+                    stats.textureBytes += byteSize!;
+                }
+            }
+        }
+
+        // TODO: This waits for ever
+        // const [gpuDrawTime, frameInterval] = await Promise.all([Promise.resolve(0), intervalPromise]);
 
         return {
             cpuTime: {
                 draw: endTime - beginTime,
             },
             gpuTime: {
-                draw: gpuDrawTime,
+                draw: 0, //gpuDrawTime,
             },
-            frameInterval,
+            frameInterval: 0,
             ...stats
         } as const satisfies RenderStatistics;
     }
@@ -851,10 +916,10 @@ export class RenderContextWebGPU {
     }
 
     private async updateCameraUniforms(encoder: GPUCommandEncoder, state: DerivedRenderState) {
-        if(!this.cameraStagingUniforms || !this.cameraUniforms) {
+        const { cameraUniforms, cameraStagingUniforms, cameraUniformsData, localSpaceTranslation } = this;
+        if(!cameraStagingUniforms || !cameraUniforms) {
             throw "Camera buffers not initialized yet"
         }
-        const { cameraUniformsData, localSpaceTranslation } = this;
         const { output, camera, matrices } = state;
         const { values } = cameraUniformsData;
         const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
@@ -870,36 +935,38 @@ export class RenderContextWebGPU {
         values.viewLocalMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
         values.windowSize = [output.width, output.height];
         values.near = camera.near;
-        await this.updateUniformBuffer(encoder, this.cameraStagingUniforms, this.cameraUniforms, this.cameraUniformsData);
+        await this.updateUniformBuffer(encoder, cameraStagingUniforms, cameraUniforms, cameraUniformsData);
     }
 
-    private updateClippingUniforms(state: DerivedRenderState) {
-        // TODO
-        // const { clipping, matrices } = state;
-        // if (this.hasStateChanged({ clipping, matrices })) {
-        //     const { clippingUniforms, clippingUniformsData } = this;
-        //     const { values } = clippingUniformsData;
-        //     const { enabled, mode, planes } = clipping;
-        //     // transform clipping planes into view space
-        //     const normal = vec3.create();
-        //     const position = vec3.create();
-        //     const matrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
-        //     const matrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
-        //     mat4.getTranslation(position, matrix);
-        //     for (let i = 0; i < planes.length; i++) {
-        //         const { normalOffset } = planes[i];
-        //         const [x, y, z, offset] = normalOffset;
-        //         vec3.set(normal, x, y, z);
-        //         vec3.transformMat3(normal, normal, matrixNormal);
-        //         const distance = offset + vec3.dot(position, normal);
-        //         const plane = vec4.fromValues(normal[0], normal[1], normal[2], -distance);
-        //         const idx = i as 0 | 1 | 2 | 3 | 4 | 5;
-        //         values[`planes.${idx}` as const] = plane;
-        //     }
-        //     values["numPlanes"] = enabled ? planes.length : 0;
-        //     values["mode"] = mode;
-        //     this.updateUniformBuffer(clippingUniforms, clippingUniformsData);
-        // }
+    private async updateClippingUniforms(encoder: GPUCommandEncoder, state: DerivedRenderState) {
+        const { clippingUniforms, clippingStagingUniforms, clippingUniformsData } = this;
+        if(!clippingUniforms || !clippingStagingUniforms) {
+            throw "Camera buffers not initialized yet"
+        }
+        const { clipping, matrices } = state;
+        if (this.hasStateChanged({ clipping, matrices })) {
+            const { values } = clippingUniformsData;
+            const { enabled, mode, planes } = clipping;
+            // transform clipping planes into view space
+            const normal = vec3.create();
+            const position = vec3.create();
+            const matrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
+            const matrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
+            mat4.getTranslation(position, matrix);
+            for (let i = 0; i < planes.length; i++) {
+                const { normalOffset } = planes[i];
+                const [x, y, z, offset] = normalOffset;
+                vec3.set(normal, x, y, z);
+                vec3.transformMat3(normal, normal, matrixNormal);
+                const distance = offset + vec3.dot(position, normal);
+                const plane = vec4.fromValues(normal[0], normal[1], normal[2], -distance);
+                const idx = i as 0 | 1 | 2 | 3 | 4 | 5;
+                values[`planes.${idx}` as const] = plane;
+            }
+            values["numPlanes"] = enabled ? planes.length : 0;
+            values["mode"] = mode;
+            await this.updateUniformBuffer(encoder, clippingStagingUniforms, clippingUniforms, clippingUniformsData);
+        }
     }
 
     /** @internal */
