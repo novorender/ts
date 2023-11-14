@@ -105,6 +105,8 @@ class TonemapModuleContext implements RenderModuleContext {
             values.mode = tonemapping.mode;
             values.maxLinearDepth = camera.far;
             await context.updateUniformBuffer(encoder, uniformsStaging, uniforms, this.uniforms);
+        }
+        if (context.hasStateChanged({ camera, tonemapping }) || context.buffersChanged()) {
             resources.bindGroup = createBindGroup(resources.bin, pipeline, context.buffers, uniforms);
         }
     }
