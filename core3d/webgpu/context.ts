@@ -17,7 +17,7 @@ import { USE_COMPUTE as TONEMAP_USES_COMPUTE } from "../modules/tonemap/webgpu"
 import { glUBOProxy, type DrawStatistics, type UniformsProxy } from "webgl2";
 import type { Image } from "./gpu_image";
 
-// the context is re-created from scratch if the underlying webgl2 context is lost
+// the context is re-created from scratch if the underlying webgpu context is lost
 
 /** The view specific context for rendering and picking.
  * @remarks
@@ -55,7 +55,6 @@ export class RenderContextWebGPU {
     // TODO
     // private outlinesUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
-    private readonly asyncPrograms: AsyncProgramInfo[] = [];
     private readonly resourceBins = new Set<ResourceBin>();
     private defaultResourceBin: ResourceBin | undefined;
     private iblResourceBin: ResourceBin | undefined;
@@ -122,7 +121,7 @@ export class RenderContextWebGPU {
     private _buffersChanged = false;
     /** @internal */
     pause = false; // true to freeze all module updates, e.g. downloading of new geometry etc.
-    /** WebGL render and pick buffers
+    /** WebGPU render and pick buffers
      * @remarks
      * Note that these buffers will be recreated whenever the {@link RenderState.output} size changes.
      */
@@ -131,16 +130,16 @@ export class RenderContextWebGPU {
     // TODO: not really sure this is useful, probably better to create our own config struct that also allows to config hdr buffers
     canvasContextConfig: Partial<GPUCanvasConfiguration> | undefined;
 
-    /** WebGL textures used for image based lighting ({@link https://en.wikipedia.org/wiki/Image-based_lighting | IBL}).
+    /** WebGPU textures used for image based lighting ({@link https://en.wikipedia.org/wiki/Image-based_lighting | IBL}).
      * @remarks
      * Note that these buffers will be changed by the background module when download of the specified {@link RenderState.background.url} IBL textures completes.
      *
      * The process to create the textures are similar to that of {@link https://github.com/KhronosGroup/glTF-IBL-Sampler}/
      */
     iblTextures: { // these are changed by the background module, once download is complete
-        /** WebGL cubemap texture containing the irradiance/diffuse values of current IBL environment. */
+        /** WebGPU cubemap texture containing the irradiance/diffuse values of current IBL environment. */
         readonly diffuse: GPUTexture;
-        /** WebGL cubemap texture containing the radiance/specular values of current IBL environment. */
+        /** WebGPU cubemap texture containing the radiance/specular values of current IBL environment. */
         readonly specular: GPUTexture;
         /** # mip maps in current specular texture. */
         readonly numMipMaps: number;
@@ -375,7 +374,7 @@ export class RenderContextWebGPU {
     /**
      * Dispose of the GPU resources used by this context, effectively destroying it and freeing up memory.
      * @remarks
-     * Calling this method is optional as the garbage collection of the underlying WebGL render context will do the same thing.
+     * Calling this method is optional as the garbage collection of the underlying WebGPU render context will do the same thing.
      * This may take some time, however, so calling this function is recommended if you plan to create a new context shortly thereafter.
      */
     dispose() {
@@ -422,10 +421,10 @@ export class RenderContextWebGPU {
         return this.pickBuffersValid;
     }
 
-    /** Query whether the underlying WebGL render context is currently lost.
+    /** Query whether the underlying WebGPU render context is currently lost.
      * @remarks
      * This could occur when too many resources are allocated or when browser window is dragged across screens.
-     * Loss and restoration of WebGL contexts is supported by this API automatically.
+     * Loss and restoration of WebGPU contexts is supported by this API automatically.
      */
     isContextLost() {
         return this.lostJustHappened;
@@ -441,7 +440,7 @@ export class RenderContextWebGPU {
     //     ] as const;
     // }
 
-    /** Helper function to update WebGL uniform buffer from proxies. */
+    /** Helper function to update WebGPU uniform buffer from proxies. */
     async updateUniformBuffer(encoder: GPUCommandEncoder, uniformBufferStaging: GPUBuffer, uniformBuffer: GPUBuffer, proxy: UniformsProxy) {
         // TODO Is it better to do this on the same encoder as the renderer or perhaps do it on a thread?
         // TODO: Does it make sense to have a common staging buffer big enough to hold any uniforms in
@@ -1203,20 +1202,11 @@ export interface PickOptions {
     readonly pickOutline?: boolean;
 }
 
-/** @internal */
-interface AsyncProgramInfo {
-    readonly program: WebGLProgram;
-    readonly vertex: WebGLShader;
-    readonly fragment: WebGLShader;
-    readonly resolve: () => void;
-    readonly reject: (reason: any) => void;
-}
-
 /** Render frame performance and resource usage statistics. */
 export interface RenderStatistics {
-    /** Estimated # bytes used by WebGL buffers for this frame. */
+    /** Estimated # bytes used by WebGPU buffers for this frame. */
     readonly bufferBytes: number;
-    /** Estimated # bytes uses by WebGL textures for this frame. */
+    /** Estimated # bytes uses by WebGPU textures for this frame. */
     readonly textureBytes: number;
     /** # of points drawn in this frame. */
     readonly points: number;
