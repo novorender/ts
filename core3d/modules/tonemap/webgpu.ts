@@ -53,14 +53,6 @@ export class TonemapModule implements RenderModule {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-        const sampler = bin.createSampler({
-            label: "Tone mapping color texture sampler",
-            minFilter: "nearest",
-            magFilter: "nearest",
-            addressModeU: "clamp-to-edge",
-            addressModeV: "clamp-to-edge"
-        });
-
         const shaderModule = bin.createShaderModule({
             label: "Tonemapping shader module",
             code: shader,
@@ -82,7 +74,7 @@ export class TonemapModule implements RenderModule {
         });
 
         const bindGroup = createBindGroup(bin, pipeline, context.buffers, uniforms);
-        return { bin, uniformsStaging, uniforms, sampler, pipeline, bindGroup };
+        return { bin, uniformsStaging, uniforms, pipeline, bindGroup };
     }
 }
 
@@ -95,7 +87,7 @@ class TonemapModuleContext implements RenderModuleContext {
 
     async update(encoder: GPUCommandEncoder, state: DerivedRenderState) {
         const { context, resources } = this;
-        const { uniformsStaging, uniforms, pipeline, sampler } = resources
+        const { uniformsStaging, uniforms, pipeline } = resources
         const { camera, tonemapping } = state;
 
         if (context.hasStateChanged({ camera, tonemapping })) {
