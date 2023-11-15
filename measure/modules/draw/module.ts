@@ -240,16 +240,16 @@ export class DrawModule extends BaseModule {
                     obj.objects.forEach(drawobj => {
                         if (drawobj.kind == "complex" || drawobj.kind == "curveSegment" || drawobj.kind == "edge") {
                             drawobj.parts.forEach(part => {
-                                if (part.vertices2D && (part.drawType == "lines" || part.drawType == "curveSegment" || part.drawType == "filled")) {
+                                if (part.vertices2D && part.indicesOnScreen && (part.drawType == "lines" || part.drawType == "curveSegment" || part.drawType == "filled")) {
                                     for (let i = 1; i < part.vertices2D.length; ++i) {
-                                        if (vec3.equals(part.vertices3D[i - 1], emptyVertex) || vec3.equals(part.vertices3D[i], emptyVertex)) {
+                                        if (vec3.equals(part.vertices3D[part.indicesOnScreen[i - 1]], emptyVertex) || vec3.equals(part.vertices3D[part.indicesOnScreen[i]], emptyVertex)) {
                                             continue;
                                         }
                                         const lineB = { start: part.vertices2D[i - 1], end: part.vertices2D[i] };
                                         const intersection = lineSegmentIntersection(line, lineB);
                                         if (intersection) {
-                                            const dir = vec3.sub(vec3.create(), part.vertices3D[i], part.vertices3D[i - 1]);
-                                            intersections.push({ intersection, point3d: vec3.scaleAndAdd(vec3.create(), part.vertices3D[i - 1], dir, intersection.u) });
+                                            const dir = vec3.sub(vec3.create(), part.vertices3D[part.indicesOnScreen[i]], part.vertices3D[part.indicesOnScreen[i - 1]]);
+                                            intersections.push({ intersection, point3d: vec3.scaleAndAdd(vec3.create(), part.vertices3D[part.indicesOnScreen[i - 1]], dir, intersection.u) });
                                         }
                                     }
                                 }
@@ -374,7 +374,38 @@ function getPathMatrices(width: number, height: number, camera: Camera): { camMa
         return { camMat, projMat };
     }
 }
+function toOnscreenText(points: ReadonlyVec3[],
+    camMat: mat4,
+    projMat: mat4,
+    near: number,
+    width: number,
+    height: number,
+    ortho: boolean,
+    cameraFar: number) {
 
+    const intdices: number[] = [];
+    const sv = points.map((v) => vec3.transformMat4(vec3.create(), v, camMat));
+
+    const screenPoints = sv.reduce((tail, head, i) => {
+        //Avoid objects very near the camera or past the far plane
+        if (ortho && (head[2] < -cameraFar || head[2] > 0)) {
+            return tail;
+        }
+        if (head[2] > 0.1) {
+            return tail;
+        }
+        const _p = toScreen(projMat, width, height, head);
+        if (_p[0] < 0 || _p[0] > width || _p[1] < 0 || _p[1] > height) {
+            return tail;
+        }
+        intdices.push(i);
+        return tail.concat([_p]);
+    }, [] as ReadonlyVec2[]);
+    if (screenPoints.length) {
+        return { screenPoints, intdices };
+    }
+    return undefined;
+}
 function toPathPointsFromMatrices(
     points: ReadonlyVec3[],
     camMat: mat4,
@@ -398,15 +429,13 @@ function toPathPointsFromMatrices(
 
     const screenPoints = sv.reduce((tail, head, i) => {
         if (ortho) {
-            for (let i = 0; i < sv.length; ++i) {
-                //Avoid objects very near the camera, put them behind instead
-                if (sv[i][2] > 0 && sv[i][2] < 0.1) {
-                    sv[i][2] = -0.0001;
-                }
-                if (sv[i][2] > cameraFar) {
-                    removedIndices.push(i);
-                    return tail;
-                }
+            //Avoid objects very near the camera, put them behind instead
+            if (sv[i][2] > 0 && sv[i][2] < 0.1) {
+                sv[i][2] = -0.0001;
+            }
+            if (sv[i][2] < -cameraFar) {
+                removedIndices.push(i);
+                return tail;
             }
         }
         if (head[2] > SCREEN_SPACE_EPSILON) {
@@ -456,61 +485,37 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
 
     for (const drawObject of drawObjects) {
         for (const drawPart of drawObject.parts) {
-            const points = toPathPointsFromMatrices(
-                drawPart.vertices3D,
-                camMat,
-                projMat,
-                camera.near,
-                width,
-                height,
-                camera.kind == "orthographic",
-                camera.far
-            );
-            if (points) {
-                const { screenPoints, removedIndices, addedIndices } = points;
-                drawPart.vertices2D = screenPoints;
-                if ((removedIndices.length > 0 || addedIndices.length > 0)) {
-                    if (drawPart.text && Array.isArray(drawPart.text)) {
-                        drawPart.text[0] = drawPart.text[0].reduce((tail, head, i) => {
-                            if (addedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i - 1) == undefined) {
-                                return tail.concat(["", head])
-                            }
-                            if (removedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i + 1) != undefined) {
-                                return tail;
-                            } else {
-                                return tail.concat(head);
-                            }
-                        }, [] as string[]);
-                    }
-                    const newVert3d: ReadonlyVec3[] = [];
-                    drawPart.vertices3D.forEach((v, i) => {
-                        if (addedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i - 1) == undefined) {
-                            newVert3d.concat([vec3.create(), v])
-                        }
-                        else if (removedIndices.find((v) => v == i) == undefined || removedIndices.find((v) => v == i + 1) == undefined) {
-                            return newVert3d.push(v);
-                        }
-                        drawPart.vertices3D = newVert3d;
-                    });
-                }
+            if (drawPart.drawType == "text") { // Pure text can use simplified conversion to 2d
+                const points = toOnscreenText(
+                    drawPart.vertices3D,
+                    camMat,
+                    projMat,
+                    camera.near,
+                    width,
+                    height,
+                    camera.kind == "orthographic",
+                    camera.far
+                );
+                drawPart.vertices2D = points?.screenPoints;
+                drawPart.indicesOnScreen = points?.intdices;
             }
-            if (drawPart.voids) {
-                drawPart.voids.forEach((drawVoid, j) => {
-                    const voidPoints = toPathPointsFromMatrices(
-                        drawVoid.vertices3D,
-                        camMat,
-                        projMat,
-                        camera.near,
-                        width,
-                        height,
-                        camera.kind == "orthographic",
-                        camera.far
-                    );
-                    if (voidPoints) {
-                        const { screenPoints, removedIndices, addedIndices } = voidPoints;
-                        drawVoid.vertices2D = screenPoints;
-                        if ((removedIndices.length > 0 || addedIndices.length > 0) && drawPart.text && Array.isArray(drawPart.text)) {
-                            drawPart.text[j + 1] = drawPart.text[j + 1].reduce((tail, head, i) => {
+            else {
+                const points = toPathPointsFromMatrices(
+                    drawPart.vertices3D,
+                    camMat,
+                    projMat,
+                    camera.near,
+                    width,
+                    height,
+                    camera.kind == "orthographic",
+                    camera.far
+                );
+                if (points) {
+                    const { screenPoints, removedIndices, addedIndices } = points;
+                    drawPart.vertices2D = screenPoints;
+                    if ((removedIndices.length > 0 || addedIndices.length > 0)) {
+                        if (drawPart.text && Array.isArray(drawPart.text)) {
+                            drawPart.text[0] = drawPart.text[0].reduce((tail, head, i) => {
                                 if (addedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i - 1) == undefined) {
                                     return tail.concat(["", head])
                                 }
@@ -521,9 +526,57 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                                 }
                             }, [] as string[]);
                         }
-
+                        if (drawPart.drawType == "angle") {
+                            const newVert3d: number[] = [];
+                            drawPart.vertices3D.forEach((v, i) => {
+                                if (addedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i - 1) == undefined) {
+                                    newVert3d.concat([-1, i])
+                                }
+                                else if (removedIndices.find((v) => v == i) == undefined || removedIndices.find((v) => v == i + 1) == undefined) {
+                                    return newVert3d.push(i);
+                                }
+                                drawPart.indicesOnScreen = newVert3d;
+                            });
+                        }
                     }
-                });
+                }
+                else {
+                    drawPart.indicesOnScreen = undefined;
+                    drawPart.vertices2D = undefined;
+                }
+                if (drawPart.voids) {
+                    drawPart.voids.forEach((drawVoid, j) => {
+                        const voidPoints = toPathPointsFromMatrices(
+                            drawVoid.vertices3D,
+                            camMat,
+                            projMat,
+                            camera.near,
+                            width,
+                            height,
+                            camera.kind == "orthographic",
+                            camera.far
+                        );
+                        if (voidPoints) {
+                            const { screenPoints, removedIndices, addedIndices } = voidPoints;
+                            drawVoid.vertices2D = screenPoints;
+                            if ((removedIndices.length > 0 || addedIndices.length > 0) && drawPart.text && Array.isArray(drawPart.text)) {
+                                drawPart.text[j + 1] = drawPart.text[j + 1].reduce((tail, head, i) => {
+                                    if (addedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i - 1) == undefined) {
+                                        return tail.concat(["", head])
+                                    }
+                                    if (removedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i + 1) != undefined) {
+                                        return tail;
+                                    } else {
+                                        return tail.concat(head);
+                                    }
+                                }, [] as string[]);
+                            }
+                        }
+                        else {
+                            drawVoid.vertices2D = undefined;
+                        }
+                    });
+                }
             }
         }
     }

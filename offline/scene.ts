@@ -55,7 +55,7 @@ export class OfflineScene {
      */
     async getUsedSize() {
         const sizes = this.dir.filesSizes();
-        let totalUsedSize = 0;
+        let totalUsedSize = this.manifest.totalByteSize;
         for await (const size of sizes) {
             if (size) {
                 totalUsedSize += size;
@@ -138,20 +138,18 @@ export class OfflineScene {
         }
         const manifestName = offline.manifest;
         manifestUrl.pathname += manifestName;
+        const debounce = debouncer();
 
         const existingFiles = new Map<string, number>(manifest.allFiles);
-        async function scanFiles() {
-            // scan local files in the background, since this could take some time.
-            const files = dir.files();
-            for await (const filename of files) {
-                if (!filename.endsWith(".json")) {
-                    existingFiles.set(filename, 0);
-                }
+
+        logger?.status("scanning");
+        const entries = await dir.getJournalEntries();
+        for (const { name, size } of entries) {
+            existingFiles.set(name, size);
+            if (debounce(1000)) {
+                logger?.progress?.(existingFiles.size, undefined, "scan");
             }
-        };
-        const scanFilesPromise = scanFiles();
-        await scanFilesPromise;
-        // console.log(`# files: ${existingFiles.size}`);
+        }
 
         try {
             logger?.status("synchronizing");
@@ -163,12 +161,11 @@ export class OfflineScene {
             const onlineManifest = new SceneManifest(manifestData);
             const { totalByteSize } = onlineManifest;
 
-            const debounce = debouncer();
 
             // start incremental download
             logger?.info?.("fetching new files");
             let totalDownload = 0;
-            logger?.progress?.(totalDownload, totalByteSize);
+            logger?.progress?.(totalDownload, totalByteSize, "download");
             const maxSimulataneousDownloads = 8;
             const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
             const maxErrors = 100;
@@ -177,7 +174,7 @@ export class OfflineScene {
             async function downloadFiles(files: Iterable<SceneManifestEntry>, type: ResourceType) {
                 for (let retry = 0; retry < 3; retry++) {
                     async function downloadFile(name: string, size: number) {
-                        const fileRequest = storage.request(dir.name, name, type, sasKey, abortSignal);
+                        const fileRequest = storage.request(dir.name, name, type, sasKey);
                         let idx = downloadQueue.findIndex(e => !e);
                         if (idx < 0) {
                             // queue is full, so wait for another download to complete
@@ -195,11 +192,27 @@ export class OfflineScene {
                             try {
                                 let fileResponse = await fetch(fileRequest);
                                 if (fileResponse.ok) {
-                                    const buffer = await fileResponse.arrayBuffer();
-                                    await dir.write(name, buffer);
-                                    totalDownload += size;
+                                    if (size > 10_000_000) {
+                                        const stream = await fileResponse.body;
+                                        if (stream) {
+                                            const addBytes = (bytes: number) => {
+                                                totalDownload += bytes;
+                                                if (debounce(100)) {
+                                                    logger?.progress?.(totalDownload, totalByteSize, "download");
+                                                }
+                                            };
+                                            await dir.writeStream(name, stream, size, abortSignal, addBytes);
+                                        }
+                                    } else {
+                                        const buffer = await fileResponse.arrayBuffer();
+                                        await dir.write(name, buffer);
+                                        totalDownload += size;
+                                    }
                                 } else {
                                     errorQueue.push({ name, size });
+                                }
+                                if (abortSignal.aborted) {
+                                    throw new DOMException("Download aborted!", "AbortError");
                                 }
                             } catch (error: unknown) {
                                 if (typeof error == "object" && error instanceof DOMException && error.name == "AbortError") {
@@ -220,7 +233,7 @@ export class OfflineScene {
                             totalDownload += size;
                         }
                         if (debounce(100)) {
-                            logger?.progress?.(totalDownload, totalByteSize);
+                            logger?.progress?.(totalDownload, totalByteSize, "download");
                         }
                     }
                     if (errorQueue.length == 0) {
@@ -229,6 +242,7 @@ export class OfflineScene {
                     // attempt to re-download failed files.
                     const errors = [...errorQueue];
                     errorQueue.length = 0;
+                    await Promise.all(downloadQueue);
                     for (const error of errors) {
                         await downloadFile(error.name, error.size);
                     }
@@ -239,7 +253,7 @@ export class OfflineScene {
             await downloadFiles(onlineManifest.dbFiles, "db");
             await Promise.all(downloadQueue);
 
-            logger?.progress?.(undefined, undefined);
+            logger?.progress?.(totalByteSize, totalByteSize, "download");
 
             // add manifest.
             const manifestBuffer = new TextEncoder().encode(JSON.stringify(manifestData)).buffer;
@@ -281,9 +295,9 @@ export class OfflineScene {
 }
 
 function debouncer() {
-    let prevTime = performance.now();
+    let prevTime = Date.now();
     return function (minInterval: number) {
-        const now = performance.now();
+        const now = Date.now();
         if (now - prevTime > minInterval) {
             prevTime = now;
             return true;

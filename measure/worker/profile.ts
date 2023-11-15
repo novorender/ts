@@ -305,7 +305,7 @@ export function centerLinesToLinesTrip(
         radiusB: number
     ) => {
         const dist = vec3.distance(a, b);
-        return dist < (radiusA + radiusB) / 2;
+        return dist < radiusA + radiusB;
     };
 
     let startSegment:

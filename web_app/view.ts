@@ -289,9 +289,32 @@ export class View<
         }
         async function getFile(path: string): Promise<Response> {
             const request = new Request(relativeUrl(path), { mode: "cors", signal: abortSignal });
-            const response = await requestOfflineFile(request) ?? await fetch(request);
-            if (!response.ok)
-                throw new Error(response.statusText);
+            let response: Response | undefined;
+            let err: unknown | undefined;
+            try {
+                response = await fetch(request);
+            }
+            catch (error) {
+                err = error;
+                //Try offline
+            }
+            if (response == undefined || !response.ok) {
+                const offlineResponse = await requestOfflineFile(request);
+                if (offlineResponse) {
+                    response = offlineResponse;
+                }
+            }
+            if (response == undefined || !response.ok) {
+                if (response) {
+                    throw new Error(response.statusText);
+                }
+                else if (err) {
+                    throw err;
+                }
+                else {
+                    throw new Error("Failed to load scene");
+                }
+            }
             return response;
         }
 
@@ -307,39 +330,35 @@ export class View<
             flipState(stateChanges, "GLToCAD");
             this.modifyRenderState(stateChanges);
 
-            try {
-                if (measure) {
-                    const measureView = await createMeasureView(this._drawContext2d, this.imports);
-                    await measureView.loadScene(baseSceneUrl, measure.brepLut); // TODO: include abort signal!
-                    this._measureView = measureView;
-                }
+            if (measure) {
+                const measureView = await createMeasureView(this._drawContext2d, this.imports);
+                await measureView.loadScene(baseSceneUrl, measure.brepLut); // TODO: include abort signal!
+                this._measureView = measureView;
+            }
 
+            try {
                 if (data) {
                     const dataContext = await loadSceneDataOffline(sceneId, data.jsonLut, data.json); // TODO: Add online variant
                     this._dataContext = dataContext;
                 }
-
-                if (offline) {
-                    this._offline = {
-                        manifestUrl: relativeUrl(offline.manifest),
-                        isEnabled: async () => {
-                            return await hasOfflineDir(sceneId);
-                        },
-                    }
-                }
-                return stateChanges.scene.config;
-            }
-            catch (error) {
+            } catch (error) {
                 const offlineSetupError = error instanceof OfflineFileNotFoundError;
-                if (offlineSetupError) {
-                    console.warn(`Scene has corruped offline storage, deleting`);
-                    if (offline) {
-                        const scenes = (await this.manageOfflineStorage()).scenes;
-                        scenes.get(sceneId)?.delete();
-                    }
+                //Only means that offline data is not downloaded
+                if (!offlineSetupError) {
+                    throw error;
                 }
-                throw error;
             }
+
+            if (offline) {
+                this._offline = {
+                    manifestUrl: relativeUrl(offline.manifest),
+                    isEnabled: async () => {
+                        return await hasOfflineDir(sceneId);
+                    },
+                }
+            }
+            return stateChanges.scene.config;
+
         }
         catch (error) { //Legacy load
             const scene = await downloadScene(baseSceneUrl, "webgl2_bin/scene.json", abortSignal);

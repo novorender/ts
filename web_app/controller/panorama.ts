@@ -1,6 +1,6 @@
 
 import { type ReadonlyVec3, vec3, type ReadonlyQuat, glMatrix } from "gl-matrix";
-import { BaseController, type ControllerInitParams, type MutableCameraState } from "./base";
+import { BaseController, easeInOut, type ControllerInitParams, type MutableCameraState } from "./base";
 import { type RenderStateCamera, mergeRecursive } from "core3d";
 import { PitchRollYawOrientation, decomposeRotation } from "./orientation";
 import { ControllerInput } from "./input";
@@ -125,7 +125,8 @@ export class PanoramaController extends BaseController {
             this.setFlyTo({
                 totalFlightTime: flyTime,
                 end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
-                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw }
+                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw },
+                easeFunction: easeInOut
             });
         }
         else {

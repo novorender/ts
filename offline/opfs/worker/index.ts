@@ -1,5 +1,5 @@
-import type { ConnectResponse, CreateDirResponse, DeleteAllResponse, DeleteDirResponse, DeleteFilesResponse, DirsResponse, FileSizesResponse, FilesResponse, IORequest, IOResponse, ReadResponse, WriteResponse } from "../messages";
-
+/// <reference lib="webworker" />
+import type { AppendStreamResponse, CloseStreamResponse, ConnectResponse, CreateDirResponse, DeleteAllResponse, DeleteDirResponse, DeleteFilesResponse, DirsResponse, FileSizesResponse, FilesResponse, IORequest, IOResponse, OpenStreamResponse, ReadResponse, WriteResponse } from "../messages";
 /** @internal Handle messages on behalf of IO worker. */
 export async function handleIOWorkerMessages(message: MessageEvent<ConnectResponse | IORequest>) {
     const data = message.data;
@@ -31,6 +31,34 @@ export async function handleIOWorkerMessages(message: MessageEvent<ConnectRespon
 
 const rootPromise = navigator.storage.getDirectory();
 const dirHandles = new Map<string, FileSystemDirectoryHandle>();
+const journalHandles = new Map<string, LockedHandle>();
+const streamHandles = new Map<string, StreamHandle>();
+
+interface StreamHandle {
+    readonly accessHandle: FileSystemSyncAccessHandle;
+    offset: number;
+    readonly size: number;
+    readonly file: string;
+    readonly dir: string;
+}
+
+class LockedHandle {
+    constructor(handle: FileSystemSyncAccessHandle) {
+        this.handle = handle;
+        this.lockPromise = Promise.resolve();
+    }
+
+    private lockPromise: Promise<void>;
+    private handle: FileSystemSyncAccessHandle;
+    async lock() {
+        await this.lockPromise;
+        let unlock: (() => void) | undefined;
+        this.lockPromise = new Promise<void>(resolve => {
+            unlock = resolve;
+        });
+        return { handle: this.handle, unlock: unlock! };
+    }
+}
 
 async function getDirHandle(name: string) {
     let dirHandle = dirHandles.get(name);
@@ -41,6 +69,40 @@ async function getDirHandle(name: string) {
     }
     return dirHandle;
 }
+
+async function getGetJournalHandle(name: string, reset: boolean) {
+    let journalHandle = journalHandles.get(name);
+    if (journalHandle && reset) {
+        const { handle, unlock } = await journalHandle.lock();
+        handle.close();
+        unlock();
+        journalHandle = undefined;
+    }
+    if (!journalHandle) {
+        const dirHandle = await getDirHandle(name);
+        const fileHandle = await dirHandle.getFileHandle("journal", { create: true });
+        const accessHandle = await fileHandle.createSyncAccessHandle();
+        journalHandle = new LockedHandle(accessHandle);
+        journalHandles.set(name, journalHandle);
+    }
+    return journalHandle;
+}
+
+
+async function closeJournal(name: string) {
+    let journalHandle = journalHandles.get(name);
+    if (journalHandle) {
+        const { handle, unlock } = await journalHandle.lock();
+        handle.close();
+        const dirHandle = await getDirHandle(name);
+        dirHandle.removeEntry("journal");
+        unlock();
+        journalHandles.delete(name);
+    }
+    return journalHandle;
+}
+
+
 
 function exhaustiveGuard(_value: never): never {
     throw new Error(`Unknown IO request message: ${JSON.stringify(_value)}`);
@@ -102,7 +164,7 @@ async function handleIORequest(data: IORequest): Promise<ResponseMessage> {
             let error: string | undefined;
             let buffer: ArrayBuffer | undefined;
             try {
-                buffer = await readFile(data.dir, data.file);
+                buffer = data.file == "journal" ? await readJournal(data.dir) : await readFile(data.dir, data.file);
                 if (buffer) {
                     transfer.push(buffer);
                 }
@@ -123,6 +185,57 @@ async function handleIORequest(data: IORequest): Promise<ResponseMessage> {
             response = { kind: "write", id: data.id, error } as const satisfies WriteResponse;
             break;
         }
+        case "open_write_stream": {
+            let error: string | undefined;
+            try {
+                const handle = await createFile(data.dir, data.file, data.size);
+                const key = `${data.dir}/${data.file}`;
+                streamHandles.set(key, handle);
+            } catch (ex: any) {
+                error = ex.message ?? ex.toString();
+                console.warn(`${data.file}: ${error}`);
+            }
+            response = { kind: "open_write_stream", id: data.id, error } as const satisfies OpenStreamResponse;
+            break;
+        }
+        case "append_stream": {
+            let error: string | undefined;
+            try {
+                const key = `${data.dir}/${data.file}`;
+                const handle = streamHandles.get(key);
+                if (handle) {
+                    await appendfile(handle, data.buffer);
+                } else {
+                    throw new Error("Handle is not opened!");
+                }
+            } catch (ex: any) {
+                error = ex.message ?? ex.toString();
+                console.warn(`${data.file}: ${error}`);
+            }
+            response = { kind: "append_stream", id: data.id, error } as const satisfies AppendStreamResponse;
+            break;
+        }
+
+        case "close_write_stream": {
+            let error: string | undefined;
+            try {
+                const key = `${data.dir}/${data.file}`;
+                const handle = streamHandles.get(key);
+                if (handle) {
+                    finalizeFile(handle);
+                    streamHandles.delete(key);
+                } else {
+                    throw new Error("Handle is not opened!");
+                }
+            } catch (ex: any) {
+                error = ex.message ?? ex.toString();
+                console.warn(`${data.file}: ${error}`);
+            }
+            response = { kind: "close_write_stream", id: data.id, error } as const satisfies CloseStreamResponse;
+            break;
+        }
+
+
         case "delete_files": {
             let error: string | undefined;
             try {
@@ -237,20 +350,95 @@ async function fileSizes(dir: string, files?: readonly string[]) {
     return sizes;
 }
 
-async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {
-    // console.log(`${dir}/${file}[${buffer.byteLength}]`);
+
+async function createFile(dir: string, file: string, size: number): Promise<StreamHandle> {
     const dirHandle = await getDirHandle(dir);
     const fileHandle = await dirHandle.getFileHandle(file, { create: true });
     const accessHandle = await fileHandle.createSyncAccessHandle();
-    accessHandle.truncate(buffer.byteLength);
-    const bytesWritten = accessHandle.write(new Uint8Array(buffer), { at: 0 });
+    accessHandle.truncate(size);
+    return { accessHandle, offset: 0, dir, file, size };
+}
+
+async function appendfile(streamHandle: StreamHandle, buffer: ArrayBuffer) {
+    const { accessHandle, offset } = streamHandle;
+    const bytesWritten = accessHandle.write(new Uint8Array(buffer), { at: offset });
+    console.assert(bytesWritten == buffer.byteLength);
+    streamHandle.offset += bytesWritten;
+}
+
+async function finalizeFile(streamHandle: StreamHandle) {
+    const { accessHandle, offset, dir, file, size } = streamHandle;
     accessHandle.flush();
     accessHandle.close();
-    console.assert(bytesWritten == buffer.byteLength);
+    if (size == offset) {
+        await appendJournal(dir, file, size);
+    }
+    else {
+        const dirHandle = await getDirHandle(dir);
+        dirHandle.removeEntry(file);
+    }
+}
+
+async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {
+    // console.log(`${dir}/${file}[${buffer.byteLength}]`);
+    let accessHandle: FileSystemSyncAccessHandle | undefined;
+    try {
+        const dirHandle = await getDirHandle(dir);
+        const fileHandle = await dirHandle.getFileHandle(file, { create: true });
+        accessHandle = await fileHandle.createSyncAccessHandle();
+        accessHandle.truncate(buffer.byteLength);
+        const bytesWritten = accessHandle.write(new Uint8Array(buffer), { at: 0 });
+        console.assert(bytesWritten == buffer.byteLength);
+        accessHandle.flush();
+        await appendJournal(dir, file, bytesWritten);
+    } finally {
+        accessHandle?.close();
+    }
+
+}
+
+async function readJournal(dir: string) {
+    let dispose: (() => void) | undefined;
+    try {
+        const journalHandle = await getGetJournalHandle(dir, true);
+        const { handle, unlock } = await journalHandle.lock();
+        dispose = unlock;
+        const size = handle.getSize();
+        const buffer = new Uint8Array(size);
+        handle.read(buffer);
+
+        return buffer.buffer;
+    } catch (error: unknown) {
+        if (error instanceof DOMException && error.name == "NotFoundError") {
+            return undefined;
+        } else {
+            console.log({ error });
+            throw error;
+        }
+    } finally {
+        dispose?.();
+    }
+}
+
+async function appendJournal(dir: string, file: string, size: number) {
+    let dispose: (() => void) | undefined;
+    try {
+        const journalHandle = await getGetJournalHandle(dir, false);
+        const { handle, unlock } = await journalHandle.lock();
+        dispose = unlock;
+        const text = `${file},${size}\n`;
+        const bytes = new TextEncoder().encode(text);
+        handle.write(bytes, { at: handle.getSize() });
+        handle.flush();
+    } finally {
+        dispose?.();
+    }
+
 }
 
 async function deleteFiles(dir: string, files: readonly string[]) {
     const dirHandle = await getDirHandle(dir);
+    closeJournal(dir);
     for (const file of files) {
         dirHandle.removeEntry(file);
     }
@@ -258,6 +446,7 @@ async function deleteFiles(dir: string, files: readonly string[]) {
 
 async function deleteDir(dir: string) {
     const root = await rootPromise;
+    closeJournal(dir);
     root.removeEntry(dir, { recursive: true });
 }
 
@@ -265,6 +454,8 @@ async function deleteAll() {
     const root = await rootPromise;
     const entries = await dirEntries(root);
     for (const [name] of entries) {
+        closeJournal(name);
         root.removeEntry(name, { recursive: true });
     }
 }
+

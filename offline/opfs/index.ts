@@ -1,6 +1,6 @@
 import { type ResourceType, type PathNameParser } from "../storage";
 import { PromiseBag } from "./promiseBag";
-import type { CreateDirResponse, CreateDirRequest, DeleteAllRequest, DirsRequest, DirsResponse, FilesRequest, IOResponse, ReadRequest, ReadResponse, DeleteAllResponse, FilesResponse, WriteRequest, WriteResponse, DeleteFilesRequest, DeleteFilesResponse, DeleteDirRequest, DeleteDirResponse, FileSizesRequest, FileSizesResponse } from "./messages";
+import type { CreateDirResponse, CreateDirRequest, DeleteAllRequest, DirsRequest, DirsResponse, FilesRequest, IOResponse, ReadRequest, ReadResponse, DeleteAllResponse, FilesResponse, WriteRequest, WriteResponse, DeleteFilesRequest, DeleteFilesResponse, DeleteDirRequest, DeleteDirResponse, FileSizesRequest, FileSizesResponse, OpenStreamRequest, CloseStreamRequest, CloseStreamResponse, AppendStreamRequest, OpenStreamResponse, AppendStreamResponse } from "./messages";
 
 /**
  * Create an OPFS based offline storage.
@@ -28,7 +28,6 @@ class OfflineStorageOPFS {
             this.promises.resolve(data.id, data);
         };
     }
-
 
     parse(str: string) {
         const re = new RegExp(`^\/(?<dir>[0-9a-f]{32})\/(?<file>.+)$`);
@@ -213,6 +212,32 @@ class OfflineDirectoryOPFS {
         }
     }
 
+    /**
+     * Retrive the name and size of files downloaded to this directory.
+     * @remarks
+     * Will be cleared uplon fully downloading a scene as manifest can be used instead.
+     */
+    async getJournalEntries(): Promise<IterableIterator<{ name: string, size: number }>> {
+        const journal = await this.read("journal");
+        function* iterate() {
+            if (journal) {
+                const buffer = new Uint8Array(journal);
+                const decoder = new TextDecoder();
+                let prevIndex = 0;
+                while (prevIndex < buffer.length) {
+                    let index = buffer.indexOf(10, prevIndex);
+                    const line = buffer.subarray(prevIndex, index);
+                    const text = decoder.decode(line, { stream: true });
+                    const [name, sizeStr] = text.split(",");
+                    const size = Number.parseInt(sizeStr);
+                    prevIndex = index + 1;
+                    yield { name, size };
+                }
+            }
+        }
+        return iterate();
+    }
+
 
     /**
      * Retrive the file sizes.
@@ -220,17 +245,24 @@ class OfflineDirectoryOPFS {
      * @returns List of files sizes or undefined for files not found.
      */
     async* filesSizes(fileNames?: readonly string[]): AsyncIterableIterator<number | undefined> {
-        const { context, name } = this;
-        const { worker, promises } = context;
-        const id = promises.newId();
-        const msg: FileSizesRequest = { kind: "file_sizes", id, dir: name, files: fileNames };
-        worker.postMessage(msg);
-        const response = await promises.create<FileSizesResponse>(id);
-        if (response.error) {
-            throw new Error(response.error);
-        }
-        for (const size of response.sizes) {
-            yield size;
+        if (fileNames) {
+            const { context, name } = this;
+            const { worker, promises } = context;
+            const id = promises.newId();
+            const msg: FileSizesRequest = { kind: "file_sizes", id, dir: name, files: fileNames };
+            worker.postMessage(msg);
+            const response = await promises.create<FileSizesResponse>(id);
+            if (response.error) {
+                throw new Error(response.error);
+            }
+            for (const size of response.sizes) {
+                yield size;
+            }
+        } else {
+            const entries = await this.getJournalEntries();
+            for (const { size } of entries) {
+                yield size
+            }
         }
     }
 
@@ -271,6 +303,59 @@ class OfflineDirectoryOPFS {
             throw new Error(response.error);
         }
     }
+
+
+    /**
+     * Stream the content of a file.
+     * @param name: The file name to write.
+     * @param stream: The new content of this file.
+     * @param size: The total byte size of the new file.
+     * @remarks
+     * The input buffer may be transferred to an underlying worker and become inaccessible from the calling thread.
+     * Thus, you should pass a copy if you need to retain the original.
+     */
+    async writeStream(name: string, stream: ReadableStream, size: number, abortSignal?: AbortSignal, progress?: (bytes: number) => void): Promise<void> {
+        const { context } = this;
+        const { worker, promises } = context;
+        const openId = promises.newId();
+        const openMsg: OpenStreamRequest = { kind: "open_write_stream", id: openId, dir: this.name, file: name, size }
+        worker.postMessage(openMsg);
+        const openResponse = await promises.create<OpenStreamResponse>(openId);
+        if (openResponse.error) {
+            throw new Error(openResponse.error);
+        }
+        const reader = stream.getReader();
+
+        for (; ;) {
+            const { done, value } = await reader.read();
+            if (done) {
+                break;
+            }
+            if (abortSignal?.aborted) {
+                break;
+            }
+            const buffer = (value as Uint8Array).buffer;
+            const streamId = promises.newId();
+            const appendMsg: AppendStreamRequest = { kind: "append_stream", id: streamId, dir: this.name, file: name, buffer }
+            worker.postMessage(appendMsg, [buffer]);
+            promises.create<AppendStreamRequest>(streamId)
+                .then(() => progress?.(buffer.byteLength))
+                .catch((reason) => {
+                    throw reason;
+                });
+
+        }
+
+        const closeId = promises.newId();
+        const closeMsg: CloseStreamRequest = { kind: "close_write_stream", id: closeId, dir: this.name, file: name }
+        worker.postMessage(closeMsg);
+        const closeResponse = await promises.create<CloseStreamResponse>(closeId);
+        if (closeResponse.error) {
+            throw new Error(closeResponse.error);
+        }
+    }
+
+
 
     /**
      * Delete the specified file.

@@ -1,6 +1,6 @@
 
 import { type ReadonlyVec3, vec3, quat, glMatrix, type ReadonlyQuat } from "gl-matrix";
-import { BaseController, type ControllerInitParams, type MutableCameraState, type PickContext } from "./base";
+import { BaseController, easeInOut, type ControllerInitParams, type MutableCameraState, type PickContext } from "./base";
 import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type BoundingSphere } from "core3d";
 import { PitchRollYawOrientation, clamp, decomposeRotation } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
@@ -153,7 +153,8 @@ export class FlightController extends BaseController {
             this.setFlyTo({
                 totalFlightTime: flyTime,
                 end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
-                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw }
+                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw },
+                easeFunction: easeInOut
             });
         }
         else {
@@ -174,7 +175,8 @@ export class FlightController extends BaseController {
             this.setFlyTo({
                 totalFlightTime: flyTime,
                 end: { pos: vec3.clone(targetPosition), pitch: _orientation.pitch, yaw: _orientation.yaw + 0.05 },
-                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw }
+                begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw },
+                easeFunction: easeInOut
             });
         } else {
             const dist = boundingSphere.radius / Math.tan(glMatrix.toRadian(_fov) / 2);
@@ -288,8 +290,8 @@ export class FlightController extends BaseController {
             return;
         }
         this.inMoveBegin = true;
-        const setPickPosition = async (x: number, y: number) => {
-            const sample = await pick.pick(x, y, { async: true });
+        const setPickPosition = async (x: number, y: number, touchEvent: boolean) => {
+            const sample = await pick.pick(x, y, { async: true, sampleDiscRadius: touchEvent ? 8 : 4 });
             if (sample) {
                 if (performance.now() - this.lastUpdatedMoveBegin > 2000) { //Delay proportinal speed for better feeling on bad devices
                     this.moveBeginDelay = performance.now();
@@ -304,10 +306,10 @@ export class FlightController extends BaseController {
 
         if (isTouchEvent(event)) {
             if (pointerTable.length > 1) {
-                await setPickPosition(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2))
+                await setPickPosition(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2), true)
             }
         } else {
-            await setPickPosition(event.offsetX, event.offsetY)
+            await setPickPosition(event.offsetX, event.offsetY, false)
         }
         this.inMoveBegin = false;
 

@@ -60,6 +60,32 @@ export interface WriteRequest {
 }
 
 /** @internal */
+export interface OpenStreamRequest {
+    readonly kind: "open_write_stream";
+    readonly id: number;
+    readonly size: number;
+    readonly dir: string;
+    readonly file: string;
+}
+
+/** @internal */
+export interface AppendStreamRequest {
+    readonly kind: "append_stream";
+    readonly id: number;
+    readonly dir: string;
+    readonly file: string;
+    readonly buffer: ArrayBuffer;
+}
+
+/** @internal */
+export interface CloseStreamRequest {
+    readonly kind: "close_write_stream";
+    readonly id: number;
+    readonly dir: string;
+    readonly file: string;
+}
+
+/** @internal */
 export interface DeleteFilesRequest {
     readonly kind: "delete_files";
     readonly id: number;
@@ -81,7 +107,7 @@ export interface DeleteAllRequest {
 }
 
 /** @internal */
-export type IORequest = CreateDirRequest | DirsRequest | FilesRequest | FileSizesRequest | ReadRequest | WriteRequest | DeleteFilesRequest | DeleteDirRequest | DeleteAllRequest;
+export type IORequest = CreateDirRequest | DirsRequest | FilesRequest | FileSizesRequest | ReadRequest | WriteRequest | OpenStreamRequest | AppendStreamRequest | CloseStreamRequest | DeleteFilesRequest | DeleteDirRequest | DeleteAllRequest;
 
 
 /** @internal */
@@ -131,6 +157,27 @@ export interface WriteResponse {
 }
 
 /** @internal */
+export interface OpenStreamResponse {
+    readonly kind: "open_write_stream";
+    readonly id: number;
+    readonly error?: string;
+}
+
+/** @internal */
+export interface AppendStreamResponse {
+    readonly kind: "append_stream";
+    readonly id: number;
+    readonly error?: string;
+}
+
+/** @internal */
+export interface CloseStreamResponse {
+    readonly kind: "close_write_stream";
+    readonly id: number;
+    readonly error?: string;
+}
+
+/** @internal */
 export interface DeleteFilesResponse {
     readonly kind: "delete_files";
     readonly id: number;
@@ -152,4 +199,4 @@ export interface DeleteAllResponse {
 }
 
 /** @internal */
-export type IOResponse = CreateDirResponse | DirsResponse | FilesResponse | FileSizesResponse | ReadResponse | WriteResponse | DeleteFilesResponse | DeleteDirResponse | DeleteAllResponse;
+export type IOResponse = CreateDirResponse | DirsResponse | FilesResponse | FileSizesResponse | ReadResponse | WriteResponse | OpenStreamResponse | AppendStreamResponse | CloseStreamResponse | DeleteFilesResponse | DeleteDirResponse | DeleteAllResponse;

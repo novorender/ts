@@ -1,7 +1,7 @@
 import { type ReadonlyVec3, vec2, vec3 } from "gl-matrix";
 import type { CylinderData, FaceData, LoopData, ProductData } from "./brep";
 import { cylinderCenterLine } from "./calculations";
-import { matFromInstance } from "./loader";
+import { matFromInstance, unitToScale } from "./loader";
 import { getEdgeStrip } from "./outline";
 import type { DrawObject, DrawPart, DrawVoid, ManholeMeasureValues, MeasureSettings } from "measure";
 import { MeasureTool } from "./scene";
@@ -32,7 +32,7 @@ export async function getCylinderDrawParts(product: ProductData, instanceIdx: nu
             to: cylinderEnd[2],
             horizontalDisplay: diff[2] < planarLength,
         },
-        text: [[`L ${length.toFixed(3)}m   ⌀ ${(cylinderData.radius * 2).toFixed(3)}m   ${vertical ? "" : `% ${((Math.abs(diff[2] / planarLength)) * 100).toFixed(2)}`}`]]
+        text: [[`L ${length.toFixed(3)}m   ⌀ ${((cylinderData.radius * 2) * unitToScale(product.units)).toFixed(3)}m   ${vertical ? "" : `% ${((Math.abs(diff[2] / planarLength)) * 100).toFixed(2)}`}`]]
     });
     for (const halfEdgeIdx of loop.halfEdges) {
         const halfEdgeData = product.halfEdges[halfEdgeIdx];
@@ -68,7 +68,7 @@ export async function getCylinderDrawParts(product: ProductData, instanceIdx: nu
 export async function getSurfaceDrawParts(product: ProductData, instanceIdx: number, face: FaceData) {
     const loop = product.loops[face.outerLoop];
     const drawParts: DrawPart[] = [];
-    async function loopToVertices(loop: LoopData): Promise<{ vertices: ReadonlyVec3[], text: string[] }> {
+    async function loopToVertices(loop: LoopData, isVoid: boolean): Promise<{ vertices: ReadonlyVec3[], text: string[] }> {
         const vertices: ReadonlyVec3[] = [];
         const hasLineOnEitherSide: boolean[] = [];
         const text: string[] = [];
@@ -105,7 +105,7 @@ export async function getSurfaceDrawParts(product: ProductData, instanceIdx: num
             }
 
         }
-        if (vertices.length > 4 && vertices.length < 15) { //We assume that more than 15 is either a tesselated complex object or a tesselated circle 
+        if (vertices.length > 4 && (vertices.length < 15 || !isVoid)) { //We assume that more than 15 is either a tesselated complex object or a tesselated circle for voids
             let prev = vec3.sub(vec3.create(), vertices[vertices.length - 2], vertices[0]);
             let next = vec3.create();
             for (let i = 0; i < vertices.length - 1; ++i) {
@@ -134,14 +134,14 @@ export async function getSurfaceDrawParts(product: ProductData, instanceIdx: num
     }
 
     const text: string[][] = [];
-    const { vertices: outerVerts, text: outerTexts } = await loopToVertices(loop);
+    const { vertices: outerVerts, text: outerTexts } = await loopToVertices(loop, false);
     text.push(outerTexts);
 
     const voids: DrawVoid[] = [];
     if (face.innerLoops) {
         for (const innerLoopIdx of face.innerLoops) {
             const innerLoop = product.loops[innerLoopIdx];
-            const { vertices: innerVerts, text: innerTexts } = await loopToVertices(innerLoop);
+            const { vertices: innerVerts, text: innerTexts } = await loopToVertices(innerLoop, true);
             text.push(innerTexts);
             voids.push({ vertices3D: innerVerts });
         }
