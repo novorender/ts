@@ -681,9 +681,11 @@ export class RenderContextWebGPU {
 
         // update modules from state
         if (!this.pause) {
-            for (const module of this.modules) {
-                await module?.update(encoder, derivedState);
-            }
+            const modulePromises = this.modules.map((module, i) => {
+                const ret = module.update(encoder, derivedState);
+                return isPromise(ret) ? ret : Promise.resolve(ret);
+            });
+            await Promise.all(modulePromises);
         }
 
         // TODO: GL sets the viewport and framebuffer here
