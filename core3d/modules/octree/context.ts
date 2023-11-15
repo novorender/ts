@@ -374,7 +374,9 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     }
                 }
                 rendered = true;
-                nodes.push({ mask, node });
+                if (mask || node.data.childMask == 0) {
+                    nodes.push({ mask, node });
+                }
             }
             return rendered;
         }
