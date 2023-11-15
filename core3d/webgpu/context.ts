@@ -127,7 +127,9 @@ export class RenderContextWebGPU {
      * Note that these buffers will be recreated whenever the {@link RenderState.output} size changes.
      */
     buffers: RenderBuffers = undefined!;
-    canvasContextConfig: GPUCanvasConfiguration | undefined;
+
+    // TODO: not really sure this is useful, probably better to create our own config struct that also allows to config hdr buffers
+    canvasContextConfig: Partial<GPUCanvasConfiguration> | undefined;
 
     /** WebGL textures used for image based lighting ({@link https://en.wikipedia.org/wiki/Image-based_lighting | IBL}).
      * @remarks
@@ -154,7 +156,7 @@ export class RenderContextWebGPU {
         readonly canvas: HTMLCanvasElement,
         /** Imported resources. */
         readonly imports: Core3DImports,
-        canvasContextConfig?: GPUCanvasConfiguration,
+        canvasContextConfig?: Partial<GPUCanvasConfiguration>,
     ) {
         // TODO: Check equivalents to provokingVertex in WebGPU the others
         // are supported by default
@@ -271,18 +273,21 @@ export class RenderContextWebGPU {
         });
 
         const canvasFormat = this.canvasFormat();
-        this.canvasContextConfig = this.canvasContextConfig ?? {
+        let canvasContextConfig = {
             device: this.device,
             format: canvasFormat,
+            ...this.canvasContextConfig
         };
+        canvasContextConfig.device = this.device;
+        canvasContextConfig.format = canvasFormat;
         if(TONEMAP_USES_COMPUTE) {
-            if(this.canvasContextConfig.usage) {
-                this.canvasContextConfig.usage |= GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT;
+            if(canvasContextConfig.usage) {
+                canvasContextConfig.usage |= GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT;
             }else{
-                this.canvasContextConfig.usage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT;
+                canvasContextConfig.usage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT;
             }
         }
-        this.context.configure(this.canvasContextConfig);
+        this.context.configure(canvasContextConfig);
 
         this.lostJustHappened = false;
         this.emulatingContextLoss = false;
