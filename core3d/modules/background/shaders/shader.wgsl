@@ -53,7 +53,6 @@ fn vertexMain(@builtin(vertex_index) vertexIndex: u32)  -> VertexOutput {
         position = vec4(0.);
     }
     var dirVS = vec3(pos.x / camera.viewClipMatrix[0][0], pos.y / camera.viewClipMatrix[1][1], -1.);
-    dirVS.y *= -1.;
     return VertexOutput(
         position,
         camera.viewLocalMatrixNormal * dirVS

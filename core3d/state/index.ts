@@ -181,6 +181,11 @@ export interface RenderStateOutput {
      * Most devices have a max cap on this value, in which case that smaller of the two will be used.
      */
     readonly samplesMSAA: number;
+
+    /** Set to true when using webgpu to signal the matrices modules that matrices need to be
+     * left handed rather than right handed for webgl2
+     */
+    readonly webgpu: boolean;
 }
 
 /** Background/environment related render state.

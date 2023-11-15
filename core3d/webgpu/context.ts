@@ -962,7 +962,6 @@ export class RenderContextWebGPU {
         const localWorldMatrix = mat4.fromTranslation(mat4.create(), localSpaceTranslation);
         values.clipViewMatrix = matrices.getMatrix(CoordSpace.Clip, CoordSpace.View);
         values.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
-        values.viewClipMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.Clip);
         values.localViewMatrix = mat4.multiply(mat4.create(), worldViewMatrix, localWorldMatrix);
         values.viewLocalMatrix = mat4.multiply(mat4.create(), worldLocalMatrix, viewWorldMatrix,);
         values.localViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);

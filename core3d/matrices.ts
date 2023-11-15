@@ -8,11 +8,19 @@ function index(from: CoordSpace, to: CoordSpace): number {
 /** @internal */
 export function matricesFromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }): Matrices {
     const { camera, output } = state;
-    const { width, height } = output;
+    const { width, height, webgpu } = output;
     const aspectRatio = width / height;
     const fovY = camera.fov * Math.PI / 180;
     const viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
+    if(webgpu) {
+        viewWorld[5] *= -1.;
+        viewWorld[1] *= -1.;
+        viewWorld[9] *= -1.;
+    }
     const viewClip = mat4.create();
+    if(webgpu) {
+        viewClip[5] *= -1.;
+    }
     if (camera.kind == "orthographic") {
         const aspect = output.width / output.height;
         const halfHeight = camera.fov / 2;
