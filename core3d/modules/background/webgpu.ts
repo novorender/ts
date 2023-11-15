@@ -217,8 +217,6 @@ class BackgroundModuleContext implements RenderModuleContext {
                     view: context.buffers.colorRenderAttachment(),
                     loadOp: "load",
                     storeOp: "store",
-                    // TODO: we need to explicitly resolve at the end before tonemappinng
-                    // resolveTarget: context.buffers.colorResolveAttachment()
                 }]
             });
 

@@ -619,7 +619,7 @@ export class RenderContextWebGPU {
             throw new Error("Context has not been initialized!");
         }
         const beginTime = performance.now();
-        const { context, device, adapter, canvas, prevState } = this;
+        const { canvas, prevState } = this;
         this.changed = false;
 
         this.resetStatistics();

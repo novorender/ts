@@ -141,8 +141,7 @@ class GridModuleContext implements RenderModuleContext {
 
     render(encoder: GPUCommandEncoder, state: DerivedRenderState) {
         const { context, resources, bindGroup } = this;
-        const { pipeline, uniforms } = resources;
-        const { cameraUniforms } = context;
+        const { pipeline } = resources;
 
         if (state.grid.enabled) {
             const pass = encoder.beginRenderPass({
