@@ -1,4 +1,4 @@
-import { CoordSpace, TonemappingMode, type RGB, defaultRenderState } from "..";
+import { CoordSpace, type RGB, defaultRenderStateWebGPU } from "..";
 import type { DerivedRenderState, RenderState, Core3DImports } from "..";
 import type { RenderModuleContext, RenderModule } from "../modules/webgpu";
 import { matricesFromRenderState } from "../matrices";
@@ -291,7 +291,7 @@ export class RenderContextWebGPU {
         this.lostJustHappened = false;
         this.emulatingContextLoss = false;
 
-        const effectiveSamplesMSAA = this.effectiveSamplesMSAA(defaultRenderState());
+        const effectiveSamplesMSAA = this.effectiveSamplesMSAA(defaultRenderStateWebGPU());
 
         this.buffers = new RenderBuffers(
             this.device,

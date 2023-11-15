@@ -1,13 +1,13 @@
 import { type RenderState, TonemappingMode } from ".";
 
 /** Create a default render state. */
-export function defaultRenderState(): RenderState {
+function _defaultRenderState(webgpu: boolean): RenderState {
     const state: RenderState = {
         output: {
             width: 512,
             height: 256,
             samplesMSAA: 1,
-            webgpu: false,
+            webgpu,
         },
         background: {
         },
@@ -110,4 +110,12 @@ export function defaultRenderState(): RenderState {
         },
     };
     return state;
+}
+
+export function defaultRenderState(): RenderState {
+    return _defaultRenderState(false)
+}
+
+export function defaultRenderStateWebGPU(): RenderState {
+    return _defaultRenderState(true)
 }
