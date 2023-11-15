@@ -3,21 +3,45 @@ import type { RenderModuleContext, RenderModule } from "../webgpu";
 import { glUBOProxy, type UniformTypes } from "webgl2";
 import type { DerivedRenderState } from "core3d";
 
-function createBindGroup(bin: ResourceBin, pipeline: GPURenderPipeline, buffers: RenderBuffers, uniforms: GPUBuffer) {
-    return bin.createBindGroup({
-        label: "Tone mapping bind group",
-        layout: pipeline.getBindGroupLayout(0),
-        entries: [
-            {
-                binding: 0,
-                resource: buffers.textureViews.color
-            },
-            {
-                binding: 1,
-                resource: { buffer: uniforms }
-            }
-        ]
-    })
+
+export const USE_COMPUTE = false;
+
+function createBindGroup(bin: ResourceBin, pipeline: GPUPipelineBase, buffers: RenderBuffers, uniforms: GPUBuffer, canvasTexture: GPUTexture) {
+    if (USE_COMPUTE) {
+        return bin.createBindGroup({
+            label: "Tone mapping bind group",
+            layout: pipeline.getBindGroupLayout(0),
+            entries: [
+                {
+                    binding: 0,
+                    resource: buffers.textureViews.color
+                },
+                {
+                    binding: 1,
+                    resource: { buffer: uniforms }
+                },
+                {
+                    binding: 2,
+                    resource: canvasTexture.createView()
+                }
+            ]
+        })
+    }else{
+        return bin.createBindGroup({
+            label: "Tone mapping bind group",
+            layout: pipeline.getBindGroupLayout(0),
+            entries: [
+                {
+                    binding: 0,
+                    resource: buffers.textureViews.color
+                },
+                {
+                    binding: 1,
+                    resource: { buffer: uniforms }
+                }
+            ]
+        })
+    }
 }
 
 /** @internal */
@@ -57,23 +81,35 @@ export class TonemapModule implements RenderModule {
             label: "Tonemapping shader module",
             code: shader,
         });
-        const pipeline = await bin.createRenderPipelineAsync({
-            label: "Tonemapping pipeline",
-            layout: "auto",
-            vertex: {
-                module: shaderModule,
-                entryPoint: "vertexMain",
-            },
-            fragment: {
-                module: shaderModule,
-                entryPoint: "fragmentMain",
-                targets: [{
-                    format: context.canvasFormat()
-                }]
-            },
-        });
+        let pipeline;
+        if(USE_COMPUTE) {
+            pipeline = bin.createComputePipeline({
+                label: "Tonemapping pipeline",
+                layout: "auto",
+                compute: {
+                    module: shaderModule,
+                    entryPoint: "computeMain",
+                },
+            });
+        }else{
+            pipeline = await bin.createRenderPipelineAsync({
+                label: "Tonemapping pipeline",
+                layout: "auto",
+                vertex: {
+                    module: shaderModule,
+                    entryPoint: "vertexMain",
+                },
+                fragment: {
+                    module: shaderModule,
+                    entryPoint: "fragmentMain",
+                    targets: [{
+                        format: context.canvasFormat()
+                    }]
+                },
+            });
+        }
 
-        const bindGroup = createBindGroup(bin, pipeline, context.buffers, uniforms);
+        const bindGroup = createBindGroup(bin, pipeline, context.buffers, uniforms, context.context!.getCurrentTexture());
         return { bin, uniformsStaging, uniforms, pipeline, bindGroup };
     }
 }
@@ -98,8 +134,9 @@ class TonemapModuleContext implements RenderModuleContext {
             values.maxLinearDepth = camera.far;
             await context.updateUniformBuffer(encoder, uniformsStaging, uniforms, this.uniforms);
         }
-        if (context.hasStateChanged({ camera, tonemapping }) || context.buffersChanged()) {
-            resources.bindGroup = createBindGroup(resources.bin, pipeline, context.buffers, uniforms);
+        if (context.buffersChanged()) {
+            console.log("Recreating tonemapping bindGroup");
+            resources.bindGroup = createBindGroup(resources.bin, pipeline, context.buffers, uniforms, context.context!.getCurrentTexture());
         }
     }
 
@@ -109,19 +146,29 @@ class TonemapModuleContext implements RenderModuleContext {
 
         this.context.buffers.resolveMSAA(encoder);
 
-        const pass = encoder.beginRenderPass({
-            colorAttachments: [{
-                // TODO: Is this a performance problem? Cache the view?
-                view: context!.getCurrentTexture().createView(),
-                loadOp: "load",
-                storeOp: "store",
-            }],
-        })
+        if(pipeline instanceof GPUComputePipeline) {
+            const pass = encoder.beginComputePass();
+            pass.setPipeline(pipeline);
+            pass.setBindGroup(0, bindGroup);
+            pass.dispatchWorkgroups(context!.canvas.width, context!.canvas.height);
+            pass.end();
+        }else{
+            const pass = encoder.beginRenderPass({
+                colorAttachments: [{
+                    // TODO: Is this a performance problem? Cache the view?
+                    view: context!.getCurrentTexture().createView(),
+                    loadOp: "load",
+                    storeOp: "store",
+                }],
+            })
 
-        pass.setPipeline(pipeline);
-        pass.setBindGroup(0, bindGroup);
-        pass.draw(3);
-        pass.end();
+            pass.setPipeline(pipeline);
+            pass.setBindGroup(0, bindGroup);
+            pass.draw(3);
+            pass.end();
+        }
+
+
 
         // TODO: This is not really rendering yet but probably add timers to the command buffer
         // context.addRenderStatistics(stats);

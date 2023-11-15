@@ -1,15 +1,8 @@
-
 struct TonemappingUniforms {
     exposure: f32,
     mode: u32,
     maxLinearDepth: f32,
 };
-
-struct VertexOutput {
-    @builtin(position) pos: vec4f,
-    @location(0) uv: vec2f,
-};
-
 
 const tonemapMaxDeviation: f32 = 1.f;
 const tonemapModeColor: u32 = 0u;
@@ -21,10 +14,15 @@ const tonemapModeZbuffer: u32 = 5u;
 
 @group(0)
 @binding(0)
-var colorTexture: texture_2d<f32>;
+var inputTexture: texture_2d<f32>;
+
 @group(0)
 @binding(1)
 var<uniform> tonemapping: TonemappingUniforms;
+
+@group(0)
+@binding(2)
+var outputTexture: texture_storage_2d<rgba8unorm, write>;
 
 fn hash(x: u32) -> u32 {
     var xx = x;
@@ -55,6 +53,11 @@ fn RRTAndODTFit(color: vec3f) -> vec3f {
     return a / b;
 }
 
+struct VertexOutput {
+    @builtin(position) pos: vec4f,
+    @location(0) uv: vec2f,
+};
+
 @vertex
 fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
     // uvs from fullscreen triangle:
@@ -81,9 +84,20 @@ struct FragInput {
 @fragment
 fn fragmentMain(input: FragInput) -> @location(0) vec4f {
     var color = vec4(1., 0., 0., 1.);
-    let uv = vec2<i32>(input.uv * vec2f(textureDimensions(colorTexture)));
-    color = textureLoad(colorTexture, uv, 0);
+    let uv = vec2<i32>(input.uv * vec2f(textureDimensions(inputTexture)));
+    color = textureLoad(inputTexture, uv, 0);
     var rgb = RRTAndODTFit(color.rgb * tonemapping.exposure);
     rgb = linearTosRGB(rgb);
     return vec4(rgb, color.a);
+}
+
+@compute
+@workgroup_size(1)
+fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
+	let uv = vec2<i32>(global_id.xy);
+    var color = vec4(1., 0., 0., 1.);
+    color = textureLoad(inputTexture, uv, 0);
+    var rgb = RRTAndODTFit(color.rgb * tonemapping.exposure);
+    rgb = linearTosRGB(rgb);
+    textureStore(outputTexture, uv, vec4(rgb, color.a));
 }

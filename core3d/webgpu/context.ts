@@ -11,6 +11,7 @@ import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "../device";
 import { orthoNormalBasisMatrixFromPlane } from "../util";
 import { createDefaultModules, createDefaultModulesWebGPU } from "../modules/default";
+import { USE_COMPUTE as TONEMAP_USES_COMPUTE } from "../modules/tonemap/webgpu"
 
 // TODO: This is imported from webgl2 but it's totally independent, maybe move it to a common folder
 import { glUBOProxy, type DrawStatistics, type UniformsProxy } from "webgl2";
@@ -126,6 +127,7 @@ export class RenderContextWebGPU {
      * Note that these buffers will be recreated whenever the {@link RenderState.output} size changes.
      */
     buffers: RenderBuffers = undefined!;
+    canvasContextConfig: GPUCanvasConfiguration | undefined;
 
     /** WebGL textures used for image based lighting ({@link https://en.wikipedia.org/wiki/Image-based_lighting | IBL}).
      * @remarks
@@ -152,7 +154,7 @@ export class RenderContextWebGPU {
         readonly canvas: HTMLCanvasElement,
         /** Imported resources. */
         readonly imports: Core3DImports,
-        // webGLOptions?: WebGLContextAttributes,
+        canvasContextConfig?: GPUCanvasConfiguration,
     ) {
         // TODO: Check equivalents to provokingVertex in WebGPU the others
         // are supported by default
@@ -201,6 +203,8 @@ export class RenderContextWebGPU {
             mode: "uint",
         });
 
+        this.canvasContextConfig = canvasContextConfig;
+
         // outlines uniforms
         // TODO
         // this.outlinesUniformsData = glUBOProxy({
@@ -212,8 +216,12 @@ export class RenderContextWebGPU {
         // this.outlineUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.outlinesUniformsData.buffer.byteLength });
     }
 
-    canvasFormat() {
-        return navigator.gpu.getPreferredCanvasFormat();
+    canvasFormat(): GPUTextureFormat {
+        if (TONEMAP_USES_COMPUTE) {
+            return "rgba8unorm";
+        }else{
+            return navigator.gpu.getPreferredCanvasFormat();
+        }
     }
 
     buffersChanged() {
@@ -262,11 +270,19 @@ export class RenderContextWebGPU {
             }
         });
 
-        const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
-        this.context.configure({
+        const canvasFormat = this.canvasFormat();
+        this.canvasContextConfig = this.canvasContextConfig ?? {
             device: this.device,
             format: canvasFormat,
-        });
+        };
+        if(TONEMAP_USES_COMPUTE) {
+            if(this.canvasContextConfig.usage) {
+                this.canvasContextConfig.usage |= GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT;
+            }else{
+                this.canvasContextConfig.usage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT;
+            }
+        }
+        this.context.configure(this.canvasContextConfig);
 
         this.lostJustHappened = false;
         this.emulatingContextLoss = false;
