@@ -465,17 +465,21 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     const { outlineRenderers } = this;
                     let outlineRenderer = outlineRenderers.get(plane);
                     if (!outlineRenderer) {
-                        outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p);
+                        const edgeAngleThreshold = 30; // don't render intersecting edges (as points) that has less angles between their neighboring triangles.
+                        outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p, edgeAngleThreshold);
                         outlineRenderers.set(plane, outlineRenderer);
                     }
                     let lineCount = 0;
                     const [...lineClusters] = outlineRenderer.intersectTriangles(renderNodes);
                     {
-                        const { count, vao } = outlineRenderer.makeLinesVAO(lineClusters);
-                        lineCount = count;
-                        outlineRenderer.renderLines(count, vao);
-                        outlineRenderer.renderPoints(count, vao);
-                        glDelete(gl, vao);
+                        const buffers = outlineRenderer.makeBuffers(lineClusters);
+                        if (buffers) {
+                            const { linesCount, pointsCount, linesVAO, pointsVAO } = buffers;
+                            lineCount = linesCount;
+                            outlineRenderer.renderLines(linesCount, linesVAO);
+                            outlineRenderer.renderPoints(pointsCount, pointsVAO);
+                            glDelete(gl, [linesVAO, pointsVAO]);
+                        }
                     }
 
                     const end = performance.now();
