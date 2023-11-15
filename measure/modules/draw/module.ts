@@ -514,21 +514,9 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                     const { screenPoints, removedIndices, addedIndices } = points;
                     drawPart.vertices2D = screenPoints;
                     if ((removedIndices.length > 0 || addedIndices.length > 0)) {
-                        if (drawPart.text && Array.isArray(drawPart.text)) {
-                            drawPart.text[0] = drawPart.text[0].reduce((tail, head, i) => {
-                                if (addedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i - 1) == undefined) {
-                                    return tail.concat(["", head])
-                                }
-                                if (removedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i + 1) != undefined) {
-                                    return tail;
-                                } else {
-                                    return tail.concat(head);
-                                }
-                            }, [] as string[]);
-                        }
                         if (drawPart.drawType == "angle") {
                             const newVert3d: number[] = [];
-                            drawPart.vertices3D.forEach((v, i) => {
+                            drawPart.vertices3D.forEach((_, i) => {
                                 if (addedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i - 1) == undefined) {
                                     newVert3d.concat([-1, i])
                                 }
@@ -557,20 +545,8 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                             camera.far
                         );
                         if (voidPoints) {
-                            const { screenPoints, removedIndices, addedIndices } = voidPoints;
+                            const { screenPoints } = voidPoints;
                             drawVoid.vertices2D = screenPoints;
-                            if ((removedIndices.length > 0 || addedIndices.length > 0) && drawPart.text && Array.isArray(drawPart.text)) {
-                                drawPart.text[j + 1] = drawPart.text[j + 1].reduce((tail, head, i) => {
-                                    if (addedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i - 1) == undefined) {
-                                        return tail.concat(["", head])
-                                    }
-                                    if (removedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i + 1) != undefined) {
-                                        return tail;
-                                    } else {
-                                        return tail.concat(head);
-                                    }
-                                }, [] as string[]);
-                            }
                         }
                         else {
                             drawVoid.vertices2D = undefined;
