@@ -1,9 +1,3 @@
-
-struct BackgroundUniforms {
-    envBlurNormalized: f32,
-    mipCount: i32,
-}
-
 struct CameraUniforms {
     clipViewMatrix: mat4x4<f32>,
     viewClipMatrix: mat4x4<f32>,
@@ -13,6 +7,11 @@ struct CameraUniforms {
     viewLocalMatrixNormal: mat3x3<f32>,
     viewSize: vec2f,
     near: f32, // near clipping plane distance
+}
+
+struct BackgroundUniforms {
+    envBlurNormalized: f32,
+    mipCount: i32,
 }
 
 @group(0)
