@@ -52,8 +52,7 @@ export class RenderContextWebGPU {
     private modules: readonly RenderModuleContext[] | undefined;
     private cameraUniformsData: ReturnType<typeof glUBOProxy>;
     private clippingUniformsData;
-    // TODO
-    // private outlinesUniformsData;
+    private outlinesUniformsData;
     private localSpaceTranslation = vec3.create() as ReadonlyVec3;
     private readonly resourceBins = new Set<ResourceBin>();
     private defaultResourceBin: ResourceBin | undefined;
@@ -97,9 +96,10 @@ export class RenderContextWebGPU {
     // /** WebGPU uniform buffer for clipping related uniforms. */
     clippingStagingUniforms: GPUBuffer | undefined;
     clippingUniforms: GPUBuffer | undefined;
+    /** WebGPU uniform buffer for outline related uniforms. */
+    outlineStagingUniforms: GPUBuffer | undefined;
+    outlineUniforms: GPUBuffer | undefined;
     // TODO
-    // /** WebGPU uniform buffer for outline related uniforms. */
-    // readonly outlineUniforms: WebGLBuffer;
     // /** WebGPU GGX/PBR shading lookup table texture. */
     // readonly lut_ggx: WebGLTexture;
     /** WebGPU Sampler used to sample mipmapped diffuse IBL texture. */
@@ -204,17 +204,15 @@ export class RenderContextWebGPU {
             mode: "uint",
         });
 
-        this.canvasContextConfig = canvasContextConfig;
-
         // outlines uniforms
-        // TODO
-        // this.outlinesUniformsData = glUBOProxy({
-        //     localPlaneMatrix: "mat4",
-        //     planeLocalMatrix: "mat4",
-        //     color: "vec3",
-        //     planeIndex: "int",
-        // });
-        // this.outlineUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.outlinesUniformsData.buffer.byteLength });
+        this.outlinesUniformsData = glUBOProxy({
+            localPlaneMatrix: "mat4",
+            planeLocalMatrix: "mat4",
+            color: "vec3",
+            planeIndex: "int",
+        });
+
+        this.canvasContextConfig = canvasContextConfig;
     }
 
     canvasFormat(): GPUTextureFormat {
@@ -363,6 +361,17 @@ export class RenderContextWebGPU {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
+        this.outlineStagingUniforms = defaultBin.createBuffer({
+            label: "Outline uniforms staging buffer",
+            size: this.outlinesUniformsData.buffer.byteLength,
+            usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+        });
+        this.outlineUniforms = defaultBin.createBuffer({
+            label: "Outline uniforms buffer",
+            size: this.outlinesUniformsData.buffer.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
         // load modules
         const modulePromises = modules.map((m, i) => {
             const ret = m.withContext(this);
@@ -452,16 +461,20 @@ export class RenderContextWebGPU {
         if (!proxy.dirtyRange.isEmpty) {
             const { begin, end } = proxy.dirtyRange;
             const size = end - begin;
+
             // TODO: this should probably map the needed range only but the range is sometimes not
             // a multiple of the minimum allowed. Probably we need to find the previous multiple of the
             // beginning and the next multiple of the size
-            await uniformBufferStaging.mapAsync(GPUMapMode.WRITE);
-            const gpuBuffer = new Uint8Array(uniformBufferStaging.getMappedRange()).subarray(begin, end);
-            gpuBuffer.set(new Uint8Array(proxy.buffer).subarray(begin, end));
-            uniformBufferStaging.unmap();
-            // const encoder = this.device.createCommandEncoder();
-            encoder.copyBufferToBuffer(uniformBufferStaging, begin, uniformBuffer, begin, size);
-            // this.device.queue.submit([encoder.finish()]);
+            // await uniformBufferStaging.mapAsync(GPUMapMode.WRITE);
+            // const gpuBuffer = new Uint8Array(uniformBufferStaging.getMappedRange()).subarray(begin, end);
+            // gpuBuffer.set(new Uint8Array(proxy.buffer).subarray(begin, end));
+            // uniformBufferStaging.unmap();
+            // // const encoder = this.device.createCommandEncoder();
+            // encoder.copyBufferToBuffer(uniformBufferStaging, begin, uniformBuffer, begin, size);
+            // // this.device.queue.submit([encoder.finish()]);
+
+            this.device.queue.writeBuffer(uniformBuffer, begin, proxy.buffer, begin, size);
+
             proxy.dirtyRange.clear();
         }
     }
@@ -974,7 +987,7 @@ export class RenderContextWebGPU {
     private async updateClippingUniforms(encoder: GPUCommandEncoder, state: DerivedRenderState) {
         const { clippingUniforms, clippingStagingUniforms, clippingUniformsData } = this;
         if(!clippingUniforms || !clippingStagingUniforms) {
-            throw "Camera buffers not initialized yet"
+            throw "Clipping buffers not initialized yet"
         }
         const { clipping, matrices } = state;
         if (this.hasStateChanged({ clipping, matrices })) {
@@ -1003,27 +1016,29 @@ export class RenderContextWebGPU {
     }
 
     /** @internal */
-    updateOutlinesUniforms(plane: ReadonlyVec4, color: RGB, planeIndex: number) {
-        // TODO
-        // const { outlineUniforms, outlinesUniformsData } = this;
-        // // transform outline plane into local space
-        // const [x, y, z, offset] = plane;
-        // const normal = vec3.fromValues(x, y, z);
-        // const distance = -offset - vec3.dot(this.localSpaceTranslation, normal);
-        // // const margin = 0.001; // add a tiny margin so that these lines aren't clipped by the clipping plane itself
-        // const planeLS = vec4.fromValues(normal[0], normal[1], normal[2], -distance);
-        // // compute plane projection matrices
-        // // const localPlaneMatrix = othoNormalBasisMatrixFromPlane(planeLS);
-        // // const planeLocalMatrix = mat4.invert(mat4.create(), localPlaneMatrix);
-        // const planeLocalMatrix = orthoNormalBasisMatrixFromPlane(planeLS);
-        // const localPlaneMatrix = mat4.invert(mat4.create(), planeLocalMatrix);
-        // // set uniform values
-        // const { values } = outlinesUniformsData;
-        // values.planeLocalMatrix = planeLocalMatrix;
-        // values.localPlaneMatrix = localPlaneMatrix;
-        // values.color = color;
-        // values.planeIndex = planeIndex;
-        // this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
+    async updateOutlinesUniforms(encoder: GPUCommandEncoder, plane: ReadonlyVec4, color: RGB, planeIndex: number) {
+        const { outlineStagingUniforms, outlineUniforms, outlinesUniformsData } = this;
+        if(!outlineStagingUniforms || !outlineUniforms) {
+            throw "Outline buffers not initialized yet"
+        }
+        // transform outline plane into local space
+        const [x, y, z, offset] = plane;
+        const normal = vec3.fromValues(x, y, z);
+        const distance = -offset - vec3.dot(this.localSpaceTranslation, normal);
+        // const margin = 0.001; // add a tiny margin so that these lines aren't clipped by the clipping plane itself
+        const planeLS = vec4.fromValues(normal[0], normal[1], normal[2], -distance);
+        // compute plane projection matrices
+        // const localPlaneMatrix = othoNormalBasisMatrixFromPlane(planeLS);
+        // const planeLocalMatrix = mat4.invert(mat4.create(), localPlaneMatrix);
+        const planeLocalMatrix = orthoNormalBasisMatrixFromPlane(planeLS);
+        const localPlaneMatrix = mat4.invert(mat4.create(), planeLocalMatrix);
+        // set uniform values
+        const { values } = outlinesUniformsData;
+        values.planeLocalMatrix = planeLocalMatrix;
+        values.localPlaneMatrix = localPlaneMatrix;
+        values.color = color;
+        values.planeIndex = planeIndex;
+        await this.updateUniformBuffer(encoder, outlineStagingUniforms, outlineUniforms, outlinesUniformsData);
     }
 
     private extractPick(pickBuffer: Uint32Array, x: number, y: number, sampleDiscRadius: number, pickCameraPlane: boolean) {

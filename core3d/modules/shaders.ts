@@ -12,6 +12,7 @@ import watermark from "./watermark/shaders";
 import { shadersWGSL as tonemapWGSL } from "./tonemap/shaders";
 import { shadersWGSL as gridWGSL } from "./grid/shaders";
 import { shadersWGSL as backgroundWGSL } from "./background/shaders";
+import { shadersWGSL as cubeWGSL } from "./cube/shaders";
 
 /** @internal */
 export type Shaders = { readonly [P in string]: { readonly vertexShader: string; readonly fragmentShader?: string; } };
@@ -28,5 +29,7 @@ export type ShadersWGSL = { readonly [P in string]: { readonly shader: string } 
 export const moduleShadersWGSL = {
     tonemap: tonemapWGSL,
     grid: gridWGSL,
-    background: backgroundWGSL,  /*clipping, cube, dynamic, grid, octree, toon, watermark*/
+    background: backgroundWGSL,
+    cube: cubeWGSL,
+    /*clipping, dynamic, grid, octree, toon, watermark*/
 } as const satisfies { readonly [P in string]: ShadersWGSL }
