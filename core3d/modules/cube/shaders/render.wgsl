@@ -27,11 +27,7 @@ fn clip(point: vec3f, clipping: ClippingUniforms) -> bool{
     for(var i = 0u; i < clipping.numPlanes; i += 1u) {
         inside = inside && dot(vec4(point, 1.), clipping.planes[i]) * s < 0.f;
     }
-    if(clipping.mode == clippingModeIntersection){
-        return inside;
-    }else{
-        return !inside;
-    }
+    return select(!inside, inside, clipping.mode == clippingModeIntersection);
 }
 
 fn packNormalAndDeviation(normal: vec3f, deviation: f32) -> vec2<u32>{
@@ -52,7 +48,7 @@ fn combineMediumP(high: u32, low: u32) -> u32{
 
 // cube
 const cubeId = 0xfffffff8u;
-const PICK = false;
+@id(0) override PICK: bool;
 
 struct CubeUniforms {
     modelLocalMatrix: mat4x4<f32>

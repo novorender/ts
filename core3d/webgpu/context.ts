@@ -740,8 +740,7 @@ export class RenderContextWebGPU {
         if (this.usePrepass) {
             for (const module of this.modules) {
                 if (module && module.prepass) {
-                    // TODO: GL sets the framebuffer here
-                    module.prepass(derivedState);
+                    module.prepass(encoder, derivedState);
                 }
             }
         }

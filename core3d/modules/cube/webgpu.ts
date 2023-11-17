@@ -5,7 +5,7 @@ import type { DerivedRenderState } from "core3d";
 import { mat4, vec3, vec4 } from "gl-matrix";
 import { createIndices, createTriplets, createVertices } from "./common";
 
-async function createRenderPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, layout: GPUVertexBufferLayout, buffers: RenderBuffers) {
+async function createRenderOrPickPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, layout: GPUVertexBufferLayout, buffers: RenderBuffers, pick: boolean) {
     return await bin.createRenderPipelineAsync({
         label: "Cube render pipeline",
         layout: "auto",
@@ -20,15 +20,33 @@ async function createRenderPipeline(bin: ResourceBin, shaderModule: GPUShaderMod
             targets: [{
                 format: buffers.textures.color.format,
             }],
+            constants: {
+                0: pick ? 1 : 0,
+            }
         },
         multisample: {
             count: buffers.samples
         },
         primitive: {
+            // TODO: This is ccw in webgl but renders incorrectly here and works with cw
+            // probably related to right / left handedness change betwen gl / webgpu
             frontFace: "cw",
-            cullMode: "back",
+            cullMode: "none",
+        },
+        depthStencil: {
+            depthWriteEnabled: true,
+            format: buffers.textures.depth.format,
+            depthCompare: "less"
         }
     });
+}
+
+async function createRenderPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, layout: GPUVertexBufferLayout, buffers: RenderBuffers) {
+    return await createRenderOrPickPipeline(bin, shaderModule, layout, buffers, false);
+}
+
+async function createPickPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, layout: GPUVertexBufferLayout, buffers: RenderBuffers) {
+    return await createRenderOrPickPipeline(bin, shaderModule, layout, buffers, true);
 }
 
 async function createLinesPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, linesLayout: GPUVertexBufferLayout, opacityLayout: GPUVertexBufferLayout, buffers: RenderBuffers) {
@@ -120,6 +138,31 @@ export class CubeModule implements RenderModule {
         const renderPipeline = await createRenderPipeline(bin, renderShaderModule, vertexLayout, context.buffers);
         const renderBindGroup = bin.createBindGroup({
             label: "Cube render bind group",
+            layout: renderPipeline.getBindGroupLayout(0),
+            entries: [
+                {
+                    binding: 0,
+                    resource: { buffer: context.cameraUniforms! }
+                },
+                {
+                    binding: 1,
+                    resource: { buffer: context.clippingUniforms! }
+                },
+                {
+                    binding: 2,
+                    resource: { buffer: uniforms }
+                },
+            ]
+        });
+
+
+        const pickShaderModule = bin.createShaderModule({
+            label: "Cube pick shader module",
+            code: shaders.render.shader,
+        });
+        const pickPipeline = await createPickPipeline(bin, pickShaderModule, vertexLayout, context.buffers);
+        const pickBindGroup = bin.createBindGroup({
+            label: "Cube pick bind group",
             layout: renderPipeline.getBindGroupLayout(0),
             entries: [
                 {
@@ -254,6 +297,9 @@ export class CubeModule implements RenderModule {
             renderBindGroup,
             renderLayout: vertexLayout,
             renderShaderModule,
+            pickPipeline,
+            pickBindGroup,
+            pickShaderModule,
             vb_line,
             vb_opacity,
             linesLayout,
@@ -292,8 +338,9 @@ class CubeModuleContext implements RenderModuleContext {
         }
 
         if(context.buffersChanged()) {
-            const { bin, renderShaderModule, renderLayout, linesShaderModule, linesLayout, opacityLayout } = resources;
+            const { bin, renderShaderModule, pickShaderModule, renderLayout, linesShaderModule, linesLayout, opacityLayout } = resources;
             resources.renderPipeline = await createRenderPipeline(bin, renderShaderModule, renderLayout, context.buffers);
+            resources.pickPipeline = await createPickPipeline(bin, pickShaderModule, renderLayout, context.buffers);
             resources.linesPipeline = await createLinesPipeline(bin, linesShaderModule, linesLayout, opacityLayout, context.buffers);
         }
     }
@@ -310,7 +357,12 @@ class CubeModuleContext implements RenderModuleContext {
                     view: context.buffers.colorRenderAttachment(),
                     loadOp: "load",
                     storeOp: "store",
-                }]
+                }],
+                depthStencilAttachment: {
+                    view: context.buffers.depthRenderAttachment(),
+                    depthLoadOp: "load",
+                    depthStoreOp: "store",
+                }
             });
 
             renderPass.setPipeline(renderPipeline);
@@ -364,22 +416,32 @@ class CubeModuleContext implements RenderModuleContext {
         }
     }
 
-    pick(state: DerivedRenderState) {
-        // const { context, resources } = this;
-        // const { programs, uniforms, vao_render } = resources;
-        // const { gl, cameraUniforms, clippingUniforms } = context;
+    pick(encoder: GPUCommandEncoder, state: DerivedRenderState) {
+        const { context, resources } = this;
+        const { pickPipeline, pickBindGroup, vb_render, ib_render, numIndices } = resources;
 
-        // if (state.cube.enabled) {
-        //     glState(gl, {
-        //         program: programs.pick,
-        //         uniformBuffers: [cameraUniforms, clippingUniforms, uniforms.cube],
-        //         depth: { test: true, },
-        //         cull: { enable: false },
-        //         vertexArrayObject: vao_render,
-        //     });
-        //     glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
-        //     // TODO: render pickable outlines too?
-        // }
+        if (state.cube.enabled) {
+            // TODO: render pickable outlines too?
+            const renderPass = encoder.beginRenderPass({
+                colorAttachments: [{
+                    view: context.buffers.colorRenderAttachment(),
+                    loadOp: "load",
+                    storeOp: "store",
+                }],
+                depthStencilAttachment: {
+                    view: context.buffers.depthRenderAttachment(),
+                    depthLoadOp: "load",
+                    depthStoreOp: "store",
+                }
+            });
+
+            renderPass.setPipeline(pickPipeline);
+            renderPass.setBindGroup(0, pickBindGroup);
+            renderPass.setVertexBuffer(0, vb_render);
+            renderPass.setIndexBuffer(ib_render, "uint16");
+            renderPass.drawIndexed(numIndices);
+            renderPass.end();
+        }
     }
 
     contextLost(): void {

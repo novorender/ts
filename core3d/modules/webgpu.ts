@@ -32,13 +32,13 @@ export interface RenderModuleContext {
      * Do a preliminary render pass to fill in Z-buffer for GPUs where this is beneficial.
      * @param state The current frame render state.
      */
-    readonly prepass?: (state: DerivedRenderState) => void;
+    readonly prepass?: (encoder: GPUCommandEncoder, state: DerivedRenderState) => void;
 
     /**
      * Render into pick buffers with module specific data.
      * @param state The current frame render state.
      */
-    readonly pick?: (state: DerivedRenderState) => void;
+    readonly pick?: (encoder: GPUCommandEncoder, state: DerivedRenderState) => void;
 
     /**
      * Render into color and depth buffer.
