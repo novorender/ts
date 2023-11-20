@@ -186,13 +186,20 @@ export class OutlineRenderer {
             const indices = new Uint32Array(totalIndices);
             let segmentOffset = 0;
             let indexOffset = 0;
-            for (const { objectId, segments, points, vertices } of clusters) {
+            for (const { objectId, segments, points, vertices, normals } of clusters) {
+                // add vertex indices for vertex/edge rendering/
                 const vtxOffset = segmentOffset * 2;
                 for (let i = 0; i < points.length; i++) {
                     indices[indexOffset++] = points[i] + vtxOffset;
                 }
+                // use normal to change alpha in color
+                const baseColor = 0x0000_00ff; // TODO: fetch color from render state/highlight buffer.
                 positions.set(vertices, segmentOffset * 4);
-                colors.fill(0xff00_00ff, segmentOffset, segmentOffset + segments);
+                for (let i = 0; i < segments; i++) {
+                    const nz = snorm16ToFloat(normals[i * 3 + 2]);
+                    const alpha = 1 - Math.min(1, Math.abs(nz));
+                    colors[segmentOffset + i] = baseColor | (alpha * 255 << 24);
+                }
                 objectIds.fill(objectId, segmentOffset, segmentOffset + segments);
                 segmentOffset += segments;
             }
@@ -293,6 +300,7 @@ function getMeshBuffers(gl: WebGL2RenderingContext, mesh: Mesh) {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.idxBuf);
     gl.getBufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, idxBuf, 0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+    // get position buffer
     const posBuf = new Int16Array(numVertices * 3);
     gl.bindBuffer(gl.ARRAY_BUFFER, mesh.posVB);
     gl.getBufferSubData(gl.ARRAY_BUFFER, 0, posBuf, 0);
@@ -507,7 +515,7 @@ function extractEdges(segments: number, vertices: Float32Array, normals: Int16Ar
                 for (let j = i + 1; j < normals.length; j++) {
                     let angleCos = vec3.dot(normals[i], normals[j]);
                     if (doubleSided) {
-                        // check direction of both neighbor triangle segments, i.e. is is the first or second segment vertex/edge that is shared.
+                        // check direction of both neighbor triangle segments, i.e. is it the first or second segment vertex/edge that is shared.
                         const dir0 = keyFromVertex(segmentIndices[i] * 2) == key;
                         const dir1 = keyFromVertex(segmentIndices[j] * 2) == key;
                         if (dir0 == dir1) {
