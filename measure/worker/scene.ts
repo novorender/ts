@@ -79,7 +79,9 @@ export class MeasureTool {
             lutPath = lutPath.substring(idx);
         }
         this.downloader = new Downloader(url);
-
+        if (lutPath.length === 0) {
+            lutPath = "object_id_to_brep_hash";
+        }
         try {
             this.idToHash = new Uint8Array(await this.downloader.downloadArrayBuffer(lutPath));
         } catch {

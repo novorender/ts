@@ -34,6 +34,8 @@ export interface DrawVoid {
     vertices2D?: ReadonlyVec2[];
     /** World coordinates*/
     vertices3D: ReadonlyVec3[];
+    /** Indices reffering to vertices3D and text if it is a list, -1 means an added empty text*/
+    indicesOnScreen?: number[];
 }
 
 /** Information about object to draw for measurement */
@@ -46,7 +48,7 @@ export interface DrawPart {
      * For angles its the angle in degrees
      * For surfaces its a list of list strings. First list is for the outer loop while the remaining is for the voids 
      */
-    text?: string | string[][];
+    readonly text?: string | string[][];
     /** Type of object to draw */
     readonly drawType: "lines" | "filled" | "vertex" | "curveSegment" | "angle" | "text";
     /** From/to 3d elevation of object, used for cylinder to show slope */
@@ -59,8 +61,9 @@ export interface DrawPart {
     /** View space coordinates, in pixel values, empty if the entire part is out of view*/
     vertices2D?: ReadonlyVec2[];
 
-    /** Indices reffering to vertices3D and text if it is a list*/
+    /** Indices reffering to vertices3D and text if it is a list, -1 means an added empty text*/
     indicesOnScreen?: number[];
+
 }
 
 /** Draw context for keeping updated canvas widht height and camera properties */
