@@ -1,3 +1,5 @@
+// #import novorender::common
+
 struct CameraUniforms {
     clipViewMatrix: mat4x4<f32>,
     viewClipMatrix: mat4x4<f32>,
