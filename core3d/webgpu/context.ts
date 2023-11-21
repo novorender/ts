@@ -216,11 +216,7 @@ export class RenderContextWebGPU {
     }
 
     canvasFormat(): GPUTextureFormat {
-        if (TONEMAP_USES_COMPUTE) {
-            return "rgba8unorm";
-        }else{
-            return navigator.gpu.getPreferredCanvasFormat();
-        }
+        return navigator.gpu.getPreferredCanvasFormat();
     }
 
     buffersChanged() {
@@ -279,9 +275,9 @@ export class RenderContextWebGPU {
         canvasContextConfig.format = canvasFormat;
         if(TONEMAP_USES_COMPUTE) {
             if(canvasContextConfig.usage) {
-                canvasContextConfig.usage |= GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT;
+                canvasContextConfig.usage |= GPUTextureUsage.COPY_DST;
             }else{
-                canvasContextConfig.usage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT;
+                canvasContextConfig.usage = GPUTextureUsage.COPY_DST;
             }
         }
         this.context.configure(canvasContextConfig);
