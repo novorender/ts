@@ -12,17 +12,30 @@ const tonemapModeObjectId: u32 = 3u;
 const tonemapModeDeviation: u32 = 4u;
 const tonemapModeZbuffer: u32 = 5u;
 
-@group(0)
-@binding(0)
-var inputTexture: texture_2d<f32>;
+
+fn unpackNormalAndDeviation(normalAndDeviation: vec2u) -> vec4f{
+    return vec4(unpack2x16float(normalAndDeviation[0]), unpack2x16float(normalAndDeviation[1]));
+}
 
 @group(0)
-@binding(1)
+@binding(0)
 var<uniform> tonemapping: TonemappingUniforms;
 
 @group(0)
-@binding(2)
+@binding(1)
 var outputTexture: texture_storage_2d<rgba8unorm, write>;
+
+@group(1)
+@binding(0)
+var colorTexture: texture_2d<f32>;
+
+@group(1)
+@binding(1)
+var pickTexture: texture_2d<u32>;
+
+@group(1)
+@binding(2)
+var zbufferTexture: texture_2d<f32>;
 
 fn hash(x: u32) -> u32 {
     var xx = x;
@@ -83,23 +96,90 @@ struct FragInput {
     @location(0) uv: vec2f,
 }
 
+fn tonemap(uv: vec2<i32>) -> vec4f {
+    var rgb: vec3f;
+    switch(tonemapping.mode) {
+        case tonemapModeColor: {
+            let color = textureLoad(colorTexture, uv, 0);
+            rgb = RRTAndODTFit(color.rgb * tonemapping.exposure);
+            rgb = linearTosRGB(rgb);
+            return vec4(rgb, color.a);
+        }
+        case tonemapModeNormal: {
+            let xyz = unpackNormalAndDeviation(vec2u(textureLoad(pickTexture, uv, 0).yz)).xyz;
+            let isnan: vec3<bool> = xyz != xyz;
+            if(any(isnan)) {
+                rgb = vec3(0.);
+            } else {
+                rgb = xyz * .5f + .5f;
+            }
+            return vec4(rgb, 1.);
+        }
+        case tonemapModeDepth: {
+            let linearDepth = bitcast<f32>(textureLoad(pickTexture, uv, 0).w);
+            // TODO: No isInf yet in wgsl
+            // if(isInf(linearDepth)) {
+            //     rgb = vec3(0., 0., 0.25);
+            // } else {
+                let i = (linearDepth / tonemapping.maxLinearDepth);
+                rgb = vec3(pow(i, 0.5));
+            // }
+            return vec4(rgb, 1.);
+        }
+        case tonemapModeObjectId: {
+            let objectId = textureLoad(pickTexture, uv, 0).x;
+            if(objectId == 0xffffffffu) {
+                rgb = vec3(0.);
+            } else {
+                // color.rgb = vec3(0,1,1);
+                let rgba = hash(~objectId);
+                let r = f32((rgba >> 16u) & 0xffu) / 255.;
+                let g = f32((rgba >> 8u) & 0xffu) / 255.;
+                let b = f32((rgba >> 0u) & 0xffu) / 255.;
+                rgb = vec3(r, g, b);
+            }
+            return vec4(rgb, 1.);
+        }
+        case tonemapModeDeviation: {
+            let deviation = unpackNormalAndDeviation(textureLoad(pickTexture, uv, 0).yz).w;
+            rgb = select(vec3(-deviation / tonemapMaxDeviation, 0., 0.), vec3(0., deviation / tonemapMaxDeviation, 0.), deviation > 0.);
+            return vec4(rgb, 1.);
+        }
+        case tonemapModeZbuffer: {
+            let z = textureLoad(zbufferTexture, uv, 0).x;
+            rgb = vec3(z);
+            return vec4(rgb, 1.);
+        }
+        default: {
+            return vec4(1.);
+        }
+    }
+}
+
 @fragment
 fn fragmentMain(input: FragInput) -> @location(0) vec4f {
-    var color = vec4(1., 0., 0., 1.);
-    let uv = vec2<i32>(input.uv * vec2f(textureDimensions(inputTexture)));
-    color = textureLoad(inputTexture, uv, 0);
-    var rgb = RRTAndODTFit(color.rgb * tonemapping.exposure);
-    rgb = linearTosRGB(rgb);
-    return vec4(rgb, color.a);
+    var uv: vec2i;
+    switch(tonemapping.mode) {
+        case tonemapModeColor: {
+            uv = vec2<i32>(input.uv * vec2f(textureDimensions(colorTexture)));
+            break;
+        }
+        case tonemapModeNormal, tonemapModeDepth, tonemapModeObjectId, tonemapModeDeviation: {
+            uv = vec2<i32>(input.uv * vec2f(textureDimensions(pickTexture)));
+            break;
+        }
+        case tonemapModeZbuffer: {
+            uv = vec2<i32>(input.uv * vec2f(textureDimensions(zbufferTexture)));
+            break;
+        }
+        default: { break; }
+    }
+    return tonemap(uv);
 }
 
 @compute
 @workgroup_size(1)
 fn computeMain(@builtin(global_invocation_id) global_id: vec3<u32>) {
-	let uv = vec2<i32>(global_id.xy);
-    var color = vec4(1., 0., 0., 1.);
-    color = textureLoad(inputTexture, uv, 0);
-    var rgb = RRTAndODTFit(color.rgb * tonemapping.exposure);
-    rgb = linearTosRGB(rgb);
-    textureStore(outputTexture, uv, vec4(rgb, color.a));
+	let uv = vec2i(global_id.xy);
+    textureStore(outputTexture, uv, tonemap(uv));
 }

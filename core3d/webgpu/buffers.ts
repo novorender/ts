@@ -61,14 +61,14 @@ export class RenderBuffers {
                 size: {width, height},
                 // format: "rg11b10ufloat", // TODO: Not supported as render attachment
                 format: "rgba16float",
-                usage: samples > 1 ? GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING : GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+                usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
             }),
             pick: resourceBin.createTexture({
                 label: "Pick buffer",
                 dimension: "2d",
                 size: {width, height},
                 format: "rgba32uint",
-                usage: samples > 1 ? GPUTextureUsage.COPY_DST : GPUTextureUsage.RENDER_ATTACHMENT,
+                usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
              }), // TODO: Pack linearDepth into this buffer instead.
             depth: resourceBin.createTexture({
                 label: "Depth buffer",
@@ -78,7 +78,7 @@ export class RenderBuffers {
                     height
                 },
                 format: "depth32float",
-                usage: samples > 1 ? GPUTextureUsage.RENDER_ATTACHMENT : GPUTextureUsage.RENDER_ATTACHMENT,
+                usage: samples > 1 ? GPUTextureUsage.TEXTURE_BINDING : GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
             }),
             colorMSAA: samples > 1 ? resourceBin.createTexture({
                 label: "MSAA color buffer",
@@ -191,20 +191,21 @@ export class RenderBuffers {
         const { textureViews } = this;
         const {colorMSAA, color, depthMSAA, depth} = textureViews;
         if (colorMSAA && depthMSAA) {
+            // TODO: Missing depth resolve. There's no direct way to do it in webgpu
+            // probably needs to be done explicitly through a shader, maybe compute?
             const pass = encoder.beginRenderPass({
-                label: "Resolve MSAA Pass",
+                label: "Resolve color MSAA Pass",
                 colorAttachments: [
                     {
                         view: colorMSAA,
                         resolveTarget: color,
                         loadOp: "load",
                         storeOp: "store",
-                        clearValue: {r: 0., g: 0., b: 0., a: 1.},
                     },
                 ]
             });
 
-            pass.end()
+            pass.end();
         }
     }
 

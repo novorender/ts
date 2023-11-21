@@ -216,7 +216,11 @@ export class RenderContextWebGPU {
     }
 
     canvasFormat(): GPUTextureFormat {
-        return navigator.gpu.getPreferredCanvasFormat();
+        if(TONEMAP_USES_COMPUTE){
+            return "rgba8unorm";
+        }else{
+            return navigator.gpu.getPreferredCanvasFormat();
+        }
     }
 
     buffersChanged() {

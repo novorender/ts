@@ -6,23 +6,19 @@ import type { DerivedRenderState } from "core3d";
 
 export const USE_COMPUTE = false;
 
-function createBindGroup(bin: ResourceBin, pipeline: GPUPipelineBase, buffers: RenderBuffers, uniforms: GPUBuffer, canvasTexture: GPUTexture) {
-    if (USE_COMPUTE) {
+function createBindGroup(bin: ResourceBin, pipeline: GPUPipelineBase, uniforms: GPUBuffer, outputTexture: GPUTexture | undefined) {
+    if (outputTexture) {
         return bin.createBindGroup({
             label: "Tone mapping bind group",
             layout: pipeline.getBindGroupLayout(0),
             entries: [
                 {
                     binding: 0,
-                    resource: buffers.textureViews.color
-                },
-                {
-                    binding: 1,
                     resource: { buffer: uniforms }
                 },
                 {
-                    binding: 2,
-                    resource: canvasTexture.createView()
+                    binding: 1,
+                    resource: outputTexture.createView()
                 }
             ]
         })
@@ -33,15 +29,32 @@ function createBindGroup(bin: ResourceBin, pipeline: GPUPipelineBase, buffers: R
             entries: [
                 {
                     binding: 0,
-                    resource: buffers.textureViews.color
-                },
-                {
-                    binding: 1,
                     resource: { buffer: uniforms }
                 }
             ]
         })
     }
+}
+
+function createTextureBindGroup(bin: ResourceBin, pipeline: GPUPipelineBase, buffers: RenderBuffers) {
+    return bin.createBindGroup({
+        label: "Tone mapping textures bind group",
+        layout: pipeline.getBindGroupLayout(1),
+        entries: [
+            {
+                binding: 0,
+                resource: buffers.textureViews.color
+            },
+            {
+                binding: 1,
+                resource: buffers.textureViews.pick
+            },
+            {
+                binding: 2,
+                resource: buffers.textureViews.depth
+            }
+        ]
+    })
 }
 
 /** @internal */
@@ -64,7 +77,7 @@ export class TonemapModule implements RenderModule {
     }
 
     async createResources(context: RenderContextWebGPU, uniformsProxy: Uniforms) {
-        const { shader } = context.imports.shadersWGSL.tonemap.render;
+        const shaders = context.imports.shadersWGSL.tonemap;
         const bin = context.resourceBin("Tonemap");
         const uniformsStaging = bin.createBuffer({
             label: "Tonemapping uniforms staging buffer",
@@ -79,7 +92,7 @@ export class TonemapModule implements RenderModule {
 
         const shaderModule = bin.createShaderModule({
             label: "Tonemapping shader module",
-            code: shader,
+            code: shaders.render.shader,
         });
         let pipeline;
         let intermediateTexture;
@@ -95,10 +108,10 @@ export class TonemapModule implements RenderModule {
             intermediateTexture = bin.createTexture({
                 label: "Tonemapping render attachment",
                 format: "rgba8unorm",
-                usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-                size: [context.canvas.width, context.canvas.height],
+                usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+                size: [context!.context!.getCurrentTexture().width, context!.context!.getCurrentTexture().height],
                 dimension: "2d",
-            })
+            });
         }else{
             pipeline = await bin.createRenderPipelineAsync({
                 label: "Tonemapping pipeline",
@@ -117,8 +130,9 @@ export class TonemapModule implements RenderModule {
             });
         }
 
-        const bindGroup = createBindGroup(bin, pipeline, context.buffers, uniforms, context.context!.getCurrentTexture());
-        return { bin, uniformsStaging, uniforms, pipeline, bindGroup, intermediateTexture };
+        const bindGroup = createBindGroup(bin, pipeline, uniforms, intermediateTexture);
+        const texturesBindGroup = createTextureBindGroup(bin, pipeline, context.buffers);
+        return { bin, uniformsStaging, uniforms, pipeline, bindGroup, texturesBindGroup, intermediateTexture };
     }
 }
 
@@ -142,36 +156,34 @@ class TonemapModuleContext implements RenderModuleContext {
             values.maxLinearDepth = camera.far;
             await context.updateUniformBuffer(encoder, uniformsStaging, uniforms, this.uniforms);
         }
+        const canvasTexture = context!.context!.getCurrentTexture();
+        if(intermediateTexture && (canvasTexture.width != intermediateTexture.width || canvasTexture.height != intermediateTexture.height)) {
+            resources.intermediateTexture = bin.createTexture({
+                label: "Tonemapping render attachment",
+                format: "rgba8unorm",
+                usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+                size: [context!.context!.getCurrentTexture().width, context!.context!.getCurrentTexture().height],
+                dimension: "2d",
+            });
+            resources.bindGroup = createBindGroup(bin, pipeline, uniforms, resources.intermediateTexture);
+        }
         if (context.buffersChanged()) {
-            console.log("Recreating tonemapping bindGroup");
-            if(intermediateTexture) {
-                resources.bindGroup = createBindGroup(bin, pipeline, context.buffers, uniforms, intermediateTexture);
-            }else{
-                resources.bindGroup = createBindGroup(bin, pipeline, context.buffers, uniforms, context.context!.getCurrentTexture());
-            }
-            if(intermediateTexture && (context.canvas.width != intermediateTexture.width || context.canvas.height != intermediateTexture.height)) {
-                resources.intermediateTexture = bin.createTexture({
-                    label: "Tonemapping render attachment",
-                    format: "rgba8unorm",
-                    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-                    size: [context.canvas.width, context.canvas.height],
-                    dimension: "2d",
-                })
-            }
+            resources.texturesBindGroup = createTextureBindGroup(bin, pipeline, context.buffers);
         }
     }
 
     render(encoder: GPUCommandEncoder) {
-        const { context } = this.context;
-        const { pipeline, bindGroup, intermediateTexture } = this.resources;
+        const { context, buffers } = this.context;
+        const { pipeline, bindGroup, texturesBindGroup, intermediateTexture } = this.resources;
 
-        this.context.buffers.resolveMSAA(encoder);
+        buffers.resolveMSAA(encoder);
 
         if(pipeline instanceof GPUComputePipeline) {
             const pass = encoder.beginComputePass();
             pass.setPipeline(pipeline);
             pass.setBindGroup(0, bindGroup);
-            pass.dispatchWorkgroups(context!.canvas.width, context!.canvas.height);
+            pass.setBindGroup(1, texturesBindGroup);
+            pass.dispatchWorkgroups(buffers.textures.color.width, buffers.textures.color.height);
             pass.end();
 
             encoder.copyTextureToTexture(
@@ -186,15 +198,15 @@ class TonemapModuleContext implements RenderModuleContext {
         }else{
             const pass = encoder.beginRenderPass({
                 colorAttachments: [{
-                    // TODO: Is this a performance problem? Cache the view?
                     view: context!.getCurrentTexture().createView(),
-                    loadOp: "load",
+                    loadOp: "clear",
                     storeOp: "store",
                 }],
             })
 
             pass.setPipeline(pipeline);
             pass.setBindGroup(0, bindGroup);
+            pass.setBindGroup(1, texturesBindGroup);
             pass.draw(3);
             pass.end();
         }
