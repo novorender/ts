@@ -29,11 +29,6 @@ async function createPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, b
                 }
             }]
         },
-        depthStencil: {
-            depthWriteEnabled: false,
-            format: buffers.textures.depth.format,
-            depthCompare: "less-equal",
-        },
         multisample: {
             count: buffers.samples
         }
@@ -150,11 +145,6 @@ class GridModuleContext implements RenderModuleContext {
                     loadOp: "load",
                     storeOp: "store",
                 }],
-                depthStencilAttachment: {
-                    view: context.buffers.depthRenderAttachment(),
-                    depthLoadOp: "load",
-                    depthStoreOp: "discard"
-                }
             });
 
             pass.setPipeline(pipeline);
