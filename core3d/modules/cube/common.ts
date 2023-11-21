@@ -59,3 +59,15 @@ export function createTriplets(pos: Float32Array, indices: Uint16Array) {
     }
     return triplets;
 }
+
+export function axisVertices() {
+    return new Float32Array([
+        // vertex      normal           color
+        0., 0., 0.,    0., 1., 0.,      1., 0., 0.,
+        1., 0., 0.,    0., 1., 0.,      1., 0., 0.,
+        0., 0., 0.,    0., 1., 0.,      0., 1., 0.,
+        0., 1., 0.,    0., 1., 0.,      0., 1., 0.,
+        0., 0., 0.,    0., 1., 0.,      0., 0., 1.,
+        0., 0., 1.,    0., 1., 0.,      0., 0., 1.,
+    ]);
+}

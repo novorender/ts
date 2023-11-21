@@ -11,24 +11,24 @@ export function matricesFromRenderState(state: { output: RenderStateOutput; came
     const { width, height, webgpu } = output;
     const aspectRatio = width / height;
     const fovY = camera.fov * Math.PI / 180;
-    const viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
-    if(webgpu) {
-        viewWorld[5] *= -1.;
-        viewWorld[1] *= -1.;
-        viewWorld[9] *= -1.;
-    }
-    const viewClip = mat4.create();
-    if(webgpu) {
-        viewClip[5] *= -1.;
-    }
+    let viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
+    let viewClip = mat4.create();
     if (camera.kind == "orthographic") {
         const aspect = output.width / output.height;
         const halfHeight = camera.fov / 2;
         const halfWidth = halfHeight * aspect;
-        mat4.ortho(viewClip, -halfWidth, halfWidth, -halfHeight, halfHeight, camera.near, camera.far);
-    }
-    else {
-        mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
+        if(webgpu) {
+            mat4.orthoZO(viewClip, -halfWidth, halfWidth, -halfHeight, halfHeight, camera.near, camera.far);
+        }else{
+            mat4.ortho(viewClip, -halfWidth, halfWidth, -halfHeight, halfHeight, camera.near, camera.far);
+        }
+    } else {
+        if(webgpu) {
+            mat4.perspectiveZO(viewClip, fovY, aspectRatio, camera.near, camera.far);
+        }else{
+            mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
+        }
+
     }
     return new MatricesImpl(viewWorld, viewClip);
 }

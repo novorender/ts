@@ -332,6 +332,8 @@ export interface RenderStateCube {
     readonly enabled: boolean; // default = false
     readonly position: ReadonlyVec3; // default = (0,0,0)
     readonly scale: number; // default = 1
+    readonly drawAxis: boolean;
+    readonly drawCube: boolean;
 }
 
 /** Gradient curve knot node.

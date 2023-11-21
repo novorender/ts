@@ -3,7 +3,7 @@ import type { RenderModuleContext, RenderModule } from "../webgpu";
 import { glUBOProxy, type UniformTypes } from "webgl2";
 import type { DerivedRenderState } from "core3d";
 import { mat4, vec3, vec4 } from "gl-matrix";
-import { createIndices, createTriplets, createVertices } from "./common";
+import { axisVertices, createIndices, createTriplets, createVertices } from "./common";
 
 async function createRenderOrPickPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, layout: GPUVertexBufferLayout, buffers: RenderBuffers, pick: boolean) {
     return await bin.createRenderPipelineAsync({
@@ -28,9 +28,7 @@ async function createRenderOrPickPipeline(bin: ResourceBin, shaderModule: GPUSha
             count: buffers.samples
         },
         primitive: {
-            // TODO: This is ccw in webgl but renders incorrectly here and works with cw
-            // probably related to right / left handedness change betwen gl / webgpu
-            frontFace: "cw",
+            frontFace: "ccw",
             cullMode: "none",
         },
         depthStencil: {
@@ -47,6 +45,34 @@ async function createRenderPipeline(bin: ResourceBin, shaderModule: GPUShaderMod
 
 async function createPickPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, layout: GPUVertexBufferLayout, buffers: RenderBuffers) {
     return await createRenderOrPickPipeline(bin, shaderModule, layout, buffers, true);
+}
+
+async function createAxisPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, layout: GPUVertexBufferLayout, buffers: RenderBuffers) {
+    return await bin.createRenderPipelineAsync({
+        label: "Axis render pipeline",
+        layout: "auto",
+        vertex: {
+            module: shaderModule,
+            entryPoint: "vertexMain",
+            buffers: [layout]
+        },
+        fragment: {
+            module: shaderModule,
+            entryPoint: "fragmentMain",
+            targets: [{
+                format: buffers.textures.color.format,
+            }],
+            constants: {
+                0: 0, // pick: false
+            }
+        },
+        multisample: {
+            count: buffers.samples
+        },
+        primitive: {
+            topology: "line-list"
+        }
+    });
 }
 
 async function createLinesPipeline(bin: ResourceBin, shaderModule: GPUShaderModule, linesLayout: GPUVertexBufferLayout, opacityLayout: GPUVertexBufferLayout, buffers: RenderBuffers) {
@@ -112,7 +138,7 @@ export class CubeModule implements RenderModule {
 
         const vb_render = createVertexBuffer(bin, vertices, "Cube vertices buffer");
         const ib_render = createIndexBuffer(bin, indices, "Cube indices buffer");
-        const vertexLayout: GPUVertexBufferLayout = {
+        const renderLayout: GPUVertexBufferLayout = {
             arrayStride: 36,
             attributes: [{
                 format: "float32x3",
@@ -135,7 +161,7 @@ export class CubeModule implements RenderModule {
             label: "Cube render shader module",
             code: shaders.render.shader,
         });
-        const renderPipeline = await createRenderPipeline(bin, renderShaderModule, vertexLayout, context.buffers);
+        const renderPipeline = await createRenderPipeline(bin, renderShaderModule, renderLayout, context.buffers);
         const renderBindGroup = bin.createBindGroup({
             label: "Cube render bind group",
             layout: renderPipeline.getBindGroupLayout(0),
@@ -155,12 +181,15 @@ export class CubeModule implements RenderModule {
             ]
         });
 
+        const axis_vb = createVertexBuffer(bin, axisVertices(), "Axis vertices buffer");
+        const axisPipeline = await createAxisPipeline(bin, renderShaderModule, renderLayout, context.buffers);
+
 
         const pickShaderModule = bin.createShaderModule({
             label: "Cube pick shader module",
             code: shaders.render.shader,
         });
-        const pickPipeline = await createPickPipeline(bin, pickShaderModule, vertexLayout, context.buffers);
+        const pickPipeline = await createPickPipeline(bin, pickShaderModule, renderLayout, context.buffers);
         const pickBindGroup = bin.createBindGroup({
             label: "Cube pick bind group",
             layout: renderPipeline.getBindGroupLayout(0),
@@ -295,8 +324,10 @@ export class CubeModule implements RenderModule {
             ib_render,
             renderPipeline,
             renderBindGroup,
-            renderLayout: vertexLayout,
+            renderLayout,
             renderShaderModule,
+            axis_vb,
+            axisPipeline,
             pickPipeline,
             pickBindGroup,
             pickShaderModule,
@@ -341,36 +372,56 @@ class CubeModuleContext implements RenderModuleContext {
             const { bin, renderShaderModule, pickShaderModule, renderLayout, linesShaderModule, linesLayout, opacityLayout } = resources;
             resources.renderPipeline = await createRenderPipeline(bin, renderShaderModule, renderLayout, context.buffers);
             resources.pickPipeline = await createPickPipeline(bin, pickShaderModule, renderLayout, context.buffers);
+            resources.axisPipeline = await createAxisPipeline(bin, renderShaderModule, renderLayout, context.buffers);
             resources.linesPipeline = await createLinesPipeline(bin, linesShaderModule, linesLayout, opacityLayout, context.buffers);
         }
     }
 
     render(encoder: GPUCommandEncoder, state: DerivedRenderState) {
         const { context, resources } = this;
-        const { vb_render, ib_render, renderPipeline, renderBindGroup, numIndices } = resources;
+        const { vb_render, ib_render, axis_vb, renderPipeline, renderBindGroup, axisPipeline, numIndices } = resources;
         const { /*outlineUniforms,*/ deviceProfile } = context;
 
         if (state.cube.enabled) {
             // render normal cube
-            const renderPass = encoder.beginRenderPass({
-                colorAttachments: [{
-                    view: context.buffers.colorRenderAttachment(),
-                    loadOp: "load",
-                    storeOp: "store",
-                }],
-                depthStencilAttachment: {
-                    view: context.buffers.depthRenderAttachment(),
-                    depthLoadOp: "load",
-                    depthStoreOp: "store",
-                }
-            });
+            if(state.cube.drawCube) {
+                const renderPass = encoder.beginRenderPass({
+                    colorAttachments: [{
+                        view: context.buffers.colorRenderAttachment(),
+                        loadOp: "load",
+                        storeOp: "store",
+                    }],
+                    depthStencilAttachment: {
+                        view: context.buffers.depthRenderAttachment(),
+                        depthLoadOp: "load",
+                        depthStoreOp: "store",
+                    }
+                });
 
-            renderPass.setPipeline(renderPipeline);
-            renderPass.setBindGroup(0, renderBindGroup);
-            renderPass.setVertexBuffer(0, vb_render);
-            renderPass.setIndexBuffer(ib_render, "uint16");
-            renderPass.drawIndexed(numIndices);
-            renderPass.end();
+                renderPass.setPipeline(renderPipeline);
+                renderPass.setBindGroup(0, renderBindGroup);
+                renderPass.setVertexBuffer(0, vb_render);
+                renderPass.setIndexBuffer(ib_render, "uint16");
+                renderPass.drawIndexed(numIndices);
+                renderPass.end();
+            }
+
+            // render axis
+            if(state.cube.drawAxis) {
+                const axisRenderPass = encoder.beginRenderPass({
+                    colorAttachments: [{
+                        view: context.buffers.colorRenderAttachment(),
+                        loadOp: "load",
+                        storeOp: "store",
+                    }]
+                });
+
+                axisRenderPass.setPipeline(axisPipeline);
+                axisRenderPass.setBindGroup(0, renderBindGroup);
+                axisRenderPass.setVertexBuffer(0, axis_vb);
+                axisRenderPass.draw(6);
+                axisRenderPass.end();
+            }
 
             // TODO: This is not really rendering yet but probably add timers to the command buffer
             // context.addRenderStatistics(stats);

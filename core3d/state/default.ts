@@ -41,6 +41,8 @@ function _defaultRenderState(webgpu: boolean): RenderState {
             enabled: false,
             position: [0, 0, 0],
             scale: 1,
+            drawAxis: false,
+            drawCube: true,
         },
         scene: undefined,
         terrain: {

@@ -2,7 +2,7 @@ import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
 import { glUBOProxy, glDraw, glState, glTransformFeedback, type UniformTypes } from "webgl2";
 import { mat4, vec3, vec4 } from "gl-matrix";
-import { createIndices, createTriplets, createVertices } from "./common";
+import { axisVertices, createIndices, createTriplets, createVertices } from "./common";
 
 /** @internal */
 export class CubeModule implements RenderModule {
@@ -48,6 +48,16 @@ export class CubeModule implements RenderModule {
         });
         bin.subordinate(vao_render, vb_render, ib_render);
 
+        const vb_axis = bin.createBuffer({ kind: "ARRAY_BUFFER", srcData: axisVertices() });
+        const vao_axis = bin.createVertexArray({
+            attributes: [
+                { kind: "FLOAT_VEC3", buffer: vb_axis, byteStride: 36, byteOffset: 0 }, // position
+                { kind: "FLOAT_VEC3", buffer: vb_axis, byteStride: 36, byteOffset: 12 }, // normal
+                { kind: "FLOAT_VEC3", buffer: vb_axis, byteStride: 36, byteOffset: 24 }, // color
+            ]
+        });
+        bin.subordinate(vao_axis, vb_axis);
+
         const vb_triplets = bin.createBuffer({ kind: "ARRAY_BUFFER", srcData: triplets });
         const vao_triplets = bin.createVertexArray({
             attributes: [
@@ -78,7 +88,7 @@ export class CubeModule implements RenderModule {
             context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks: [...uniformBufferBlocks, "Outline"], transformFeedback: { varyings: ["line_vertices", "opacity"], bufferMode: "SEPARATE_ATTRIBS" } }),
         ]);
         const programs = { color, pick, line, intersect };
-        return { bin, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line, vb_opacity, programs } as const;
+        return { bin, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vao_axis, vb_line, vb_opacity, vb_axis, programs } as const;
     }
 }
 
@@ -107,21 +117,36 @@ class CubeModuleContext implements RenderModuleContext {
 
     render(state: DerivedRenderState) {
         const { context, resources } = this;
-        const { programs, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line, vb_opacity } = resources;
+        const { programs, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vao_axis, vb_line, vb_opacity } = resources;
         const { gl, cameraUniforms, clippingUniforms, outlineUniforms, deviceProfile } = context;
 
         if (state.cube.enabled) {
             // render normal cube
-            glState(gl, {
-                program: programs.color,
-                uniformBuffers: [cameraUniforms, clippingUniforms, uniforms.cube],
-                // drawBuffers: context.drawBuffers(),
-                depth: { test: true, },
-                cull: { enable: false },
-                vertexArrayObject: vao_render,
-            });
-            const stats = glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
-            context.addRenderStatistics(stats);
+            if(state.cube.drawCube) {
+                glState(gl, {
+                    program: programs.color,
+                    uniformBuffers: [cameraUniforms, clippingUniforms, uniforms.cube],
+                    // drawBuffers: context.drawBuffers(),
+                    depth: { test: true, },
+                    cull: { enable: false },
+                    vertexArrayObject: vao_render,
+                });
+                let stats = glDraw(gl, { kind: "elements", mode: "TRIANGLES", indexType: "UNSIGNED_SHORT", count: 36 });
+                context.addRenderStatistics(stats);
+            }
+
+            // render axis
+            if(state.cube.drawAxis) {
+                glState(gl, {
+                    program: programs.color,
+                    uniformBuffers: [cameraUniforms, clippingUniforms, uniforms.cube],
+                    depth: { test: true, },
+                    cull: { enable: false },
+                    vertexArrayObject: vao_axis,
+                });
+                let stats = glDraw(gl, { kind: "arrays", mode: "LINES", count: 6 });
+                context.addRenderStatistics(stats);
+            }
 
             if (state.outlines.enabled && deviceProfile.features.outline) {
                 const planeIndex = state.clipping.planes.findIndex((cp) => vec4.exactEquals(cp.normalOffset, plane));

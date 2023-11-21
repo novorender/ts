@@ -62,9 +62,11 @@ struct VertexOutput {
 fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
     // uvs from fullscreen triangle:
     // https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
+    // But webgpu has same coordinate system for ndc and texture coords as directx rather than vulkan
+    // so we need to flip y
     let uv = vec2f(vec2((vertexIndex << 1u) & 2u, vertexIndex & 2u));
     return VertexOutput(
-        vec4(uv * 2. - 1., 0., 1.),
+        vec4(uv * vec2(2., -2.) + vec2(-1., 1.), 0., 1.),
         uv
     );
 }
