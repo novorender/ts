@@ -465,15 +465,15 @@ export class RenderContextWebGPU {
             // TODO: this should probably map the needed range only but the range is sometimes not
             // a multiple of the minimum allowed. Probably we need to find the previous multiple of the
             // beginning and the next multiple of the size
-            // await uniformBufferStaging.mapAsync(GPUMapMode.WRITE);
-            // const gpuBuffer = new Uint8Array(uniformBufferStaging.getMappedRange()).subarray(begin, end);
-            // gpuBuffer.set(new Uint8Array(proxy.buffer).subarray(begin, end));
-            // uniformBufferStaging.unmap();
-            // // const encoder = this.device.createCommandEncoder();
-            // encoder.copyBufferToBuffer(uniformBufferStaging, begin, uniformBuffer, begin, size);
-            // // this.device.queue.submit([encoder.finish()]);
+            await uniformBufferStaging.mapAsync(GPUMapMode.WRITE);
+            const gpuBuffer = new Uint8Array(uniformBufferStaging.getMappedRange()).subarray(begin, end);
+            gpuBuffer.set(new Uint8Array(proxy.buffer).subarray(begin, end));
+            uniformBufferStaging.unmap();
+            // const encoder = this.device.createCommandEncoder();
+            encoder.copyBufferToBuffer(uniformBufferStaging, begin, uniformBuffer, begin, size);
+            // this.device.queue.submit([encoder.finish()]);
 
-            this.device.queue.writeBuffer(uniformBuffer, begin, proxy.buffer, begin, size);
+            // this.device.queue.writeBuffer(uniformBuffer, begin, proxy.buffer, begin, size);
 
             proxy.dirtyRange.clear();
         }

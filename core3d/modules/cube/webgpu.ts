@@ -270,12 +270,9 @@ export class CubeModule implements RenderModule {
         const vb_triplets = bin.createBuffer({
             label: "Cube triplets buffer",
             size: triplets.byteLength,
-            usage: GPUBufferUsage.STORAGE,
-            mappedAtCreation: true,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
-        let gpuTriplets = new Float32Array(vb_triplets.getMappedRange());
-        gpuTriplets.set(triplets);
-        vb_triplets.unmap();
+        context.device?.queue.writeBuffer(vb_triplets, 0, triplets);
 
         const tripletsShaderModule = bin.createShaderModule({
             label: "Cube triplets shader module",
