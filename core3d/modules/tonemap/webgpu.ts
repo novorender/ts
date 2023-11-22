@@ -57,6 +57,16 @@ function createTextureBindGroup(bin: ResourceBin, pipeline: GPUPipelineBase, buf
     })
 }
 
+function createIntermediateTexture(bin: ResourceBin, buffers: RenderBuffers) {
+    return bin.createTexture({
+        label: "Tonemapping compute intermediate texture",
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+        size: [buffers.width, buffers.height],
+        dimension: "2d",
+    });
+}
+
 /** @internal */
 export class TonemapModule implements RenderModule {
     readonly kind = "tonemap";
@@ -98,20 +108,14 @@ export class TonemapModule implements RenderModule {
         let intermediateTexture;
         if(USE_COMPUTE) {
             pipeline = bin.createComputePipeline({
-                label: "Tonemapping pipeline",
+                label: "Tonemapping compute pipeline",
                 layout: "auto",
                 compute: {
                     module: shaderModule,
                     entryPoint: "computeMain",
                 },
             });
-            intermediateTexture = bin.createTexture({
-                label: "Tonemapping render attachment",
-                format: "rgba8unorm",
-                usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
-                size: [context!.context!.getCurrentTexture().width, context!.context!.getCurrentTexture().height],
-                dimension: "2d",
-            });
+            intermediateTexture = createIntermediateTexture(bin, context.buffers);
         }else{
             pipeline = await bin.createRenderPipelineAsync({
                 label: "Tonemapping pipeline",
@@ -158,13 +162,7 @@ class TonemapModuleContext implements RenderModuleContext {
         }
         const canvasTexture = context!.context!.getCurrentTexture();
         if(intermediateTexture && (canvasTexture.width != intermediateTexture.width || canvasTexture.height != intermediateTexture.height)) {
-            resources.intermediateTexture = bin.createTexture({
-                label: "Tonemapping render attachment",
-                format: "rgba8unorm",
-                usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
-                size: [context!.context!.getCurrentTexture().width, context!.context!.getCurrentTexture().height],
-                dimension: "2d",
-            });
+            resources.intermediateTexture = createIntermediateTexture(bin, context.buffers);
             resources.bindGroup = createBindGroup(bin, pipeline, uniforms, resources.intermediateTexture);
         }
         if (context.buffersChanged()) {
