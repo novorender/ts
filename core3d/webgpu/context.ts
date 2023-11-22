@@ -721,8 +721,6 @@ export class RenderContextWebGPU {
             await Promise.all(modulePromises);
         }
 
-        // TODO: GL sets the viewport and framebuffer here
-
         // Clear z buffer
         const depthPass = encoder.beginRenderPass({
             colorAttachments: [],
