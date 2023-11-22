@@ -20,12 +20,12 @@ export class OrthoController extends BaseController {
         stepInterval: 1,
         usePointerLock: false,
         touchRotate: false,
-        touchDeAcceleration: false
+        deAcceleration: false
     };
     private _position: ReadonlyVec3 = vec3.create();
     private _orientation = new PitchRollYawOrientation();
     private _fov = 50;
-    private _touchVelocity = vec2.create();
+    private _moveVelocity = vec2.create();
 
     /**
      * @param input The input source.
@@ -134,15 +134,29 @@ export class OrthoController extends BaseController {
         this.changed();
     }
 
+    private deAccelerate() {
+        const { _moveVelocity, height, _position, _orientation } = this;
+        const scale = this._fov / height;
+        const deltaPos = vec3.transformQuat(vec3.create(), vec3.fromValues(_moveVelocity[0] * scale * -1, _moveVelocity[1] * scale, 0), _orientation.rotation);
+        vec3.scale(deltaPos, deltaPos, 10);
+        this.moveTo(vec3.add(vec3.create(), _position, deltaPos), 500, undefined, easeOut);
+        this._moveVelocity = vec2.create();
+    }
+
     override touchChanged(event: TouchEvent): void {
-        if (this.params.touchDeAcceleration) {
-            const { _touchVelocity, height, _position, _orientation } = this;
-            if (event.touches.length == 0 && _touchVelocity[0] != 0 && _touchVelocity[1] != 0) {
-                const scale = this._fov / height;
-                const deltaPos = vec3.transformQuat(vec3.create(), vec3.fromValues(_touchVelocity[0] * scale * -1, _touchVelocity[1] * scale, 0), _orientation.rotation);
-                vec3.scale(deltaPos, deltaPos, 10);
-                this.moveTo(vec3.add(vec3.create(), _position, deltaPos), 500, undefined, easeOut);
-                this._touchVelocity = vec2.create();
+        if (this.params.deAcceleration) {
+            const { _moveVelocity } = this;
+            if (event.touches.length == 0 && _moveVelocity[0] != 0 && _moveVelocity[1] != 0) {
+                this.deAccelerate();
+            }
+        }
+    }
+
+    override async mouseButtonChanged(event: MouseEvent): Promise<void> {
+        if (this.params.deAcceleration) {
+            const { _moveVelocity } = this;
+            if (event.buttons == 0 && _moveVelocity[0] != 0 && _moveVelocity[1] != 0) {
+                this.deAccelerate();
             }
         }
     }
@@ -203,7 +217,9 @@ export class OrthoController extends BaseController {
             return;
         }
 
-        this._touchVelocity = vec2.fromValues(axes.touch_1_move_x, axes.touch_1_move_y);
+        this._moveVelocity = vec2.fromValues(
+            axes.mouse_lmb_move_x + axes.mouse_rmb_move_x + axes.mouse_mmb_move_x + axes.touch_1_move_x,
+            axes.mouse_lmb_move_y + axes.mouse_rmb_move_y + axes.mouse_mmb_move_y + axes.touch_1_move_y);
 
         let tx = -axes.keyboard_ad + axes.mouse_lmb_move_x + axes.mouse_rmb_move_x + axes.mouse_mmb_move_x + axes.touch_1_move_x;
         let ty = -axes.keyboard_ws + axes.mouse_lmb_move_y + axes.mouse_rmb_move_y + axes.mouse_mmb_move_y + axes.touch_1_move_y;
@@ -292,6 +308,6 @@ export interface OrthoControllerParams {
     /** Enable de acceleration when letting go while moving in touch
      * @defaultValue false
      */
-    readonly touchDeAcceleration: boolean
+    readonly deAcceleration: boolean
 }
 
