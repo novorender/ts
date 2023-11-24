@@ -37,8 +37,9 @@ export function createDefaultModules() {
 export function createDefaultModulesWebGPU() {
     return [
         new BackgroundModuleWebGPU(),
-        new CubeModuleWebGPU(),
         new GridModuleWebGPU(),
+        new CubeModuleWebGPU(),
+        new DynamicModuleWebGPU(),
         new TonemapModuleWebGPU(),
     ];
 }

@@ -438,6 +438,7 @@ export type TextureParams =
 export type TextureTargetString = TextureParams["kind"];
 
 export type TextureImageSource = ImageBitmap | ImageData | HTMLImageElement | HTMLCanvasElement | HTMLVideoElement | OffscreenCanvas;
+export const TextureImageSourceClasses = [ImageBitmap, ImageData, HTMLImageElement, HTMLCanvasElement, HTMLVideoElement, OffscreenCanvas];
 
 // 2D
 export type TextureParams2DUncompressedImage = Uncompressed & Partial<Size2D> & GenMipMap & {

@@ -70,3 +70,29 @@ fn unpackNormalAndDeviation(normalAndDeviation: vec2<u32>) -> vec4f{
 fn combineMediumP(high: u32, low: u32) -> u32{
     return (high << 16u) | (low & 0xffffu);
 }
+
+//sRGB
+const GAMMA: f32 = 2.2;
+const INV_GAMMA: f32 = 1.0 / GAMMA;
+// linear to sRGB approximation (http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html)
+fn linearTosRGB(color: vec3f) -> vec3f {
+    return pow(color, vec3(INV_GAMMA));
+}
+
+// sRGB to linear approximation (http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html)
+fn sRGBToLinear(srgbIn: vec3f) -> vec3f{
+    return vec3(pow(srgbIn.xyz, vec3(GAMMA)));
+}
+
+fn toLinear(f: f32) -> f32{
+    if(f <= 0.0404482362771082f) {
+        return f / 12.92f;
+    }
+
+    return pow(((f + 0.055f) / 1.055f), 2.4f);
+}
+
+// sRGB to linear approximation (http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html)
+fn sRGBToLinearComplex(srgbIn: vec3f) -> vec3f{
+    return vec3(toLinear(srgbIn.r), toLinear(srgbIn.g), toLinear(srgbIn.b));
+}

@@ -1,6 +1,7 @@
+import { TextureImageSourceClasses } from "webgl2";
 import type { Image } from "./gpu_image";
 
-type GPUResource = GPUTexture | GPUBuffer | GPUShaderModule | GPUSampler | GPURenderPipeline | GPUComputePipeline | GPUBindGroup;
+type GPUResource = GPUTexture | GPUBuffer | GPUShaderModule | GPUSampler | GPURenderPipeline | GPUComputePipeline | GPUBindGroup | GPUBindGroupLayout | GPUPipelineLayout;
 
 /**
  * A WebGL resource tracking helper class.
@@ -54,6 +55,9 @@ export class ResourceBin {
 
     createTextureFromImage(image: Image) {
         image.descriptor.usage |= GPUTextureUsage.COPY_DST;
+        if(TextureImageSourceClasses.some(T => image.data instanceof T)) {
+            image.descriptor.usage |= GPUTextureUsage.RENDER_ATTACHMENT;
+        }
         const texture = this.add(this.device.createTexture(image.descriptor), { kind: "Texture", byteSize: textureBytes(image.descriptor) });
         if(image.data instanceof ArrayBuffer || ArrayBuffer.isView(image.data)) {
             this.device.queue.writeTexture(
@@ -104,8 +108,9 @@ export class ResourceBin {
                 }
                 levelNum += 1;
             }
-        }else{
-            throw "Texture type not supported yet"
+        }else if(TextureImageSourceClasses.some(T => image.data instanceof T)){
+            // TODO: check generateMipmaps and generate them
+            this.device.queue.copyExternalImageToTexture({source: image.data as any}, {texture}, [texture.width, texture.height])
         }
 
         return texture
@@ -123,8 +128,16 @@ export class ResourceBin {
         return this.add(this.device.createComputePipeline(params), { kind: "ComputePipeline" })
     }
 
+    createBindGroupLayout(params: GPUBindGroupLayoutDescriptor) {
+        return this.add(this.device.createBindGroupLayout(params), { kind: "BindGroupLayout" })
+    }
+
     createBindGroup(params: GPUBindGroupDescriptor) {
         return this.add(this.device.createBindGroup(params), { kind: "BindGroup" })
+    }
+
+    createPipelineLayout(params: GPUPipelineLayoutDescriptor) {
+        return this.add(this.device.createPipelineLayout(params), { kind: "PipelineLayout" })
     }
 
     private add<T extends GPUResource>(resource: T, info: ResourceInfo): T {
@@ -152,10 +165,10 @@ export class ResourceBin {
     // }
 
     delete(...resources: readonly (GPUResource | null)[]) {
-        this.del(resources);
+        this.deleteMany(resources);
     }
 
-    private del(resources: readonly (GPUResource | null)[], deleteInfos?: ResourceInfo[]) {
+    deleteMany(resources: readonly (GPUResource | null)[], deleteInfos?: ResourceInfo[]) {
         const { device, resourceMap } = this;
         for (const resource of resources) {
             if (!resource)
@@ -258,6 +271,8 @@ const resourceKinds = [
     "RenderPipeline",
     "ComputePipeline",
     "BindGroup",
+    "BindGroupLayout",
+    "PipelineLayout"
 ] as const;
 
 const internalFormatTexelBytes = {

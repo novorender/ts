@@ -118,6 +118,7 @@ export class CubeModule implements RenderModule {
     }
 
     async createResources(context: RenderContextWebGPU, uniformsProxy: Uniforms) {
+        // TODO: await all pipelines at once
         const shaders = context.imports.shadersWGSL.cube;
         const vertices = createVertices((pos, norm, col) => ([...pos, ...norm, ...col]));
         const pos = createVertices((pos) => (pos));

@@ -17,6 +17,9 @@ import { USE_COMPUTE as TONEMAP_USES_COMPUTE } from "../modules/tonemap/webgpu"
 import { glUBOProxy, type DrawStatistics, type UniformsProxy } from "webgl2";
 import type { Image } from "./gpu_image";
 
+// TODO: This is replicated in cube
+type TypedArray = Uint8Array | Uint16Array | Uint32Array | Int8Array | Int16Array | Int32Array | Float32Array | Float64Array;
+
 // the context is re-created from scratch if the underlying webgpu context is lost
 
 /** The view specific context for rendering and picking.
@@ -99,9 +102,8 @@ export class RenderContextWebGPU {
     /** WebGPU uniform buffer for outline related uniforms. */
     outlineStagingUniforms: GPUBuffer | undefined;
     outlineUniforms: GPUBuffer | undefined;
-    // TODO
     // /** WebGPU GGX/PBR shading lookup table texture. */
-    // readonly lut_ggx: WebGLTexture;
+    lut_ggx: GPUTexture | undefined;
     /** WebGPU Sampler used to sample mipmapped diffuse IBL texture. */
     samplerMip: GPUSampler | undefined; // use to read diffuse texture
     /** WebGPU Sampler used to sample other, non-mipmapped IBL textures. */
@@ -174,12 +176,6 @@ export class RenderContextWebGPU {
             usage: GPUTextureUsage.TEXTURE_BINDING
         } as const;
 
-        // ggx lookup texture and ibl samplers
-        // TODO: create textures for ggx LUTs
-        // gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-        // const lutParams = { kind: "TEXTURE_2D", internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: imports.lutGGX } as const;
-        // this.lut_ggx = defaultBin.createTexture(lutParams);
-
         // camera uniforms
         this.cameraUniformsData = glUBOProxy({
             clipViewMatrix: "mat4",
@@ -239,7 +235,9 @@ export class RenderContextWebGPU {
             throw new Error("WebGPU not supported on this browser.");
         }
 
-        const adapter = await navigator.gpu.requestAdapter();
+        const adapter = await navigator.gpu.requestAdapter({
+            powerPreference: "high-performance"
+        });
         if (!adapter) {
             throw new Error("No appropriate GPUAdapter found.");
         }
@@ -308,6 +306,24 @@ export class RenderContextWebGPU {
 
         const defaultBin = this.defaultResourceBin = this.resourceBin("context");
         const iblBin = this.iblResourceBin = this.resourceBin("ibl");
+
+
+        // ggx lookup texture and ibl samplers
+        // gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+        const lutImage: Image = {
+            descriptor: {
+                label: "ggx LUT",
+                format: "rgba8unorm",
+                size: {
+                    width: this.imports.lutGGX.width,
+                    height: this.imports.lutGGX.height,
+                    depthOrArrayLayers: 1
+                },
+                usage: GPUTextureUsage.TEXTURE_BINDING,
+            },
+            data: this.imports.lutGGX
+        }
+        this.lut_ggx = defaultBin.createTextureFromImage(lutImage);
 
         // create default ibl textures
         const top = new Uint8Array([192, 192, 192, 255]);
@@ -455,6 +471,8 @@ export class RenderContextWebGPU {
         // TODO: Does it make sense to have a common staging buffer big enough to hold any uniforms in
         // all the modules and use it for every update or will it make things slower by needing to wait for
         // one uniform to be copied before uploading the next?
+        // TODO: Not using a separate encoder sometimes generates a warning saying that the encoder
+        // was already finished
         if(!this.device) {
             throw "Device not initialized yet"
         }
@@ -469,14 +487,32 @@ export class RenderContextWebGPU {
             const gpuBuffer = new Uint8Array(uniformBufferStaging.getMappedRange()).subarray(begin, end);
             gpuBuffer.set(new Uint8Array(proxy.buffer).subarray(begin, end));
             uniformBufferStaging.unmap();
-            // const encoder = this.device.createCommandEncoder();
+            const encoder = this.device.createCommandEncoder();
             encoder.copyBufferToBuffer(uniformBufferStaging, begin, uniformBuffer, begin, size);
-            // this.device.queue.submit([encoder.finish()]);
+            this.device.queue.submit([encoder.finish()]);
 
             // this.device.queue.writeBuffer(uniformBuffer, begin, proxy.buffer, begin, size);
 
             proxy.dirtyRange.clear();
         }
+    }
+
+    async updateBuffer(encoder: GPUCommandEncoder, stagingBuffer: GPUBuffer, buffer: GPUBuffer, data: TypedArray) {
+        if(!this.device) {
+            throw "Device not initialized yet"
+        }
+
+        {
+            await stagingBuffer.mapAsync(GPUMapMode.WRITE);
+            const gpuBuffer = new Uint8Array(stagingBuffer.getMappedRange());
+            gpuBuffer.set(new Uint8Array(data.buffer));
+            stagingBuffer.unmap();
+            const encoder = this.device.createCommandEncoder();
+            encoder.copyBufferToBuffer(stagingBuffer, 0, buffer, 0, data.byteLength);
+            this.device.queue.submit([encoder.finish()]);
+        }
+
+        // this.device.queue.writeBuffer(buffer, 0, data);
     }
 
     /** Explicitly update WebGPU IBL textures from specified parameters. */
