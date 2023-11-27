@@ -175,6 +175,7 @@ fn vertexMain(vertex: VertexInput) -> VertexOutput {
 }
 
 struct FragmentInput {
+    @builtin(front_facing) frontFacing: bool,
     @location(0) positionVS: vec3f,
     @location(1) toCamera: vec3f,
     @location(2) color0: vec4f,
@@ -240,7 +241,8 @@ fn getNormalInfo(vertex: FragmentInput, v: vec3f) -> NormalInfo {
     // ng = normalize(vertex.tbn[2]);
 
     // For a back-facing surface, the tangential basis vectors are negated.
-    let facing = step(0.f, dot(v, ng)) * 2.f - 1.f;
+    // let facing = step(0.f, dot(v, ng)) * 2.f - 1.f;
+    let facing = select(-1., 1., vertex.frontFacing);
     t *= facing;
     b *= facing;
     ng *= facing;
@@ -257,9 +259,9 @@ fn getNormalInfo(vertex: FragmentInput, v: vec3f) -> NormalInfo {
 
     return NormalInfo(
         ng,
+        n,
         t,
         b,
-        n,
     );
 }
 
