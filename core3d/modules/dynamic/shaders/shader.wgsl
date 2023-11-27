@@ -352,17 +352,6 @@ fn packNormal(normal: vec3f) -> vec2<u32>{
 
 @fragment
 fn fragmentMain(vertex: FragmentInput) -> FragmentOutput {
-    // if(PBR_METALLIC_ROUGHNESS) {
-    //     return FragmentOutput(
-    //         vec4(vertex.positionVS, 1.),
-    //         vec4(0),
-    //     );
-    // }else{
-    //     return FragmentOutput(
-    //         vec4(1., 0., 0., 1.),
-    //         vec4(0),
-    //     );
-    // }
     var baseColor = material.baseColorFactor * vertex.color0;
 
     if(material.baseColorUVSet >= 0) {
