@@ -330,11 +330,9 @@ export class View<
             flipState(stateChanges, "GLToCAD");
             this.modifyRenderState(stateChanges);
 
-            if (measure) {
-                const measureView = await createMeasureView(this._drawContext2d, this.imports);
-                await measureView.loadScene(baseSceneUrl, measure.brepLut); // TODO: include abort signal!
-                this._measureView = measureView;
-            }
+            const measureView = await createMeasureView(this._drawContext2d, this.imports);
+            await measureView.loadScene(baseSceneUrl, measure ? measure.brepLut : ""); // TODO: include abort signal!
+            this._measureView = measureView;
 
             try {
                 if (data) {
