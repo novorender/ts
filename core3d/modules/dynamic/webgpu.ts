@@ -165,6 +165,7 @@ export class DynamicModule implements RenderModule {
             ]
         });
 
+        // TODO: Is it worth reusing a camera bindgroup for all modules?
         const cameraBindGroup = bin.createBindGroup({
             label: "Dynamic module camera bind group",
             layout: cameraLayout,
@@ -268,6 +269,7 @@ async function createMeshPipeline(material: RenderStateDynamicMaterial, geometry
             }
         },
         primitive: {
+            frontFace: "ccw",
             cullMode: material.doubleSided ? "none" : "back",
         },
         multisample: {
@@ -440,7 +442,7 @@ class DynamicModuleContext implements RenderModuleContext {
                 // gl.bindBufferBase(gl.UNIFORM_BUFFER, 2, object.uniformsBuffer);
             }
 
-            // TODO: We need to set the bindgroups all the time, maybe explore bundles?
+            // TODO: We need to set the bindgroups for every object, maybe explore bundles?
             pass.setPipeline(pipeline);
             pass.setBindGroup(0, cameraBindGroup);
             pass.setBindGroup(1, object.bindGroup);
@@ -454,9 +456,9 @@ class DynamicModuleContext implements RenderModuleContext {
             pass.setVertexBuffer(6, object.instancesBuffer);
             if(geometry.resources.indices) {
                 pass.setIndexBuffer(geometry.resources.indices, geometry.drawParams.indexType!);
-                pass.drawIndexed(geometry.drawParams.count, object.numInstances, 0, 0, 0);
+                pass.drawIndexed(geometry.drawParams.count, object.numInstances);
             }else{
-                pass.draw(geometry.drawParams.count, object.numInstances, 0, 0);
+                pass.draw(geometry.drawParams.count, object.numInstances);
             }
 
             pass.end();
@@ -548,6 +550,43 @@ class GeometryAsset {
         if(indices && typeof data.indices != "number"){
             bin.device.queue.writeBuffer(indices, 0, data.indices);
         }
+
+        function vertexFormatStride(f: GPUVertexFormat) {
+            switch(f) {
+                case "float16x2": return 2 * 2;
+                case "float16x4": return 2 * 4;
+                case "float32":   return 4 * 1;
+                case "float32x2": return 4 * 2;
+                case "float32x3": return 4 * 3;
+                case "float32x4": return 4 * 4;
+                case "sint16x2":  return 2 * 2;
+                case "sint16x4":  return 2 * 4;
+                case "sint32":    return 4 * 1;
+                case "sint32x2":  return 4 * 2;
+                case "sint32x3":  return 4 * 3;
+                case "sint32x4":  return 4 * 4;
+                case "sint8x2":   return 1 * 2;
+                case "sint8x4":   return 1 * 4;
+                case "snorm16x2": return 2 * 2;
+                case "snorm16x4": return 2 * 4;
+                case "snorm8x2":  return 1 * 2;
+                case "snorm8x4":  return 1 * 4;
+                case "uint16x2":  return 2 * 2;
+                case "uint16x4":  return 2 * 4;
+                case "uint32":    return 4 * 1;
+                case "uint32x2":  return 4 * 2;
+                case "uint32x3":  return 4 * 3;
+                case "uint32x4":  return 4 * 4;
+                case "uint8x2":   return 1 * 2;
+                case "uint8x4":   return 1 * 4;
+                case "unorm16x2": return 2 * 2;
+                case "unorm16x4": return 2 * 4;
+                case "unorm8x2":  return 1 * 2;
+                case "unorm8x4":  return 1 * 4;
+                case "unorm10-10-10-2": return 4;
+            }
+        }
+
         function parseLayoutFormat(a: RenderStateDynamicVertexAttribute | undefined, shaderLocation: number): GPUVertexBufferLayout | null {
             if(!a) return null;
 
@@ -664,7 +703,7 @@ class GeometryAsset {
             }
 
             return {
-                arrayStride: a.byteStride ?? 0,
+                arrayStride: a.byteStride ?? vertexFormatStride(format!),
                 attributes: [{
                     format: format!,
                     offset: a.byteOffset ?? 0,
