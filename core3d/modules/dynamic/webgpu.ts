@@ -181,7 +181,7 @@ export class DynamicModule implements RenderModule {
             label: "Dynamic module empty buffer",
             size: 0,
             usage: GPUBufferUsage.VERTEX,
-        })
+        });
 
         return { bin, defaultSamplers, defaultTexture, shaderModule, cameraBindGroup, emptyBuffer, cameraLayout, objectLayout, materialLayout } as const;
     }
@@ -283,6 +283,13 @@ async function createMeshPipeline(material: RenderStateDynamicMaterial, geometry
     })
 }
 
+function vertexBufferLayoutToString(layout: GPUVertexBufferLayout): string {
+    const attrs = Array.from(layout.attributes)
+        .map((attr) => (`${attr.format}_${attr.offset}_${attr.shaderLocation}`))
+        .join();
+    return `${layout.arrayStride}_[${attrs}]`;
+}
+
 class DynamicModuleContext implements RenderModuleContext {
     iblTextures;
     readonly buffers = new Map<BufferSource, BufferAsset>();
@@ -291,7 +298,8 @@ class DynamicModuleContext implements RenderModuleContext {
     readonly materials = new Map<RenderStateDynamicMaterial, MaterialAsset>();
     readonly images = new Map<RenderStateDynamicImage, TextureAsset>();
     readonly samplers = new Map<RenderStateDynamicSampler, SamplerAsset>();
-    readonly meshesDict = new Map<RenderStateDynamicMeshPrimitive, ObjectGeometryMaterialGroup>();
+    readonly pipelines = new Map<string, GPURenderPipeline>();
+    meshes: ObjectGeometryMaterialGroup[] = [];
 
     constructor(readonly context: RenderContextWebGPU, readonly module: DynamicModule, readonly resources: Resources) {
         this.iblTextures = context.iblTextures;
@@ -337,6 +345,43 @@ class DynamicModuleContext implements RenderModuleContext {
             syncAssets(bin, geometries, this.geometries, data => new GeometryAsset(bin, data, this.buffers));
             syncAssets(bin, objects, this.objects, data => new ObjectAsset(bin, context, data, state, objectLayout));
             syncAssets(bin, materials, this.materials, data => new MaterialAsset(bin, context, data, this.images, this.samplers, defaultTexture, defaultSamplers, materialLayout));
+
+            const layouts = [cameraLayout, objectLayout, materialLayout];
+            this.meshes = [];
+            const { pipelines, meshes } = this;
+            const usedPipelines = new Set<string>;
+            // TODO: Await all pipelines at once
+            for (const obj of state.dynamic.objects) {
+                const objAsset = this.objects.get(obj)!;
+                for (const primitive of obj.mesh.primitives) {
+                    const geometry = this.geometries.get(primitive.geometry)!;
+                    const material = this.materials.get(primitive.material)!;
+                    let pipeline = pipelines.get(geometry.key);
+                    if(!pipeline) {
+                        pipeline = await createMeshPipeline(primitive.material, geometry, bin, shaderModule, context.buffers, layouts);
+                        pipelines.set(geometry.key, pipeline);
+                    }
+
+                    meshes.push({material, geometry, object: objAsset, pipeline});
+                    usedPipelines.add(geometry.key);
+                }
+            }
+
+            for(const [key, pipeline] of pipelines) {
+                if(!usedPipelines.has(key)) {
+                    bin.delete(pipeline);
+                    pipelines.delete(key)
+                }
+            }
+
+            // sort by material and then object
+            meshes.sort((a, b) => {
+                let diff = a.material.index - b.material.index;
+                if (diff == 0) {
+                    diff = a.object.index - b.object.index;
+                }
+                return diff;
+            })
         }
         if (context.hasStateChanged({ localSpaceTranslation })) {
             // TODO: Do we really need to use Array.from?
@@ -347,65 +392,18 @@ class DynamicModuleContext implements RenderModuleContext {
             // TODO: Do we really need to use Array.from?
             await Promise.all(Array.from(this.materials.values()).map((material) => (material.update(encoder, context, defaultTexture))));
         }
-
-        const { objects, geometries, materials, meshesDict } = this;
-        const layouts = [cameraLayout, objectLayout, materialLayout];
-        // TODO: Await all pipelines at once
-        if(meshesDict.size == 0) {
-            for (const obj of state.dynamic.objects) {
-                const objAsset = objects.get(obj)!;
-                for (const primitive of obj.mesh.primitives) {
-                    const geometry = geometries.get(primitive.geometry)!;
-                    const material = materials.get(primitive.material)!;
-                    let pipeline = await createMeshPipeline(primitive.material, geometry, bin, shaderModule, context.buffers, layouts);
-                    meshesDict.set(primitive, { material, geometry, object: objAsset, pipeline });
-                }
-            }
-        }else{
-            let i = 0;
-            for (const obj of state.dynamic.objects) {
-                const objAsset = objects.get(obj)!;
-                for (const primitive of obj.mesh.primitives) {
-                    const geometry = geometries.get(primitive.geometry)!;
-                    const material = materials.get(primitive.material)!;
-                    const mesh = meshesDict.get(primitive);
-                    if(mesh) {
-                        if(mesh.material !== material) {
-                            mesh.pipeline = await createMeshPipeline(primitive.material, geometry, bin, shaderModule, context.buffers, layouts);
-                        }
-                    }else{
-                        let pipeline = await createMeshPipeline(primitive.material, geometry, bin, shaderModule, context.buffers, layouts);
-                        meshesDict.set(primitive, { material, geometry, object: objAsset, pipeline });
-                    }
-                }
-            }
-        }
     }
 
     render(encoder: GPUCommandEncoder, state: DerivedRenderState) {
         const { context, resources } = this;
         const { cameraBindGroup, emptyBuffer } = resources;
 
-        const { geometries, meshesDict } = this;
-        const meshes: ObjectGeometryMaterialGroup[] = [];
+        const { geometries, meshes } = this;
         let numPrimitives = 0;
         state.dynamic.objects.forEach((p => { numPrimitives += p.mesh.primitives.length }));
         if (numPrimitives != geometries.size) {// happens to objects that are deleted the next frame when using pickbuffers as they are using previous state.
             return;
         }
-        for (const obj of state.dynamic.objects) {
-            for (const primitive of obj.mesh.primitives) {
-                meshes.push(meshesDict.get(primitive)!);
-            }
-        }
-        // sort by material and then object
-        meshes.sort((a, b) => {
-            let diff = a.material.index - b.material.index;
-            if (diff == 0) {
-                diff = a.object.index - b.object.index;
-            }
-            return diff;
-        })
 
         const renderPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [{
@@ -534,6 +532,7 @@ class GeometryAsset {
     index = 0;
     readonly drawParams;
     readonly resources;
+    readonly key;
 
     constructor(bin: ResourceBin, data: RenderStateDynamicGeometry, buffers: Map<BufferSource, BufferAsset>) {
         const hasIndexBuffer = typeof data.indices != "number";
@@ -720,7 +719,7 @@ class GeometryAsset {
             normal: {
                 buffer: normal ? buffers.get(normal.buffer)?.buffer ?? null : null,
                 layout: parseLayoutFormat(normal, 1) ?? {
-                    arrayStride: 0,
+                    arrayStride: vertexFormatStride("float32x3"),
                     attributes: [{
                         format: "float32x3",
                         offset: 0,
@@ -732,7 +731,7 @@ class GeometryAsset {
             tangent: {
                 buffer: tangent ? buffers.get(tangent.buffer)?.buffer ?? null : null,
                 layout: parseLayoutFormat(tangent, 2) ?? {
-                    arrayStride: 0,
+                    arrayStride: vertexFormatStride("float32x4"),
                     attributes: [{
                         format: "float32x4",
                         offset: 0,
@@ -744,7 +743,7 @@ class GeometryAsset {
             color0: {
                 buffer: color0 ? buffers.get(color0.buffer)?.buffer ?? null : null,
                 layout: parseLayoutFormat(color0, 3) ?? {
-                    arrayStride: 0,
+                    arrayStride: vertexFormatStride("float32x4"),
                     attributes: [{
                         format: "float32x4",
                         offset: 0,
@@ -756,7 +755,7 @@ class GeometryAsset {
             texCoord0: {
                 buffer: texCoord0 ? buffers.get(texCoord0.buffer)?.buffer ?? null : null,
                 layout: parseLayoutFormat(texCoord0, 4) ?? {
-                    arrayStride: 0,
+                    arrayStride: vertexFormatStride("float32x2"),
                     attributes: [{
                         format: "float32x2",
                         offset: 0,
@@ -768,7 +767,7 @@ class GeometryAsset {
             texCoord1: {
                 buffer: texCoord1 ? buffers.get(texCoord1.buffer)?.buffer ?? null : null,
                 layout: parseLayoutFormat(texCoord1, 5) ?? {
-                    arrayStride: 0,
+                    arrayStride: vertexFormatStride("float32x2"),
                     attributes: [{
                         format: "float32x2",
                         offset: 0,
@@ -779,6 +778,32 @@ class GeometryAsset {
             },
             indices: indices
         } as const;
+
+        {
+            const {position, normal, color0, texCoord0, texCoord1, tangent} = this.resources;
+            const positionKey = vertexBufferLayoutToString(position.layout!);
+            let normalKey;
+            if (normal.layout) {
+                normalKey = vertexBufferLayoutToString(normal.layout)
+            }
+            let color0Key;
+            if (color0.layout) {
+                color0Key = vertexBufferLayoutToString(color0.layout)
+            }
+            let texCoord0Key;
+            if (texCoord0.layout) {
+                texCoord0Key = vertexBufferLayoutToString(texCoord0.layout)
+            }
+            let texCoord1Key;
+            if (texCoord1.layout) {
+                texCoord1Key = vertexBufferLayoutToString(texCoord1.layout)
+            }
+            let tangentKey;
+            if (tangent.layout) {
+                tangentKey = vertexBufferLayoutToString(tangent.layout)
+            }
+            this.key = `${positionKey}_${normalKey}_${color0Key}_${texCoord0Key}_${texCoord1Key}_${tangentKey}`;
+        }
     }
 
     dispose(bin: ResourceBin) {
