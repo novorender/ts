@@ -190,9 +190,8 @@ export interface RenderStateBackground {
     /** The background color to be used if no url is specified.
      * @remarks
      * If undefined, the default background will be used instead.
-     * If alpha < 1, the rendered image will be transparent, which could be useful for 2D compositing.
      */
-    readonly color?: RGBA;
+    readonly color?: RGB;
 
     /** The absolute url of the background/environment.
      * @remarks
