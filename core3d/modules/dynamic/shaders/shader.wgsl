@@ -354,7 +354,12 @@ fn packNormal(normal: vec3f) -> vec2<u32>{
 
 @fragment
 fn fragmentMain(vertex: FragmentInput) -> FragmentOutput {
-    var baseColor = material.baseColorFactor * vertex.color0;
+    // TODO: This works on glsl when the color vertex buffer is not set but here color0 is 0,0,0,0
+    // and everything is discarded.
+    // One of the differences is that in gl we are setting that slot to null while in webgpu
+    // we need to set it to an empty buffer although it probably won't make a difference to set
+    // it to null
+    var baseColor = material.baseColorFactor * vec4(vertex.color0.xyz, 1.);
 
     if(material.baseColorUVSet >= 0) {
         let uv = select(vertex.texCoord1, vertex.texCoord0, material.baseColorUVSet < 1);
