@@ -29,7 +29,7 @@ export class ClippingModule implements RenderModule {
         const bin = context.resourceBin("Clipping");
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
         const uniformBufferBlocks = ["Camera", "Clipping", "Colors"];
-        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks });
+        const program = await context.makeProgramAsync(bin, { name: "clipping", vertexShader, fragmentShader, uniformBufferBlocks });
         return { bin, uniforms, program } as const;
     }
 }

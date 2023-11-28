@@ -13,10 +13,11 @@ layout(std140) uniform Outline {
 in struct {
     highp vec3 positionVS;
     highp vec2 screenPos;
-    mediump vec4 color;
 } varyings;
 
 flat in struct {
+    mediump vec4 color;
+    mediump float radius;
 #if defined (ADRENO600)
     mediump uint objectId_low;
     mediump uint objectId_high;
@@ -28,32 +29,32 @@ flat in struct {
 layout(location = 0) out mediump vec4 fragColor;
 layout(location = 1) out highp uvec4 fragPick;
 
-const float radius = 5.0f; // / 1000.f;
-
 void main() {
-    // lowp float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
-    // bool inside = clipping.mode == clippingModeIntersection ? (clipping.numPlanes + (outline.planeIndex >= 0 ? 1u : 0u)) > 0U : true;
-    // for(lowp uint i = 0u; i < clipping.numPlanes; i++) {
-    //     if(int(i) == outline.planeIndex) {
-    //         inside = inside && clipping.mode != clippingModeIntersection;
-    //     } else {
-    //         inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
-    //     }
-    // }
-    // if(clipping.mode == clippingModeIntersection ? inside : !inside) {
-    //     discard;
-    // }
+    lowp float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
+    bool inside = clipping.mode == clippingModeIntersection ? (clipping.numPlanes + (outline.planeIndex >= 0 ? 1u : 0u)) > 0U : true;
+    for(lowp uint i = 0u; i < clipping.numPlanes; i++) {
+        if(int(i) == outline.planeIndex) {
+            inside = inside && clipping.mode != clippingModeIntersection;
+        } else {
+            inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.;
+        }
+    }
+    if(clipping.mode == clippingModeIntersection ? inside : !inside) {
+        discard;
+    }
 
-    if(distance(gl_FragCoord.xy, varyings.screenPos) > radius)
+    float dist = distance(gl_FragCoord.xy, varyings.screenPos);
+    if(dist > varyingsFlat.radius)
         discard;
 
-    fragColor = varyings.color;
+    float a = clamp(varyingsFlat.radius - dist, 0., 1.);
+    fragColor = vec4(varyingsFlat.color.rgb, varyingsFlat.color.a * a);
     float linearDepth = -varyings.positionVS.z;
 #if defined (ADRENO600)
     highp uint objectId = combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low) | (1u << 31);
     fragPick = uvec4(objectId, 0, 0, floatBitsToUint(linearDepth));
 #else
-    uint lineObjectId = varyingsFlat.objectId | (1u << 31);
-    fragPick = uvec4(lineObjectId, packNormalAndDeviation(vec3(0), 0.f), floatBitsToUint(linearDepth));
+    uint objectId = varyingsFlat.objectId | (1u << 31);
+    fragPick = uvec4(objectId, packNormalAndDeviation(vec3(0), 0.), floatBitsToUint(linearDepth));
 #endif
 }

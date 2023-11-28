@@ -88,10 +88,10 @@ export class OctreeModule implements RenderModule {
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.color, ShaderMode.triangles) }),
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pick, ShaderMode.triangles) }),
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pre, ShaderMode.triangles) }),
-            context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks: ["Camera", "Clipping", "Outline", "Node"], textureUniforms, transformFeedback: { varyings: ["line_vertices", "color", "object_id"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
-            context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
-            context.makeProgramAsync(bin, { ...shaders.point, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
-            context.makeProgramAsync(bin, { ...shaders.debug, uniformBufferBlocks }),
+            context.makeProgramAsync(bin, { name: "octree_intersect", ...shaders.intersect, uniformBufferBlocks: ["Camera", "Clipping", "Outline", "Node"], textureUniforms, transformFeedback: { varyings: ["line_vertices", "color", "object_id"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
+            context.makeProgramAsync(bin, { name: "octree_line", ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
+            context.makeProgramAsync(bin, { name: "octree_point", ...shaders.point, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
+            context.makeProgramAsync(bin, { name: "octree_debug", ...shaders.debug, uniformBufferBlocks }),
             shadersPromise,
         ]);
         const programs: Programs = { ...corePrograms, intersect, line, point, debug };
@@ -143,7 +143,7 @@ export class OctreeModule implements RenderModule {
         for (const pass of OctreeModule.passes) {
             const modes = {} as Mutable<ModePrograms>;
             for (const mode of OctreeModule.modes) {
-                const promise = context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(context.deviceProfile, pass, mode, programFlags) });
+                const promise = context.makeProgramAsync(bin, { name: `octree_render_${pass}_${mode}`, ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(context.deviceProfile, pass, mode, programFlags) });
                 const compiledPromise = promise.then(program => {
                     modes[mode] = program;
                 });

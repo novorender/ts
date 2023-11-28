@@ -12,10 +12,12 @@ layout(std140) uniform Outline {
 
 in struct {
     highp vec3 positionVS;
-    mediump vec4 color;
+    mediump vec2 uv;
 } varyings;
 
 flat in struct {
+    mediump vec4 color;
+    mediump float len;
 #if defined (ADRENO600)
     mediump uint objectId_low;
     mediump uint objectId_high;
@@ -28,26 +30,34 @@ layout(location = 0) out mediump vec4 fragColor;
 layout(location = 1) out highp uvec4 fragPick;
 
 void main() {
-    lowp float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
+    lowp float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
     bool inside = clipping.mode == clippingModeIntersection ? (clipping.numPlanes + (outline.planeIndex >= 0 ? 1u : 0u)) > 0U : true;
     for(lowp uint i = 0u; i < clipping.numPlanes; i++) {
         if(int(i) == outline.planeIndex) {
             inside = inside && clipping.mode != clippingModeIntersection;
         } else {
-            inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
+            inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.;
         }
     }
     if(clipping.mode == clippingModeIntersection ? inside : !inside) {
         discard;
     }
 
-    fragColor = varyings.color;
+    vec2 uv = varyings.uv;
+    if(uv.x > 0.)
+        uv.x = max(0., uv.x - varyingsFlat.len);
+    float l = length(uv);
+    if(l > 1.)
+        discard;
+
+    float a = min(2., (1. - l) * 4.);
+    fragColor = vec4(varyingsFlat.color.rgb, varyingsFlat.color.a * a);
     float linearDepth = -varyings.positionVS.z;
 #if defined (ADRENO600)
     highp uint objectId = combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low) | (1u << 31);
     fragPick = uvec4(objectId, 0, 0, floatBitsToUint(linearDepth));
 #else
     uint lineObjectId = varyingsFlat.objectId | (1u << 31);
-    fragPick = uvec4(lineObjectId, packNormalAndDeviation(vec3(0), 0.f), floatBitsToUint(linearDepth));
+    fragPick = uvec4(lineObjectId, packNormalAndDeviation(vec3(0), 0.), floatBitsToUint(linearDepth));
 #endif
 }

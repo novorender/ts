@@ -617,19 +617,34 @@ export enum TonemappingMode {
  */
 export interface RenderStateOutlines {
     /** 
- * @ignore
- * @privateRemarks Ability to turn all clipping outlines on and off based on conditions in the render loop.
- * Will be overwritten every frame 
-*/
+    * @ignore
+    * @privateRemarks Ability to turn all clipping outlines on and off based on conditions in the render loop.
+    * Will be overwritten every frame 
+    */
     readonly on: boolean;
+
     /** Whether to do outline rendering. */
     readonly enabled: boolean;
-    /** Color of outline.
+
+    /** Outline thickness, in meters.
+     * @default 0.02
+     */
+    readonly thickness: number;
+
+    /** Color of outline lines.
      * @remarks
      * Due to {@link RenderStateTonemapping | tone mapping} the color displayed on screen will a bit duller.
      * If you require bright colors, you may "overexpose" them, e.g. `[10,0,0]` for bright red.
      */
     readonly color: RGB;
+
+    /** Color of outline vertices.
+     * @remarks
+     * Due to {@link RenderStateTonemapping | tone mapping} the color displayed on screen will a bit duller.
+     * If you require bright colors, you may "overexpose" them, e.g. `[10,0,0]` for bright red.
+     */
+    readonly vertexColor: RGB;
+
     /** The outline intersection plane. */
     readonly plane: ReadonlyVec4;
 }

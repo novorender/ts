@@ -27,7 +27,7 @@ export class ToonModule implements RenderModule {
         const textureNames = ["color", "pick", "zbuffer"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
 
-        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera"], textureUniforms })
+        const program = await context.makeProgramAsync(bin, { name: "toon_outline", vertexShader, fragmentShader, uniformBufferBlocks: ["Camera"], textureUniforms })
         return { bin, uniforms, sampler, program } as const;
     }
 }

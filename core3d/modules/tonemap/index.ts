@@ -28,7 +28,7 @@ export class TonemapModule implements RenderModule {
         const sampler = bin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         const textureNames = ["color", "pick", "zbuffer"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
-        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks: ["Tonemapping"], textureUniforms })
+        const program = await context.makeProgramAsync(bin, { name: "tonemap", vertexShader, fragmentShader, uniformBufferBlocks: ["Tonemapping"], textureUniforms })
         return { bin, uniforms, sampler, program } as const;
     }
 }

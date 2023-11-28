@@ -36,7 +36,7 @@ export class WatermarkModule implements RenderModule {
             indices: ib
         });
         bin.subordinate(vao, vb, ib);
-        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks: ["Watermark"] })
+        const program = await context.makeProgramAsync(bin, { name: "watermark", vertexShader, fragmentShader, uniformBufferBlocks: ["Watermark"] })
         return { bin, uniforms, vao, program } as const;
     }
 

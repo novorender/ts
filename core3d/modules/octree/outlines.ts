@@ -4,6 +4,7 @@ import { orthoNormalBasisMatrixFromPlane } from "core3d/util";
 import { glCreateBuffer, glCreateVertexArray, glDelete, glDraw, glState } from "webgl2";
 import { OctreeNode } from "./node";
 import { MaterialType, type Mesh } from "./mesh";
+import type { DerivedRenderState } from "web_app";
 
 type ObjectId = number;
 type ChildIndex = number;
@@ -174,7 +175,7 @@ export class OutlineRenderer {
         return lineClusters;
     }
 
-    makeBuffers(clusters: readonly LineCluster[]) {
+    makeBuffers(clusters: readonly LineCluster[], state: DerivedRenderState, highlightIndices: Uint8Array) {
         if (clusters.length > 0) {
             const { context } = this;
             const { gl } = context.renderContext;
@@ -187,13 +188,15 @@ export class OutlineRenderer {
             let segmentOffset = 0;
             let indexOffset = 0;
             for (const { objectId, segments, points, vertices, normals } of clusters) {
-                // add vertex indices for vertex/edge rendering/
+                // add vertex indices for vertex/edge rendering.
                 const vtxOffset = segmentOffset * 2;
                 for (let i = 0; i < points.length; i++) {
                     indices[indexOffset++] = points[i] + vtxOffset;
                 }
                 // use normal to change alpha in color
-                const baseColor = 0x0000_00ff; // TODO: fetch color from render state/highlight buffer.
+                const highlightIndex = highlightIndices[objectId];
+                const [r, g, b] = (highlightIndex ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? state.outlines.color;
+                const baseColor = packRGBA(r / 4, g / 4, b / 4); // allow some over-exposure at the expense of lower bit resolution
                 positions.set(vertices, segmentOffset * 4);
                 for (let i = 0; i < segments; i++) {
                     const nz = snorm16ToFloat(normals[i * 3 + 2]);
@@ -204,6 +207,7 @@ export class OutlineRenderer {
                 segmentOffset += segments;
             }
             console.assert(totalSegments == segmentOffset);
+            console.assert(totalIndices == indexOffset);
 
             const idxBuffer = glCreateBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices, usage: "STREAM_DRAW" });
             const posBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: positions, usage: "STREAM_DRAW" });
@@ -242,7 +246,7 @@ export class OutlineRenderer {
                 writeMask: false
             },
         });
-        const stats = glDraw(gl, { kind: "arrays_instanced", mode: "LINES", count: 2, instanceCount: count });
+        const stats = glDraw(gl, { kind: "arrays_instanced", mode: "TRIANGLE_STRIP", count: 4, instanceCount: count });
         renderContext.addRenderStatistics(stats);
     }
 
@@ -472,6 +476,15 @@ function keyFromXY(x: number, y: number): CoordKey {
 
 function xyFromKey(key: CoordKey): readonly [x: number, y: number] {
     return [Number(key & 0xffff_ffffn) / 0x1_0000 - 0x8000, Number((key >> 32n) & 0xffff_ffffn) / 0x1_0000 - 0x8000];
+}
+
+function packRGBA(r: number, g: number, b: number, a = 1) {
+    return (
+        clamp(r, 0, 1) * 255 << 0 |
+        clamp(g, 0, 1) * 255 << 8 |
+        clamp(b, 0, 1) * 255 << 16 |
+        clamp(a, 0, 1) * 255 << 24
+    );
 }
 
 function extractEdges(segments: number, vertices: Float32Array, normals: Int16Array, edgeAngleThresholdCos: number, doubleSided: boolean) {

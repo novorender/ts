@@ -24,5 +24,5 @@ layout(location = 0) out vec4 fragColor;
 void main() {
     if(clipOutlines(varyings.positionVS, clipping))
         discard;
-    fragColor = vec4(outline.color, varyings.opacity);
+    fragColor = vec4(outline.lineColor, varyings.opacity);
 }

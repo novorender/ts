@@ -60,16 +60,16 @@ void main() {
         line_vertices = vec4(0);
     }
 
-    vec3 rgb = outline.color;
+    vec3 rgb = outline.lineColor;
 
     if(vertexHighlight != 0U) {
-        float u = (float(vertexHighlight) + 0.5f) / float(maxHighlights);
-        vec4 colorTranslation = texture(textures.highlights, vec2(u, 5.5f / 6.0f));
-        if(colorTranslation.a == 1.f) {
+        float u = (float(vertexHighlight) + 0.5) / float(maxHighlights);
+        vec4 colorTranslation = texture(textures.highlights, vec2(u, 5.5 / 6.0));
+        if(colorTranslation.a == 1.) {
             rgb = colorTranslation.rgb;
         }
     }
 
-    color = vec4(rgb, 1.f - abs(normal.z));
+    color = vec4(rgb, 1. - abs(normal.z));
     object_id = vertexObjectId;
 }

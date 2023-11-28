@@ -14,6 +14,7 @@ import { decodeBase64 } from "core3d/util";
 import { OutlineRenderer } from "./outlines";
 
 const enum UBO { camera, clipping, scene, node };
+const useNewOutlines = true;
 
 export interface RenderNode {
     readonly mask: number;
@@ -450,40 +451,16 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         gl.bindTexture(gl.TEXTURE_2D, null);
 
         if (deviceProfile.features.outline && state.outlines.on) {
-            // transform outline plane into local space
+            const { vertexColor, thickness } = state.outlines;
 
             const renderOutlines = (plane: ReadonlyVec4, color: RGB, planeIndex = -1) => {
                 const [x, y, z, offset] = plane;
                 const p = vec4.fromValues(x, y, z, -offset);
-                renderContext.updateOutlinesUniforms(p, color, planeIndex);
-
+                renderContext.updateOutlinesUniforms(p, color, vertexColor, planeIndex, thickness);
                 const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
 
-                const useNewOutlines = false;
                 if (useNewOutlines) {
-                    const begin = performance.now();
-                    const { outlineRenderers } = this;
-                    let outlineRenderer = outlineRenderers.get(plane);
-                    if (!outlineRenderer) {
-                        const edgeAngleThreshold = 30; // don't render intersecting edges (as points) that has less angles between their neighboring triangles.
-                        outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p, edgeAngleThreshold);
-                        outlineRenderers.set(plane, outlineRenderer);
-                    }
-                    let lineCount = 0;
-                    const [...lineClusters] = outlineRenderer.intersectTriangles(renderNodes);
-                    {
-                        const buffers = outlineRenderer.makeBuffers(lineClusters);
-                        if (buffers) {
-                            const { linesCount, pointsCount, linesVAO, pointsVAO } = buffers;
-                            lineCount = linesCount;
-                            outlineRenderer.renderLines(linesCount, linesVAO);
-                            outlineRenderer.renderPoints(pointsCount, pointsVAO);
-                            glDelete(gl, [linesVAO, pointsVAO]);
-                        }
-                    }
-
-                    const end = performance.now();
-                    console.log(`lines: ${lineCount} time:${end - begin}`);
+                    this.renderNodeClippingOutline2(plane, state, renderNodes);
                 } else {
                     // render clipping outlines
                     glState(gl, {
@@ -493,7 +470,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                             writeMask: false
                         },
                     });
-
                     for (const { mask, node } of renderNodes) {
                         if (node.intersectsPlane(p)) {
                             this.renderNodeClippingOutline(node, mask);
@@ -583,20 +559,26 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             gl.bindTexture(gl.TEXTURE_2D, null);
 
             if (deviceProfile.features.outline && state.outlines.on) {
-                const renderOutlines = (plane: ReadonlyVec4, color: RGB, planeIndex = -1) => {
+                const { vertexColor, thickness } = state.outlines;
+                const renderOutlines = (plane: ReadonlyVec4, lineColor: RGB, planeIndex = -1) => {
                     const [x, y, z, offset] = plane;
                     const p = vec4.fromValues(x, y, z, -offset);
-                    renderContext.updateOutlinesUniforms(p, color, planeIndex);
-                    glState(gl, {
-                        uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
-                        depth: {
-                            test: false,
-                            writeMask: false
-                        },
-                    });
-                    for (const { mask, node } of renderNodes) {
-                        if (node.intersectsPlane(p)) {
-                            this.renderNodeClippingOutline(node, mask);
+                    renderContext.updateOutlinesUniforms(p, lineColor, vertexColor, planeIndex, thickness);
+
+                    if (useNewOutlines) {
+                        this.renderNodeClippingOutline2(plane, state, renderNodes);
+                    } else {
+                        glState(gl, {
+                            uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
+                            depth: {
+                                test: false,
+                                writeMask: false
+                            },
+                        });
+                        for (const { mask, node } of renderNodes) {
+                            if (node.intersectsPlane(p)) {
+                                this.renderNodeClippingOutline(node, mask);
+                            }
                         }
                     }
                 }
@@ -698,6 +680,36 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
         }
+    }
+
+    renderNodeClippingOutline2(plane: ReadonlyVec4, state: DerivedRenderState, renderNodes: readonly RenderNode[]) {
+        const begin = performance.now();
+        const { gl } = this.renderContext;
+        const { outlineRenderers, highlights } = this;
+        let outlineRenderer = outlineRenderers.get(plane);
+        if (!outlineRenderer) {
+            const edgeAngleThreshold = 30; // don't render intersecting edges (as points) that has smaller angles than this threshold between their neighboring triangles.
+            const [x, y, z, offset] = plane;
+            const p = vec4.fromValues(x, y, z, -offset);
+            outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p, edgeAngleThreshold);
+            outlineRenderers.set(plane, outlineRenderer);
+        }
+        let lineCount = 0, pointCount = 0;
+        // TODO: offload to worker (mainly to avoid timeout and stuttering)?
+        const [...lineClusters] = outlineRenderer.intersectTriangles(renderNodes);
+        {
+            const buffers = outlineRenderer.makeBuffers(lineClusters, state, highlights);
+            if (buffers) {
+                const { linesCount, pointsCount, linesVAO, pointsVAO } = buffers;
+                lineCount = linesCount;
+                pointCount = pointsCount;
+                outlineRenderer.renderLines(linesCount, linesVAO);
+                outlineRenderer.renderPoints(pointsCount, pointsVAO);
+                glDelete(gl, [linesVAO, pointsVAO]);
+            }
+        }
+        const end = performance.now();
+        // console.log(`lines: ${lineCount}, points: ${pointCount} time:${end - begin}`);
     }
 
     renderNodeDebug(node: OctreeNode) {

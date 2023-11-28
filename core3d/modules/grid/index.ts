@@ -31,7 +31,7 @@ export class GridModule implements RenderModule {
         const { vertexShader, fragmentShader } = context.imports.shaders.grid.render;
         const bin = context.resourceBin("Grid");
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: uniformsProxy.buffer });
-        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Grid"] })
+        const program = await context.makeProgramAsync(bin, { name: "grid", vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "Grid"] })
         return { bin, uniforms, program } as const;
     }
 }

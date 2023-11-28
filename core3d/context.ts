@@ -206,8 +206,10 @@ export class RenderContext {
         this.outlinesUniformsData = glUBOProxy({
             localPlaneMatrix: "mat4",
             planeLocalMatrix: "mat4",
-            color: "vec3",
+            lineColor: "vec3",
             planeIndex: "int",
+            pointColor: "vec3",
+            linearSize: "float",
         });
         this.outlineUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.outlinesUniformsData.buffer.byteLength });
     }
@@ -245,7 +247,7 @@ export class RenderContext {
         const ext = glExtensions(gl).parallelShaderCompile;
         function pollAsyncPrograms() {
             for (let i = 0; i < asyncPrograms.length; i++) {
-                const { program, resolve, reject } = asyncPrograms[i];
+                const { name, program, resolve, reject } = asyncPrograms[i];
                 if (ext) {
                     if (!gl.getProgramParameter(program, ext.COMPLETION_STATUS_KHR))
                         continue;
@@ -253,6 +255,7 @@ export class RenderContext {
                 const [info] = asyncPrograms.splice(i--, 1);
                 const error = glCheckProgram(gl, info);
                 if (error) {
+                    console.error(`Failed to link shader: ${name}!`);
                     reject(error);
                 } else {
                     resolve();
@@ -394,7 +397,7 @@ export class RenderContext {
     /** Compile WebGL/GLSL shader program asynchronously. */
     makeProgramAsync(resourceBin: ResourceBin, params: AsyncProgramParams) {
         const { gl, commonChunk } = this;
-        const { vertexShader, fragmentShader } = params;
+        const { name, vertexShader, fragmentShader } = params;
         const header = { commonChunk, ...params.header } as const; // inject common shader code here, if not defined in params.
         const programAsync = resourceBin.createProgramAsync({ header, vertexShader, fragmentShader });
         const { program } = programAsync;
@@ -443,7 +446,7 @@ export class RenderContext {
                 gl.useProgram(null);
                 resolve(program);
             }
-            this.asyncPrograms.push({ ...programAsync, resolve: postLink, reject });
+            this.asyncPrograms.push({ name, ...programAsync, resolve: postLink, reject });
         });
     }
 
@@ -901,7 +904,7 @@ export class RenderContext {
     }
 
     /** @internal */
-    updateOutlinesUniforms(plane: ReadonlyVec4, color: RGB, planeIndex: number) {
+    updateOutlinesUniforms(plane: ReadonlyVec4, lineColor: RGB, pointColor: RGB, planeIndex: number, linearSize: number) {
         const { outlineUniforms, outlinesUniformsData } = this;
         // transform outline plane into local space
         const [x, y, z, offset] = plane;
@@ -918,8 +921,10 @@ export class RenderContext {
         const { values } = outlinesUniformsData;
         values.planeLocalMatrix = planeLocalMatrix;
         values.localPlaneMatrix = localPlaneMatrix;
-        values.color = color;
+        values.lineColor = lineColor;
+        values.pointColor = pointColor;
         values.planeIndex = planeIndex;
+        values.linearSize = linearSize;
         this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
     }
 
@@ -1096,6 +1101,8 @@ export interface PickOptions {
 
 /** Parameters for asynchronous shader compilation and linking. */
 export interface AsyncProgramParams {
+    /** For debugging/diagnostics purposes. */
+    readonly name?: string;
     /** Common GLSL header information to be inserted before the body code. */
     readonly header?: Partial<ShaderHeaderParams>;
     /** The vertex shader. */
@@ -1119,6 +1126,7 @@ export interface AsyncProgramParams {
 
 /** @internal */
 interface AsyncProgramInfo {
+    readonly name?: string; // for debugging purposes only.
     readonly program: WebGLProgram;
     readonly vertex: WebGLShader;
     readonly fragment: WebGLShader;

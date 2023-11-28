@@ -80,10 +80,10 @@ export class CubeModule implements RenderModule {
 
         const uniformBufferBlocks = ["Camera", "Clipping", "Cube"];
         const [color, pick, line, intersect] = await Promise.all([
-            context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks }),
-            context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, header: { flags: ["PICK"] } }),
-            context.makeProgramAsync(bin, { ...shaders.line, uniformBufferBlocks: [...uniformBufferBlocks, "Outline"] }),
-            context.makeProgramAsync(bin, { ...shaders.intersect, uniformBufferBlocks: [...uniformBufferBlocks, "Outline"], transformFeedback: { varyings: ["line_vertices", "opacity"], bufferMode: "SEPARATE_ATTRIBS" } }),
+            context.makeProgramAsync(bin, { name: "cube_render", ...shaders.render, uniformBufferBlocks }),
+            context.makeProgramAsync(bin, { name: "cube_pick", ...shaders.render, uniformBufferBlocks, header: { flags: ["PICK"] } }),
+            context.makeProgramAsync(bin, { name: "cube_line", ...shaders.line, uniformBufferBlocks: [...uniformBufferBlocks, "Outline"] }),
+            context.makeProgramAsync(bin, { name: "cube_intersect", ...shaders.intersect, uniformBufferBlocks: [...uniformBufferBlocks, "Outline"], transformFeedback: { varyings: ["line_vertices", "opacity"], bufferMode: "SEPARATE_ATTRIBS" } }),
         ]);
         const programs = { color, pick, line, intersect };
         return { bin, uniforms, transformFeedback, vao_render, vao_triplets, vao_line, vb_line, vb_opacity, programs } as const;
@@ -132,11 +132,12 @@ class CubeModuleContext implements RenderModuleContext {
             context.addRenderStatistics(stats);
 
             if (state.outlines.enabled && deviceProfile.features.outline) {
+                const { thickness, vertexColor } = state.outlines;
                 const planeIndex = state.clipping.planes.findIndex((cp) => vec4.exactEquals(cp.normalOffset, plane));
                 const [x, y, z, offset] = state.outlines.plane;
                 const plane = vec4.fromValues(x, y, z, -offset);
 
-                context.updateOutlinesUniforms(plane, state.outlines.color, planeIndex);
+                context.updateOutlinesUniforms(plane, state.outlines.color, vertexColor, planeIndex, thickness);
                 // transform vertex triplets into intersection lines
                 glState(gl, {
                     program: programs.intersect,

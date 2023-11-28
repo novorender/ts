@@ -37,7 +37,7 @@ export class BackgroundModule implements RenderModule {
         const uniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: uniformsProxy.buffer.byteLength });
         const uniformBufferBlocks = ["Camera", "Background"];
         const textureUniforms = ["textures.skybox", "textures.ibl.specular"];
-        const program = await context.makeProgramAsync(bin, { vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms });
+        const program = await context.makeProgramAsync(bin, { name: "background", vertexShader, fragmentShader, uniformBufferBlocks, textureUniforms });
         return { bin, uniforms, program } as const;
     }
 
