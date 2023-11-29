@@ -25,32 +25,35 @@ const mediump float verticalSobel[5 * 5] = float[]( //
 1.f, 2.f, 0.f, -2.f, -1.f, //
 1.f, 2.f, 0.f, -2.f, -1.f);
 
-bool objectTest(uint objectId, vec2 bl, vec2 tr, vec2 br, vec2 tl) {
-    uint obj0 = texture(textures.pick, bl).x;
-    if(obj0 != objectId) {
-        return true;
-    }
-    uint obj1 = texture(textures.pick, tr).x;
-    if(obj1 != objectId) {
-        return true;
-    }
-    uint obj2 = texture(textures.pick, br).x;
-    if(obj2 != objectId) {
-        return true;
-    }
-    uint obj3 = texture(textures.pick, tl).x;
-    if(obj3 != objectId) {
-        return true;
-    }
-    return false;
-}
-
 float getPixelOffset(int index, float pixelSize) {
     return float(index - 2) * pixelSize;
 }
 
 vec2 getUvCoord(int i, int j, vec2 uv, float pixelSizeX, float pixelSizeY) {
     return uv + vec2(getPixelOffset(i, pixelSizeX), getPixelOffset(j, pixelSizeY));
+}
+
+float objectTest(uint objectId, vec2 uv, float pixelSizeX, float pixelSizeY) {
+    float horizontal = 0.f;
+    float vertical = 0.f;
+    for(int i = 0; i < 5; ++i) {
+        for(int j = 0; j < 5; ++j) {
+            int idx = i * 5 + j;
+            if(idx == 12) {
+                continue;
+            }
+            vec2 uvCoord = getUvCoord(i, j, uv, pixelSizeX, pixelSizeY);
+            if(uvCoord.x < 0.f || uvCoord.y < 0.f) {
+                return 0.f;
+            }
+            float sobelFactorH = horizontalSobel[idx];
+            float sobelFactorV = verticalSobel[idx];
+            float val = texture(textures.pick, uvCoord).x != objectId ? 1.f : 0.f;
+            horizontal += sobelFactorH * val;
+            vertical += sobelFactorV * val;
+        }
+    }
+    return sqrt(pow(horizontal, 2.f) + pow(vertical, 2.f)) / 35.f; // use 25 instead of 35?
 }
 
 float depthTest2(float centerDepth, vec2 uv, float pixelSizeX, float pixelSizeY) {
@@ -106,16 +109,23 @@ void main() {
     float pixelSizeX = 1.f / camera.viewSize.x;
     float pixelSizeY = 1.f / camera.viewSize.y;
 
-    //uint objectId = texture(textures.pick, uv).x;
+    uint objectId = texture(textures.pick, uv).x;
     float centerDepth = uintBitsToFloat(texture(textures.pick, uv).w);
     vec3 centerNormal = unpackNormalAndDeviation(texture(textures.pick, uv).yz).xyz;
 
+    float objectEdge = objectTest(objectId, uv, pixelSizeX, pixelSizeY);
     float normalEdge = 0.f;
-    float depthEdge = depthTest2(centerDepth, uv, pixelSizeX, pixelSizeY);
-    if(depthEdge < 0.8f) {
+    float depthEdge = 0.f;
+    if (objectEdge < 0.8) {
+        depthEdge = depthTest2(centerDepth, uv, pixelSizeX, pixelSizeY);
+    }
+    if(depthEdge < 0.8f && objectEdge < 0.8f) {
         normalEdge = normalTest2(centerNormal, uv, pixelSizeX, pixelSizeY);
     }
-    float edge = min(0.8f, max(depthEdge, normalEdge));
+    if(objectEdge < 0.8f) {
+        objectEdge = objectTest(objectId, uv, pixelSizeX, pixelSizeY);
+    }
+    float edge = min(0.8f, max(max(depthEdge, normalEdge), objectEdge));
 
     if(edge < 0.3f) {
         discard;
