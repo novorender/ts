@@ -300,6 +300,26 @@ export class OutlineRenderer {
             yield p;
         }
     }
+
+    *getLines(cluster: LineCluster): IterableIterator<[ReadonlyVec3, ReadonlyVec3]> {
+        const { points, vertices } = cluster;
+        const { planeLocalMatrix } = this;
+        const end = vec3.create();
+        const start = vec3.create();
+        for (let i = 1; i < points.length; ++i) {
+            const startIdx = points[i - 1];
+            const endIdx = points[i];
+            start[0] = vertices[startIdx * 2 + 0];
+            start[1] = vertices[startIdx * 2 + 1];
+            end[2] = 0;
+            end[0] = vertices[endIdx * 2 + 0];
+            end[1] = vertices[endIdx * 2 + 1];
+            end[2] = 0;
+            vec3.transformMat4(start, start, planeLocalMatrix);
+            vec3.transformMat4(end, end, planeLocalMatrix);
+            yield [start, end];
+        }
+    }
 }
 
 function floatToSnorm16(float: number) {
