@@ -298,6 +298,9 @@ export function centerLinesToLinesTrip(
         next: number | undefined;
     }[]
 ) {
+    if (centerLines.length == 1) {
+        return [centerLines[0].start, centerLines[0].end];
+    }
     const compare = (
         a: ReadonlyVec3,
         radiusA: number,
