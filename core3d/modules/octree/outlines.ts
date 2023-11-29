@@ -64,6 +64,7 @@ export class OutlineRenderer {
     readonly planeLocalMatrix: ReadonlyMat4;
     readonly localPlaneMatrix: ReadonlyMat4;
     readonly nodeLinesCache = new WeakMap<OctreeNode, NodeLineClusters>();
+    readonly lineClusters: WeakRef<LineCluster>[] = [];
 
     constructor(
         readonly context: OctreeModuleContext,
@@ -159,13 +160,11 @@ export class OutlineRenderer {
                         if (segments) {
                             const vertices = posBuffer.slice(0, segments * 4);
                             const normals = normalBuffer.slice(0, segments * 3);
-                            // if (objectId == 380053) {
-                            //     console.log("dude!");
-                            // }
                             const points = extractEdges(segments, vertices, normals, edgeAngleThresholdCos, doubleSided);
                             // TODO: Clip lines against other clipping planes?
                             const lineCluster = { objectId, segments, vertices, normals, points } as const satisfies LineCluster;
                             clusters.push(lineCluster);
+                            this.lineClusters.push(new WeakRef(lineCluster));
                         }
                     }
                 }
@@ -273,6 +272,19 @@ export class OutlineRenderer {
         // const stats = glDraw(gl, { kind: "elements", mode: "POINTS", indexType: "UNSIGNED_INT", count });
         const stats = glDraw(gl, { kind: "arrays", mode: "POINTS", count });
         renderContext.addRenderStatistics(stats);
+    }
+
+    *getLineClusters(): IterableIterator<LineCluster> {
+        const { lineClusters } = this;
+        for (let i = 0; i < lineClusters.length; ++i) {
+            const clusterRef = lineClusters[i];
+            const cluster = clusterRef.deref();
+            if (cluster) {
+                yield cluster;
+            } else {
+                lineClusters.splice(i--, 1);
+            }
+        }
     }
 
     // get edge intersection vertices - in local space

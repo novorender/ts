@@ -436,13 +436,24 @@ export class View<
      * @public
      * @returns returns a set of all object ids on the screen 
      */
-    async getOutlineObjectsOnScreen() {
+    getOutlineObjectsOnScreen() {
         const context = this._renderContext;
+        const planes = this.renderStateGL.clipping.planes;
+        const objectIds = new Set<number>();
         if (context) {
-            context.renderPickBuffers();
-            const pick = (await context.buffers.pickBuffers()).pick;
-            return context.getOutlineObjects(pick);
+            const { outlineRenderers } = context;
+            for (const plane of planes) {
+                if (plane.outline) {
+                    const outlineRenderer = outlineRenderers.get(plane.normalOffset);
+                    if (outlineRenderer) {
+                        for (const { objectId } of outlineRenderer.getLineClusters()) {
+                            objectIds.add(objectId);
+                        }
+                    }
+                }
+            }
         }
+        return objectIds;
     }
 
     /**
