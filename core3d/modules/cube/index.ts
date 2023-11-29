@@ -137,7 +137,7 @@ class CubeModuleContext implements RenderModuleContext {
                 const [x, y, z, offset] = state.outlines.plane;
                 const plane = vec4.fromValues(x, y, z, -offset);
 
-                context.updateOutlinesUniforms(plane, state.outlines.color, vertexColor, planeIndex, thickness);
+                context.updateOutlinesUniforms(plane, state.outlines.lineColor, vertexColor, planeIndex, thickness);
                 // transform vertex triplets into intersection lines
                 glState(gl, {
                     program: programs.intersect,

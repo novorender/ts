@@ -70,7 +70,7 @@ export function defaultRenderState(): RenderState {
             on: true,
             enabled: false,
             thickness: 0.02,
-            color: [4, 4, 4], // bright white (overexposed)
+            lineColor: [4, 4, 4], // bright white (overexposed)
             vertexColor: [0, .5, 0], // green
             plane: [0, 0, 1, 0],
         },

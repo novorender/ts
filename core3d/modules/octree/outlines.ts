@@ -16,7 +16,7 @@ export interface LineCluster {
     readonly segments: number; // # of line segments
     readonly vertices: Float32Array; // xy positions for line segments in plane space (one pair per triangle/segment)
     readonly normals: Int16Array; // triangle normals (one per triangle/segment)
-    readonly points: Uint32Array; // list of vertex indices to hard-edge points into the vertices.
+    readonly points: Uint32Array; // list of vertex indices to hard-edge points into the segment vertices.
 }
 
 class NodeIntersectionBuilder {
@@ -159,6 +159,9 @@ export class OutlineRenderer {
                         if (segments) {
                             const vertices = posBuffer.slice(0, segments * 4);
                             const normals = normalBuffer.slice(0, segments * 3);
+                            // if (objectId == 380053) {
+                            //     console.log("dude!");
+                            // }
                             const points = extractEdges(segments, vertices, normals, edgeAngleThresholdCos, doubleSided);
                             // TODO: Clip lines against other clipping planes?
                             const lineCluster = { objectId, segments, vertices, normals, points } as const satisfies LineCluster;
@@ -180,24 +183,27 @@ export class OutlineRenderer {
             const { context } = this;
             const { gl } = context.renderContext;
             const totalSegments = clusters.map(e => e.segments).reduce((a, b) => (a + b));
-            const totalIndices = clusters.map(e => e.points.length).reduce((a, b) => (a + b));
-            const positions = new Float32Array(totalSegments * 4);
+            const totalPoints = clusters.map(e => e.points.length).reduce((a, b) => (a + b));
+            const linePos = new Float32Array(totalSegments * 4);
+            const pointPos = new Float32Array(totalPoints * 2);
             const colors = new Uint32Array(totalSegments);
             const objectIds = new Uint32Array(totalSegments);
-            const indices = new Uint32Array(totalIndices);
+            // const indices = new Uint32Array(totalIndices);
             let segmentOffset = 0;
-            let indexOffset = 0;
+            let pointOffset = 0;
             for (const { objectId, segments, points, vertices, normals } of clusters) {
                 // add vertex indices for vertex/edge rendering.
                 const vtxOffset = segmentOffset * 2;
                 for (let i = 0; i < points.length; i++) {
-                    indices[indexOffset++] = points[i] + vtxOffset;
+                    const idx = points[i]; // + vtxOffset;
+                    pointPos[pointOffset++] = vertices[idx * 2 + 0];
+                    pointPos[pointOffset++] = vertices[idx * 2 + 1];
                 }
                 // use normal to change alpha in color
                 const highlightIndex = highlightIndices[objectId];
-                const [r, g, b] = (highlightIndex ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? state.outlines.color;
+                const [r, g, b] = (highlightIndex ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? state.outlines.lineColor;
                 const baseColor = packRGBA(r / 4, g / 4, b / 4); // allow some over-exposure at the expense of lower bit resolution
-                positions.set(vertices, segmentOffset * 4);
+                linePos.set(vertices, segmentOffset * 4);
                 for (let i = 0; i < segments; i++) {
                     const nz = snorm16ToFloat(normals[i * 3 + 2]);
                     const alpha = 1 - Math.min(1, Math.abs(nz));
@@ -207,27 +213,26 @@ export class OutlineRenderer {
                 segmentOffset += segments;
             }
             console.assert(totalSegments == segmentOffset);
-            console.assert(totalIndices == indexOffset);
+            console.assert(totalPoints * 2 == pointOffset);
 
-            const idxBuffer = glCreateBuffer(gl, { kind: "ELEMENT_ARRAY_BUFFER", srcData: indices, usage: "STREAM_DRAW" });
-            const posBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: positions, usage: "STREAM_DRAW" });
+            const pointPosBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: pointPos, usage: "STREAM_DRAW" });
+            const linePosBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: linePos, usage: "STREAM_DRAW" });
             const colorBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: colors, usage: "STREAM_DRAW" });
             const objectIdBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: objectIds, usage: "STREAM_DRAW" });
             const linesVAO = glCreateVertexArray(gl, {
                 attributes: [
-                    { kind: "FLOAT", componentCount: 4, componentType: "FLOAT", normalized: false, buffer: posBuffer, byteOffset: 0, byteStride: 16, divisor: 1 },
+                    { kind: "FLOAT", componentCount: 4, componentType: "FLOAT", normalized: false, buffer: linePosBuffer, byteOffset: 0, byteStride: 16, divisor: 1 },
                     { kind: "FLOAT", componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, buffer: colorBuffer, byteOffset: 0, byteStride: 4, divisor: 1 },
                     { kind: "UNSIGNED_INT", componentCount: 1, componentType: "UNSIGNED_INT", buffer: objectIdBuffer, byteOffset: 0, byteStride: 4, divisor: 1 },
                 ],
             });
             const pointsVAO = glCreateVertexArray(gl, {
                 attributes: [
-                    { kind: "FLOAT", componentCount: 2, componentType: "FLOAT", normalized: false, buffer: posBuffer, byteOffset: 0, byteStride: 8 },
+                    { kind: "FLOAT", componentCount: 2, componentType: "FLOAT", normalized: false, buffer: pointPosBuffer, byteOffset: 0, byteStride: 8 },
                 ],
-                indices: idxBuffer
             });
-            glDelete(gl, [idxBuffer, posBuffer, colorBuffer, objectIdBuffer]); // the VAOs array already references these buffers, so we release our reference on them early.
-            return { linesCount: totalSegments, pointsCount: totalIndices, linesVAO, pointsVAO } as const;
+            glDelete(gl, [pointPosBuffer, linePosBuffer, colorBuffer, objectIdBuffer]); // the VAOs array already references these buffers, so we release our reference on them early.
+            return { linesCount: totalSegments, pointsCount: totalPoints, linesVAO, pointsVAO } as const;
         }
     }
 
@@ -265,7 +270,8 @@ export class OutlineRenderer {
                 writeMask: false
             },
         });
-        const stats = glDraw(gl, { kind: "elements", mode: "POINTS", indexType: "UNSIGNED_INT", count });
+        // const stats = glDraw(gl, { kind: "elements", mode: "POINTS", indexType: "UNSIGNED_INT", count });
+        const stats = glDraw(gl, { kind: "arrays", mode: "POINTS", count });
         renderContext.addRenderStatistics(stats);
     }
 
@@ -401,6 +407,8 @@ function intersectTriangles(segmentPos: Float32Array, segmentNormal: Int16Array,
     const ab = vec3.create(); const ac = vec3.create(); const normal = vec3.create();
     for (let i = 0; i < idx.length; i += 3) {
         const i0 = idx[i + 0]; const i1 = idx[i + 1]; const i2 = idx[i + 2];
+        if (i0 == i1 || i0 == i2 || i1 == i2)
+            continue; // skip degenerate triangles
         vec3.set(p0, pos[i0 * 3 + 0], pos[i0 * 3 + 1], pos[i0 * 3 + 2]);
         vec3.set(p1, pos[i1 * 3 + 0], pos[i1 * 3 + 1], pos[i1 * 3 + 2]);
         vec3.set(p2, pos[i2 * 3 + 0], pos[i2 * 3 + 1], pos[i2 * 3 + 2]);
@@ -409,13 +417,16 @@ function intersectTriangles(segmentPos: Float32Array, segmentNormal: Int16Array,
         const gt0 = z0 > 0; const gt1 = z1 > 0; const gt2 = z2 > 0;
         const lt0 = z0 < 0; const lt1 = z1 < 0; const lt2 = z2 < 0;
         // does triangle intersect plane?
-        // this test is not just a possible optimization, but also excludes problematic triangles that straddles the plane along an edge
+        // this test is not just a possible optimization, but also excludes problematic triangles that straddles the plane along an edge or vertex only
         if ((gt0 || gt1 || gt2) && (lt0 || lt1 || lt2)) { // SIMD: any()?
             // compute triangle normal
             vec3.sub(ab, p1, p0);
             vec3.sub(ac, p2, p0);
             vec3.cross(normal, ab, ac);
             const [nx, ny, nz] = vec3.normalize(normal, normal);
+            const l2 = nx * nx + ny * ny + nz * nz;
+            if (l2 < 0.9 || l2 > 1.1)
+                continue; // skip degenerate triangles.
 
             // check for half-edge intersections in negative direction
             const v0 = intersectHalfEdge(p1, p0) ?? intersectHalfEdge(p2, p1) ?? intersectHalfEdge(p0, p2)!;
@@ -487,6 +498,7 @@ function packRGBA(r: number, g: number, b: number, a = 1) {
     );
 }
 
+// TODO: add varying ways to project/compute 2D thickness
 function extractEdges(segments: number, vertices: Float32Array, normals: Int16Array, edgeAngleThresholdCos: number, doubleSided: boolean) {
     const xyVertexMap = new Map<CoordKey, number>();
     const xySegmentMap = new Map<CoordKey, number[]>();
@@ -521,12 +533,12 @@ function extractEdges(segments: number, vertices: Float32Array, normals: Int16Ar
         // we only care about manifold edges.
         if (segmentIndices.length > 1) {
             // get the neighboring triangle normals.
-            const normals = segmentIndices.map(i => getNormal(i));
+            const triNorms = segmentIndices.map(i => getNormal(i));
             let minAngleCos = 2;
             // There might be more than 2 connected triangles (albeit rare), so we pick the largest angle (smallest cos) between all possible combinations.
-            for (let i = 0; i < normals.length - 1; i++) {
-                for (let j = i + 1; j < normals.length; j++) {
-                    let angleCos = vec3.dot(normals[i], normals[j]);
+            for (let i = 0; i < triNorms.length - 1; i++) {
+                for (let j = i + 1; j < triNorms.length; j++) {
+                    let angleCos = vec3.dot(triNorms[i], triNorms[j]);
                     if (doubleSided) {
                         // check direction of both neighbor triangle segments, i.e. is it the first or second segment vertex/edge that is shared.
                         const dir0 = keyFromVertex(segmentIndices[i] * 2) == key;

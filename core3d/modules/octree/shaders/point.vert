@@ -49,7 +49,7 @@ void main() {
 
     varyingsFlat.color = vec4(outline.pointColor, 1);
 
-    highp uint objectId = 0x7000000U | uint(gl_InstanceID);
+    highp uint objectId = 0x7000000U | uint(gl_VertexID);
 
 #if defined (ADRENO600)
     varyingsFlat.objectId_high = objectId >> 16u;

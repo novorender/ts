@@ -478,13 +478,13 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
             if (state.outlines.enabled) {
-                renderOutlines(state.outlines.plane, state.outlines.color);
+                renderOutlines(state.outlines.plane, state.outlines.lineColor);
             }
             if (state.clipping.enabled) {
                 for (let i = 0; i < state.clipping.planes.length; ++i) {
                     const { normalOffset, outline } = state.clipping.planes[i];
                     if (outline?.enabled) {
-                        renderOutlines(normalOffset, outline.color ?? state.outlines.color, i)
+                        renderOutlines(normalOffset, outline.lineColor ?? state.outlines.lineColor, i)
                     }
                 }
             }
@@ -583,13 +583,13 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     }
                 }
                 if (state.outlines.enabled) {
-                    renderOutlines(state.outlines.plane, state.outlines.color);
+                    renderOutlines(state.outlines.plane, state.outlines.lineColor);
                 }
                 if (state.clipping.enabled) {
                     for (let i = 0; i < state.clipping.planes.length; ++i) {
                         const { normalOffset, outline } = state.clipping.planes[i];
                         if (outline?.enabled) {
-                            renderOutlines(normalOffset, outline.color ?? state.outlines.color, i)
+                            renderOutlines(normalOffset, outline.lineColor ?? state.outlines.lineColor, i)
                         }
                     }
                 }
@@ -673,7 +673,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                                 program: programs.line,
                                 vertexArrayObject: vao_line,
                             });
-                            const stats = glDraw(gl, { kind: "arrays_instanced", mode: "LINES", count: 2, instanceCount: count });
+                            // const stats = glDraw(gl, { kind: "arrays_instanced", mode: "LINES", count: 2, instanceCount: count });
+                            const stats = glDraw(gl, { kind: "arrays_instanced", mode: "TRIANGLE_STRIP", count: 4, instanceCount: count });
                             renderContext.addRenderStatistics(stats);
                         }
                     }

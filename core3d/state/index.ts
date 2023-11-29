@@ -481,9 +481,9 @@ export interface RenderStateClippingPlane {
         enabled: boolean,
 
         /**
-         * The color to use for the outlines of this plane, or undefined to use the {@link RenderStateOutlines.color | default outline color}.
+         * The color to use for the outlines of this plane, or undefined to use the {@link RenderStateOutlines.lineColor | default outline color}.
          */
-        color?: RGB
+        lineColor?: RGB
     }
 }
 
@@ -635,7 +635,7 @@ export interface RenderStateOutlines {
      * Due to {@link RenderStateTonemapping | tone mapping} the color displayed on screen will a bit duller.
      * If you require bright colors, you may "overexpose" them, e.g. `[10,0,0]` for bright red.
      */
-    readonly color: RGB;
+    readonly lineColor: RGB;
 
     /** Color of outline vertices.
      * @remarks
