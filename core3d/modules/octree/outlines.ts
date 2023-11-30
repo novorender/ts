@@ -200,8 +200,8 @@ export class OutlineRenderer {
                 }
                 // use normal to change alpha in color
                 const highlightIndex = highlightIndices[objectId];
-                const [r, g, b] = (highlightIndex ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? state.outlines.lineColor;
-                const baseColor = packRGBA(r / 4, g / 4, b / 4); // allow some over-exposure at the expense of lower bit resolution
+                const [r, g, b] = (highlightIndex && highlightIndex != 254 ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? state.outlines.lineColor;
+                const baseColor = packRGBA(r / 4, g / 4, b / 4); // allow some overB-exposure at the expense of lower bit resolution
                 linePos.set(vertices, segmentOffset * 4);
                 for (let i = 0; i < segments; i++) {
                     const nz = snorm16ToFloat(normals[i * 3 + 2]);
