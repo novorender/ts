@@ -179,9 +179,10 @@ export class DynamicModule implements RenderModule {
 
         const emptyBuffer = bin.createBuffer({
             label: "Dynamic module empty buffer",
-            size: 0,
-            usage: GPUBufferUsage.VERTEX,
+            size: 4*4,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         });
+        bin.device.queue.writeBuffer(emptyBuffer, 0, new Float32Array([1., 1., 1., 1.]));
 
         return { bin, defaultSamplers, defaultTexture, shaderModule, cameraBindGroup, emptyBuffer, cameraLayout, objectLayout, materialLayout } as const;
     }
@@ -514,13 +515,37 @@ function syncAssets<TK, TV extends { index: number, dispose(bin: ResourceBin): v
     }
 }
 
+function createNonMultipleOf4Buffer(bin: ResourceBin, label: string, usage: GPUFlagsConstant, srcData: BufferSource) {
+    const byteLength = srcData.byteLength + (4 - srcData.byteLength % 4);
+    const buffer = bin.createBuffer({ label, usage, size: byteLength });
+    const stagingBuffer = bin.createBuffer({ label: "non multiple of 4 padded staging", usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE, size: byteLength, mappedAtCreation: true });
+    const range = stagingBuffer.getMappedRange();
+    const dst = new Uint8Array(range).subarray(0, srcData.byteLength);
+    if(srcData instanceof ArrayBuffer) {
+        const src = new Uint8Array(srcData);
+        dst.set(src);
+    }else{
+        const src = new Uint8Array(srcData.buffer, srcData.byteOffset, srcData.byteLength);
+        dst.subarray(0, srcData.byteLength).set(src);
+    }
+    stagingBuffer.unmap();
+    const encoder = bin.device.createCommandEncoder();
+    encoder.copyBufferToBuffer(stagingBuffer, 0, buffer, 0, byteLength);
+    bin.device.queue.submit([encoder.finish()]);
+    return buffer;
+}
+
 class BufferAsset {
     index = 0;
     readonly buffer: GPUBuffer;
 
     constructor(bin: ResourceBin, label: string, usage: GPUFlagsConstant, srcData: BufferSource) {
-        this.buffer = bin.createBuffer({ label, usage, size: srcData.byteLength });
-        bin.device.queue.writeBuffer(this.buffer, 0, srcData);
+        if(srcData.byteLength % 4 == 0){
+            this.buffer = bin.createBuffer({ label, usage, size: srcData.byteLength });
+            bin.device.queue.writeBuffer(this.buffer, 0, srcData);
+        }else{
+            this.buffer = createNonMultipleOf4Buffer(bin,label, usage, srcData);
+        }
     }
 
     dispose(bin: ResourceBin) {
@@ -541,13 +566,18 @@ class GeometryAsset {
         const count = hasIndexBuffer ? data.indices.length : data.indices;
         this.drawParams = { mode, count, indexType };
         const { position, normal, tangent, color0, texCoord0, texCoord1 } = data.attributes;
-        const indices = typeof data.indices == "number" ? null : bin.createBuffer({
-            label: "Dynamic index buffer",
-            usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-            size: data.indices.byteLength
-        });
-        if(indices && typeof data.indices != "number"){
-            bin.device.queue.writeBuffer(indices, 0, data.indices);
+        let indices;
+        if(typeof data.indices != "number"){
+            const label = "Dynamic index buffer";
+            const usage = GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST;
+            if(data.indices.byteLength % 4 == 0){
+                indices = bin.createBuffer({ label, usage, size: data.indices.byteLength });
+                bin.device.queue.writeBuffer(indices, 0, data.indices);
+            }else{
+                indices = createNonMultipleOf4Buffer(bin, label, usage, data.indices);
+            }
+        }else{
+            indices = null;
         }
 
         function vertexFormatStride(f: GPUVertexFormat) {
@@ -701,8 +731,9 @@ class GeometryAsset {
                 default: throw "Unrecheable"
             }
 
+            const arrayStride = a.byteStride ?? vertexFormatStride(format!);
             return {
-                arrayStride: a.byteStride ?? vertexFormatStride(format!),
+                arrayStride: arrayStride ? 0 : vertexFormatStride(format!),
                 attributes: [{
                     format: format!,
                     offset: a.byteOffset ?? 0,
@@ -719,7 +750,7 @@ class GeometryAsset {
             normal: {
                 buffer: normal ? buffers.get(normal.buffer)?.buffer ?? null : null,
                 layout: parseLayoutFormat(normal, 1) ?? {
-                    arrayStride: vertexFormatStride("float32x3"),
+                    arrayStride: 0,
                     attributes: [{
                         format: "float32x3",
                         offset: 0,
@@ -731,7 +762,7 @@ class GeometryAsset {
             tangent: {
                 buffer: tangent ? buffers.get(tangent.buffer)?.buffer ?? null : null,
                 layout: parseLayoutFormat(tangent, 2) ?? {
-                    arrayStride: vertexFormatStride("float32x4"),
+                    arrayStride: 0,
                     attributes: [{
                         format: "float32x4",
                         offset: 0,
@@ -743,7 +774,7 @@ class GeometryAsset {
             color0: {
                 buffer: color0 ? buffers.get(color0.buffer)?.buffer ?? null : null,
                 layout: parseLayoutFormat(color0, 3) ?? {
-                    arrayStride: vertexFormatStride("float32x4"),
+                    arrayStride: 0,
                     attributes: [{
                         format: "float32x4",
                         offset: 0,
@@ -755,7 +786,7 @@ class GeometryAsset {
             texCoord0: {
                 buffer: texCoord0 ? buffers.get(texCoord0.buffer)?.buffer ?? null : null,
                 layout: parseLayoutFormat(texCoord0, 4) ?? {
-                    arrayStride: vertexFormatStride("float32x2"),
+                    arrayStride: 0,
                     attributes: [{
                         format: "float32x2",
                         offset: 0,
@@ -767,7 +798,7 @@ class GeometryAsset {
             texCoord1: {
                 buffer: texCoord1 ? buffers.get(texCoord1.buffer)?.buffer ?? null : null,
                 layout: parseLayoutFormat(texCoord1, 5) ?? {
-                    arrayStride: vertexFormatStride("float32x2"),
+                    arrayStride: 0,
                     attributes: [{
                         format: "float32x2",
                         offset: 0,
