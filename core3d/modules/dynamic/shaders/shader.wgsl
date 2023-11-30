@@ -137,12 +137,7 @@ fn vertexMain(vertex: VertexInput) -> VertexOutput {
     let posVS = camera.localViewMatrix * instanceMatrix * vertex.position;
     // let posVS = vertex.instanceMatrix3;
 
-// FIX: Setting the position to fullscreen quad shows a full screen solid color with the correct color
-// so the problem shoud be something with either the camera matrix or the vertex buffer since the instance
-// matrix set to identity doesn't show anything either
     let position = camera.viewClipMatrix * posVS;
-    // let pos = vec2f(vec2((vertex.index << 1u) & 2u, vertex.index & 2u)) * 2.0 - 1.0;
-    // let position = vec4(pos, 1., 1.);
 
     // let pointSize = 1.;
     let normalLS = instanceMatrixNormal * vertex.normal;
