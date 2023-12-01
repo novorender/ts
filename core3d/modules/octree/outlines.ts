@@ -290,13 +290,14 @@ export class OutlineRenderer {
     // get edge intersection vertices - in local space
     *getVertices(cluster: LineCluster): IterableIterator<ReadonlyVec3> {
         const { points, vertices } = cluster;
-        const { planeLocalMatrix } = this;
+        const { planeLocalMatrix, localSpaceTranslation } = this;
         const p = vec3.create();
         for (const idx of points) {
             p[0] = vertices[idx * 2 + 0];
             p[1] = vertices[idx * 2 + 1];
             p[2] = 0;
             vec3.transformMat4(p, p, planeLocalMatrix);
+            vec3.add(p, p, localSpaceTranslation);
             yield p;
         }
     }

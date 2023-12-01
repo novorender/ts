@@ -431,6 +431,35 @@ export class View<
         }
     }
 
+    hoverOutline(pos: ReadonlyVec3, threshold: number) {
+        const context = this._renderContext;
+        const planes = this.renderStateGL.clipping.planes;
+        let currentMaxDis = Math.pow(threshold, 2);
+        const hoverPoint = vec3.create();
+        if (context) {
+            const flip = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
+            const { outlineRenderers } = context;
+            for (const plane of planes) {
+                if (plane.outline) {
+                    const outlineRenderer = outlineRenderers.get(plane.normalOffset);
+                    if (outlineRenderer) {
+                        for (const cluster of outlineRenderer.getLineClusters()) {
+                            for (const v of outlineRenderer.getVertices(cluster)) {
+                                const fv = flip(v);
+                                const d = vec3.sqrDist(fv, pos)
+                                if (d < currentMaxDis) {
+                                    currentMaxDis = d;
+                                    vec3.copy(hoverPoint, fv);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return vec3.dot(hoverPoint, hoverPoint) != 0 ? hoverPoint : undefined;
+    }
+
     /**
      * Get all object ids currently on screen
      * @public
