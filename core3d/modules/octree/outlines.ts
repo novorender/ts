@@ -64,6 +64,7 @@ export class OutlineRenderer {
     readonly planeLocalMatrix: ReadonlyMat4;
     readonly localPlaneMatrix: ReadonlyMat4;
     readonly nodeLinesCache = new WeakMap<OctreeNode, NodeLineClusters>();
+    readonly lineClusters: WeakRef<LineCluster>[] = [];
 
     constructor(
         readonly context: OctreeModuleContext,
@@ -159,13 +160,11 @@ export class OutlineRenderer {
                         if (segments) {
                             const vertices = posBuffer.slice(0, segments * 4);
                             const normals = normalBuffer.slice(0, segments * 3);
-                            // if (objectId == 380053) {
-                            //     console.log("dude!");
-                            // }
                             const points = extractEdges(segments, vertices, normals, edgeAngleThresholdCos, doubleSided);
                             // TODO: Clip lines against other clipping planes?
                             const lineCluster = { objectId, segments, vertices, normals, points } as const satisfies LineCluster;
                             clusters.push(lineCluster);
+                            this.lineClusters.push(new WeakRef(lineCluster));
                         }
                     }
                 }
@@ -201,8 +200,8 @@ export class OutlineRenderer {
                 }
                 // use normal to change alpha in color
                 const highlightIndex = highlightIndices[objectId];
-                const [r, g, b] = (highlightIndex ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? state.outlines.lineColor;
-                const baseColor = packRGBA(r / 4, g / 4, b / 4); // allow some over-exposure at the expense of lower bit resolution
+                const [r, g, b] = (highlightIndex && highlightIndex != 254 ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? state.outlines.lineColor;
+                const baseColor = packRGBA(r / 4, g / 4, b / 4); // allow some overB-exposure at the expense of lower bit resolution
                 linePos.set(vertices, segmentOffset * 4);
                 for (let i = 0; i < segments; i++) {
                     const nz = snorm16ToFloat(normals[i * 3 + 2]);
@@ -275,17 +274,51 @@ export class OutlineRenderer {
         renderContext.addRenderStatistics(stats);
     }
 
+    *getLineClusters(): IterableIterator<LineCluster> {
+        const { lineClusters } = this;
+        for (let i = 0; i < lineClusters.length; ++i) {
+            const clusterRef = lineClusters[i];
+            const cluster = clusterRef.deref();
+            if (cluster) {
+                yield cluster;
+            } else {
+                lineClusters.splice(i--, 1);
+            }
+        }
+    }
+
     // get edge intersection vertices - in local space
     *getVertices(cluster: LineCluster): IterableIterator<ReadonlyVec3> {
         const { points, vertices } = cluster;
-        const { planeLocalMatrix } = this;
+        const { planeLocalMatrix, localSpaceTranslation } = this;
         const p = vec3.create();
         for (const idx of points) {
             p[0] = vertices[idx * 2 + 0];
             p[1] = vertices[idx * 2 + 1];
             p[2] = 0;
             vec3.transformMat4(p, p, planeLocalMatrix);
+            vec3.add(p, p, localSpaceTranslation);
             yield p;
+        }
+    }
+
+    *getLines(cluster: LineCluster): IterableIterator<[ReadonlyVec3, ReadonlyVec3]> {
+        const { points, vertices } = cluster;
+        const { planeLocalMatrix } = this;
+        const end = vec3.create();
+        const start = vec3.create();
+        for (let i = 1; i < points.length; ++i) {
+            const startIdx = points[i - 1];
+            const endIdx = points[i];
+            start[0] = vertices[startIdx * 2 + 0];
+            start[1] = vertices[startIdx * 2 + 1];
+            end[2] = 0;
+            end[0] = vertices[endIdx * 2 + 0];
+            end[1] = vertices[endIdx * 2 + 1];
+            end[2] = 0;
+            vec3.transformMat4(start, start, planeLocalMatrix);
+            vec3.transformMat4(end, end, planeLocalMatrix);
+            yield [start, end];
         }
     }
 }

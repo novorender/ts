@@ -32,7 +32,6 @@ export interface RootNodes {
 
 /** @internal */
 export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
-    outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>();
     readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
     currentProgramFlags = OctreeModule.defaultProgramFlags;
     nextProgramFlags = OctreeModule.defaultProgramFlags;
@@ -187,7 +186,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         if (renderContext.hasStateChanged({ localSpaceTranslation })) {
             this.localSpaceChanged = localSpaceTranslation !== this.localSpaceTranslation;
             this.localSpaceTranslation = localSpaceTranslation;
-            this.outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>; // all outline renderers has to go
+            renderContext.outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>; // all outline renderers has to go
         }
 
         if (renderContext.hasStateChanged({ highlights })) {
@@ -682,8 +681,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
     renderNodeClippingOutline2(plane: ReadonlyVec4, state: DerivedRenderState, renderNodes: readonly RenderNode[]) {
         const begin = performance.now();
-        const { gl } = this.renderContext;
-        const { outlineRenderers, highlights } = this;
+        const { gl, outlineRenderers } = this.renderContext;
+        const { highlights } = this;
         let outlineRenderer = outlineRenderers.get(plane);
         if (!outlineRenderer) {
             const edgeAngleThreshold = 30; // don't render intersecting edges (as points) that has smaller angles than this threshold between their neighboring triangles.

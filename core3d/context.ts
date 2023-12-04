@@ -12,6 +12,7 @@ import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
 import { orthoNormalBasisMatrixFromPlane } from "./util";
 import { createDefaultModules } from "./modules/default";
+import type { OutlineRenderer } from "./modules/octree/outlines";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 
@@ -94,6 +95,8 @@ export class RenderContext {
     readonly samplerMip: WebGLSampler; // use to read diffuse texture
     /** WebGL Sampler used to sample other, non-mipmapped IBL textures. */
     readonly samplerSingle: WebGLSampler; // use to read the other textures
+
+    outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>();
 
     // shared mutable state
     /** {@link RenderState} used to render the previous frame, if any. */
@@ -760,18 +763,6 @@ export class RenderContext {
         for (let i = 3; i < pick.length; i += 4) {
             yield floats[i];
         }
-    }
-
-    //* @internal */
-    getOutlineObjects(pick: Uint32Array) {
-        const objs = new Set<number>();
-        for (let i = 0; i < pick.length; i += 4) {
-            const objectId = pick[i];
-            if (objectId < 0xf000_0000 && (objectId & (1 << 31)) != 0) {
-                objs.add(objectId & ~(1 << 31));
-            }
-        }
-        return objs;
     }
 
     /**
