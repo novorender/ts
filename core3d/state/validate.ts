@@ -31,6 +31,9 @@ export function validateRenderState(newState: RenderState, changes: RenderStateC
     if (changes.highlights) {
         validate.highlights(newState.highlights);
     }
+    if (changes.outlines) {
+        validate.outlines(newState.outlines);
+    }
     if (changes.output) {
         validate.output(newState.output);
     }
@@ -148,8 +151,12 @@ class ValidationContext {
     }
 
     outlines(state: RenderStateOutlines) {
-        const { plane } = state;
+        const { plane, linearThickness, minPixelThickness, maxPixelThickness, vertexObjectIdBase } = state;
         this.plane(plane).valid().report("outline.plane.normalOffset");
+        this.numeric(linearThickness).positive().report("outline.linearThickness");
+        this.numeric(minPixelThickness).positive().report("outline.minPixelThickness");
+        this.numeric(maxPixelThickness).greaterThanOrEqual(minPixelThickness, "outline.minPixelThickness").max(511).report("outline.maxPixelThickness");
+        this.numeric(vertexObjectIdBase).integer().positive().report("outline.vertexObjectIdBase");
     }
 
     output(state: RenderStateOutput) {
@@ -287,6 +294,20 @@ class NumericValidator extends BaseValidator<number> {
     lessThan(ref: number, refText?: string) {
         if (this.value >= ref) {
             this.error(`must be less than ${refText ?? ref}!`);
+        }
+        return this;
+    }
+
+    greaterThanOrEqual(ref: number, refText?: string) {
+        if (this.value < ref) {
+            this.error(`must be greater than or equal to ${refText ?? ref}!`);
+        }
+        return this;
+    }
+
+    lessThanOrEqual(ref: number, refText?: string) {
+        if (this.value > ref) {
+            this.error(`must be less than or equal to ${refText ?? ref}!`);
         }
         return this;
     }

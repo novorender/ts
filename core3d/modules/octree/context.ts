@@ -451,12 +451,10 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         gl.bindTexture(gl.TEXTURE_2D, null);
 
         if (deviceProfile.features.outline && state.outlines.on) {
-            const { vertexColor, thickness } = state.outlines;
-
             const renderOutlines = (plane: ReadonlyVec4, color: RGB, planeIndex = -1) => {
                 const [x, y, z, offset] = plane;
                 const p = vec4.fromValues(x, y, z, -offset);
-                renderContext.updateOutlinesUniforms(p, color, vertexColor, planeIndex, thickness);
+                renderContext.updateOutlinesUniforms(state.outlines, p, planeIndex);
                 const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
 
                 if (useNewOutlines) {
@@ -559,11 +557,10 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             gl.bindTexture(gl.TEXTURE_2D, null);
 
             if (deviceProfile.features.outline && state.outlines.on) {
-                const { vertexColor, thickness } = state.outlines;
-                const renderOutlines = (plane: ReadonlyVec4, lineColor: RGB, planeIndex = -1) => {
+                const renderOutlines = (plane: ReadonlyVec4, planeIndex = -1, color?: RGB) => {
                     const [x, y, z, offset] = plane;
                     const p = vec4.fromValues(x, y, z, -offset);
-                    renderContext.updateOutlinesUniforms(p, lineColor, vertexColor, planeIndex, thickness);
+                    renderContext.updateOutlinesUniforms(state.outlines, p, planeIndex, color);
 
                     if (useNewOutlines) {
                         this.renderNodeClippingOutline2(plane, state, renderNodes);
@@ -583,13 +580,13 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     }
                 }
                 if (state.outlines.enabled) {
-                    renderOutlines(state.outlines.plane, state.outlines.lineColor);
+                    renderOutlines(state.outlines.plane);
                 }
                 if (state.clipping.enabled) {
                     for (let i = 0; i < state.clipping.planes.length; ++i) {
                         const { normalOffset, outline } = state.clipping.planes[i];
                         if (outline?.enabled) {
-                            renderOutlines(normalOffset, outline.lineColor ?? state.outlines.lineColor, i)
+                            renderOutlines(normalOffset, i, outline.lineColor);
                         }
                     }
                 }

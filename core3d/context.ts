@@ -1,5 +1,5 @@
 import { CoordSpace, TonemappingMode, type RGB } from "./";
-import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports } from "./";
+import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports, RenderStateOutlines } from "./";
 import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits } from "webgl2";
 import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
@@ -210,6 +210,9 @@ export class RenderContext {
             planeIndex: "int",
             pointColor: "vec3",
             linearSize: "float",
+            minPixelSize: "float",
+            maxPixelSize: "float",
+            pointObjectIdBase: "uint",
         });
         this.outlineUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.outlinesUniformsData.buffer.byteLength });
     }
@@ -904,7 +907,7 @@ export class RenderContext {
     }
 
     /** @internal */
-    updateOutlinesUniforms(plane: ReadonlyVec4, lineColor: RGB, pointColor: RGB, planeIndex: number, linearSize: number) {
+    updateOutlinesUniforms(state: RenderStateOutlines, plane: ReadonlyVec4, planeIndex?: number, color?: RGB) {
         const { outlineUniforms, outlinesUniformsData } = this;
         // transform outline plane into local space
         const [x, y, z, offset] = plane;
@@ -921,10 +924,13 @@ export class RenderContext {
         const { values } = outlinesUniformsData;
         values.planeLocalMatrix = planeLocalMatrix;
         values.localPlaneMatrix = localPlaneMatrix;
-        values.lineColor = lineColor;
-        values.pointColor = pointColor;
-        values.planeIndex = planeIndex;
-        values.linearSize = linearSize;
+        values.lineColor = color ?? state.lineColor;
+        values.pointColor = state.vertexColor;
+        values.planeIndex = planeIndex ?? -1;
+        values.linearSize = state.linearThickness;
+        values.minPixelSize = state.minPixelThickness;
+        values.maxPixelSize = state.maxPixelThickness;
+        values.pointObjectIdBase = state.vertexObjectIdBase;
         this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
     }
 

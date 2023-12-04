@@ -11,10 +11,6 @@ layout(std140) uniform Outline {
 };
 
 layout(location = 0) in vec2 vertexPositions;
-// layout(location = 1) in mediump vec4 vertexColor;
-// layout(location = 2) in uint vertexObjectId;
-const vec4 vertexColor = vec4(1, 1, 0, 1);
-// const uint vertexObjectId = 0xffffffffU;
 
 out struct {
     highp vec3 positionVS;
@@ -37,9 +33,8 @@ void main() {
     vec3 posVS = (camera.localViewMatrix * outline.planeLocalMatrix * vec4(pos, 0, 1)).xyz;
     gl_Position = camera.viewClipMatrix * vec4(posVS, 1);
 
-    float linearSize = outline.linearSize;
-    mediump float projectedSize = max(0., camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 1.0 / gl_Position.w);
-    gl_PointSize = clamp(projectedSize, 3., 25.);
+    mediump float projectedSize = max(0., camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / gl_Position.w);
+    gl_PointSize = projectedSize < outline.minPixelSize ? 0. : clamp(projectedSize, outline.minPixelSize, outline.maxPixelSize);
 
     varyingsFlat.radius = max(1.0, gl_PointSize * 0.5);
     varyings.positionVS = posVS;
@@ -49,7 +44,7 @@ void main() {
 
     varyingsFlat.color = vec4(outline.pointColor, 1);
 
-    highp uint objectId = 0x7000000U | uint(gl_VertexID);
+    highp uint objectId = outline.pointObjectIdBase | uint(gl_VertexID);
 
 #if defined (ADRENO600)
     varyingsFlat.objectId_high = objectId >> 16u;

@@ -626,9 +626,24 @@ export interface RenderStateOutlines {
     readonly enabled: boolean;
 
     /** Outline thickness, in meters.
-     * @default 0.02
+     * @default 0.01
      */
-    readonly thickness: number;
+    readonly linearThickness: number;
+
+    /** Outline minimum thickness, in pixels.
+     * @default 3
+     */
+    readonly minPixelThickness: number;
+
+    /** Outline maximum thickness, in pixels.
+     * @default 9
+     */
+    readonly maxPixelThickness: number;
+
+    /** Outline vertex base object id value.
+     * @default 0x7000_0000
+     */
+    readonly vertexObjectIdBase: number;
 
     /** Color of outline lines.
      * @remarks

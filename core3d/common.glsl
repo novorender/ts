@@ -68,6 +68,9 @@ struct OutlineUniforms {
     lowp int planeIndex;
     mediump vec3 pointColor;
     mediump float linearSize;
+    mediump float minPixelSize;
+    mediump float maxPixelSize;
+    highp uint pointObjectIdBase;
 };
 
 bool clipOutlines(highp vec3 point, ClippingUniforms clipping) {

@@ -13,6 +13,7 @@ layout(std140) uniform Outline {
 in struct {
     highp vec3 positionVS;
     mediump vec2 uv;
+    mediump float radius;
 } varyings;
 
 flat in struct {
@@ -43,14 +44,15 @@ void main() {
         discard;
     }
 
+    float pixelRadius = varyings.radius;
     vec2 uv = varyings.uv;
     if(uv.x > 0.)
         uv.x = max(0., uv.x - varyingsFlat.len);
     float l = length(uv);
-    if(l > 1.)
+    if(l > pixelRadius)
         discard;
 
-    float a = min(2., (1. - l) * 4.);
+    float a = min(2., (pixelRadius - l)); // add one pixel alpha/AA slope
     fragColor = vec4(varyingsFlat.color.rgb, varyingsFlat.color.a * a);
     float linearDepth = -varyings.positionVS.z;
 #if defined (ADRENO600)
