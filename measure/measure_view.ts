@@ -1,6 +1,6 @@
 import * as Comlink from "comlink";
 import type { MeasureTool, Service } from "./worker";
-import type { ReadonlyQuat, ReadonlyVec2, ReadonlyVec3 } from "gl-matrix";
+import type { ReadonlyQuat, ReadonlyVec2, ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
 import { CollisionModule, DrawModule, FollowModule, ManholeModule, CoreModule, ProfileModule, RoadModule } from "./modules";
 import type { DrawContext } from "./modules";
 import { measure } from "core3d/benchmark/util";
@@ -192,5 +192,7 @@ export interface MeasureSettings {
     /** Where to measure cylinder from, in case of measure between two cylinder, same option will be used for both*/
     cylinderMeasure?: CylinerMeasureType;
     /** Setting to get labels along the curve when drawing segments*/
-    segmentLabelInterval?: number
+    segmentLabelInterval?: number;
+    /** Forces measures taken to the plane*/
+    planeMeasure?: ReadonlyVec4;
 }

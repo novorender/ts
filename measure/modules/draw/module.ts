@@ -137,7 +137,7 @@ export class DrawModule extends BaseModule {
             kind = "manhole"
         }
         else if (entity.drawKind == "measureResult") {
-            drawObjects = [getResultDrawObject(entity as DuoMeasurementValues)];
+            drawObjects = [getResultDrawObject(entity as DuoMeasurementValues, setting)];
             kind = "measureResult";
         }
         else {
@@ -559,7 +559,8 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
 }
 
 
-function getResultDrawObject(result: DuoMeasurementValues): DrawObject {
+
+function getResultDrawObject(result: DuoMeasurementValues, setting?: MeasureSettings): DrawObject {
     const parts: DrawPart[] = [];
     if (result.measureInfoA?.point && result.measureInfoB?.point) {
         const measurePoints = [result.measureInfoA?.point, result.measureInfoB?.point];
@@ -569,38 +570,76 @@ function getResultDrawObject(result: DuoMeasurementValues): DrawObject {
         const measureLen = vec3.len(diff);
         parts.push({ name: "result", text: measureLen.toFixed(3), drawType: "lines", vertices3D: [vec3.clone(measurePoints[0]), vec3.clone(measurePoints[1])] });
 
-        pts = [
-            pts[0],
-            vec3.fromValues(pts[1][0], pts[0][1], pts[0][2]),
-            vec3.fromValues(pts[1][0], pts[1][1], pts[0][2]),
-            pts[1],
-        ];
+        if (setting?.planeMeasure) {
+            const plane = setting?.planeMeasure;
+            const dir = vec3.fromValues(plane[0], plane[1], plane[2]);
+            const up = glMatrix.equals(Math.abs(vec3.dot(vec3.fromValues(0, 0, 1), dir)), 1)
+                ? vec3.fromValues(0, 1, 0)
+                : vec3.fromValues(0, 0, 1);
 
-        parts.push({ name: "x-axis", text: Math.abs(diff[0]).toFixed(3), drawType: "lines", vertices3D: [vec3.clone(pts[0]), vec3.clone(pts[1])] });
-        parts.push({ name: "y-axis", text: Math.abs(diff[1]).toFixed(3), drawType: "lines", vertices3D: [vec3.clone(pts[1]), vec3.clone(pts[2])] });
-        parts.push({ name: "z-axis", text: Math.abs(diff[2]).toFixed(3), drawType: "lines", vertices3D: [vec3.clone(pts[2]), vec3.clone(pts[3])] });
+            const right = vec3.cross(vec3.create(), up, dir);
+            vec3.cross(up, dir, right);
+            vec3.normalize(up, up);
+
+            vec3.cross(right, up, dir);
+            vec3.normalize(right, right);
+
+            const tx = vec3.dot(diff, right);
+            const ty = vec3.dot(diff, up);
+            const py = vec3.scaleAndAdd(vec3.create(), pts[1], up, ty);
+
+            parts.push({ name: "y-axis", text: Math.abs(ty).toFixed(3), drawType: "lines", vertices3D: [vec3.clone(py), vec3.clone(pts[1])] });
+            parts.push({ name: "x-axis", text: Math.abs(tx).toFixed(3), drawType: "lines", vertices3D: [vec3.clone(pts[0]), vec3.clone(py)] });
+
+            //Angles:
+            const xDiff = vec3.sub(vec3.create(), pts[0], py);
+            const angle = vec3.angle(diff, xDiff) * (180 / Math.PI);
+            if (angle > 0.1) {
+                parts.push({ name: "x-angle", text: angle.toFixed(1) + "°", drawType: "angle", vertices3D: [vec3.clone(pts[0]), vec3.clone(py), vec3.clone(pts[1])] });
+            }
+
+            const yDiff = vec3.sub(vec3.create(), py, pts[1]);
+            const yAngle = vec3.angle(diff, yDiff) * (180 / Math.PI);
+            if (yAngle > 0.1) {
+                parts.push({ name: "y-angle", text: yAngle.toFixed(1) + "°", drawType: "angle", vertices3D: [vec3.clone(pts[1]), vec3.clone(pts[0]), vec3.clone(py)] });
+            }
+        }
+        else {
+            pts = [
+                pts[0],
+                vec3.fromValues(pts[1][0], pts[0][1], pts[0][2]),
+                vec3.fromValues(pts[1][0], pts[1][1], pts[0][2]),
+                pts[1],
+            ];
+
+            parts.push({ name: "x-axis", text: Math.abs(diff[0]).toFixed(3), drawType: "lines", vertices3D: [vec3.clone(pts[0]), vec3.clone(pts[1])] });
+            parts.push({ name: "y-axis", text: Math.abs(diff[1]).toFixed(3), drawType: "lines", vertices3D: [vec3.clone(pts[1]), vec3.clone(pts[2])] });
+            parts.push({ name: "z-axis", text: Math.abs(diff[2]).toFixed(3), drawType: "lines", vertices3D: [vec3.clone(pts[2]), vec3.clone(pts[3])] });
 
 
-        const planarDiff = vec2.len(vec2.fromValues(diff[0], diff[1]));
-        const xyPt1 = vec3.fromValues(pts[0][0], pts[0][1], Math.min(pts[0][2], pts[3][2]));
-        const xyPt2 = vec3.fromValues(pts[3][0], pts[3][1], Math.min(pts[0][2], pts[3][2]));
-        parts.push({ name: "xy-plane", text: planarDiff.toFixed(3), drawType: "lines", vertices3D: [xyPt1, xyPt2] });
+            const planarDiff = vec2.len(vec2.fromValues(diff[0], diff[1]));
+            const xyPt1 = vec3.fromValues(pts[0][0], pts[0][1], Math.min(pts[0][2], pts[3][2]));
+            const xyPt2 = vec3.fromValues(pts[3][0], pts[3][1], Math.min(pts[0][2], pts[3][2]));
+            parts.push({ name: "xy-plane", text: planarDiff.toFixed(3), drawType: "lines", vertices3D: [xyPt1, xyPt2] });
 
-        //Angles:
-        const zDiff = vec3.sub(vec3.create(), pts[2], pts[3]);
-        const angle = vec3.angle(diff, zDiff) * (180 / Math.PI);
-        if (angle > 0.1) {
-            const fromP = flip ? vec3.clone(measurePoints[1]) : vec3.clone(measurePoints[0]);
-            const toP = vec3.clone(pts[2]);
-            parts.push({ name: "z-angle", text: angle.toFixed(1) + "°", drawType: "angle", vertices3D: [vec3.clone(pts[3]), fromP, toP] });
+            //Angles:
+            const zDiff = vec3.sub(vec3.create(), pts[2], pts[3]);
+            const angle = vec3.angle(diff, zDiff) * (180 / Math.PI);
+            if (angle > 0.1) {
+                const fromP = flip ? vec3.clone(measurePoints[1]) : vec3.clone(measurePoints[0]);
+                const toP = vec3.clone(pts[2]);
+                parts.push({ name: "z-angle", text: angle.toFixed(1) + "°", drawType: "angle", vertices3D: [vec3.clone(pts[3]), fromP, toP] });
+            }
+
+            const xzDiff = vec3.sub(vec3.create(), xyPt1, xyPt2);
+            const xzAngle = vec3.angle(diff, xzDiff) * (180 / Math.PI);
+            if (xzAngle > 0.1) {
+                const fromP = flip ? vec3.clone(measurePoints[0]) : vec3.clone(measurePoints[1]);
+                parts.push({ name: "xz-angle", text: xzAngle.toFixed(1) + "°", drawType: "angle", vertices3D: [vec3.clone(xyPt1), fromP, vec3.clone(xyPt2)] });
+            }
         }
 
-        const xzDiff = vec3.sub(vec3.create(), xyPt1, xyPt2);
-        const xzAngle = vec3.angle(diff, xzDiff) * (180 / Math.PI);
-        if (xzAngle > 0.1) {
-            const fromP = flip ? vec3.clone(measurePoints[0]) : vec3.clone(measurePoints[1]);
-            parts.push({ name: "xz-angle", text: xzAngle.toFixed(1) + "°", drawType: "angle", vertices3D: [vec3.clone(xyPt1), fromP, vec3.clone(xyPt2)] });
-        }
+
     }
 
     if (result.angle) {
