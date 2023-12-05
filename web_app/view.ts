@@ -431,11 +431,18 @@ export class View<
         }
     }
 
-    hoverOutline(pos: ReadonlyVec3, threshold: number) {
+    /**
+     * Select outline point based on the proximity to the input point.
+     * @param position Input position, outline points will be tested againts this.
+     * @param threshold Threshold in meters, if no points are within this proxmitiy of the input point undefined will be returned
+     * @public
+     * @returns returns the closest point to the input position.
+     */
+    selectOutlinePoint(position: ReadonlyVec3, threshold: number) {
         const context = this._renderContext;
         const planes = this.renderStateGL.clipping.planes;
         let currentMaxDis = Math.pow(threshold, 2);
-        const hoverPoint = vec3.create();
+        const point = vec3.create();
         if (context) {
             const flip = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
             const { outlineRenderers } = context;
@@ -446,10 +453,10 @@ export class View<
                         for (const cluster of outlineRenderer.getLineClusters()) {
                             for (const v of outlineRenderer.getVertices(cluster)) {
                                 const fv = flip(v);
-                                const d = vec3.sqrDist(fv, pos)
+                                const d = vec3.sqrDist(fv, position);
                                 if (d < currentMaxDis) {
                                     currentMaxDis = d;
-                                    vec3.copy(hoverPoint, fv);
+                                    vec3.copy(point, fv);
                                 }
                             }
                         }
@@ -457,7 +464,7 @@ export class View<
                 }
             }
         }
-        return vec3.dot(hoverPoint, hoverPoint) != 0 ? hoverPoint : undefined;
+        return vec3.dot(point, point) != 0 ? point : undefined;
     }
 
     /**

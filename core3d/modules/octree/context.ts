@@ -685,10 +685,12 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { highlights } = this;
         let outlineRenderer = outlineRenderers.get(plane);
         if (!outlineRenderer) {
-            const edgeAngleThreshold = 30; // don't render intersecting edges (as points) that has smaller angles than this threshold between their neighboring triangles.
             const [x, y, z, offset] = plane;
             const p = vec4.fromValues(x, y, z, -offset);
-            outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p, edgeAngleThreshold);
+            //TODO: Sync with renderstate.
+            const edgeAngleThreshold = 30; // don't render intersecting edges (as points) that has smaller angles than this threshold between their neighboring triangles.
+            const minVertexSpacing = state.outlines.linearThickness;
+            outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p, edgeAngleThreshold, minVertexSpacing);
             outlineRenderers.set(plane, outlineRenderer);
         }
         let lineCount = 0, pointCount = 0;

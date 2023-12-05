@@ -71,7 +71,8 @@ export function defaultRenderState(): RenderState {
             enabled: false,
             linearThickness: 0.01,
             minPixelThickness: 3,
-            maxPixelThickness: 9,
+            maxPixelThickness: 5,
+            relativePointSize: 2,
             vertexObjectIdBase: 0x7000_0000, // TODO: Get from some global enum instead?
             lineColor: [4, 4, 4], // bright white (overexposed)
             vertexColor: [0, .5, 0], // green

@@ -640,6 +640,11 @@ export interface RenderStateOutlines {
      */
     readonly maxPixelThickness: number;
 
+    /** Outline relative size between lines and points.
+     * @default 2
+     */
+    readonly relativePointSize: number;
+
     /** Outline vertex base object id value.
      * @default 0x7000_0000
      */

@@ -215,6 +215,7 @@ export class RenderContext {
             linearSize: "float",
             minPixelSize: "float",
             maxPixelSize: "float",
+            pointScale: "float",
             pointObjectIdBase: "uint",
         });
         this.outlineUniforms = glCreateBuffer(gl, { kind: "UNIFORM_BUFFER", byteSize: this.outlinesUniformsData.buffer.byteLength });
@@ -921,6 +922,7 @@ export class RenderContext {
         values.linearSize = state.linearThickness;
         values.minPixelSize = state.minPixelThickness;
         values.maxPixelSize = state.maxPixelThickness;
+        values.pointScale = state.relativePointSize;
         values.pointObjectIdBase = state.vertexObjectIdBase;
         this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
     }

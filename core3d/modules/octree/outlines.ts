@@ -71,6 +71,7 @@ export class OutlineRenderer {
         readonly localSpaceTranslation: ReadonlyVec3,
         readonly plane: ReadonlyVec4,
         readonly edgeAngleThreshold: number,
+        readonly minVertexSpacing: number
     ) {
         const { planeLocalMatrix, localPlaneMatrix } = planeMatrices(plane, localSpaceTranslation);
         this.planeLocalMatrix = planeLocalMatrix;
@@ -117,7 +118,7 @@ export class OutlineRenderer {
     // create intersection line clusters for node
     createNodeLineClusters(node: OctreeNode) {
         const childBuilders = new Map<ChildIndex, NodeIntersectionBuilder>();
-        const { context, localSpaceTranslation, localPlaneMatrix, edgeAngleThreshold } = this;
+        const { context, localSpaceTranslation, localPlaneMatrix, edgeAngleThreshold, minVertexSpacing } = this;
         const { gl } = context.renderContext;
         const { denormMatrix } = OutlineRenderer;
         const edgeAngleThresholdCos = Math.cos(glMatrix.toRadian(edgeAngleThreshold));
@@ -160,7 +161,7 @@ export class OutlineRenderer {
                         if (segments) {
                             const vertices = posBuffer.slice(0, segments * 4);
                             const normals = normalBuffer.slice(0, segments * 3);
-                            const points = extractEdges(segments, vertices, normals, edgeAngleThresholdCos, doubleSided);
+                            const points = extractEdges(segments, vertices, normals, edgeAngleThresholdCos, minVertexSpacing, doubleSided);
                             // TODO: Clip lines against other clipping planes?
                             const lineCluster = { objectId, segments, vertices, normals, points } as const satisfies LineCluster;
                             clusters.push(lineCluster);
@@ -532,11 +533,20 @@ function packRGBA(r: number, g: number, b: number, a = 1) {
 }
 
 // TODO: add varying ways to project/compute 2D thickness
-function extractEdges(segments: number, vertices: Float32Array, normals: Int16Array, edgeAngleThresholdCos: number, doubleSided: boolean) {
+function extractEdges(segments: number, vertices: Float32Array, normals: Int16Array, edgeAngleThresholdCos: number, minVertexSpacing: number, doubleSided: boolean) {
     const xyVertexMap = new Map<CoordKey, number>();
     const xySegmentMap = new Map<CoordKey, number[]>();
     function keyFromVertex(vertexIndex: number): CoordKey {
         return keyFromXY(vertices[vertexIndex * 2 + 0], vertices[vertexIndex * 2 + 1]);
+    }
+    function getSegmentLengthSqr(segmentIndex: number) {
+        const x0 = vertices[segmentIndex * 4 + 0];
+        const y0 = vertices[segmentIndex * 4 + 1];
+        const x1 = vertices[segmentIndex * 4 + 2];
+        const y1 = vertices[segmentIndex * 4 + 3];
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        return dx * dx + dy * dy;
     }
     function addSegmentVertex(segmentIndex: number, vertexIndex: number) {
         const key = keyFromVertex(vertexIndex);
@@ -567,10 +577,13 @@ function extractEdges(segments: number, vertices: Float32Array, normals: Int16Ar
         if (segmentIndices.length > 1) {
             // get the neighboring triangle normals.
             const triNorms = segmentIndices.map(i => getNormal(i));
+            const segLengths = segmentIndices.map(i => getSegmentLengthSqr(i));
             let minAngleCos = 2;
+            const n = segmentIndices.length;
+            const t2 = minVertexSpacing * minVertexSpacing;
             // There might be more than 2 connected triangles (albeit rare), so we pick the largest angle (smallest cos) between all possible combinations.
-            for (let i = 0; i < triNorms.length - 1; i++) {
-                for (let j = i + 1; j < triNorms.length; j++) {
+            for (let i = 0; i < n - 1; i++) {
+                for (let j = i + 1; j < n; j++) {
                     let angleCos = vec3.dot(triNorms[i], triNorms[j]);
                     if (doubleSided) {
                         // check direction of both neighbor triangle segments, i.e. is it the first or second segment vertex/edge that is shared.
@@ -581,7 +594,7 @@ function extractEdges(segments: number, vertices: Float32Array, normals: Int16Ar
                             minAngleCos = -minAngleCos;
                         }
                     }
-                    if (minAngleCos > angleCos) {
+                    if (minAngleCos > angleCos && (segLengths[i] > t2 || segLengths[j] > t2)) {
                         minAngleCos = angleCos;
                     }
                 }
@@ -591,6 +604,11 @@ function extractEdges(segments: number, vertices: Float32Array, normals: Int16Ar
                 console.assert(vertexIndex != undefined);
                 vertexIndices.push(vertexIndex);
             }
+        }
+        else if (doubleSided && segmentIndices.length == 1) {
+            const vertexIndex = xyVertexMap.get(key)!;
+            console.assert(vertexIndex != undefined);
+            vertexIndices.push(vertexIndex);
         }
     }
     return new Uint32Array(vertexIndices);

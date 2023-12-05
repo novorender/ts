@@ -33,13 +33,13 @@ void main() {
     vec3 posVS = (camera.localViewMatrix * outline.planeLocalMatrix * vec4(pos, 0, 1)).xyz;
     gl_Position = camera.viewClipMatrix * vec4(posVS, 1);
 
-    mediump float projectedSize = max(0., camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / gl_Position.w);
-    gl_PointSize = projectedSize < outline.minPixelSize ? 0. : clamp(projectedSize, outline.minPixelSize, outline.maxPixelSize);
+    mediump float projectedSize = max(0.f, camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / gl_Position.w);
+    gl_PointSize = projectedSize < outline.minPixelSize ? 0.f : clamp(projectedSize, outline.minPixelSize, outline.maxPixelSize) * outline.pointScale;
 
-    varyingsFlat.radius = max(1.0, gl_PointSize * 0.5);
+    varyingsFlat.radius = max(1.0f, gl_PointSize * 0.5f);
     varyings.positionVS = posVS;
     // Convert position to window coordinates
-    vec2 halfsize = camera.viewSize * 0.5;
+    vec2 halfsize = camera.viewSize * 0.5f;
     varyings.screenPos = halfsize + ((gl_Position.xy / gl_Position.w) * halfsize);
 
     varyingsFlat.color = vec4(outline.pointColor, 1);
