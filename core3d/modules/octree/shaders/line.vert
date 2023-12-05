@@ -34,16 +34,16 @@ flat out struct {
 bool clipZ(inout vec4 v0, inout vec4 v1) {
     float z0 = v0.z;
     float z1 = v1.z;
-    if(z0 <= 0. && z1 <= 0.) {
+    if(z0 <= 0.f && z1 <= 0.f) {
         return false;
-    } else if(z0 < 0. && z1 > 0.) {
+    } else if(z0 < 0.f && z1 > 0.f) {
         float t = z1 / (z1 - z0);
         v0 = mix(v1, v0, t);
-        v0.z = 0.;
-    } else if(z1 < 0. && z0 > 0.) {
+        v0.z = 0.f;
+    } else if(z1 < 0.f && z0 > 0.f) {
         float t = z0 / (z0 - z1);
         v1 = mix(v0, v1, t);
-        v1.z = 0.;
+        v1.z = 0.f;
         // v1 = v0;
     }
     return true;
@@ -70,11 +70,11 @@ void main() {
     }
 
     // compute pixel coordinates.
-    vec2 p0 = v0CS.xy / v0CS.w * camera.viewSize * 0.5;
-    vec2 p1 = v1CS.xy / v1CS.w * camera.viewSize * 0.5;
+    vec2 p0 = v0CS.xy / v0CS.w * camera.viewSize * 0.5f;
+    vec2 p1 = v1CS.xy / v1CS.w * camera.viewSize * 0.5f;
 
-    mediump float projectedSize0 = max(0., camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / v0CS.w);
-    mediump float projectedSize1 = max(0., camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / v1CS.w);
+    mediump float projectedSize0 = max(0.f, camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / v0CS.w);
+    mediump float projectedSize1 = max(0.f, camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / v1CS.w);
 
     mediump float pixelSize0 = clamp(projectedSize0, outline.minPixelSize, outline.maxPixelSize);
     mediump float pixelSize1 = clamp(projectedSize1, outline.minPixelSize, outline.maxPixelSize);
@@ -87,36 +87,36 @@ void main() {
     mediump float r;
     switch(gl_VertexID % 4) {
         case 0:
-            r = pixelSize0 * .5;
+            r = pixelSize0 * .5f;
             pos = p0 + (-t + n) * r;
             uv = vec2(-r, +r);
             break;
         case 1:
-            r = pixelSize0 * .5;
+            r = pixelSize0 * .5f;
             pos = p0 + (-t - n) * r;
             uv = vec2(-r, -r);
             break;
         case 2:
-            r = pixelSize1 * .5;
+            r = pixelSize1 * .5f;
             pos = p1 + (t + n) * r;
             uv = vec2(len + r, +r);
             break;
         case 3:
-            r = pixelSize1 * .5;
+            r = pixelSize1 * .5f;
             pos = p1 + (t - n) * r;
             uv = vec2(len + r, -r);
             break;
     }
-    pos /= camera.viewSize * 0.5; // scale back down to NDC
+    pos /= camera.viewSize * 0.5f; // scale back down to NDC
 
     // vec2 pos = gl_VertexID % 2 == 0 ? vertexPositions.xy : vertexPositions.zw;
     // vec3 posVS = (camera.localViewMatrix * outline.planeLocalMatrix * vec4(pos, 0, 1)).xyz;
     // vec2 pos = gl_VertexID % 2 == 0 ? vertexPositions.xy : vertexPositions.zw;
-    vec3 posVS = gl_VertexID % 2 == 0 ? v0CS.xyz : v0CS.xyz;
+    vec3 posVS = gl_VertexID % 2 == 0 ? v0VS.xyz : v0VS.xyz;
     varyings.positionVS = posVS;
     varyings.uv = uv;
     varyings.radius = r;
-    varyingsFlat.color = vertexColor * 4.; // allow some over-exposure from 8 bit colors
+    varyingsFlat.color = vertexColor * 4.f; // allow some over-exposure from 8 bit colors
     varyingsFlat.len = len;
 
 #if defined (ADRENO600)
