@@ -240,16 +240,19 @@ export class DrawModule extends BaseModule {
                     obj.objects.forEach(drawobj => {
                         if (drawobj.kind == "complex" || drawobj.kind == "curveSegment" || drawobj.kind == "edge") {
                             drawobj.parts.forEach(part => {
-                                if (part.vertices2D && part.indicesOnScreen && (part.drawType == "lines" || part.drawType == "curveSegment" || part.drawType == "filled")) {
+                                if (part.vertices2D && (part.drawType == "lines" || part.drawType == "curveSegment" || part.drawType == "filled")) {
+
                                     for (let i = 1; i < part.vertices2D.length; ++i) {
-                                        if (vec3.equals(part.vertices3D[part.indicesOnScreen[i - 1]], emptyVertex) || vec3.equals(part.vertices3D[part.indicesOnScreen[i]], emptyVertex)) {
+                                        const prev3dPoint = part.indicesOnScreen ? part.vertices3D[part.indicesOnScreen[i - 1]] : part.vertices3D[i - 1];
+                                        const current3dPoint = part.indicesOnScreen ? part.vertices3D[part.indicesOnScreen[i]] : part.vertices3D[i];
+                                        if (vec3.equals(prev3dPoint, emptyVertex) || vec3.equals(current3dPoint, emptyVertex)) {
                                             continue;
                                         }
                                         const lineB = { start: part.vertices2D[i - 1], end: part.vertices2D[i] };
                                         const intersection = lineSegmentIntersection(line, lineB);
                                         if (intersection) {
-                                            const dir = vec3.sub(vec3.create(), part.vertices3D[part.indicesOnScreen[i]], part.vertices3D[part.indicesOnScreen[i - 1]]);
-                                            intersections.push({ intersection, point3d: vec3.scaleAndAdd(vec3.create(), part.vertices3D[part.indicesOnScreen[i - 1]], dir, intersection.u) });
+                                            const dir = vec3.sub(vec3.create(), current3dPoint, prev3dPoint);
+                                            intersections.push({ intersection, point3d: vec3.scaleAndAdd(vec3.create(), prev3dPoint, dir, intersection.u) });
                                         }
                                     }
                                 }
