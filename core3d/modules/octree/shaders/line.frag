@@ -31,6 +31,9 @@ layout(location = 0) out mediump vec4 fragColor;
 layout(location = 1) out highp uvec4 fragPick;
 
 void main() {
+    if (varyingsFlat.color.a == 0.) {
+        discard;
+    }
     lowp float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
     bool inside = clipping.mode == clippingModeIntersection ? (clipping.numPlanes + (outline.planeIndex >= 0 ? 1u : 0u)) > 0U : true;
     for(lowp uint i = 0u; i < clipping.numPlanes; i++) {

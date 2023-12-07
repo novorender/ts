@@ -11,6 +11,7 @@ layout(std140) uniform Outline {
 };
 
 layout(location = 0) in vec2 vertexPositions;
+layout(location = 1) in uint hidden;
 
 out struct {
     highp vec3 positionVS;
@@ -20,6 +21,7 @@ out struct {
 flat out struct {
     mediump vec4 color;
     mediump float radius;
+    mediump uint hidden;
 #if defined (ADRENO600)
     mediump uint objectId_low;
     mediump uint objectId_high;
@@ -29,6 +31,7 @@ flat out struct {
 } varyingsFlat;
 
 void main() {
+    varyingsFlat.hidden = hidden;
     vec2 pos = vertexPositions;
     vec3 posVS = (camera.localViewMatrix * outline.planeLocalMatrix * vec4(pos, 0, 1)).xyz;
     gl_Position = camera.viewClipMatrix * vec4(posVS, 1);

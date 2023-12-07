@@ -17,6 +17,7 @@ export interface LineCluster {
     readonly vertices: Float32Array; // xy positions for line segments in plane space (one pair per triangle/segment)
     readonly normals: Int16Array; // triangle normals (one per triangle/segment)
     readonly points: Uint32Array; // list of vertex indices to hard-edge points into the segment vertices.
+    active: boolean;
 }
 
 class NodeIntersectionBuilder {
@@ -78,7 +79,14 @@ export class OutlineRenderer {
         this.localPlaneMatrix = localPlaneMatrix;
     }
 
+    resetActiveClusters() {
+        for (const cluster of this.getLineClusters()) {
+            cluster.active = false;
+        }
+    }
+
     *intersectTriangles(renderNodes: readonly RenderNode[]): IterableIterator<LineCluster> {
+        this.resetActiveClusters();
         const lineClusterArrays = new Map<number, LineCluster[]>(); // key: object_id
         for (const { mask, node } of renderNodes) {
             if (node.intersectsPlane(this.plane)) {
@@ -87,6 +95,7 @@ export class OutlineRenderer {
                 for (const [childIndex, clusters] of nodeClusters) {
                     if ((1 << childIndex) & mask) {
                         for (const cluster of clusters) {
+                            cluster.active = true;
                             let arr = lineClusterArrays.get(cluster.objectId);
                             if (!arr) {
                                 arr = [];
@@ -109,6 +118,7 @@ export class OutlineRenderer {
                 vertices: flattenF32Arrays(clusters.map(e => e.vertices)),
                 normals: flattenI16Arrays(clusters.map(e => e.normals)),
                 points: flattenIndices(clusters),
+                active: true
             } as const satisfies LineCluster;
             lines += segments;
             yield cluster;
@@ -163,7 +173,7 @@ export class OutlineRenderer {
                             const normals = normalBuffer.slice(0, segments * 3);
                             const points = extractEdges(segments, vertices, normals, edgeAngleThresholdCos, minVertexSpacing, doubleSided);
                             // TODO: Clip lines against other clipping planes?
-                            const lineCluster = { objectId, segments, vertices, normals, points } as const satisfies LineCluster;
+                            const lineCluster = { objectId, segments, vertices, normals, points, active: true } as const satisfies LineCluster;
                             clusters.push(lineCluster);
                             this.lineClusters.push(new WeakRef(lineCluster));
                         }
@@ -186,6 +196,7 @@ export class OutlineRenderer {
             const totalPoints = clusters.map(e => e.points.length).reduce((a, b) => (a + b));
             const linePos = new Float32Array(totalSegments * 4);
             const pointPos = new Float32Array(totalPoints * 2);
+            const pointsHidden = new Uint32Array(totalPoints);
             const colors = new Uint32Array(totalSegments);
             const objectIds = new Uint32Array(totalSegments);
             // const indices = new Uint32Array(totalIndices);
@@ -194,21 +205,30 @@ export class OutlineRenderer {
             for (const { objectId, segments, points, vertices, normals } of clusters) {
                 // add vertex indices for vertex/edge rendering.
                 const vtxOffset = segmentOffset * 2;
+                const highlightIndex = highlightIndices[objectId];
                 for (let i = 0; i < points.length; i++) {
                     const idx = points[i]; // + vtxOffset;
+                    pointsHidden[pointOffset / 2] = highlightIndex == 254 ? 1 : 0;
                     pointPos[pointOffset++] = vertices[idx * 2 + 0];
                     pointPos[pointOffset++] = vertices[idx * 2 + 1];
                 }
                 // use normal to change alpha in color
-                const highlightIndex = highlightIndices[objectId];
-                const [r, g, b] = (highlightIndex && highlightIndex != 254 ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? state.outlines.lineColor;
-                const baseColor = packRGBA(r / 4, g / 4, b / 4); // allow some overB-exposure at the expense of lower bit resolution
-                linePos.set(vertices, segmentOffset * 4);
-                for (let i = 0; i < segments; i++) {
-                    const nz = snorm16ToFloat(normals[i * 3 + 2]);
-                    const alpha = 1 - Math.min(1, Math.abs(nz));
-                    colors[segmentOffset + i] = baseColor | (alpha * 255 << 24);
+                if (highlightIndex == 254) {
+                    linePos.set(vertices, segmentOffset * 4);
+                    for (let i = 0; i < segments; i++) {
+                        colors[segmentOffset + i] = 0;
+                    }
+                } else {
+                    const [r, g, b] = (highlightIndex && highlightIndex != 254 ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? state.outlines.lineColor;
+                    const baseColor = packRGBA(r / 4, g / 4, b / 4); // allow some overB-exposure at the expense of lower bit resolution
+                    linePos.set(vertices, segmentOffset * 4);
+                    for (let i = 0; i < segments; i++) {
+                        const nz = snorm16ToFloat(normals[i * 3 + 2]);
+                        const alpha = 1 - Math.min(1, Math.abs(nz));
+                        colors[segmentOffset + i] = baseColor | (alpha * 255 << 24);
+                    }
                 }
+
                 objectIds.fill(objectId, segmentOffset, segmentOffset + segments);
                 segmentOffset += segments;
             }
@@ -216,6 +236,7 @@ export class OutlineRenderer {
             console.assert(totalPoints * 2 == pointOffset);
 
             const pointPosBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: pointPos, usage: "STREAM_DRAW" });
+            const pointHiddenBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: pointsHidden, usage: "STREAM_DRAW" });
             const linePosBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: linePos, usage: "STREAM_DRAW" });
             const colorBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: colors, usage: "STREAM_DRAW" });
             const objectIdBuffer = glCreateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: objectIds, usage: "STREAM_DRAW" });
@@ -229,9 +250,10 @@ export class OutlineRenderer {
             const pointsVAO = glCreateVertexArray(gl, {
                 attributes: [
                     { kind: "FLOAT", componentCount: 2, componentType: "FLOAT", normalized: false, buffer: pointPosBuffer, byteOffset: 0, byteStride: 8 },
+                    { kind: "UNSIGNED_INT", componentCount: 1, componentType: "UNSIGNED_INT", buffer: pointHiddenBuffer, byteOffset: 0, byteStride: 4 },
                 ],
             });
-            glDelete(gl, [pointPosBuffer, linePosBuffer, colorBuffer, objectIdBuffer]); // the VAOs array already references these buffers, so we release our reference on them early.
+            glDelete(gl, [pointPosBuffer, linePosBuffer, colorBuffer, objectIdBuffer, pointHiddenBuffer]); // the VAOs array already references these buffers, so we release our reference on them early.
             return { linesCount: totalSegments, pointsCount: totalPoints, linesVAO, pointsVAO } as const;
         }
     }
@@ -281,7 +303,9 @@ export class OutlineRenderer {
             const clusterRef = lineClusters[i];
             const cluster = clusterRef.deref();
             if (cluster) {
-                yield cluster;
+                if (cluster.active) {
+                    yield cluster;
+                }
             } else {
                 lineClusters.splice(i--, 1);
             }
@@ -299,6 +323,7 @@ export class OutlineRenderer {
             p[2] = 0;
             vec3.transformMat4(p, p, planeLocalMatrix);
             vec3.add(p, p, localSpaceTranslation);
+            console.log(p);
             yield p;
         }
     }
@@ -571,6 +596,7 @@ function extractEdges(segments: number, vertices: Float32Array, normals: Int16Ar
         addSegmentVertex(i, i * 2 + 1);
     }
     // determine the edge angle of each unique xy coordinate
+    const t2 = minVertexSpacing * minVertexSpacing;
     const vertexIndices: number[] = [];
     for (const [key, segmentIndices] of xySegmentMap) {
         // we only care about manifold edges.
@@ -580,7 +606,6 @@ function extractEdges(segments: number, vertices: Float32Array, normals: Int16Ar
             const segLengths = segmentIndices.map(i => getSegmentLengthSqr(i));
             let minAngleCos = 2;
             const n = segmentIndices.length;
-            const t2 = minVertexSpacing * minVertexSpacing;
             // There might be more than 2 connected triangles (albeit rare), so we pick the largest angle (smallest cos) between all possible combinations.
             for (let i = 0; i < n - 1; i++) {
                 for (let j = i + 1; j < n; j++) {
@@ -605,7 +630,7 @@ function extractEdges(segments: number, vertices: Float32Array, normals: Int16Ar
                 vertexIndices.push(vertexIndex);
             }
         }
-        else if (doubleSided && segmentIndices.length == 1) {
+        else if (doubleSided && segmentIndices.length == 1 && getSegmentLengthSqr(segmentIndices[0]) > t2) {
             const vertexIndex = xyVertexMap.get(key)!;
             console.assert(vertexIndex != undefined);
             vertexIndices.push(vertexIndex);
