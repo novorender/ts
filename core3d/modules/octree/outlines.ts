@@ -490,7 +490,6 @@ function intersectTriangles(segmentPos: Float32Array, segmentNormal: Int16Array,
             const v0 = intersectHalfEdge(p1, p0) ?? intersectHalfEdge(p2, p1) ?? intersectHalfEdge(p0, p2)!;
             // check for half-edge intersections in positive direction
             const v1 = intersectHalfEdge(p0, p1) ?? intersectHalfEdge(p1, p2) ?? intersectHalfEdge(p2, p0)!;
-            console.assert(v0 && v1);
             emit(v0[0], v0[1], v1[0], v1[1], nx, ny, nz);
 
             // // check for edge intersections
