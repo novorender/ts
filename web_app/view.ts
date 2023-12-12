@@ -659,6 +659,7 @@ export class View<
                     if (wasIdle) {
                         // reset back to default when camera starts moving
                         this.resolutionModifier = this.baseRenderResolution;
+                        this.resize();
                         this.resolutionTier = 2;
                         // disable features when moving to increase performance - outlines are only disabled in pinhole
                         this.modifyRenderState({ toonOutline: { on: false }, outlines: { on: this.renderState.camera.kind == "orthographic" } });
@@ -805,12 +806,11 @@ export class View<
     private recalcBaseRenderResolution() {
         const { deviceProfile } = this;
         if (deviceProfile.tier < 2) {
-            const maxRes = deviceProfile.tier == 0 ? 720 * 1280 : 1440 * 2560;
-            let baseRenderResolution = deviceProfile.renderResolution / devicePixelRatio;
+            const scale = deviceProfile.tier == 0 ? 720 + 1280 : 1440 + 2560;
             const { width, height } = this.canvas.getBoundingClientRect();
-            let idleRes = baseRenderResolution * 2 * width * height;
-            if (idleRes > maxRes) {
-                baseRenderResolution *= maxRes / idleRes;
+            let baseRenderResolution = ((scale / (width + height)) / 2) / devicePixelRatio;
+            if (baseRenderResolution > 0.5) {
+                baseRenderResolution = 0.5;
             }
             this.baseRenderResolution = baseRenderResolution;
             this.resolutionModifier = baseRenderResolution;
