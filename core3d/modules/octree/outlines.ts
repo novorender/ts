@@ -323,7 +323,6 @@ export class OutlineRenderer {
             p[2] = 0;
             vec3.transformMat4(p, p, planeLocalMatrix);
             vec3.add(p, p, localSpaceTranslation);
-            console.log(p);
             yield p;
         }
     }
