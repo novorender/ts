@@ -93,7 +93,7 @@ export class RoadTool {
                         const nextP = sec.p[i];
                         const dir = vec3.sub(vec3.create(), nextP, p);
                         vec3.normalize(dir, dir);
-                        return vec3.scaleAndAdd(vec3.create(), p, dir, internalParam);
+                        return vec3.scaleAndAdd(vec3.create(), p, dir, internalParam + 0.001);
                     }) : sec.p;
                 }
                 const up = vec3.fromValues(0, 0, 1);
