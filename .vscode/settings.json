@@ -121,6 +121,7 @@
         "\r",
         "struct ToonOutlineUniforms {\r",
         "    mediump vec3 color;\r",
+        "    bool outlineObjects;\r",
         "};\r",
         "\r",
         "// dynamic geometry\r",

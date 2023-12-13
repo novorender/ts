@@ -109,6 +109,7 @@ export function defaultRenderState(): RenderState {
             on: false,
             enabled: false,
             color: [0, 0, 0],
+            outlineObjects: false,
         },
         pick: {
             opacityThreshold: 1,

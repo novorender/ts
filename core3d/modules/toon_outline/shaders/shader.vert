@@ -2,9 +2,9 @@ layout(std140) uniform Camera {
     CameraUniforms camera;
 };
 
-// layout(std140) uniform ToonOutline {
-//     ToonOutlineUniforms toonOutline;
-// };
+layout(std140) uniform ToonOutline {
+    ToonOutlineUniforms toonOutline;
+};
 
 out highp vec2 uv;
 

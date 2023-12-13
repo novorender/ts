@@ -709,6 +709,9 @@ export interface RenderStateToonOutline {
     readonly enabled: boolean;
     /** Color to use for edges and contours. */
     readonly color: RGB;
+    /** Creates an outline around each object in addition to edges, 
+     * this can manually be disabled as it will create a lot of noise on scenes with a lot of z-fighting . */
+    readonly outlineObjects: boolean;
 }
 
 /** Pick related render state.
