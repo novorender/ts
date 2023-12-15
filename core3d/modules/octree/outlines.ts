@@ -137,7 +137,7 @@ export class OutlineRenderer {
         // modelPlaneMatrix = localPlaneMatrix * modelLocalMatrix * denormMatrix
         mat4.mul(modelPlaneMatrix, mat4.mul(modelPlaneMatrix, localPlaneMatrix, modelLocalMatrix), denormMatrix);
         for (const mesh of node.meshes) {
-            if (mesh.numTriangles && mesh.drawParams.mode == "TRIANGLES" && !mesh.baseColorTexture && mesh.idxBuf) {
+            if (mesh.numTriangles && mesh.drawParams.mode == "TRIANGLES" && mesh.idxBuf) {
                 const doubleSided = mesh.materialType == MaterialType.opaqueDoubleSided || mesh.materialType == MaterialType.transparent;
                 const { drawRanges, objectRanges } = mesh;
                 const { idxBuf, posBuf } = getMeshBuffers(gl, mesh);
