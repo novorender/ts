@@ -74,6 +74,7 @@ void main() {
     // compute pixel coordinates.
     vec2 p0 = v0CS.xy / v0CS.w * camera.viewSize * 0.5f;
     vec2 p1 = v1CS.xy / v1CS.w * camera.viewSize * 0.5f;
+    vec2 zw = gl_VertexID % 4 < 2 ? v0CS.zw : v1CS.zw;
 
     mediump float projectedSize0 = max(0.f, camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / v0CS.w);
     mediump float projectedSize1 = max(0.f, camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / v1CS.w);
@@ -110,11 +111,12 @@ void main() {
             break;
     }
     pos /= camera.viewSize * 0.5f; // scale back down to NDC
+    pos *= zw[1];
 
     // vec2 pos = gl_VertexID % 2 == 0 ? vertexPositions.xy : vertexPositions.zw;
     // vec3 posVS = (camera.localViewMatrix * outline.planeLocalMatrix * vec4(pos, 0, 1)).xyz;
     // vec2 pos = gl_VertexID % 2 == 0 ? vertexPositions.xy : vertexPositions.zw;
-    vec3 posVS = gl_VertexID % 2 == 0 ? v0VS.xyz : v1VS.xyz;
+    vec3 posVS = gl_VertexID % 4 < 2 ? v0VS.xyz : v1VS.xyz;
     varyings.positionVS = posVS;
     varyings.uv = uv;
     varyings.radius = r;
@@ -128,5 +130,5 @@ void main() {
     varyingsFlat.objectId = vertexObjectId;
 #endif
     // gl_Position = camera.viewClipMatrix * vec4(posVS, 1);
-    gl_Position = vec4(pos, 0, 1);
+    gl_Position = vec4(pos, zw);
 }

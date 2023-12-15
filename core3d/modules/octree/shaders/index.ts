@@ -14,9 +14,6 @@ const shaders = {
         vertexShader: render_vert,
         fragmentShader: render_frag,
     },
-    intersect: {
-        vertexShader: intersect_vert,
-    },
     line: {
         vertexShader: line_vert,
         fragmentShader: line_frag,

@@ -103,12 +103,7 @@ export interface VertexAttributes {
     readonly color: VertexAttributeData | null;
     readonly projectedPos: VertexAttributeData | null;
     readonly deviations: VertexAttributeData | null;
-    readonly triangles0: VertexAttributeData | null;
-    readonly triangles1: VertexAttributeData | null;
-    readonly triangles2: VertexAttributeData | null;
-    readonly trianglesObjId: VertexAttributeData | null;
     readonly highlight: VertexAttributeData | null;
-    readonly highlightTri: VertexAttributeData | null;
 }
 
 /** @internal */
@@ -442,14 +437,6 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
             }
         }
         const vertexBuffer = new ArrayBuffer(numVertices * vertexStride);
-        let trianglePosBuffer: Int16Array | undefined;
-        let triangleObjectIdBuffer: Uint32Array | undefined;
-        let highlightBufferTri: Uint8Array | undefined;
-        if (enableOutlines && primitiveType == PrimitiveType.triangles) { // TODO: support triangle strips and fans too
-            trianglePosBuffer = new Int16Array(new ArrayBuffer(numTriangles * trianglePosStride));
-            triangleObjectIdBuffer = new Uint32Array(numTriangles);
-            highlightBufferTri = new Uint8Array(numTriangles);
-        }
         const positionBuffer = separatePositionBuffer ? new ArrayBuffer(numVertices * positionStride) : undefined;
         let indexBuffer: Uint32Array | Uint16Array | undefined;
         if (vertexIndex) {
@@ -484,10 +471,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
         const [vertexBuffers, bufIdx] = enumerateBuffers({
             primary: vertexBuffer,
             highlight: highlightBuffer?.buffer,
-            pos: positionBuffer,
-            triPos: trianglePosBuffer?.buffer,
-            triId: triangleObjectIdBuffer?.buffer,
-            highlightTri: highlightBufferTri?.buffer,
+            pos: positionBuffer
         });
 
         for (const childIndex of childIndices) {
@@ -525,30 +509,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
                 }
 
                 // initialize triangle vertex buffer for clipping intersection
-                let numTrianglesInSubMesh = 0;
-                if (trianglePosBuffer && triangleObjectIdBuffer) {
-                    const { x, y, z } = vertex.position;
-                    let j = triangleOffset * 3 * 3;
-                    if (vertexIndex && indexBuffer) {
-                        numTrianglesInSubMesh = (endIdx - beginIdx) / 3;
-                        for (let i = beginIdx; i < endIdx; i++) {
-                            // TODO: Add support for triangle strips and fans as well...
-                            const idx = vertexIndex[i] + beginVtx;
-                            trianglePosBuffer[j++] = x[idx];
-                            trianglePosBuffer[j++] = y[idx];
-                            trianglePosBuffer[j++] = z[idx];
-                        }
-                    } else {
-                        numTrianglesInSubMesh = (endVtx - beginVtx) / 3;
-                        for (let i = beginVtx; i < endVtx; i++) {
-                            const idx = i;
-                            trianglePosBuffer[j++] = x[idx];
-                            trianglePosBuffer[j++] = y[idx];
-                            trianglePosBuffer[j++] = z[idx];
-                        }
-                    }
-                    triangleObjectIdBuffer.fill(objectId, triangleOffset, triangleOffset + numTrianglesInSubMesh);
-                }
+                const numTrianglesInSubMesh = vertexIndex && indexBuffer ? (endIdx - beginIdx) / 3 : (endVtx - beginVtx) / 3;
 
                 if (positionBuffer) {
                     // initialize separate positions buffer
@@ -571,7 +532,6 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
                 const highlightIndex = highlights.indices[objectId] ?? 0;
                 if (highlightIndex) {
                     highlightBuffer.fill(highlightIndex, vertexOffset, endVertex);
-                    highlightBufferTri?.fill(highlightIndex, triangleOffset, endTriangle);
                 }
 
                 // update object ranges
@@ -595,7 +555,6 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
 
         console.assert(vertexOffset == numVertices);
         console.assert(indexOffset == numIndices);
-        console.assert(triangleOffset == (triangleObjectIdBuffer?.length ?? 0));
         const indices = indexBuffer ?? numVertices;
 
         const [beginTexture, endTexture] = groupMeshes[0].textureRange;
@@ -619,12 +578,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
             color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["color"], byteStride: stride } : null,
             projectedPos: (attributes & OptionalVertexAttribute.projectedPos) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: attribOffsets["projectedPos"], byteStride: stride } : null,
             deviations: deviations != 0 ? { kind: deviationsKind, buffer: bufIdx.primary, componentCount: deviations, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["deviations"], byteStride: stride } : null,
-            triangles0: trianglePosBuffer ? { kind: "FLOAT_VEC4", buffer: bufIdx.triPos, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 0, byteStride: 18 } : null,
-            triangles1: trianglePosBuffer ? { kind: "FLOAT_VEC4", buffer: bufIdx.triPos, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 6, byteStride: 18 } : null,
-            triangles2: trianglePosBuffer ? { kind: "FLOAT_VEC4", buffer: bufIdx.triPos, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: 12, byteStride: 18 } : null,
-            trianglesObjId: trianglePosBuffer ? { kind: "UNSIGNED_INT", buffer: bufIdx.triId, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, byteOffset: 0, byteStride: 4 } : null,
             highlight: { kind: "UNSIGNED_INT", buffer: bufIdx.highlight, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, byteOffset: 0, byteStride: 0 },
-            highlightTri: { kind: "UNSIGNED_INT", buffer: bufIdx.highlightTri, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, byteOffset: 0, byteStride: 0 },
         } as const satisfies VertexAttributes;
 
         objectRanges.sort((a, b) => (a.objectId - b.objectId));

@@ -68,38 +68,22 @@ export class OctreeModule implements RenderModule {
         const highlightTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 6, internalFormat: "RGBA32F", type: "FLOAT", image: null });
         const gradientsTexture = bin.createTexture(this.gradientImageParams);
 
-        const transformFeedback = bin.createTransformFeedback()!;
-        let vb_line: WebGLBuffer | null = null;
-        let vao_line: WebGLVertexArrayObject | null = null;
-        if (context.deviceProfile.features.outline) {
-            vb_line = bin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: this.maxLines * 24, usage: "STATIC_DRAW" });
-            vao_line = bin.createVertexArray({
-                attributes: [
-                    { kind: "FLOAT_VEC4", buffer: vb_line, byteStride: 36, byteOffset: 0, componentType: "FLOAT", divisor: 1 }, // positions in plane space (line vertex pair)
-                    { kind: "FLOAT_VEC4", buffer: vb_line, byteStride: 36, byteOffset: 16, componentType: "FLOAT", divisor: 1 }, // color
-                    { kind: "UNSIGNED_INT", buffer: vb_line, byteStride: 36, byteOffset: 32, componentType: "UNSIGNED_INT", divisor: 1 }, // object_id
-                ],
-            });
-        }
-
         const { textureUniforms, uniformBufferBlocks } = OctreeModule;
         const shadersPromise = OctreeModule.compileShaders(context, bin);
-        const [/*color, pick, pre,*/ intersect, line, point, debug, corePrograms] = await Promise.all([
+        const [/*color, pick, pre,*/  line, point, debug, corePrograms] = await Promise.all([
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.color, ShaderMode.triangles) }),
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pick, ShaderMode.triangles) }),
             // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pre, ShaderMode.triangles) }),
-            context.makeProgramAsync(bin, { name: "octree_intersect", ...shaders.intersect, uniformBufferBlocks: ["Camera", "Clipping", "Outline", "Node"], textureUniforms, transformFeedback: { varyings: ["line_vertices", "color", "object_id"], bufferMode: "INTERLEAVED_ATTRIBS" } }),
             context.makeProgramAsync(bin, { name: "octree_line", ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
             context.makeProgramAsync(bin, { name: "octree_point", ...shaders.point, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
             context.makeProgramAsync(bin, { name: "octree_debug", ...shaders.debug, uniformBufferBlocks }),
             shadersPromise,
         ]);
-        const programs: Programs = { ...corePrograms, intersect, line, point, debug };
+        const programs: Programs = { ...corePrograms, line, point, debug };
         // const programs = { color, pick, pre, intersect, line, debug };
         // const programs = { intersect, line, debug };
         return {
             bin, programs,
-            transformFeedback, vb_line, vao_line,
             sceneUniforms, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture
         } as const;
     }
@@ -167,7 +151,6 @@ type PassPrograms = { readonly [P in keyof typeof ShaderPass]: ModePrograms };
 type ModePrograms = { readonly [P in keyof typeof ShaderMode]: WebGLProgram };
 /** @internal */
 export interface Programs extends PassPrograms {
-    readonly intersect: WebGLProgram;
     readonly line: WebGLProgram;
     readonly point: WebGLProgram;
     readonly debug: WebGLProgram;

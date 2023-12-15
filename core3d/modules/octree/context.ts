@@ -457,21 +457,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
 
                 if (useNewOutlines) {
-                    this.renderNodeClippingOutline2(plane, state, renderNodes);
-                } else {
-                    // render clipping outlines
-                    glState(gl, {
-                        uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
-                        depth: {
-                            test: false,
-                            writeMask: false
-                        },
-                    });
-                    for (const { mask, node } of renderNodes) {
-                        if (node.intersectsPlane(p)) {
-                            this.renderNodeClippingOutline(node, mask);
-                        }
-                    }
+                    this.renderNodeClippingOutline(plane, state, renderNodes);
                 }
             }
             if (state.outlines.enabled) {
@@ -562,20 +548,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     renderContext.updateOutlinesUniforms(state.outlines, p, planeIndex, color);
 
                     if (useNewOutlines) {
-                        this.renderNodeClippingOutline2(plane, state, renderNodes);
-                    } else {
-                        glState(gl, {
-                            uniformBuffers: [cameraUniforms, clippingUniforms, outlineUniforms, null],
-                            depth: {
-                                test: false,
-                                writeMask: false
-                            },
-                        });
-                        for (const { mask, node } of renderNodes) {
-                            if (node.intersectsPlane(p)) {
-                                this.renderNodeClippingOutline(node, mask);
-                            }
-                        }
+                        this.renderNodeClippingOutline(plane, state, renderNodes);
                     }
                 }
                 if (state.outlines.enabled) {
@@ -644,42 +617,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
     }
 
-    renderNodeClippingOutline(node: OctreeNode, mask: number) {
-        const { resources, renderContext, module } = this;
-        const { gl } = renderContext;
-        const { programs, transformFeedback, vb_line, vao_line } = resources;
-        if (mask && node.uniforms) {
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, UBO.node, node.uniforms);
-            for (const mesh of node.meshes) {
-                if (mesh.numTriangles && mesh.drawParams.mode == "TRIANGLES" && !mesh.baseColorTexture) {
-                    for (const drawRange of mesh.drawRanges) {
-                        if ((1 << drawRange.childIndex) & mask) {
-                            const count = drawRange.count / 3;
-                            const first = drawRange.first / 3;
-                            console.assert(count * 2 <= module.maxLines);
-                            // find triangle intersections
-                            glState(gl, {
-                                program: programs.intersect,
-                                vertexArrayObject: mesh.vaoTriangles,
-                            });
-                            glTransformFeedback(gl, { kind: "POINTS", transformFeedback, outputBuffers: [vb_line!], count, first });
-
-                            // draw lines
-                            glState(gl, {
-                                program: programs.line,
-                                vertexArrayObject: vao_line,
-                            });
-                            // const stats = glDraw(gl, { kind: "arrays_instanced", mode: "LINES", count: 2, instanceCount: count });
-                            const stats = glDraw(gl, { kind: "arrays_instanced", mode: "TRIANGLE_STRIP", count: 4, instanceCount: count });
-                            renderContext.addRenderStatistics(stats);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    renderNodeClippingOutline2(plane: ReadonlyVec4, state: DerivedRenderState, renderNodes: readonly RenderNode[]) {
+    renderNodeClippingOutline(plane: ReadonlyVec4, state: DerivedRenderState, renderNodes: readonly RenderNode[]) {
         const begin = performance.now();
         const { gl, outlineRenderers } = this.renderContext;
         const { highlights } = this;
