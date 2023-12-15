@@ -80,7 +80,7 @@ export class DrawModule extends BaseModule {
      * points2d, all the points in 2d space regadless if they are within the current canvas size
      * and the original points removed from screen points
      */
-    toScreenSpace(points: ReadonlyVec3[]): { screenPoints: ReadonlyVec2[], points2d: ReadonlyVec2[], removedIndices: number[] } | undefined {
+    toScreenSpace(points: ReadonlyVec3[]): { screenPoints: ReadonlyVec2[], points2d: ReadonlyVec2[], indicesOnScreen: number[] } | undefined {
         const { drawContext } = this;
         const { width, height, camera } = drawContext;
         const { camMat, projMat } = getPathMatrices(width, height, camera);
@@ -409,6 +409,7 @@ function toOnscreenText(points: ReadonlyVec3[],
     }
     return undefined;
 }
+
 function toPathPointsFromMatrices(
     points: ReadonlyVec3[],
     camMat: mat4,
@@ -418,7 +419,7 @@ function toPathPointsFromMatrices(
     height: number,
     ortho: boolean,
     cameraFar: number
-): { screenPoints: ReadonlyVec2[], points2d: ReadonlyVec2[], removedIndices: number[], addedIndices: number[] } | undefined {
+): { screenPoints: ReadonlyVec2[], points2d: ReadonlyVec2[], indicesOnScreen: number[] } | undefined {
     const clip = (p: vec3, p0: vec3) => {
         const d = vec3.sub(vec3.create(), p0, p);
         vec3.scale(d, d, (-near - p[2]) / d[2]);
@@ -426,9 +427,9 @@ function toPathPointsFromMatrices(
     };
 
     const points2d: ReadonlyVec2[] = [];
-    const removedIndices: number[] = [];
-    const addedIndices: number[] = [];
+    const indicesOnScreen: number[] = [];
     const sv = points.map((v) => vec3.transformMat4(vec3.create(), v, camMat));
+    let currentIdx = 0;
 
     const screenPoints = sv.reduce((tail, head, i) => {
         if (ortho) {
@@ -437,18 +438,19 @@ function toPathPointsFromMatrices(
                 sv[i][2] = -0.0001;
             }
             if (sv[i][2] < -cameraFar) {
-                removedIndices.push(i);
+                currentIdx++
                 return tail;
             }
         }
         if (head[2] > SCREEN_SPACE_EPSILON) {
             if (i === 0 || sv[i - 1][2] > 0) {
-                removedIndices.push(i);
+                currentIdx++
                 return tail;
             }
             const p0 = clip(sv[i - 1], head);
             const _p = toScreen(projMat, width, height, p0);
             points2d.push(_p);
+            indicesOnScreen.push(currentIdx++);
             return tail.concat([_p]);
         }
         const _p = toScreen(projMat, width, height, head);
@@ -456,13 +458,15 @@ function toPathPointsFromMatrices(
         if (i !== 0 && sv[i - 1][2] > SCREEN_SPACE_EPSILON) {
             const p0 = clip(head, sv[i - 1]);
             const _p0 = toScreen(projMat, width, height, p0);
-            addedIndices.push(i);
+            indicesOnScreen.push(currentIdx);
+            indicesOnScreen.push(currentIdx++);
             return tail.concat([_p0], [_p]);
         }
+        indicesOnScreen.push(currentIdx++);
         return tail.concat([_p]);
     }, [] as ReadonlyVec2[]);
     if (screenPoints.length) {
-        return { screenPoints, points2d, removedIndices, addedIndices };
+        return { screenPoints, points2d, indicesOnScreen };
     }
     return undefined;
 }
@@ -514,22 +518,9 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                     camera.far
                 );
                 if (points) {
-                    const { screenPoints, removedIndices, addedIndices } = points;
+                    const { screenPoints, indicesOnScreen } = points;
                     drawPart.vertices2D = screenPoints;
-                    if ((removedIndices.length > 0 || addedIndices.length > 0)) {
-                        if (drawPart.drawType == "angle") {
-                            const newVert3d: number[] = [];
-                            drawPart.vertices3D.forEach((_, i) => {
-                                if (addedIndices.find((v) => v == i) != undefined && removedIndices.find((v) => v == i - 1) == undefined) {
-                                    newVert3d.concat([-1, i])
-                                }
-                                else if (removedIndices.find((v) => v == i) == undefined || removedIndices.find((v) => v == i + 1) == undefined) {
-                                    return newVert3d.push(i);
-                                }
-                                drawPart.indicesOnScreen = newVert3d;
-                            });
-                        }
-                    }
+                    drawPart.indicesOnScreen = screenPoints.length == drawPart.vertices3D.length ? undefined : indicesOnScreen;
                 }
                 else {
                     drawPart.indicesOnScreen = undefined;
@@ -548,8 +539,9 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                             camera.far
                         );
                         if (voidPoints) {
-                            const { screenPoints } = voidPoints;
+                            const { screenPoints, indicesOnScreen } = voidPoints;
                             drawVoid.vertices2D = screenPoints;
+                            drawVoid.indicesOnScreen = screenPoints.length == drawVoid.vertices3D.length ? undefined : indicesOnScreen;
                         }
                         else {
                             drawVoid.vertices2D = undefined;
