@@ -7,7 +7,7 @@ export class ToonModule implements RenderModule {
     readonly kind = "toon_outline";
     readonly uniforms = {
         color: "vec3",
-        outlineObjects: "bool",
+        outlineObjects: "uint",
     } as const satisfies Record<string, UniformTypes>;
 
     async withContext(context: RenderContext) {
@@ -49,7 +49,7 @@ class ToonModuleContext implements RenderModuleContext {
         if (context.hasStateChanged({ toonOutline, localSpaceTranslation })) {
             const { values } = this.uniforms;
             values.color = toonOutline.color;
-            values.outlineObjects = toonOutline.outlineObjects;
+            values.outlineObjects = toonOutline.outlineObjects ? 1 : 0;
             context.updateUniformBuffer(uniforms, this.uniforms);
         }
         if (context.prevState != undefined && !context.isPickBuffersValid() && state.toonOutline.enabled && state.toonOutline.on) {

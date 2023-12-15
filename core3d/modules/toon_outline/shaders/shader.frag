@@ -113,7 +113,7 @@ void main() {
     float centerDepth = uintBitsToFloat(texture(textures.pick, uv).w);
     vec3 centerNormal = unpackNormalAndDeviation(texture(textures.pick, uv).yz).xyz;
 
-    float objectEdge = toonOutline.outlineObjects ? objectTest(objectId, uv, pixelSizeX, pixelSizeY) : 0.;
+    float objectEdge = toonOutline.outlineObjects == 1u ? objectTest(objectId, uv, pixelSizeX, pixelSizeY) : 0.;
     float normalEdge = 0.f;
     float depthEdge = 0.f;
     if (objectEdge < 0.8) {
