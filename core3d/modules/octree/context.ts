@@ -457,8 +457,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const p = vec4.fromValues(x, y, z, -offset);
                 renderContext.updateOutlinesUniforms(state.outlines, p, planeIndex);
                 const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail,
-                    this.rootNodes[NodeGeometryKind.triangles],
-                    state.terrain.asBackground ? undefined : this.rootNodes[NodeGeometryKind.terrain]);
+                    this.rootNodes[NodeGeometryKind.triangles], this.rootNodes[NodeGeometryKind.terrain]);
 
                 this.renderNodeClippingOutline(plane, state, renderNodes);
             }
