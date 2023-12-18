@@ -604,7 +604,7 @@ export class View<
         const controller = controllers[kind];
         _activeController = this._activeController = controller;
         const { position, rotation, pivot, fovMeters } = prevState;
-        _activeController.init({ kind, position: initialState?.position ?? position, rotation: initialState?.rotation ?? rotation, pivot, distance, fovMeters: initialState?.fov ?? (kind != "panorama" ? fovMeters : undefined) });
+        _activeController.init({ kind, position: initialState?.position ?? position, rotation: initialState?.rotation ?? rotation, pivot: initialState?.pivot ?? pivot, distance, fovMeters: initialState?.fov ?? (kind != "panorama" ? fovMeters : undefined) });
         const changes = _activeController.stateChanges();
         this.modifyRenderState({ camera: changes });
         return controller;
@@ -937,6 +937,8 @@ export type CameraControllersFactory<T extends CameraControllers> = (input: Cont
 
 /** Optional values to initialize camera controller. */
 export interface CameraControllerInitialValues {
+    /** The camera pivot position. */
+    readonly pivot?: ReadonlyVec3;
     /** The camera position. */
     readonly position?: ReadonlyVec3;
     /** The camera rotation. */
