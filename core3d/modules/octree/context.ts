@@ -14,7 +14,6 @@ import { decodeBase64 } from "core3d/util";
 import { OutlineRenderer } from "./outlines";
 
 const enum UBO { camera, clipping, scene, node };
-const useNewOutlines = true;
 
 export interface RenderNode {
     readonly mask: number;
@@ -359,7 +358,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0);
     }
 
-    getRenderNodes(projectedSizeSplitThreshold: number, rootNode: OctreeNode | undefined): readonly RenderNode[] {
+    getRenderNodes(projectedSizeSplitThreshold: number, ...rootNodes: readonly (OctreeNode | undefined)[]): readonly RenderNode[] {
         // create list of meshes that we can sort by material/state?
         const nodes: RenderNode[] = [];
         function iterate(node: OctreeNode): boolean {
@@ -380,10 +379,13 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             }
             return rendered;
         }
-        if (rootNode) {
-            iterate(rootNode);
-            nodes.sort((a, b) => a.node.viewDistance - b.node.viewDistance); // sort nodes front to back, i.e. ascending view distance
+        for (const rootNode of rootNodes) {
+            if (rootNode) {
+                iterate(rootNode);
+            }
         }
+
+        nodes.sort((a, b) => a.node.viewDistance - b.node.viewDistance); // sort nodes front to back, i.e. ascending view distance
         return nodes;
     }
 
@@ -454,11 +456,11 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const [x, y, z, offset] = plane;
                 const p = vec4.fromValues(x, y, z, -offset);
                 renderContext.updateOutlinesUniforms(state.outlines, p, planeIndex);
-                const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, this.rootNodes[NodeGeometryKind.triangles]);
+                const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail,
+                    this.rootNodes[NodeGeometryKind.triangles],
+                    state.terrain.asBackground ? undefined : this.rootNodes[NodeGeometryKind.terrain]);
 
-                if (useNewOutlines) {
-                    this.renderNodeClippingOutline(plane, state, renderNodes);
-                }
+                this.renderNodeClippingOutline(plane, state, renderNodes);
             }
             if (state.outlines.enabled) {
                 renderOutlines(state.outlines.plane, state.outlines.lineColor);
@@ -541,31 +543,33 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
 
-            if (deviceProfile.features.outline && state.outlines.on) {
-                const renderOutlines = (plane: ReadonlyVec4, planeIndex = -1, color?: RGB) => {
-                    const [x, y, z, offset] = plane;
-                    const p = vec4.fromValues(x, y, z, -offset);
-                    renderContext.updateOutlinesUniforms(state.outlines, p, planeIndex, color);
-
-                    if (useNewOutlines) {
-                        this.renderNodeClippingOutline(plane, state, renderNodes);
-                    }
-                }
-                if (state.outlines.enabled) {
-                    renderOutlines(state.outlines.plane);
-                }
-                if (state.clipping.enabled) {
-                    for (let i = 0; i < state.clipping.planes.length; ++i) {
-                        const { normalOffset, outline } = state.clipping.planes[i];
-                        if (outline?.enabled) {
-                            renderOutlines(normalOffset, i, outline.lineColor);
-                        }
-                    }
-                }
-            }
-
             if (rootNode.geometryKind == NodeGeometryKind.terrain && state.terrain.asBackground) {
                 glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
+            }
+        }
+
+        if (deviceProfile.features.outline && state.outlines.on) {
+            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail,
+                this.rootNodes[NodeGeometryKind.triangles],
+                state.terrain.asBackground ? undefined : this.rootNodes[NodeGeometryKind.terrain]);
+
+            const renderOutlines = (plane: ReadonlyVec4, planeIndex = -1, color?: RGB) => {
+                const [x, y, z, offset] = plane;
+                const p = vec4.fromValues(x, y, z, -offset);
+                renderContext.updateOutlinesUniforms(state.outlines, p, planeIndex, color);
+
+                this.renderNodeClippingOutline(plane, state, renderNodes);
+            }
+            if (state.outlines.enabled) {
+                renderOutlines(state.outlines.plane);
+            }
+            if (state.clipping.enabled) {
+                for (let i = 0; i < state.clipping.planes.length; ++i) {
+                    const { normalOffset, outline } = state.clipping.planes[i];
+                    if (outline?.enabled) {
+                        renderOutlines(normalOffset, i, outline.lineColor);
+                    }
+                }
             }
         }
     }
