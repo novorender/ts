@@ -391,7 +391,7 @@ function toOnscreenText(points: ReadonlyVec3[],
 
     const screenPoints = sv.reduce((tail, head, i) => {
         //Avoid objects very near the camera or past the far plane
-        if (ortho && (head[2] < -cameraFar || head[2] > 0)) {
+        if (ortho && (head[2] < -cameraFar)) {
             return tail;
         }
         if (head[2] > 0.1) {
@@ -501,7 +501,7 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                     width,
                     height,
                     camera.kind == "orthographic",
-                    camera.far
+                    camera.far + 0.1
                 );
                 drawPart.vertices2D = points?.screenPoints;
                 drawPart.indicesOnScreen = points?.intdices;
@@ -515,7 +515,7 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                     width,
                     height,
                     camera.kind == "orthographic",
-                    camera.far
+                    camera.far + 0.1
                 );
                 if (points) {
                     const { screenPoints, indicesOnScreen } = points;
