@@ -1,6 +1,6 @@
 import { mat3, type ReadonlyVec3, vec2, vec3 } from "gl-matrix";
 import { Downloader } from "../util";
-import type { CrossSections } from "./cross_section";
+import type { CrossSection, CrossSections } from "./cross_section";
 import type { CrossSlope, RoadCrossSection, RoadProfile, RoadProfiles } from "measure";
 
 export class RoadTool {
@@ -79,21 +79,32 @@ export class RoadTool {
                     centerDir = vec3.sub(vec3.create(), nextCenter, currCenter);
                     vec3.normalize(centerDir, centerDir);
                 } else {
-                    const internalParam = Math.abs(param - intervals[index - 1]);
+                    let prevCenter: ReadonlyVec3 = vec3.create();
+                    let prevSec: CrossSection;
+                    let prevIdx = 0;
+                    do {
+                        ++prevIdx;
+                        prevSec = sections[index - prevIdx];
+                        const nextCenterIdx = prevSec.l == sec.l ? centerIdx : crossSections.codes[prevSec.l].findIndex((c) => c == 10);
+                        prevCenter = prevSec.p[nextCenterIdx];
+                    } while (vec3.exactEquals(currCenter, prevCenter) && index - prevIdx > 0);
+
+                    const internalParam = Math.abs(param - intervals[index - prevIdx]);
                     if (internalParam > 10) {
                         return undefined;
                     }
-                    const prevSec = sections[index - 1];
-                    const nextCenterIdx = prevSec.l == sec.l ? centerIdx : crossSections.codes[prevSec.l].findIndex((c) => c == 10);
-                    const prevCenter = prevSec.p[nextCenterIdx];
+
+                    if (vec3.exactEquals(currCenter, prevCenter)) {
+                        return undefined;
+                    }
+
                     centerDir = vec3.sub(vec3.create(), currCenter, prevCenter);
                     vec3.normalize(centerDir, centerDir);
-
                     pts = prevSec.l == sec.l ? prevSec.p.map((p, i) => {
                         const nextP = sec.p[i];
                         const dir = vec3.sub(vec3.create(), nextP, p);
                         vec3.normalize(dir, dir);
-                        return vec3.scaleAndAdd(vec3.create(), p, dir, internalParam + 0.001);
+                        return vec3.scaleAndAdd(vec3.create(), p, dir, internalParam);
                     }) : sec.p;
                 }
                 const up = vec3.fromValues(0, 0, 1);
@@ -113,16 +124,15 @@ export class RoadTool {
                 });
 
                 const points = pts.map((p) => {
-                    const _p = vec3.clone(p);
-                    return _p;
+                    return vec3.scaleAndAdd(vec3.create(), p, centerDir, 0.001);
                 });
 
                 const sectionCodes = codes[sec.l];
 
                 const { leftShoulder, rightShoulder } = this.findShoulderIndex(sectionCodes)
-                const cp = vec3.clone(pts[centerIdx]);
-                const lp = vec3.clone(pts[leftShoulder]);
-                const rp = vec3.clone(pts[rightShoulder]);
+                const cp = vec3.clone(points[centerIdx]);
+                const lp = vec3.clone(points[leftShoulder]);
+                const rp = vec3.clone(points[rightShoulder]);
 
                 const cp2d = vec2.fromValues(cp[0], cp[1]);
                 const lp2d = vec2.fromValues(lp[0], lp[1]);
