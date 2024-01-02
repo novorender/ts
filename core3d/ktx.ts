@@ -1,4 +1,4 @@
-import type { CubeImages, TextureParams } from "webgl2";
+import { getBufferViewType, type CubeImages, type TextureParams } from "webgl2";
 import { GL } from "webgl2/constants";
 
 const identifier = new Uint8Array([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A]);
@@ -213,18 +213,20 @@ export function parseKTX(ktx: Uint8Array): TextureParams {
     const internalFormat = textureFormatInternal[header.glInternalFormat];
     const kind = isArray ? "TEXTURE_ARRAY" : isCube ? "TEXTURE_CUBE_MAP" : is3D ? "TEXTURE_3D" : "TEXTURE_2D";
     const type = header.glType ? textureDataType[header.glType] : undefined;
+    const arrayType = type ? getBufferViewType(type) : Uint8Array;
+
     const dim = { width: header.pixelWidth, height: header.pixelHeight, ...(is3D ? { depth: header.pixelDepth } : undefined) };
     let mips: CubeImages[] | BufferSource[] = undefined!;
     if (isCube) {
         const images = new Array(numMips).fill(null).map(_ => ([] as any[]));
         for (const image of getImages(header, ktx, littleEndian)) {
-            images[image.mip][image.face] = image.buffer;
+            images[image.mip][image.face] = new arrayType(image.buffer.slice().buffer);
         }
         mips = images as unknown as CubeImages[];
     } else {
         mips = new Array<BufferSource>(numMips);
         for (const image of getImages(header, ktx, littleEndian)) {
-            mips[image.mip] = image.buffer;
+            mips[image.mip] = new arrayType(image.buffer.slice().buffer);
         }
     }
     const imageData = hasMips ? { mipMaps: mips } as const : { image: mips[0] } as const;

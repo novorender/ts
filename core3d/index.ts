@@ -3,13 +3,14 @@
  * 
  * @packageDocumentation
  */
-export * from "./init";
-export * from "./state";
+export * from "./benchmark";
 export * from "./context";
-export * from "./modules";
 export * from "./device";
 export * from "./imports";
-export * from "./benchmark";
+export * from "./init";
+export * from "./materials";
+export * from "./modules";
+export * from "./state";
 export * from "./wasm";
 export { downloadScene } from "./scene";
 export { downloadGLTF } from "./gltf";

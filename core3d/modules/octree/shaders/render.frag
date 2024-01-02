@@ -15,6 +15,7 @@ layout(std140) uniform Node {
 };
 
 uniform OctreeTextures textures;
+uniform NodeTextures node_textures;
 
 in OctreeVaryings varyings;
 flat in OctreeVaryingsFlat varyingsFlat;
@@ -28,10 +29,10 @@ void main() {
     if(linearDepth < camera.near)
         discard;
 
-    lowp float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
+    lowp float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
     bool inside = clipping.mode == clippingModeIntersection ? clipping.numPlanes > 0U : true;
     for(lowp uint i = 0U; i < clipping.numPlanes; i++) {
-        inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
+        inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.;
     }
     if(clipping.mode == clippingModeIntersection ? inside : !inside) {
         discard;
@@ -42,6 +43,20 @@ void main() {
     highp uint objectId;
     lowp uint highlight;
     baseColor = varyingsFlat.color;
+
+    // do tri-planar uv projection
+    vec3 n = abs(normalize(varyings.normalLS));
+    vec2 uv;
+    vec3 posLS = varyings.positionLS;
+    if(n.x > n.y && n.x > n.z)
+        uv = posLS.yz;
+    else if(n.y > n.z)
+        uv = posLS.xz;
+    else
+        uv = posLS.xy;
+    uv *= .25; // apply scale
+    baseColor *= texture(textures.base_color, uv);
+
 #if defined (ADRENO600)
     objectId = combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low);
 #else
@@ -57,7 +72,7 @@ void main() {
     mediump vec3 geometricNormalVS = normalize(cross(axisX, axisY));
 
     // ensure that vertex normal points in same direction as geometric normal (which always faces camera)
-    if(dot(normalVS, normalVS) < 0.1f || dot(normalVS, geometricNormalVS) < 0.f) {
+    if(dot(normalVS, normalVS) < 0.1 || dot(normalVS, geometricNormalVS) < 0.) {
         normalVS = geometricNormalVS;
     }
     mediump vec3 normalWS = normalize(camera.viewLocalMatrixNormal * normalVS);
@@ -70,10 +85,11 @@ void main() {
     rgba = baseColor = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange); //Modify base color to get 
 #elif (MODE == MODE_TRIANGLES)
     if(baseColor == vec4(0)) {
-        rgba = texture(textures.base_color, varyings.texCoord0);
+        rgba = texture(node_textures.unlit_color, varyings.texCoord0);
     } else {
         rgba = baseColor;
     }
+
 #endif
 
 #if defined (HIGHLIGHT)
@@ -81,13 +97,13 @@ void main() {
         discard;
     }
     if(highlight != 0U || scene.applyDefaultHighlight) {
-        mediump float u = (float(highlight) + 0.5f) / float(maxHighlights);
+        mediump float u = (float(highlight) + 0.5) / float(maxHighlights);
         mediump mat4 colorTransform;
-        colorTransform[0] = texture(textures.highlights, vec2(u, 0.5f / 6.0f));
-        colorTransform[1] = texture(textures.highlights, vec2(u, 1.5f / 6.0f));
-        colorTransform[2] = texture(textures.highlights, vec2(u, 2.5f / 6.0f));
-        colorTransform[3] = texture(textures.highlights, vec2(u, 3.5f / 6.0f));
-        mediump vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5f / 6.0f));
+        colorTransform[0] = texture(textures.highlights, vec2(u, 0.5 / 6.0));
+        colorTransform[1] = texture(textures.highlights, vec2(u, 1.5 / 6.0));
+        colorTransform[2] = texture(textures.highlights, vec2(u, 2.5 / 6.0));
+        colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / 6.0));
+        mediump vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / 6.0));
         rgba = colorTransform * rgba + colorTranslation;
     }
 #endif
@@ -97,16 +113,16 @@ void main() {
         mediump vec4 diffuseOpacity = rgba;
         diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
 
-        mediump vec4 specularShininess = vec4(mix(0.4f, 0.1f, baseColor.a)); // TODO: get from varyings instead
+        mediump vec4 specularShininess = vec4(mix(0.4, 0.1, baseColor.a)); // TODO: get from varyings instead
         specularShininess.rgb = sRGBToLinear(specularShininess.rgb);
 
         mediump vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
         mediump vec3 N = normalize(normalWS);
 
         mediump vec3 irradiance = texture(textures.ibl.diffuse, N).rgb;
-        mediump float perceptualRoughness = clamp((1.0f - specularShininess.a), 0.0f, 1.0f);
+        mediump float perceptualRoughness = clamp((1.0 - specularShininess.a), 0.0, 1.0);
         perceptualRoughness *= perceptualRoughness;
-        mediump float lod = perceptualRoughness * (scene.iblMipCount - 1.0f);
+        mediump float lod = perceptualRoughness * (scene.iblMipCount - 1.0);
         mediump vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb;
 
         mediump vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
@@ -117,7 +133,7 @@ void main() {
 
 #if (PASS == PASS_PICK)
 #if defined (IOS_INTERPOLATION_BUG)
-    float a = round(rgba.a * 256.f) / 256.f; // older ipad/IOS devices don't use flat mode on float varyings and thus introduces interpolation noise that we need to round off.
+    float a = round(rgba.a * 256.) / 256.; // older ipad/IOS devices don't use flat mode on float varyings and thus introduces interpolation noise that we need to round off.
 #else
     float a = rgba.a;
 #endif
@@ -132,15 +148,15 @@ void main() {
 #endif
 
 #if (PASS == PASS_PRE)
-    if(rgba.a < 1.f)
+    if(rgba.a < 1.)
         discard;
 #elif (PASS != PASS_PICK)
-    if(rgba.a <= 0.f)
+    if(rgba.a <= 0.)
         discard;
 #endif
 
 #if defined (DITHER) && (PASS == PASS_COLOR)
-    if((rgba.a - 0.5f / 16.0f) < dither(gl_FragCoord.xy))
+    if((rgba.a - 0.5 / 16.0) < dither(gl_FragCoord.xy))
         discard;
 #endif
 

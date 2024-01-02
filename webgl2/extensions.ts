@@ -9,13 +9,15 @@ export function glExtensions(gl: WebGL2RenderingContext, refresh = false) {
 
 function getWebGL2Extensions(gl: WebGL2RenderingContext) {
     return {
-        colorBufferFloat: gl.getExtension("EXT_color_buffer_float") as WEBGL_color_buffer_float | null, // also includes half floats
-        parallelShaderCompile: gl.getExtension("KHR_parallel_shader_compile") as KHR_parallel_shader_compile | null,
-        loseContext: gl.getExtension("WEBGL_lose_context") as WEBGL_lose_context | null,
-        multiDraw: gl.getExtension("WEBGL_MULTI_DRAW") as WEBGL_multi_draw | null,
+        colorBufferFloat: gl.getExtension("EXT_color_buffer_float"), // also includes half floats
+        textureFloatLinear: gl.getExtension("OES_texture_float_linear"), // also includes half floats
+        parallelShaderCompile: gl.getExtension("KHR_parallel_shader_compile"),
+        loseContext: gl.getExtension("WEBGL_lose_context"),
+        multiDraw: gl.getExtension("WEBGL_MULTI_DRAW"),
         drawBuffersIndexed: gl.getExtension("OES_draw_buffers_indexed") as OES_draw_buffers_indexed_ext | null,
         disjointTimerQuery: gl.getExtension('EXT_disjoint_timer_query_webgl2') as EXT_disjoint_timer_query_webgl2_ext,
         provokingVertex: gl.getExtension('WEBGL_provoking_vertex') as WEBGL_provoking_vertex | null,
+        textureFilterAnisotropic: gl.getExtension('EXT_texture_filter_anisotropic'),
     } as const;
 }
 

@@ -34,7 +34,7 @@ export class OctreeModule implements RenderModule {
     readonly gradientImageParams: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: Gradient.size, height: 2, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null };
     readonly maxHighlights = 8;
 
-    static readonly textureNames = ["base_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients"] as const;
+    static readonly textureNames = ["unlit_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients", "base_color"] as const;
     static readonly textureUniforms = OctreeModule.textureNames.map(name => `textures.${name}`);
     static readonly uniformBufferBlocks = ["Camera", "Clipping", "Scene", "Node"];
     static readonly passes = [ShaderPass.color, ShaderPass.pick, ShaderPass.pre] as const;
@@ -67,6 +67,8 @@ export class OctreeModule implements RenderModule {
         const materialTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null });
         const highlightTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 6, internalFormat: "RGBA32F", type: "FLOAT", image: null });
         const gradientsTexture = bin.createTexture(this.gradientImageParams);
+        const baseColorParams = context.imports.materials?.baseColorTextureParams;
+        const baseColorTexture = baseColorParams ? bin.createTexture(baseColorParams) : defaultBaseColorTexture;
 
         const transformFeedback = bin.createTransformFeedback()!;
         let vb_line: WebGLBuffer | null = null;
@@ -100,7 +102,7 @@ export class OctreeModule implements RenderModule {
         return {
             bin, programs,
             transformFeedback, vb_line, vao_line,
-            sceneUniforms, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture
+            sceneUniforms, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture, baseColorTexture
         } as const;
     }
 

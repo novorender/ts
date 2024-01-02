@@ -1,5 +1,5 @@
 import type { ReadonlyMat3, ReadonlyMat4, ReadonlyQuat, ReadonlyVec3 } from "gl-matrix";
-import type { DrawMode, MagFilterString, MinFilterString, RGBA, TextureParams2DUncompressed, VertexAttribute, WrapString } from "webgl2";
+import type { DrawMode, MagFilterString, MinFilterString, RGBA, TextureParams2DUncompressed, TextureParams2DUncompressedMipMapped, VertexAttribute, WrapString } from "webgl2";
 import type { RGB } from "./types";
 
 /** Texture image related state.
@@ -7,7 +7,7 @@ import type { RGB } from "./types";
  */
 export interface RenderStateDynamicImage {
     /** The parameters for to 2D, uncompressed texture creation. */
-    readonly params: TextureParams2DUncompressed; // TODO: Add support for compressed textures
+    readonly params: TextureParams2DUncompressed | TextureParams2DUncompressedMipMapped; // TODO: Add support for compressed textures
 }
 
 /** Texture sampled related state

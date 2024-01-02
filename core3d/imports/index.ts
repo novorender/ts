@@ -1,4 +1,4 @@
-import type { WasmInstance } from "core3d";
+import type { MaterialImports, WasmInstance } from "core3d";
 import type { ShaderImports } from "core3d/shaders";
 import type { TextureImageSource } from "webgl2";
 
@@ -43,6 +43,9 @@ export interface Core3DImports {
      * @remarks The shaders can be found in `core3d/imports/shaders.ts`.
      */
     readonly shaders: ShaderImports;
+
+    /** Material imports */
+    readonly materials?: MaterialImports;
 }
 
 

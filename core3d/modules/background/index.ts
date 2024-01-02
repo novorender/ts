@@ -1,9 +1,10 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import { parseKTX } from "core3d/ktx";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glClear, glDraw, glState } from "webgl2";
+import { glUBOProxy, glClear, glDraw, glState, type CubeImages } from "webgl2";
 import { type TextureParams, type UniformTypes, type TextureParamsCubeUncompressed, type TextureParamsCubeUncompressedMipMapped } from "webgl2";
 import { BufferFlags } from "core3d/buffers";
+import type { Float16Instance } from "core3d/wasm/float16";
 
 /** @internal */
 export class BackgroundModule implements RenderModule {
@@ -41,7 +42,7 @@ export class BackgroundModule implements RenderModule {
         return { bin, uniforms, program } as const;
     }
 
-    async downloadTextures(baseUrl: URL) {
+    async downloadTextures(wasm: Float16Instance, baseUrl: URL) {
         if (this.abortController) {
             this.abortController.abort();
         }
@@ -54,7 +55,7 @@ export class BackgroundModule implements RenderModule {
                 download<TextureParamsCubeUncompressed>(new URL("background.ktx", baseUrl)),
             ] as const;
             const [specular, diffuse, skybox] = await Promise.all(promises);
-            this.textureParams = { diffuse, specular, skybox } as const;
+            this.textureParams = { diffuse: convertToRGBA(wasm, diffuse), specular: convertToRGBA(wasm, specular), skybox } as const;
         } finally {
             this.abortController = undefined;
         }
@@ -93,7 +94,7 @@ class BackgroundModuleContext implements RenderModuleContext {
             const { url } = state.background;
             if (url) {
                 if (url != module.url) {
-                    module.downloadTextures(new URL(url)).then(() => { context.changed = true; });
+                    module.downloadTextures(context.imports.wasmInstance, new URL(url)).then(() => { context.changed = true; });
                 }
             } else {
                 context.updateIBLTextures(null);
@@ -116,7 +117,7 @@ class BackgroundModuleContext implements RenderModuleContext {
     render(state: DerivedRenderState) {
         const { context, resources, skybox } = this;
         const { program, uniforms } = resources;
-        const { gl, cameraUniforms, samplerSingle, samplerMip } = context;
+        const { gl, cameraUniforms, samplerSingle, samplerEnvMip } = context;
 
         const clearColor =
             (state.background.color ?
@@ -130,7 +131,7 @@ class BackgroundModuleContext implements RenderModuleContext {
                 uniformBuffers: [cameraUniforms, uniforms],
                 textures: [
                     { kind: "TEXTURE_CUBE_MAP", texture: skybox, sampler: samplerSingle },
-                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
+                    { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerEnvMip },
                 ],
                 depth: {
                     test: false,
@@ -153,4 +154,36 @@ class BackgroundModuleContext implements RenderModuleContext {
         this.contextLost();
         this.resources.bin.dispose();
     }
+}
+
+function convertImageToRGBA(wasm: Float16Instance, rgb: Uint16Array) {
+    const pixels = Math.floor(rgb.length / 3);
+    const rgba = new Uint16Array(pixels * 4);
+    for (let i = 0; i < pixels; i++) {
+        rgba[i * 4 + 0] = rgb[i * 3 + 0];
+        rgba[i * 4 + 1] = rgb[i * 3 + 1];
+        rgba[i * 4 + 2] = rgb[i * 3 + 2];
+        rgba[i * 4 + 3] = 0x3c00; // alpha = 1.0 in float 16;
+    }
+    return rgba;
+}
+
+function convertToRGBA(wasm: Float16Instance, params: TextureParamsCubeUncompressed): TextureParamsCubeUncompressed;
+function convertToRGBA(wasm: Float16Instance, params: TextureParamsCubeUncompressedMipMapped): TextureParamsCubeUncompressedMipMapped;
+function convertToRGBA(wasm: Float16Instance, params: TextureParamsCubeUncompressed | TextureParamsCubeUncompressedMipMapped): TextureParamsCubeUncompressed | TextureParamsCubeUncompressedMipMapped {
+    function convertCube(images: CubeImages | null): CubeImages | null {
+        if (images) {
+            return images.map(rgb => (convertImageToRGBA(wasm, rgb as Uint16Array))) as unknown as CubeImages;
+        }
+        return null;
+    }
+    if ("image" in params) {
+        const image = convertCube(params.image);
+        return { ...params, internalFormat: "RGBA16F", type: "HALF_FLOAT", image } as const satisfies TextureParamsCubeUncompressed;
+
+    } else if (typeof params.mipMaps != "number") {
+        const mipMaps = params.mipMaps.map(images => convertCube(images));
+        return { ...params, internalFormat: "RGBA16F", type: "HALF_FLOAT", mipMaps } as const satisfies TextureParamsCubeUncompressedMipMapped;
+    }
+    return params;
 }

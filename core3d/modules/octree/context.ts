@@ -408,8 +408,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
     render(state: DerivedRenderState) {
         const { resources, renderContext, debug } = this;
-        const { usePrepass, samplerSingle, samplerMip } = renderContext;
-        const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
+        const { usePrepass, samplerSingle, samplerMip, samplerEnvMip, samplerMipRepeat } = renderContext;
+        const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture, baseColorTexture } = resources;
         const { gl, iblTextures, cameraUniforms, clippingUniforms, outlineUniforms, deviceProfile } = renderContext;
 
         // glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
@@ -425,12 +425,13 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 func: usePrepass ? "LEQUAL" : "LESS",
             },
             textures: [
-                { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // basecolor - will be overridden by nodes that have textures, e.g. terrain nodes.
+                { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // unlit_color - will be overridden by nodes that have textures, e.g. terrain nodes.
                 { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerNearest },
-                { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
+                { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerEnvMip },
                 { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
+                { kind: "TEXTURE_2D", texture: baseColorTexture, sampler: samplerMipRepeat }, // base_color
             ],
         });
         this.applyDefaultAttributeValues();

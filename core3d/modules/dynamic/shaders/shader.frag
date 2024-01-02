@@ -19,7 +19,7 @@ layout(location = 0) out mediump vec4 fragColor;
 layout(location = 1) out highp uvec4 fragPick;
 
 float clampedDot(vec3 x, vec3 y) {
-    return clamp(dot(x, y), 0.0f, 1.0f);
+    return clamp(dot(x, y), 0., 1.);
 }
 
 struct NormalInfo {
@@ -32,12 +32,14 @@ struct NormalInfo {
 // Get normal, tangent and bitangent vectors.
 NormalInfo getNormalInfo(vec3 v) {
     vec2 UV = material.normalUVSet == 0 ? varyings.texCoord0 : varyings.texCoord1;
-    vec3 uv_dx = dFdx(vec3(UV, 0));
-    vec3 uv_dy = dFdy(vec3(UV, 0));
-
-    if(length(uv_dx) + length(uv_dy) <= 1e-6f) {
-        uv_dx = vec3(1.0f, 0.0f, 0.0f);
-        uv_dy = vec3(0.0f, 1.0f, 0.0f);
+    vec2 uv_dx = dFdx(UV);
+    vec2 uv_dy = dFdy(UV);
+    // we need to solve this properly for repeating octree textures
+    if(length(uv_dx) <= 1e-2) {
+        uv_dx = vec2(1, 0);
+    }
+    if(length(uv_dy) <= 1e-2) {
+        uv_dy = vec2(0, 1);
     }
 
     vec3 t_ = (uv_dy.t * dFdx(v) - uv_dx.t * dFdy(v)) / (uv_dx.s * uv_dy.t - uv_dy.s * uv_dx.t);
@@ -49,7 +51,7 @@ NormalInfo getNormalInfo(vec3 v) {
     vec3 geometricNormalVS = normalize(cross(axisX, axisY));
 
     vec3 nrm = varyings.tbn[2];
-    if(dot(nrm, nrm) < 0.5f)
+    if(dot(nrm, nrm) < .5)
         nrm = camera.viewLocalMatrixNormal * geometricNormalVS;
     ng = normalize(nrm);
     // ng = normalize(varyings.tbn[2]);
@@ -58,20 +60,22 @@ NormalInfo getNormalInfo(vec3 v) {
 
     // // Normalize eigenvectors as matrix is linearly interpolated.
     // t = normalize(varyings.tbn[0]);
-    // b = normalize(vTvaryings.tbnBN[1]);
+    // b = normalize(varyings.tbn[1]);
     // ng = normalize(varyings.tbn[2]);
 
     // For a back-facing surface, the tangential basis vectors are negated.
-    float facing = step(0.f, dot(v, ng)) * 2.f - 1.f;
+    float facing = step(0., dot(v, ng)) * 2. - 1.;
     t *= facing;
     b *= facing;
     ng *= facing;
 
     // Compute pertubed normals:
     if(material.normalUVSet >= 0) {
-        n = texture(textures.normal, UV).rgb * 2.f - vec3(1.f);
-        n *= vec3(material.normalScale, material.normalScale, 1.f);
+        n = texture(textures.normal, UV).rgb * 2. - vec3(1);
+        // n = texture(textures.normal, UV).rgb;
+        n *= vec3(material.normalScale, material.normalScale, 1);
         n = mat3(t, b, ng) * normalize(n);
+        n = normalize(n);
     } else {
         n = ng;
     }
@@ -114,7 +118,7 @@ MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, mediump float f0_ior) {
     // Achromatic f0 based on IOR.
     vec3 f0 = vec3(f0_ior);
 
-    info.albedoColor = mix(info.baseColor.rgb * (vec3(1.0f) - f0), vec3(0), info.metallic);
+    info.albedoColor = mix(info.baseColor.rgb * (vec3(1) - f0), vec3(0), info.metallic);
     info.f0 = mix(f0, info.baseColor.rgb, info.metallic);
 
     return info;
@@ -123,9 +127,9 @@ MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, mediump float f0_ior) {
 mediump vec3 getIBLRadianceGGX(mediump vec3 n, vec3 v, mediump float perceptualRoughness, mediump vec3 specularColor) {
     float NdotV = clampedDot(n, v);
     vec3 reflection = normalize(reflect(-v, n));
-    vec2 brdfSamplePoint = clamp(vec2(NdotV, perceptualRoughness), vec2(0.0f, 0.0f), vec2(1.0f, 1.0f));
+    vec2 brdfSamplePoint = clamp(vec2(NdotV, perceptualRoughness), vec2(0), vec2(1));
     mediump vec2 brdf = texture(textures.lut_ggx, brdfSamplePoint).rg;
-    mediump float lod = clamp(perceptualRoughness * float(material.radianceMipCount), 0.0f, float(material.radianceMipCount));
+    mediump float lod = perceptualRoughness * float(material.radianceMipCount);
     mediump vec4 specularSample = textureLod(textures.ibl.specular, reflection, lod);
     mediump vec3 specularLight = specularSample.rgb;
     return specularLight * (specularColor * brdf.x + brdf.y);
@@ -141,8 +145,9 @@ void main() {
 
     if(material.baseColorUVSet >= 0) {
         vec2 uv = material.baseColorUVSet < 1 ? varyings.texCoord0 : varyings.texCoord1;
-        mediump vec4 bc = texture(textures.base_color, uv);
-        baseColor *= vec4(sRGBToLinearComplex(bc.rgb), bc.a);
+        mediump vec4 bc = texture(textures.base_color, uv); // prefer using build-in SRGB hardware conversion
+        // baseColor *= vec4(sRGBToLinearComplex(bc.rgb), bc.a);
+        baseColor *= bc;
     }
     if(baseColor.a < material.alphaCutoff)
         discard;
@@ -162,13 +167,13 @@ void main() {
     materialInfo.baseColor = baseColor.rgb;
 
     // The default index of refraction of 1.5 yields a dielectric normal incidence reflectance of 0.04.
-    mediump float ior = 1.5f;
-    mediump float f0_ior = 0.04f;
+    mediump float ior = 1.5;
+    mediump float f0_ior = .04;
 
     materialInfo = getMetallicRoughnessInfo(materialInfo, f0_ior);
 
-    materialInfo.perceptualRoughness = clamp(materialInfo.perceptualRoughness, 0.0f, 1.0f);
-    materialInfo.metallic = clamp(materialInfo.metallic, 0.0f, 1.0f);
+    materialInfo.perceptualRoughness = clamp(materialInfo.perceptualRoughness, 0., 1.);
+    materialInfo.metallic = clamp(materialInfo.metallic, 0., 1.);
 
     // Roughness is authored as perceptual roughness; as is convention,
     // convert to material roughness by squaring the perceptual roughness.
@@ -178,14 +183,14 @@ void main() {
     mediump float reflectance = max(max(materialInfo.f0.r, materialInfo.f0.g), materialInfo.f0.b);
 
     // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
-    materialInfo.f90 = vec3(clamp(reflectance * 50.0f, 0.0f, 1.0f));
+    materialInfo.f90 = vec3(clamp(reflectance * 50., 0., 1.));
 
     materialInfo.n = n;
 
     // LIGHTING
-    mediump vec3 f_specular = vec3(0.0f);
-    mediump vec3 f_diffuse = vec3(0.0f);
-    mediump vec3 f_emissive = vec3(0.0f);
+    mediump vec3 f_specular = vec3(0);
+    mediump vec3 f_diffuse = vec3(0);
+    mediump vec3 f_emissive = vec3(0);
 
     f_specular += getIBLRadianceGGX(n, v, materialInfo.perceptualRoughness, materialInfo.f0);
     f_diffuse += getIBLRadianceLambertian(n, materialInfo.albedoColor);
@@ -198,7 +203,7 @@ void main() {
 
     // vec3 intensity = vec3(uSunBrightness);
 
-    // if(NdotL > 0.0 || NdotV > 0.0) {
+    // if(NdotL > 0. || NdotV > 0.) {
     //     // Calculation of analytical light
     //     //https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#acknowledgments AppendixB
     //     f_specular += intensity * NdotL * BRDF_specularGGX(materialInfo.f0, materialInfo.f90, materialInfo.alphaRoughness, VdotH, NdotL, NdotV, NdotH);
@@ -212,6 +217,8 @@ void main() {
     }
 
     mediump vec3 color = (f_emissive + f_diffuse + f_specular) + ambientLight * materialInfo.albedoColor;
+    // mediump vec3 color = f_specular;
+    // color = vec3(materialInfo.perceptualRoughness);
 
     // Apply optional PBR terms for additional (optional) shading
     if(material.occlusionUVSet >= 0) {
@@ -226,12 +233,13 @@ void main() {
 #else
 
     outColor = baseColor;
+    // outColor = texture(textures.base_color, varyings.texCoord0);
 
 #endif
 
     fragColor = outColor;
     // only write to pick buffers for opaque triangles (for devices without OES_draw_buffers_indexed support)
-    if(outColor.a >= 0.99f) {
+    if(outColor.a >= 0.99) {
 #if defined (ADRENO600)
         fragPick = uvec4(combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low), packNormal(normal), floatBitsToUint(varyings.linearDepth));
 #else

@@ -42,22 +42,22 @@ const uint vertexHighlight = 0U;
 
 void main() {
     vec4 vertPos = vertexPosition;
-    bool isDefined = dot(vertexProjectedPos.xyz, vertexProjectedPos.xyz) != 0.f;
-    if(scene.useProjectedPosition && vertexProjectedPos.w != 0.f && isDefined) {
+    bool isDefined = dot(vertexProjectedPos.xyz, vertexProjectedPos.xyz) != 0.;
+    if(scene.useProjectedPosition && vertexProjectedPos.w != 0. && isDefined) {
         vertPos = vertexProjectedPos;
     }
     vec4 posLS = node.modelLocalMatrix * vertPos;
     vec4 posVS = camera.localViewMatrix * posLS;
     gl_Position = camera.viewClipMatrix * posVS;
 
-    vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5f) / 256.f, .5f));
-    float deviation = 0.f;
+    vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
+    float deviation = 0.;
 
 #if (MODE == MODE_POINTS)
     deviation = vertexDeviations[scene.deviationIndex];
-    if(scene.deviationFactor > 0.f) {
-        if(deviation == 0.f) { //undefined
-            if(dot(scene.deviationUndefinedColor, scene.deviationUndefinedColor) != 0.f) {
+    if(scene.deviationFactor > 0.) {
+        if(deviation == 0.) { //undefined
+            if(dot(scene.deviationUndefinedColor, scene.deviationUndefinedColor) != 0.) {
                 color = scene.deviationUndefinedColor;
             }
         } else {
@@ -68,21 +68,24 @@ void main() {
 
     // compute point size
     mediump float linearSize = scene.metricSize + node.tolerance * scene.toleranceFactor;
-    mediump float projectedSize = max(0.f, camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 0.5f / gl_Position.w);
-    gl_PointSize = min(scene.maxPixelSize, max(1.0f, scene.pixelSize + projectedSize));
+    mediump float projectedSize = max(0., camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 0.5 / gl_Position.w);
+    gl_PointSize = min(scene.maxPixelSize, max(1.0, scene.pixelSize + projectedSize));
 
     // Convert position to window coordinates
-    vec2 halfsize = camera.viewSize * 0.5f;
+    vec2 halfsize = camera.viewSize * 0.5;
     varyings.screenPos = halfsize + ((gl_Position.xy / gl_Position.w) * halfsize);
 
     // Convert radius to window coordinates
-    varyings.radius = max(1.0f, gl_PointSize * 0.5f);
+    varyings.radius = max(1.0, gl_PointSize * 0.5);
+
 #elif defined (HIGHLIGHT)
     if(vertexHighlight >= 0xFEU) {
         gl_Position = vec4(0); // hide 0xfe/0xff groups by outputting degenerate triangles/lines
     }
 #endif
 
+    varyings.positionLS = posLS.xyz;
+    varyings.normalLS = vertexNormal;
     varyings.positionVS = posVS.xyz;
     varyings.normalVS = normalize(camera.localViewMatrixNormal * vertexNormal);
     varyings.texCoord0 = vertexTexCoord0;

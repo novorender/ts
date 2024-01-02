@@ -91,9 +91,13 @@ export class RenderContext {
     readonly outlineUniforms: WebGLBuffer;
     /** WebGL GGX/PBR shading lookup table texture. */
     readonly lut_ggx: WebGLTexture;
-    /** WebGL Sampler used to sample mipmapped diffuse IBL texture. */
-    readonly samplerMip: WebGLSampler; // use to read diffuse texture
-    /** WebGL Sampler used to sample other, non-mipmapped IBL textures. */
+    /** WebGL Sampler used to sample mip mapped IBL texture trilinear. */
+    readonly samplerEnvMip: WebGLSampler; // use for trilinear sampling with capped lower mip (due to WebGL bug?)
+    /** WebGL Sampler used to sample mipmapped texture trilinear. */
+    readonly samplerMip: WebGLSampler; // use for trilinear sampling
+    /** WebGL Sampler used to sample mipmapped texture trilinear repeating UV. */
+    readonly samplerMipRepeat: WebGLSampler;
+    /** WebGL Sampler used to sample other, non-mipmapped IBL textures bilinear. */
     readonly samplerSingle: WebGLSampler; // use to read the other textures
 
     outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>();
@@ -161,10 +165,12 @@ export class RenderContext {
 
         // ggx lookup texture and ibl samplers
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-        const lutParams = { kind: "TEXTURE_2D", internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: imports.lutGGX } as const;
+        const lutParams = { kind: "TEXTURE_2D", internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: imports.lutGGX, generateMipMaps: true } as const;
         this.lut_ggx = defaultBin.createTexture(lutParams);
         this.samplerSingle = defaultBin.createSampler({ minificationFilter: "LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         this.samplerMip = defaultBin.createSampler({ minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
+        this.samplerMipRepeat = defaultBin.createSampler({ minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["REPEAT", "REPEAT"] });
+        this.samplerEnvMip = defaultBin.createSampler({ minificationFilter: "LINEAR_MIPMAP_LINEAR", magnificationFilter: "LINEAR", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"], maxLOD: 5 });
 
         // create default ibl textures
         const top = new Uint8Array([192, 192, 192, 255]);
@@ -172,6 +178,11 @@ export class RenderContext {
         const bottom = new Uint8Array([64, 64, 64, 255]);
         const image = [side, side, top, bottom, side, side] as const;
         const textureParams = this.defaultIBLTextureParams = { kind: "TEXTURE_CUBE_MAP", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: image } as const;
+        // const top = new Float32Array([.75, .75, .75, 1]);
+        // const side = new Float32Array([.5, .5, .5, 1]);
+        // const bottom = new Float32Array([.25, .25, .25, 1]);
+        // const image = [side, side, top, bottom, side, side] as const;
+        // const textureParams = this.defaultIBLTextureParams = { kind: "TEXTURE_CUBE_MAP", width: 1, height: 1, internalFormat: "RGBA32F", type: "FLOAT", image: image } as const;
         this.iblTextures = {
             diffuse: iblBin.createTexture(textureParams),
             specular: iblBin.createTexture(textureParams),

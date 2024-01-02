@@ -1,4 +1,5 @@
 import { GL } from "./constants.js";
+import { glExtensions } from "./extensions.js";
 import { getBufferViewType } from "./misc.js";
 
 export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParams) {
@@ -13,6 +14,15 @@ export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParam
     const { internalFormat, format, type, arrayType } = getFormatInfo(gl, params.internalFormat, "type" in params ? params.type : undefined);
 
     type ImageTarget = typeof gl[TextureImageTargetString];
+
+    const textureAnisotropy = 8; // TODO: Get from device profile?
+    if (textureAnisotropy > 1) {
+        const { textureFilterAnisotropic } = glExtensions(gl);
+        if (textureFilterAnisotropic) {
+            const max = gl.getParameter(textureFilterAnisotropic.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+            gl.texParameterf(target, textureFilterAnisotropic.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(max, textureAnisotropy));
+        }
+    }
 
     function textureImage(imgTarget: ImageTarget, data: BufferSource | null, level: number, sizeX: number, sizeY: number, sizeZ = 0) {
         if (!data)
@@ -30,7 +40,17 @@ export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParam
             if (sizeZ) {
                 gl.texSubImage3D(imgTarget, level, offsetX, offsetY, offsetZ, sizeX, sizeY, sizeZ, format as number, type, pixels);
             } else {
+                // if (pixels && pixels.BYTES_PER_ELEMENT == 4 && sizeX < 256 / pixels.BYTES_PER_ELEMENT) {
+                //     // expand image to be 256 byte aligned (because of nvidia shenanigans)
+                //     const stride = 256 / pixels.BYTES_PER_ELEMENT;
+                //     const alignedPixels = new Float32Array(stride * sizeY);
+                //     for (let y = 0; y < sizeY; y++) {
+                //         alignedPixels.set(pixels.subarray(y * sizeY, (y + 1) * sizeY), y * stride);
+                //     }
+                //     gl.texSubImage2D(imgTarget, level, offsetX, offsetY, sizeX, sizeY, format as number, type, pixels);
+                // } else {
                 gl.texSubImage2D(imgTarget, level, offsetX, offsetY, sizeX, sizeY, format as number, type, pixels);
+                // }
             }
         } else {
             if (sizeZ) {
@@ -66,7 +86,7 @@ export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParam
                 }
             } else {
                 console.assert(target == gl.TEXTURE_2D);
-                textureImage(gl.TEXTURE_2D, image, level, width, height);
+                textureImage(gl.TEXTURE_2D, image, level, width / n, height / n);
             }
         }
     }
@@ -85,6 +105,7 @@ export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParam
         const isNumber = typeof mipMaps == "number";
         const levels = isNumber ? mipMaps : mipMaps.length;
         textureStorage(levels);
+
         if (!isNumber) {
             for (let level = 0; level < levels; level++) {
                 const mipMap = mipMaps[level];
@@ -179,7 +200,7 @@ export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGL
                 }
             } else {
                 console.assert(target == gl.TEXTURE_2D);
-                textureImage(gl.TEXTURE_2D, image, level, width, height);
+                textureImage(gl.TEXTURE_2D, image, level, width / n, height / n);
             }
         }
     }

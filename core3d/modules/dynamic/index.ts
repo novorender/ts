@@ -482,15 +482,15 @@ class MaterialAsset {
     }
 
     update(context: RenderContext, defaultTexture: WebGLTexture) {
-        const { iblTextures, lut_ggx, samplerSingle, samplerMip } = context;
+        const { iblTextures, lut_ggx, samplerSingle, samplerMip, samplerEnvMip } = context;
         const { uniforms, uniformsBuffer, textures, samplers } = this;
         const { diffuse, specular, numMipMaps } = iblTextures;
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
         const mutableState = this.stateParams as Mutable<StateParams>;
         mutableState.textures = [
-            { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerSingle },
+            { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerMip },
             { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerSingle },
-            { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerMip },
+            { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerEnvMip },
             { kind: "TEXTURE_2D", texture: textures.baseColor ?? defaultTexture, sampler: samplers.baseColor ?? null },
             { kind: "TEXTURE_2D", texture: textures.metallicRoughness ?? defaultTexture, sampler: samplers.metallicRoughness ?? null },
             { kind: "TEXTURE_2D", texture: textures.normal ?? defaultTexture, sampler: samplers.normal ?? null },

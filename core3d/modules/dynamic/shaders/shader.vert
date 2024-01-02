@@ -28,7 +28,7 @@ void main() {
     mat3 instanceMatrixNormal = mat3(instanceMatrix); // TODO: normalize?
     vec4 posVS = camera.localViewMatrix * instanceMatrix * vertexPosition;
     gl_Position = camera.viewClipMatrix * posVS;
-    gl_PointSize = 1.f;
+    gl_PointSize = 1.;
     vec3 normalLS = instanceMatrixNormal * vertexNormal;
     vec3 tangentLS = instanceMatrixNormal * vertexTangent.xyz;
     vec3 cameraPosLS = camera.viewLocalMatrix[3].xyz;
