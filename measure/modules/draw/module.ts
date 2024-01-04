@@ -70,7 +70,7 @@ export class DrawModule extends BaseModule {
      * @param drawProduct The product that will be updated based on current camera.
      * @returns Corresponding 3D position at the view plane in world space, or undefined if there is no active render context.
      */
-    updateProuct(drawProduct: DrawProduct) {
+    updateProduct(drawProduct: DrawProduct) {
         FillDrawInfo2D(this.drawContext, drawProduct.objects);
     }
 

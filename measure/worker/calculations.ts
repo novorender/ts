@@ -395,17 +395,17 @@ function getCurveToCurveMeasureValues(
   curveB: Curve3D,
   instanceIdxB: number
 ): DuoMeasurementValues | undefined {
-  let curveDataA = { prouct: productA, curve: curveA, instance: instanceIdxA };
-  let curveDataB = { prouct: productB, curve: curveB, instance: instanceIdxB };
+  let curveDataA = { product: productA, curve: curveA, instance: instanceIdxA };
+  let curveDataB = { product: productB, curve: curveB, instance: instanceIdxB };
   const entities = [curveDataA, curveDataB];
   entities.sort((a, b) => a.curve!.kind.localeCompare(b.curve!.kind));
   [curveDataA, curveDataB] = entities;
   const kindCombo = `${curveDataA.curve!.kind}_${curveDataB.curve!.kind}`;
   const matA = matFromInstance(
-    curveDataA.prouct.instances[curveDataA.instance]
+    curveDataA.product.instances[curveDataA.instance]
   );
   const matB = matFromInstance(
-    curveDataB.prouct.instances[curveDataB.instance]
+    curveDataB.product.instances[curveDataB.instance]
   );
   switch (kindCombo) {
     case "line_line": {

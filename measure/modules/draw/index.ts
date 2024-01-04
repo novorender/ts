@@ -13,7 +13,7 @@ export interface DrawableEntity {
 
 /** A hierarcical structure to draw 2d objects */
 export interface DrawProduct {
-    /** Type of draw prouct */
+    /** Type of draw product */
     readonly kind: "basic" | "manhole" | "measureResult";
     /** Objects to draw */
     readonly objects: DrawObject[];
