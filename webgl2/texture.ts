@@ -15,7 +15,7 @@ export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParam
 
     type ImageTarget = typeof gl[TextureImageTargetString];
 
-    const textureAnisotropy = 8; // TODO: Get from device profile?
+    const textureAnisotropy = 2; // TODO: Get from device profile?
     if (textureAnisotropy > 1) {
         const { textureFilterAnisotropic } = glExtensions(gl);
         if (textureFilterAnisotropic) {

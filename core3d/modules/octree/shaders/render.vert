@@ -50,6 +50,9 @@ void main() {
     vec4 posVS = camera.localViewMatrix * posLS;
     gl_Position = camera.viewClipMatrix * posVS;
 
+    vec3 cameraPosLS = camera.viewLocalMatrix[3].xyz;
+    varyings.toCamera = cameraPosLS - posLS.xyz;
+
     vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
     float deviation = 0.;
 

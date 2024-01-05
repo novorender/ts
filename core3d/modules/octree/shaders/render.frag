@@ -23,6 +23,127 @@ flat in OctreeVaryingsFlat varyingsFlat;
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out uvec4 fragPick;
 
+#define PBR
+
+vec2 triplanarProjection(vec3 xyz, vec3 normal) {
+    vec3 n = abs(normalize(normal));
+    vec3 s = sign(normal);
+    // multiply by the sign of the dominant normal coordinate to mirror e.g. front, back and left, right etc.
+    if(n.x > n.y && n.x > n.z)
+        return vec2(-xyz.z * s.x, xyz.y);
+    else if(n.y > n.z)
+        return vec2(-xyz.x * s.y, xyz.z);
+    else
+        return vec2(xyz.x * s.z, xyz.y);
+}
+
+    // pick a perpendicular'ish u direction based on normal dominate coordinate
+vec3 triplanarTangentDir(vec3 normal) {
+    vec3 n = abs(normalize(normal));
+    vec3 s = sign(normal);
+    if(n.x > n.y && n.x > n.z)
+        return vec3(0, 0, -s.x);
+    else if(n.y > n.z)
+        return vec3(-s.y, 0, 0);
+    else
+        return vec3(s.z, 0, 0);
+}
+
+mat3 triplanarTangentSpace(vec3 normal) {
+    vec3 u = triplanarTangentDir(normal);
+    vec3 b = normalize(cross(normal, u)); // compute bi-tangent
+    vec3 t = cross(b, normal); // compute tangent
+    return mat3(t, b, normal);
+}
+
+struct NormalInfo {
+    vec3 ng;   // Geometric normal
+    vec3 n;    // Pertubed normal
+    vec3 t;    // Pertubed tangent
+    vec3 b;    // Pertubed bitangent
+};
+
+// Get normal, tangent and bitangent vectors.
+// params: (all in local/world space)
+// v - vector from fragment to camera
+// normal - vertex normal
+// uv - texture coordinates
+NormalInfo getNormalInfo(vec3 v, vec3 normal, vec2 uv) {
+    vec3 ng = normalize(normal);
+    mat3 ts = triplanarTangentSpace(ng);
+
+    // For a back-facing surface, the tangential basis vectors are negated.
+    float facing = step(0., dot(v, ng)) * 2. - 1.;
+    ts *= facing;
+    // Compute pertubed normals:
+    vec2 xy = texture(textures.normal, uv).rg; // RG16F for signed normals
+    float z = sqrt(1. - dot(xy, xy)); // compute z component from xy (to save memory and bandwith)
+    vec3 n = vec3(xy, z); // tangent-space normal
+    n = ts * n; // transform into world space
+    n = normalize(n);
+
+    NormalInfo info;
+    info.ng = ng;
+    info.t = ts[0];
+    info.b = ts[1];
+    info.n = n;
+    return info;
+}
+
+struct MaterialInfo {
+    mediump float perceptualRoughness;      // roughness value, as authored by the model creator (input to shader)
+    mediump vec3 f0;                        // full reflectance color (n incidence angle)
+
+    mediump float alphaRoughness;           // roughness mapped to a more linear change in the roughness (proposed by [2])
+    mediump vec3 albedoColor;
+
+    mediump vec3 f90;                       // reflectance color at grazing angle
+    mediump float metallic;
+
+    mediump float occlusion;
+    mediump vec3 n;
+    mediump vec3 baseColor; // getBaseColor()
+};
+
+MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, mediump float f0_ior, vec2 uv) {
+    // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
+    // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
+    vec4 mrSample = texture(textures.orm, uv);
+    info.perceptualRoughness = mrSample.g;
+    info.metallic = mrSample.b;
+    info.occlusion = mrSample.r;
+
+    // Achromatic f0 based on IOR.
+    vec3 f0 = vec3(f0_ior);
+
+    info.albedoColor = mix(info.baseColor.rgb * (vec3(1) - f0), vec3(0), info.metallic);
+    info.f0 = mix(f0, info.baseColor.rgb, info.metallic);
+
+    // info.perceptualRoughness = clamp(info.perceptualRoughness, 0., 1.);
+    // info.metallic = clamp(info.metallic, 0., 1.);
+    return info;
+}
+
+float clampedDot(vec3 x, vec3 y) {
+    return clamp(dot(x, y), 0., 1.);
+}
+
+mediump vec3 getIBLRadianceGGX(mediump vec3 n, vec3 v, mediump float perceptualRoughness, mediump vec3 specularColor) {
+    float NdotV = clampedDot(n, v);
+    vec3 reflection = normalize(reflect(-v, n));
+    vec2 brdfSamplePoint = clamp(vec2(NdotV, perceptualRoughness), vec2(0), vec2(1));
+    mediump vec2 brdf = texture(textures.lut_ggx, brdfSamplePoint).rg;
+    mediump float lod = perceptualRoughness * float(scene.iblMipCount);
+    mediump vec4 specularSample = textureLod(textures.ibl.specular, reflection, lod);
+    mediump vec3 specularLight = specularSample.rgb;
+    return specularLight * (specularColor * brdf.x + brdf.y);
+}
+
+mediump vec3 getIBLRadianceLambertian(mediump vec3 n, mediump vec3 diffuseColor) {
+    vec3 diffuseLight = texture(textures.ibl.diffuse, n).rgb;
+    return diffuseLight * diffuseColor;
+}
+
 void main() {
     highp float linearDepth = -varyings.positionVS.z;
 #if defined(CLIP)
@@ -43,19 +164,6 @@ void main() {
     highp uint objectId;
     lowp uint highlight;
     baseColor = varyingsFlat.color;
-
-    // do tri-planar uv projection
-    vec3 n = abs(normalize(varyings.normalLS));
-    vec2 uv;
-    vec3 posLS = varyings.positionLS;
-    if(n.x > n.y && n.x > n.z)
-        uv = posLS.yz;
-    else if(n.y > n.z)
-        uv = posLS.xz;
-    else
-        uv = posLS.xy;
-    uv *= .25; // apply scale
-    baseColor *= texture(textures.base_color, uv);
 
 #if defined (ADRENO600)
     objectId = combineMediumP(varyingsFlat.objectId_high, varyingsFlat.objectId_low);
@@ -110,14 +218,59 @@ void main() {
 
 #if (PASS != PASS_PICK && MODE != MODE_POINTS)
     if(baseColor != vec4(0)) {
+
+        // apply shading
+#if defined (PBR)
+        mediump float uvScale = .5; // TODO: get from uniforms/lut texture
+        vec3 pos = varyings.positionLS;
+        mediump vec3 n = varyings.normalLS;
+        if(dot(n, n) < .5)
+            n = cross(dFdx(pos), dFdy(pos)); // use derivatives to compute geometric normal when vertex normal is undefined/missing
+        mediump vec3 v = normalize(varyings.toCamera);
+
+        vec2 uv = triplanarProjection(pos, n);
+        uv *= uvScale; // apply scale
+
+        MaterialInfo materialInfo;
+        baseColor *= texture(textures.base_color, uv);
+        materialInfo.baseColor = baseColor.rgb;
+
+        NormalInfo normalInfo = getNormalInfo(v, n, uv);
+        n = normalInfo.n; // used bump-mapped normal for shading
+
+        // The default index of refraction of 1.5 yields a dielectric normal incidence reflectance of 0.04.
+        mediump float ior = 1.5;
+        mediump float f0_ior = .04;
+        materialInfo = getMetallicRoughnessInfo(materialInfo, f0_ior, uv);
+
+        // Roughness is authored as perceptual roughness; as is convention, convert to material roughness by squaring the perceptual roughness.
+        materialInfo.alphaRoughness = materialInfo.perceptualRoughness * materialInfo.perceptualRoughness;
+
+        mediump float reflectance = max(max(materialInfo.f0.r, materialInfo.f0.g), materialInfo.f0.b);
+
+        // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
+        materialInfo.f90 = vec3(clamp(reflectance * 50., 0., 1.));
+
+        // LIGHTING
+        mediump vec3 f_specular = getIBLRadianceGGX(n, v, materialInfo.perceptualRoughness, materialInfo.f0);
+        mediump vec3 f_diffuse = getIBLRadianceLambertian(n, materialInfo.albedoColor);
+        // TODO: emissive?
+
+        // mediump vec3 color = (f_emissive + f_diffuse + f_specular) + ambientLight * materialInfo.albedoColor;
+        mediump vec3 color = f_diffuse + f_specular;
+        color *= materialInfo.occlusion;
+        rgba = vec4(color, baseColor.a);
+        // rgba.rgb = normalInfo.n * .5 + .5;
+
+#else
+        // fast, but fairly basic shading for weaker devices
+        mediump vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
+        mediump vec3 N = normalize(normalWS);
         mediump vec4 diffuseOpacity = rgba;
         diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
 
         mediump vec4 specularShininess = vec4(mix(0.4, 0.1, baseColor.a)); // TODO: get from varyings instead
         specularShininess.rgb = sRGBToLinear(specularShininess.rgb);
-
-        mediump vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
-        mediump vec3 N = normalize(normalWS);
 
         mediump vec3 irradiance = texture(textures.ibl.diffuse, N).rgb;
         mediump float perceptualRoughness = clamp((1.0 - specularShininess.a), 0.0, 1.0);
@@ -127,8 +280,8 @@ void main() {
 
         mediump vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
         rgba = vec4(rgb, rgba.a);
+#endif
     }
-
 #endif
 
 #if (PASS == PASS_PICK)

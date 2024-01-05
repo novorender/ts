@@ -34,7 +34,7 @@ export class OctreeModule implements RenderModule {
     readonly gradientImageParams: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: Gradient.size, height: 2, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null };
     readonly maxHighlights = 8;
 
-    static readonly textureNames = ["unlit_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients", "base_color"] as const;
+    static readonly textureNames = ["unlit_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients", "base_color", "normal", "orm", "lut_ggx"] as const;
     static readonly textureUniforms = OctreeModule.textureNames.map(name => `textures.${name}`);
     static readonly uniformBufferBlocks = ["Camera", "Clipping", "Scene", "Node"];
     static readonly passes = [ShaderPass.color, ShaderPass.pick, ShaderPass.pre] as const;
@@ -69,7 +69,10 @@ export class OctreeModule implements RenderModule {
         const gradientsTexture = bin.createTexture(this.gradientImageParams);
         const baseColorParams = context.imports.materials?.baseColorTextureParams;
         const baseColorTexture = baseColorParams ? bin.createTexture(baseColorParams) : defaultBaseColorTexture;
-
+        const normalParams = context.imports.materials?.normalTextureParams ?? null;
+        const normalTexture = normalParams ? bin.createTexture(normalParams) : null
+        const ormParams = context.imports.materials?.metallicRoughnessOcclusionTextureParams ?? null;
+        const ormTexture = ormParams ? bin.createTexture(ormParams) : null
         const transformFeedback = bin.createTransformFeedback()!;
         let vb_line: WebGLBuffer | null = null;
         let vao_line: WebGLVertexArrayObject | null = null;
@@ -102,7 +105,7 @@ export class OctreeModule implements RenderModule {
         return {
             bin, programs,
             transformFeedback, vb_line, vao_line,
-            sceneUniforms, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture, baseColorTexture
+            sceneUniforms, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture, baseColorTexture, normalTexture, ormTexture,
         } as const;
     }
 

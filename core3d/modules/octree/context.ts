@@ -409,8 +409,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     render(state: DerivedRenderState) {
         const { resources, renderContext, debug } = this;
         const { usePrepass, samplerSingle, samplerMip, samplerEnvMip, samplerMipRepeat } = renderContext;
-        const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture, baseColorTexture } = resources;
-        const { gl, iblTextures, cameraUniforms, clippingUniforms, outlineUniforms, deviceProfile } = renderContext;
+        const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture, baseColorTexture, normalTexture, ormTexture } = resources;
+        const { gl, iblTextures, lut_ggx, cameraUniforms, clippingUniforms, outlineUniforms, deviceProfile } = renderContext;
 
         // glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
 
@@ -426,12 +426,15 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             },
             textures: [
                 { kind: "TEXTURE_2D", texture: null, sampler: samplerSingle }, // unlit_color - will be overridden by nodes that have textures, e.g. terrain nodes.
-                { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerNearest },
+                { kind: "TEXTURE_CUBE_MAP", texture: diffuse, sampler: samplerSingle },
                 { kind: "TEXTURE_CUBE_MAP", texture: specular, sampler: samplerEnvMip },
                 { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: baseColorTexture, sampler: samplerMipRepeat }, // base_color
+                { kind: "TEXTURE_2D", texture: normalTexture, sampler: samplerMipRepeat }, // normal map
+                { kind: "TEXTURE_2D", texture: ormTexture, sampler: samplerMipRepeat }, // occlusion, roughness & metalness map
+                { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerMip },
             ],
         });
         this.applyDefaultAttributeValues();

@@ -178,6 +178,7 @@ struct OctreeVaryings {
     mediump vec3 normalLS; // world/local space
     highp vec3 positionVS; // view space
     mediump vec3 normalVS; // view space
+    highp vec3 toCamera; // world/local space
     highp vec2 texCoord0;
     highp vec2 screenPos;
     mediump float radius;
@@ -224,7 +225,11 @@ const struct OctreeTextures {
     lowp sampler2D materials;
     mediump sampler2D highlights;
     mediump sampler2D gradients;
+    // these textures should be arranged in texture arrays instead
     mediump sampler2D base_color;
+    mediump sampler2D normal;
+    mediump sampler2D orm; // occlusion, roughness and metalness
+    mediump sampler2D lut_ggx;
 };
 const struct NodeTextures {
     lowp sampler2D unlit_color;
