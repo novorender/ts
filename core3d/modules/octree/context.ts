@@ -631,14 +631,14 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             //TODO: Sync with renderstate.
             const edgeAngleThreshold = 30; // don't render intersecting edges (as points) that has smaller angles than this threshold between their neighboring triangles.
             const minVertexSpacing = state.outlines.linearThickness;
-            outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p, edgeAngleThreshold, minVertexSpacing);
+            outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p, edgeAngleThreshold, minVertexSpacing, highlights);
             outlineRenderers.set(plane, outlineRenderer);
         }
         let lineCount = 0, pointCount = 0;
         // TODO: offload to worker (mainly to avoid timeout and stuttering)?
         const [...lineClusters] = outlineRenderer.intersectTriangles(renderNodes);
         {
-            const buffers = outlineRenderer.makeBuffers(lineClusters, state, highlights);
+            const buffers = outlineRenderer.makeBuffers(lineClusters, state);
             if (buffers) {
                 const { linesCount, pointsCount, linesVAO, pointsVAO } = buffers;
                 lineCount = linesCount;
@@ -733,7 +733,6 @@ function updateHighlightBuffer(buffer: Uint8Array, highlight: RenderStateHighlig
         groupIndex++;
     }
 }
-
 
 function* iterateNodes(node: OctreeNode | undefined): IterableIterator<OctreeNode> {
     if (node) {
