@@ -8,10 +8,11 @@ import { type ReadonlyVec3, vec3, vec4, type ReadonlyVec4 } from "gl-matrix";
 import type { NodeLoader } from "./loader";
 import { computeGradientColors, gradientRange } from "./gradient";
 // import { BufferFlags } from "@novorender/core3d/buffers";
-import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass } from "./module";
+import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass, type MaterialTextures } from "./module";
 import { Mutex } from "./mutex";
 import { decodeBase64 } from "core3d/util";
 import { OutlineRenderer } from "./outlines";
+import { ResourceBin } from "core3d/resource";
 
 const enum UBO { camera, clipping, scene, node };
 const useNewOutlines = true;
@@ -37,6 +38,13 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     nextProgramFlags = OctreeModule.defaultProgramFlags;
     debug = false;
     suspendUpdates = false;
+
+    materialTextures: MaterialTextures = {
+        params: undefined,
+        color: null,
+        normal: null,
+        orm: null,
+    };
 
     localSpaceTranslation = vec3.create() as ReadonlyVec3;
     localSpaceChanged = false;
@@ -121,6 +129,16 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             glUpdateTexture(gl, resources.gradientsTexture, { ...module.gradientImageParams, image: this.gradientsImage });
         }
 
+        if (this.materialTextures?.params != renderContext.material) {
+            OctreeModule.diposeMaterialTextures(this.resources.bin, this.materialTextures);
+            if (renderContext.material) {
+                updateShaderCompileConstants({ pbr: true });
+                this.materialTextures = OctreeModule.createMaterialTextures(this.resources.bin, renderContext.material);
+            } else {
+                updateShaderCompileConstants({ pbr: false });
+            }
+        }
+
         if (renderContext.hasStateChanged({ scene })) {
             const { prevState } = renderContext;
             if (scene) {
@@ -168,7 +186,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     if (url) {
                         const materialData = makeMaterialAtlas(state);
                         if (materialData) {
-                            glUpdateTexture(gl, resources.materialTexture, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: materialData });
+                            glUpdateTexture(gl, resources.materialTexture, { kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "SRGB8_ALPHA8", type: "UNSIGNED_BYTE", image: materialData });
                         }
                     }
                 }
@@ -409,7 +427,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     render(state: DerivedRenderState) {
         const { resources, renderContext, debug } = this;
         const { usePrepass, samplerSingle, samplerMip, samplerEnvMip, samplerMipRepeat } = renderContext;
-        const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture, baseColorTexture, normalTexture, ormTexture } = resources;
+        const { color, normal, orm } = this.materialTextures;
+        const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
         const { gl, iblTextures, lut_ggx, cameraUniforms, clippingUniforms, outlineUniforms, deviceProfile } = renderContext;
 
         // glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
@@ -431,9 +450,9 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
-                { kind: "TEXTURE_2D", texture: baseColorTexture, sampler: samplerMipRepeat }, // base_color
-                { kind: "TEXTURE_2D", texture: normalTexture, sampler: samplerMipRepeat }, // normal map
-                { kind: "TEXTURE_2D", texture: ormTexture, sampler: samplerMipRepeat }, // occlusion, roughness & metalness map
+                { kind: "TEXTURE_2D", texture: color, sampler: samplerMipRepeat }, // base_color
+                { kind: "TEXTURE_2D", texture: normal, sampler: samplerMipRepeat }, // normal map
+                { kind: "TEXTURE_2D", texture: orm, sampler: samplerMipRepeat }, // occlusion, roughness & metalness map
                 { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerMip },
             ],
         });

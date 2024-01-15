@@ -1,7 +1,7 @@
 import type { TextureParams2DUncompressedMipMapped, RGBA } from "webgl2";
 
-/** PBR material/texture import data. */
-export interface MaterialImports {
+/** PBR material/texture data. */
+export interface PBRMaterialData {
     /** Linear scale, i.e. size per "tile" in meters. */
     readonly scale: number;
 

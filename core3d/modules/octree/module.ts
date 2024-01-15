@@ -1,4 +1,4 @@
-import type { DeviceProfile, RenderContext } from "core3d";
+import type { DeviceProfile, PBRMaterialData, RenderContext } from "core3d";
 import type { RenderModule } from "..";
 import { glUBOProxy, type TextureParams2DUncompressed, type UniformTypes } from "webgl2";
 import type { ResourceBin } from "core3d/resource";
@@ -64,15 +64,9 @@ export class OctreeModule implements RenderModule {
         const sceneUniforms = bin.createBuffer({ kind: "UNIFORM_BUFFER", srcData: uniforms.scene.buffer });
         const samplerNearest = bin.createSampler({ minificationFilter: "NEAREST", magnificationFilter: "NEAREST", wrap: ["CLAMP_TO_EDGE", "CLAMP_TO_EDGE"] });
         const defaultBaseColorTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 1, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: new Uint8Array([255, 255, 255, 255]) });
-        const materialTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null });
+        const materialTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 1, internalFormat: "SRGB8_ALPHA8", type: "UNSIGNED_BYTE", image: null });
         const highlightTexture = bin.createTexture({ kind: "TEXTURE_2D", width: 256, height: 6, internalFormat: "RGBA32F", type: "FLOAT", image: null });
         const gradientsTexture = bin.createTexture(this.gradientImageParams);
-        const baseColorParams = context.imports.materials?.baseColorTextureParams;
-        const baseColorTexture = baseColorParams ? bin.createTexture(baseColorParams) : defaultBaseColorTexture;
-        const normalParams = context.imports.materials?.normalTextureParams ?? null;
-        const normalTexture = normalParams ? bin.createTexture(normalParams) : null
-        const ormParams = context.imports.materials?.metallicRoughnessOcclusionTextureParams ?? null;
-        const ormTexture = ormParams ? bin.createTexture(ormParams) : null
         const transformFeedback = bin.createTransformFeedback()!;
         let vb_line: WebGLBuffer | null = null;
         let vao_line: WebGLVertexArrayObject | null = null;
@@ -105,7 +99,7 @@ export class OctreeModule implements RenderModule {
         return {
             bin, programs,
             transformFeedback, vb_line, vao_line,
-            sceneUniforms, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture, baseColorTexture, normalTexture, ormTexture,
+            sceneUniforms, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture,
         } as const;
     }
 
@@ -113,10 +107,11 @@ export class OctreeModule implements RenderModule {
         clip: false as boolean,
         dither: false as boolean,
         highlight: false as boolean,
+        pbr: false as boolean,
     } as const;
 
     static shaderConstants(deviceProfile: DeviceProfile, pass: ShaderPass, mode: ShaderMode, programFlags = OctreeModule.defaultProgramFlags) {
-        const { clip, dither, highlight } = programFlags;
+        const { clip, dither, highlight, pbr } = programFlags;
         const flags: string[] = [];
         if (clip || deviceProfile.quirks.slowShaderRecompile) { //Always complie in clip on devices with slow recomplie.
             flags.push("CLIP");
@@ -126,6 +121,9 @@ export class OctreeModule implements RenderModule {
         }
         if (highlight) {
             flags.push("HIGHLIGHT");
+        }
+        if (pbr) {
+            flags.push("PBR");
         }
         if (deviceProfile.quirks.adreno600) {
             flags.push("ADRENO600");
@@ -159,9 +157,27 @@ export class OctreeModule implements RenderModule {
         await Promise.all(promises);
         return programs;
     }
+    static createMaterialTextures(bin: ResourceBin, params?: PBRMaterialData) {
+        if (!params) {
+            return { params: undefined, color: null, normal: null, orm: null } as const;
+        }
+
+        const { baseColorTextureParams, normalTextureParams, metallicRoughnessOcclusionTextureParams } = params;
+        const color = baseColorTextureParams ? bin.createTexture(baseColorTextureParams) : null;
+        const normal = normalTextureParams ? bin.createTexture(normalTextureParams) : null;
+        const orm = metallicRoughnessOcclusionTextureParams ? bin.createTexture(metallicRoughnessOcclusionTextureParams) : null;
+        return { params, color, normal, orm } as const;
+    }
+
+    static diposeMaterialTextures(bin: ResourceBin, textures: MaterialTextures) {
+        const { color, normal, orm } = textures;
+        bin.delete(color, normal, orm);
+    }
 
     readonly maxLines = 1024 * 1024; // TODO: find a proper size!
 }
+
+export type MaterialTextures = ReturnType<typeof OctreeModule.createMaterialTextures>;
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 /** @internal */

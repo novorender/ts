@@ -23,8 +23,6 @@ flat in OctreeVaryingsFlat varyingsFlat;
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out uvec4 fragPick;
 
-#define PBR
-
 vec2 triplanarProjection(vec3 xyz, vec3 normal) {
     vec3 n = abs(normalize(normal));
     vec3 s = sign(normal);
@@ -256,10 +254,10 @@ void main() {
         mediump vec3 f_diffuse = getIBLRadianceLambertian(n, materialInfo.albedoColor);
         // TODO: emissive?
 
-        // mediump vec3 color = (f_emissive + f_diffuse + f_specular) + ambientLight * materialInfo.albedoColor;
         mediump vec3 color = f_diffuse + f_specular;
         color *= materialInfo.occlusion;
         rgba = vec4(color, baseColor.a);
+        // rgba = baseColor;
         // rgba.rgb = normalInfo.n * .5 + .5;
 
 #else
@@ -267,18 +265,15 @@ void main() {
         mediump vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
         mediump vec3 N = normalize(normalWS);
         mediump vec4 diffuseOpacity = rgba;
-        diffuseOpacity.rgb = sRGBToLinear(diffuseOpacity.rgb);
 
-        mediump vec4 specularShininess = vec4(mix(0.4, 0.1, baseColor.a)); // TODO: get from varyings instead
-        specularShininess.rgb = sRGBToLinear(specularShininess.rgb);
-
-        mediump vec3 irradiance = texture(textures.ibl.diffuse, N).rgb;
-        mediump float perceptualRoughness = clamp((1.0 - specularShininess.a), 0.0, 1.0);
+        mediump float perceptualRoughness = mix(.1, 1., baseColor.a);
         perceptualRoughness *= perceptualRoughness;
-        mediump float lod = perceptualRoughness * (scene.iblMipCount - 1.0);
-        mediump vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb;
 
-        mediump vec3 rgb = diffuseOpacity.rgb * irradiance + specularShininess.rgb * reflection;
+        mediump vec3 irradiance = texture(textures.ibl.diffuse, N).rgb * perceptualRoughness;
+        mediump float lod = perceptualRoughness * (scene.iblMipCount - 1.0);
+        mediump vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb * (1. - perceptualRoughness);
+
+        mediump vec3 rgb = diffuseOpacity.rgb * irradiance + reflection;
         rgba = vec4(rgb, rgba.a);
 #endif
     }
