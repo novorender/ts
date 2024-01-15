@@ -2,9 +2,9 @@ layout(std140) uniform Camera {
     CameraUniforms camera;
 };
 
-// layout(std140) uniform ToonOutline {
-//     ToonOutlineUniforms toonOutline;
-// };
+layout(std140) uniform ToonOutline {
+    ToonOutlineUniforms toonOutline;
+};
 
 uniform TonemappingTextures textures;
 
@@ -113,7 +113,7 @@ void main() {
     float centerDepth = uintBitsToFloat(texture(textures.pick, uv).w);
     vec3 centerNormal = unpackNormalAndDeviation(texture(textures.pick, uv).yz).xyz;
 
-    float objectEdge = objectTest(objectId, uv, pixelSizeX, pixelSizeY);
+    float objectEdge = toonOutline.outlineObjects == 1u ? objectTest(objectId, uv, pixelSizeX, pixelSizeY) : 0.;
     float normalEdge = 0.f;
     float depthEdge = 0.f;
     if (objectEdge < 0.8) {
@@ -121,9 +121,6 @@ void main() {
     }
     if(depthEdge < 0.8f && objectEdge < 0.8f) {
         normalEdge = normalTest2(centerNormal, uv, pixelSizeX, pixelSizeY);
-    }
-    if(objectEdge < 0.8f) {
-        objectEdge = objectTest(objectId, uv, pixelSizeX, pixelSizeY);
     }
     float edge = min(0.8f, max(max(depthEdge, normalEdge), objectEdge));
 

@@ -72,7 +72,8 @@ export class OutlineRenderer {
         readonly localSpaceTranslation: ReadonlyVec3,
         readonly plane: ReadonlyVec4,
         readonly edgeAngleThreshold: number,
-        readonly minVertexSpacing: number
+        readonly minVertexSpacing: number,
+        readonly highlightIndices: Uint8Array
     ) {
         const { planeLocalMatrix, localPlaneMatrix } = planeMatrices(plane, localSpaceTranslation);
         this.planeLocalMatrix = planeLocalMatrix;
@@ -137,7 +138,7 @@ export class OutlineRenderer {
         // modelPlaneMatrix = localPlaneMatrix * modelLocalMatrix * denormMatrix
         mat4.mul(modelPlaneMatrix, mat4.mul(modelPlaneMatrix, localPlaneMatrix, modelLocalMatrix), denormMatrix);
         for (const mesh of node.meshes) {
-            if (mesh.numTriangles && mesh.drawParams.mode == "TRIANGLES" && !mesh.baseColorTexture && mesh.idxBuf) {
+            if (mesh.numTriangles && mesh.drawParams.mode == "TRIANGLES" && mesh.idxBuf) {
                 const doubleSided = mesh.materialType == MaterialType.opaqueDoubleSided || mesh.materialType == MaterialType.transparent;
                 const { drawRanges, objectRanges } = mesh;
                 const { idxBuf, posBuf } = getMeshBuffers(gl, mesh);
@@ -188,9 +189,9 @@ export class OutlineRenderer {
         return lineClusters;
     }
 
-    makeBuffers(clusters: readonly LineCluster[], state: DerivedRenderState, highlightIndices: Uint8Array) {
+    makeBuffers(clusters: readonly LineCluster[], state: DerivedRenderState) {
         if (clusters.length > 0) {
-            const { context } = this;
+            const { context, highlightIndices } = this;
             const { gl } = context.renderContext;
             const totalSegments = clusters.map(e => e.segments).reduce((a, b) => (a + b));
             const totalPoints = clusters.map(e => e.points.length).reduce((a, b) => (a + b));
@@ -298,12 +299,12 @@ export class OutlineRenderer {
     }
 
     *getLineClusters(): IterableIterator<LineCluster> {
-        const { lineClusters } = this;
+        const { lineClusters, highlightIndices } = this;
         for (let i = 0; i < lineClusters.length; ++i) {
             const clusterRef = lineClusters[i];
             const cluster = clusterRef.deref();
             if (cluster) {
-                if (cluster.active) {
+                if (cluster.active && highlightIndices[cluster.objectId] != 254) {
                     yield cluster;
                 }
             } else {
@@ -323,7 +324,6 @@ export class OutlineRenderer {
             p[2] = 0;
             vec3.transformMat4(p, p, planeLocalMatrix);
             vec3.add(p, p, localSpaceTranslation);
-            console.log(p);
             yield p;
         }
     }

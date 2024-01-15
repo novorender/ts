@@ -113,6 +113,7 @@ struct GridUniforms {
 
 struct ToonOutlineUniforms {
     mediump vec3 color;
+    uint outlineObjects;
 };
 
 // dynamic geometry

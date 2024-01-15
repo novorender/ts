@@ -1,12 +1,13 @@
 import type { DerivedRenderState, RenderContext } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glDraw, glState, type UniformTypes } from "webgl2";
+import { glUBOProxy, glDraw, glState, type UniformTypes, glGetUniformsInfo } from "webgl2";
 
 /** @internal */
 export class ToonModule implements RenderModule {
     readonly kind = "toon_outline";
     readonly uniforms = {
         color: "vec3",
+        outlineObjects: "uint",
     } as const satisfies Record<string, UniformTypes>;
 
     async withContext(context: RenderContext) {
@@ -27,7 +28,7 @@ export class ToonModule implements RenderModule {
         const textureNames = ["color", "pick", "zbuffer"] as const;
         const textureUniforms = textureNames.map(name => `textures.${name}`);
 
-        const program = await context.makeProgramAsync(bin, { name: "toon_outline", vertexShader, fragmentShader, uniformBufferBlocks: ["Camera"], textureUniforms })
+        const program = await context.makeProgramAsync(bin, { name: "toon_outline", vertexShader, fragmentShader, uniformBufferBlocks: ["Camera", "ToonOutline"], textureUniforms })
         return { bin, uniforms, sampler, program } as const;
     }
 }
@@ -48,6 +49,7 @@ class ToonModuleContext implements RenderModuleContext {
         if (context.hasStateChanged({ toonOutline, localSpaceTranslation })) {
             const { values } = this.uniforms;
             values.color = toonOutline.color;
+            values.outlineObjects = toonOutline.outlineObjects ? 1 : 0;
             context.updateUniformBuffer(uniforms, this.uniforms);
         }
         if (context.prevState != undefined && !context.isPickBuffersValid() && state.toonOutline.enabled && state.toonOutline.on) {

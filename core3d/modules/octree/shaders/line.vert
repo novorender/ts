@@ -31,19 +31,21 @@ flat out struct {
 #endif
 } varyingsFlat;
 
-bool clipZ(inout vec4 v0, inout vec4 v1) {
-    float z0 = v0.z;
-    float z1 = v1.z;
+bool clipZ(inout vec4 v0CS, inout vec4 v1CS, inout vec4 v0VS, inout vec4 v1VS) {
+    float z0 = v0CS.z;
+    float z1 = v1CS.z;
     if(z0 <= 0.f && z1 <= 0.f) {
         return false;
     } else if(z0 < 0.f && z1 > 0.f) {
         float t = z1 / (z1 - z0);
-        v0 = mix(v1, v0, t);
-        v0.z = 0.f;
+        v0CS = mix(v1CS, v0CS, t);
+        v0CS.z = 0.f;
+        v0VS = mix(v1VS, v0VS, t);
     } else if(z1 < 0.f && z0 > 0.f) {
         float t = z0 / (z0 - z1);
-        v1 = mix(v0, v1, t);
-        v1.z = 0.f;
+        v1CS = mix(v0CS, v1CS, t);
+        v1CS.z = 0.f;
+        v1VS = mix(v0VS, v1VS, t);
         // v1 = v0;
     }
     return true;
@@ -64,7 +66,7 @@ void main() {
     vec4 v1CS = (camera.viewClipMatrix * v1VS);
 
     // clip line against front clipping plane (Z=0)
-    if(!clipZ(v0CS, v1CS)) {
+    if(!clipZ(v0CS, v1CS, v0VS, v1VS)) {
         gl_Position = vec4(0); // line segment is behind front clipping plane, i.e. invisible, and should be culled/degenerate.
         return;
     }
@@ -72,6 +74,7 @@ void main() {
     // compute pixel coordinates.
     vec2 p0 = v0CS.xy / v0CS.w * camera.viewSize * 0.5f;
     vec2 p1 = v1CS.xy / v1CS.w * camera.viewSize * 0.5f;
+    vec2 zw = gl_VertexID % 4 < 2 ? v0CS.zw : v1CS.zw;
 
     mediump float projectedSize0 = max(0.f, camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / v0CS.w);
     mediump float projectedSize1 = max(0.f, camera.viewClipMatrix[1][1] * outline.linearSize * float(camera.viewSize.y) / v1CS.w);
@@ -108,11 +111,12 @@ void main() {
             break;
     }
     pos /= camera.viewSize * 0.5f; // scale back down to NDC
+    pos *= zw[1];
 
     // vec2 pos = gl_VertexID % 2 == 0 ? vertexPositions.xy : vertexPositions.zw;
     // vec3 posVS = (camera.localViewMatrix * outline.planeLocalMatrix * vec4(pos, 0, 1)).xyz;
     // vec2 pos = gl_VertexID % 2 == 0 ? vertexPositions.xy : vertexPositions.zw;
-    vec3 posVS = gl_VertexID % 2 == 0 ? v0VS.xyz : v0VS.xyz;
+    vec3 posVS = gl_VertexID % 4 < 2 ? v0VS.xyz : v1VS.xyz;
     varyings.positionVS = posVS;
     varyings.uv = uv;
     varyings.radius = r;
@@ -126,5 +130,5 @@ void main() {
     varyingsFlat.objectId = vertexObjectId;
 #endif
     // gl_Position = camera.viewClipMatrix * vec4(posVS, 1);
-    gl_Position = vec4(pos, 0, 1);
+    gl_Position = vec4(pos, zw);
 }

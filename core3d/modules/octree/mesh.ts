@@ -15,11 +15,9 @@ export interface Mesh {
     readonly materialType: MaterialType;
     readonly vao: WebGLVertexArrayObject;
     readonly vaoPosOnly: WebGLVertexArrayObject | null;
-    readonly vaoTriangles: WebGLVertexArrayObject | null;
     readonly posVB: WebGLBuffer;
     readonly idxBuf: WebGLBuffer | null;
     readonly highlightVB: WebGLBuffer | null;
-    readonly highlightTriVB: WebGLBuffer | null;
     readonly numVertices: number;
     readonly numTriangles: number;
     readonly drawParams: DrawParams;
@@ -59,20 +57,17 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
         const ib = typeof indices != "number" ? resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
-        const { triangles0, triangles1, triangles2, trianglesObjId, position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight, highlightTri } = convertAttributes(vertexAttributes, buffers);
-        const triangleAttributes = [triangles0, triangles1, triangles2, trianglesObjId, highlightTri];
+        const { position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight } = convertAttributes(vertexAttributes, buffers);
         const renderAttributes = [position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight];
         // // add extra highlight vertex buffer and attribute
         // const highlightVB = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: subMesh.numVertices });
         // attributes.push({ kind: "UNSIGNED_INT", buffer: highlightVB, componentType: "UNSIGNED_BYTE" });
         const posVB = position.buffer;
         const highlightVB = highlight!.buffer;
-        const highlightTriVB = triangles0 ? highlightTri!.buffer : null;
 
         const vao = resourceBin.createVertexArray({ attributes: renderAttributes, indices: ib });
         const vaoPosOnly = position.buffer != 0 ? resourceBin.createVertexArray({ attributes: [position], indices: ib }) : null;
-        const vaoTriangles = triangleAttributes ? resourceBin.createVertexArray({ attributes: triangleAttributes }) : null;
-        resourceBin.subordinate(vao, ...buffers.filter(buf => buf != posVB && buf != highlightVB && buf != highlightTriVB));
+        resourceBin.subordinate(vao, ...buffers.filter(buf => buf != posVB && buf != highlightVB));
         // if (ib) {
         //     resourceBin.subordinate(vao, ib);
         // }
@@ -82,13 +77,13 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
             { kind: "arrays", mode: subMesh.primitiveType, count };
         const baseColorTextureIndex = subMesh.baseColorTexture as number;
         const baseColorTexture = textures[baseColorTextureIndex] ?? null;
-        yield { vao, vaoPosOnly, vaoTriangles, idxBuf: ib ?? null, posVB, highlightVB, highlightTriVB, drawParams, drawRanges, numVertices, numTriangles, objectRanges, materialType: materialType as unknown as MaterialType, baseColorTexture } as const satisfies Mesh;
+        yield { vao, vaoPosOnly, idxBuf: ib ?? null, posVB, highlightVB, drawParams, drawRanges, numVertices, numTriangles, objectRanges, materialType: materialType as unknown as MaterialType, baseColorTexture } as const satisfies Mesh;
     }
 }
 
 /** @internal */
 export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, highlights: Uint8Array | undefined) {
-    const { highlightVB, highlightTriVB } = mesh;
+    const { highlightVB } = mesh;
     if (highlightVB) {
         const highlightBuffer = new Uint8Array(mesh.numVertices);
         if (highlights) {
@@ -101,25 +96,12 @@ export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, hig
         }
         glUpdateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: highlightBuffer, targetBuffer: highlightVB });
     }
-
-    if (highlightTriVB) {
-        const highlightTriBuffer = new Uint8Array(mesh.numTriangles);
-        if (highlights) {
-            for (const { objectId, beginTriangle, endTriangle } of mesh.objectRanges) {
-                const highlight = highlights[objectId];
-                if (highlight) {
-                    highlightTriBuffer.fill(highlight, beginTriangle, endTriangle);
-                }
-            }
-        }
-        glUpdateBuffer(gl, { kind: "ARRAY_BUFFER", srcData: highlightTriBuffer, targetBuffer: highlightTriVB });
-    }
 }
 
 /** @internal */
 export function deleteMesh(resourceBin: ResourceBin, mesh: Mesh) {
-    const { vao, vaoPosOnly, vaoTriangles, idxBuf, posVB, highlightVB, highlightTriVB, baseColorTexture } = mesh;
-    resourceBin.delete(vao, vaoPosOnly, vaoTriangles, idxBuf, posVB, highlightVB, highlightTriVB, baseColorTexture);
+    const { vao, vaoPosOnly, idxBuf, posVB, highlightVB, baseColorTexture } = mesh;
+    resourceBin.delete(vao, vaoPosOnly, idxBuf, posVB, highlightVB, baseColorTexture);
 }
 
 /** @internal */

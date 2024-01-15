@@ -604,7 +604,7 @@ export class View<
         const controller = controllers[kind];
         _activeController = this._activeController = controller;
         const { position, rotation, pivot, fovMeters } = prevState;
-        _activeController.init({ kind, position: initialState?.position ?? position, rotation: initialState?.rotation ?? rotation, pivot, distance, fovMeters: initialState?.fov ?? (kind != "panorama" ? fovMeters : undefined) });
+        _activeController.init({ kind, position: initialState?.position ?? position, rotation: initialState?.rotation ?? rotation, pivot: initialState?.pivot ?? pivot, distance, fovMeters: initialState?.fov ?? (kind != "panorama" ? fovMeters : undefined) });
         const changes = _activeController.stateChanges();
         this.modifyRenderState({ camera: changes });
         return controller;
@@ -632,8 +632,9 @@ export class View<
             if (cameraChanges) {
                 this.modifyRenderState(cameraChanges);
             }
+            const { moving } = _activeController;
 
-            const isIdleFrame = idleFrameTime > 500 && !this._activeController.moving;
+            const isIdleFrame = idleFrameTime > 500 && !moving;
             if (_renderContext && !_renderContext.isContextLost()) {
                 _renderContext.poll(); // poll for events, such as async reads and shader linking
 
@@ -659,6 +660,7 @@ export class View<
                     if (wasIdle) {
                         // reset back to default when camera starts moving
                         this.resolutionModifier = this.baseRenderResolution;
+                        this.resize();
                         this.resolutionTier = 2;
                         // disable features when moving to increase performance - outlines are only disabled in pinhole
                         this.modifyRenderState({ toonOutline: { on: false }, outlines: { on: this.renderState.camera.kind == "orthographic" } });
@@ -687,11 +689,11 @@ export class View<
                     const statsPromise = _renderContext.render(renderStateGL);
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
-                        this.render?.(isIdleFrame);
+                        this.render?.({ isIdleFrame, cameraMoved: moving });
                         possibleChanges = true;
                     });
                 } else if (possibleChanges) {
-                    this.render?.(isIdleFrame);
+                    this.render?.({ isIdleFrame, cameraMoved: moving });
                     if (isIdleFrame) {
                         // render pick buffer if there is nothing else to render and camera is not moving
                         // make it feel better for slower devices when picking idle frame
@@ -700,13 +702,13 @@ export class View<
                 }
             }
 
-            if (this._activeController.moving) {
+            if (moving) {
                 wasCameraMoving = true;
                 idleFrameTime = 0;
             } else if (!wasCameraMoving) {
                 idleFrameTime += frameTime;
             }
-            wasCameraMoving = this._activeController.moving;
+            wasCameraMoving = moving;
             prevRenderTime = renderTime;
         }
     }
@@ -762,10 +764,12 @@ export class View<
 
     /**
      * Override this in a derived class for custom rendering of e.g. 2D content, such as text and lines etc.
-     * @param isIdleFrame Was the camera moving or not.
+     * @param isIdleFrame If this frame is an idle frame, a frame with more visual features and higher resolution, 
+     *                    delayed triggered when camera stopped movinbg.
+     * @param cameraMoved Was the camera moving or not during the current frame.
      * @virtual
      */
-    render?(isIdleFrame: boolean): void;
+    render?(params: { isIdleFrame: boolean, cameraMoved: boolean }): void;
 
     /** 
      * Callback function to update render context.
@@ -805,12 +809,11 @@ export class View<
     private recalcBaseRenderResolution() {
         const { deviceProfile } = this;
         if (deviceProfile.tier < 2) {
-            const maxRes = deviceProfile.tier == 0 ? 720 * 1280 : 1440 * 2560;
-            let baseRenderResolution = deviceProfile.renderResolution / devicePixelRatio;
+            const scale = deviceProfile.tier == 0 ? 720 + 1280 : 1440 + 2560;
             const { width, height } = this.canvas.getBoundingClientRect();
-            let idleRes = baseRenderResolution * 2 * width * height;
-            if (idleRes > maxRes) {
-                baseRenderResolution *= maxRes / idleRes;
+            let baseRenderResolution = ((scale / (width + height)) / 2) / devicePixelRatio;
+            if (baseRenderResolution > 0.5) {
+                baseRenderResolution = 0.5;
             }
             this.baseRenderResolution = baseRenderResolution;
             this.resolutionModifier = baseRenderResolution;
@@ -937,6 +940,8 @@ export type CameraControllersFactory<T extends CameraControllers> = (input: Cont
 
 /** Optional values to initialize camera controller. */
 export interface CameraControllerInitialValues {
+    /** The camera pivot position. */
+    readonly pivot?: ReadonlyVec3;
     /** The camera position. */
     readonly position?: ReadonlyVec3;
     /** The camera rotation. */
