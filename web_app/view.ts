@@ -405,7 +405,6 @@ export class View<
             let pos: ReadonlyVec3 | undefined;
             const [nx, ny, nz] = plane;
             const planeDir = vec3.fromValues(nx, ny, nz);
-            console.log(planeDir);
             if (renderState.camera.kind === "orthographic") {
                 pos = laserPosition;
             } else {
@@ -425,11 +424,9 @@ export class View<
                 const minI = Math.abs(nx) < Math.abs(ny) && Math.abs(nx) < Math.abs(nz) ? 0 : Math.abs(ny) < Math.abs(nz) ? 1 : 2;
                 let flipY = 1;
                 let flipX = 1;
-                console.log(minI);
                 if (minI != 2) {
                     flipLaser = true;
                     const maxI = Math.abs(nx) > Math.abs(ny) ? 0 : 1;
-                    console.log(maxI);
                     if (planeDir[maxI] < 0) {
                         flipX = -1;
                     } else {
