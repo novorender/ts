@@ -397,7 +397,7 @@ export class View<
      * results will be ordered from  closest to furthest from the tracer poitn
      */
 
-    async outlineLaser(laserPosition: ReadonlyVec3, planeIndex: number): Promise<OutlineIntersection | undefined> {
+    outlineLaser(laserPosition: ReadonlyVec3, planeIndex: number): OutlineIntersection | undefined {
         const context = this._renderContext;
         const { renderState } = this;
         const plane = renderState.clipping.planes[planeIndex].normalOffset;
