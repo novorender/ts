@@ -352,15 +352,17 @@ export class OutlineRenderer {
     }
 
     transformToPlane(v: ReadonlyVec3): ReadonlyVec2 {
-        const { localPlaneMatrix } = this;
-        const p = vec3.transformMat4(vec3.create(), v, localPlaneMatrix);
+        const { localPlaneMatrix, localSpaceTranslation } = this;
+        const p = vec3.sub(vec3.create(), v, localSpaceTranslation);
+        vec3.transformMat4(p, p, localPlaneMatrix);
         return vec2.fromValues(p[0], p[1]);
     }
 
     transformFromPlane(v: ReadonlyVec2): ReadonlyVec3 {
-        const { planeLocalMatrix } = this;
+        const { planeLocalMatrix, localSpaceTranslation } = this;
         const p = vec3.fromValues(v[0], v[1], 0);
         vec3.transformMat4(p, p, planeLocalMatrix);
+        vec3.add(p, p, localSpaceTranslation);
         return p;
     }
 }
