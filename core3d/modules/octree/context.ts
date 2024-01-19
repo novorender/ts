@@ -1,4 +1,4 @@
-import type { DerivedRenderState, RenderContext, RenderStateGroupAction, RenderStateHighlightGroups, RenderStateScene, RGB, RGBATransform } from "core3d";
+import type { DerivedRenderState, PBRMaterialData, RenderContext, RenderStateGroupAction, RenderStateHighlightGroups, RenderStateScene, RGB, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
@@ -12,7 +12,6 @@ import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, Shad
 import { Mutex } from "./mutex";
 import { decodeBase64 } from "core3d/util";
 import { OutlineRenderer } from "./outlines";
-import { ResourceBin } from "core3d/resource";
 
 const enum UBO { camera, clipping, scene, node };
 
@@ -38,12 +37,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     debug = false;
     suspendUpdates = false;
 
-    materialTextures: MaterialTextures = {
-        params: undefined,
-        color: null,
-        normal: null,
-        orm: null,
-    };
+    materialParams: Readonly<Record<string, PBRMaterialData>>;
+    materialTextures: MaterialTextures = { color: null, normal: null, orm: null };
 
     localSpaceTranslation = vec3.create() as ReadonlyVec3;
     localSpaceChanged = false;
@@ -63,6 +58,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             indices: new Uint8Array(buffer, 4),
             mutex: new Mutex(buffer),
         } as const;
+        this.materialParams = renderContext.materials;
     }
 
     get highlights() {
@@ -128,13 +124,16 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             glUpdateTexture(gl, resources.gradientsTexture, { ...module.gradientImageParams, image: this.gradientsImage });
         }
 
-        if (this.materialTextures?.params != renderContext.material) {
-            OctreeModule.diposeMaterialTextures(this.resources.bin, this.materialTextures);
-            if (renderContext.material) {
+        if (this.materialParams != renderContext.materials) {
+            OctreeModule.disposeMaterialTextures(this.resources.bin, this.materialTextures);
+            this.materialParams = renderContext.materials;
+            const materialParams = Object.values(this.materialParams);
+            if (materialParams.length > 0) {
                 updateShaderCompileConstants({ pbr: true });
-                this.materialTextures = OctreeModule.createMaterialTextures(this.resources.bin, renderContext.material);
+                this.materialTextures = OctreeModule.createMaterialTextures(this.resources.bin, materialParams[0], materialParams);
             } else {
                 updateShaderCompileConstants({ pbr: false });
+                this.materialTextures = { color: null, normal: null, orm: null };
             }
         }
 
@@ -431,7 +430,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { usePrepass, samplerSingle, samplerMip, samplerEnvMip, samplerMipRepeat } = renderContext;
         const { color, normal, orm } = this.materialTextures;
         const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
-        const { gl, iblTextures, lut_ggx, cameraUniforms, clippingUniforms, outlineUniforms, deviceProfile } = renderContext;
+        const { gl, iblTextures, lut_ggx, cameraUniforms, clippingUniforms, deviceProfile } = renderContext;
 
         // glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
 
@@ -452,10 +451,10 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 { kind: "TEXTURE_2D", texture: materialTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: highlightTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
-                { kind: "TEXTURE_2D", texture: color, sampler: samplerMipRepeat }, // base_color
-                { kind: "TEXTURE_2D", texture: normal, sampler: samplerMipRepeat }, // normal map
-                { kind: "TEXTURE_2D", texture: orm, sampler: samplerMipRepeat }, // occlusion, roughness & metalness map
                 { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerMip },
+                { kind: "TEXTURE_2D_ARRAY", texture: color, sampler: samplerMipRepeat }, // base_color
+                { kind: "TEXTURE_2D_ARRAY", texture: normal, sampler: samplerMipRepeat }, // normal map
+                { kind: "TEXTURE_2D_ARRAY", texture: orm, sampler: samplerMipRepeat }, // occlusion, roughness & metalness map
             ],
         });
         this.applyDefaultAttributeValues();
@@ -536,7 +535,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
     pick() {
         const { resources, renderContext } = this;
-        const { gl, cameraUniforms, clippingUniforms, outlineUniforms, samplerSingle, samplerMip, iblTextures, currentState, deviceProfile } = renderContext;
+        const { gl, cameraUniforms, clippingUniforms, samplerSingle, samplerMip, iblTextures, currentState, deviceProfile } = renderContext;
         const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
         const { diffuse, specular } = iblTextures;
         const state = currentState!;
@@ -779,14 +778,14 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
         }
     }
 
-    function copyMatrix(index: number, rgbaTransform: RGBATransform, outlineColor?: RGB) {
+    function copyMatrix(index: number, rgbaTransform: RGBATransform, textureIndex?: number, textureScale?: number) {
         for (let col = 0; col < 5; col++) {
             for (let row = 0; row < numColorMatrixRows; row++) {
                 colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform[col + row * 5];
             }
         }
         const col = numColorMatrixCols - 1;
-        const rgba = outlineColor ? [...outlineColor, 1] : [0, 0, 0, 0];
+        const rgba = [textureIndex ?? -1, textureScale ?? 0, 0, 0];
         for (let row = 0; row < numColorMatrixRows; row++) {
             colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgba[row];
         }
@@ -796,7 +795,8 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
     const { defaultAction, groups } = highlights;
     copyMatrix(0, getRGBATransform(defaultAction));
     for (let i = 0; i < groups.length; i++) {
-        copyMatrix(i + 1, getRGBATransform(groups[i].action), groups[i].outlineColor);
+        const { textureIndex, textureScale } = groups[i];
+        copyMatrix(i + 1, getRGBATransform(groups[i].action), textureIndex, textureScale ? 1 / textureScale : undefined); // TODO: move texture scale into separate array
     }
     return colorMatrices;
 }

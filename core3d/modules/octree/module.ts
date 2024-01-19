@@ -1,6 +1,6 @@
-import type { DeviceProfile, PBRMaterialData, RenderContext } from "core3d";
+import type { DeviceProfile, PBRMaterialCommon, PBRMaterialData, PBRMaterialTextures, RenderContext } from "core3d";
 import type { RenderModule } from "..";
-import { glUBOProxy, type TextureParams2DUncompressed, type UniformTypes } from "webgl2";
+import { glUBOProxy, type Pow2, type TexelTypeString, type TextureParams2DArrayUncompressedMipMapped, type TextureParams2DUncompressed, type TextureParams2DUncompressedMipMapped, type UncompressedTextureFormatType, type UniformTypes } from "webgl2";
 import type { ResourceBin } from "core3d/resource";
 import { OctreeModuleContext } from "./context";
 import { NodeLoader } from "./loader";
@@ -34,7 +34,7 @@ export class OctreeModule implements RenderModule {
     readonly gradientImageParams: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: Gradient.size, height: 2, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null };
     readonly maxHighlights = 8;
 
-    static readonly textureNames = ["unlit_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients", "base_color", "normal", "orm", "lut_ggx"] as const;
+    static readonly textureNames = ["unlit_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients", "lut_ggx", "base_color", "normal", "orm"] as const;
     static readonly textureUniforms = OctreeModule.textureNames.map(name => `textures.${name}`);
     static readonly uniformBufferBlocks = ["Camera", "Clipping", "Scene", "Node"];
     static readonly passes = [ShaderPass.color, ShaderPass.pick, ShaderPass.pre] as const;
@@ -155,21 +155,64 @@ export class OctreeModule implements RenderModule {
         await Promise.all(promises);
         return programs;
     }
-    static createMaterialTextures(bin: ResourceBin, params?: PBRMaterialData) {
-        if (!params) {
+
+    static createMaterialTextures(bin: ResourceBin, common: PBRMaterialCommon, textures: readonly PBRMaterialTextures[]) {
+        if (textures.length == 0) {
             return { params: undefined, color: null, normal: null, orm: null } as const;
         }
+        const { width, height, mipCount } = common;
 
-        const { baseColorTextureParams, normalTextureParams, metallicRoughnessOcclusionTextureParams } = params;
-        const color = baseColorTextureParams ? bin.createTexture(baseColorTextureParams) : null;
-        const normal = normalTextureParams ? bin.createTexture(normalTextureParams) : null;
-        const orm = metallicRoughnessOcclusionTextureParams ? bin.createTexture(metallicRoughnessOcclusionTextureParams) : null;
-        return { params, color, normal, orm } as const;
+        function arrayParams(format: UncompressedTextureFormatType, mipMaps: readonly BufferSource[]): TextureParams2DArrayUncompressedMipMapped | undefined {
+            if (mipMaps) {
+                return {
+                    kind: "TEXTURE_2D_ARRAY",
+                    width, height, depth: textures.length,
+                    ...format,
+                    mipMaps,
+                };
+            }
+        }
+
+        // combine all mip map images into an array image
+        function flattenMips(key: "albedoTexture" | "normalTexture" | "occlusionMetallicRoughnessTexture") {
+            const mergedMipMaps: BufferSource[] = [];
+            for (let i = 0; i < mipCount; i++) {
+                const dst = new Uint8Array(textures[0][key][i].byteLength * textures.length);
+                let offset = 0;
+                for (const texture of textures) {
+                    const src = texture[key][i];
+                    if (ArrayBuffer.isView(src)) {
+                        const srcView = new Uint8Array(src.buffer, src.byteOffset, src.byteLength);
+                        dst.set(srcView, offset);
+                        offset += src.byteLength;
+                    }
+                }
+                mergedMipMaps[i] = dst.buffer;
+            }
+            return mergedMipMaps;
+        }
+
+        // TODO: streamline loading and merging of mipmaps (textureUpdate with x,y,z offsets?)
+
+        const baseColorTextures = flattenMips("albedoTexture");
+        const normalTextures = flattenMips("normalTexture");
+        const ormTextures = flattenMips("occlusionMetallicRoughnessTexture");
+        // const { baseColorTexture, normalTexture, occlusionMetallicRoughnessTexture } = materials[0];
+        const colorArrayParams = arrayParams({ internalFormat: "R11F_G11F_B10F", type: "UNSIGNED_INT_10F_11F_11F_REV" }, baseColorTextures);
+        const normalArrayParams = arrayParams({ internalFormat: "RG16F", type: "HALF_FLOAT" }, normalTextures);
+        const ormArrayParams = arrayParams({ internalFormat: "RGB8", type: "UNSIGNED_BYTE" }, ormTextures);
+
+        const color = colorArrayParams ? bin.createTexture(colorArrayParams) : null;
+        const normal = normalArrayParams ? bin.createTexture(normalArrayParams) : null;
+        const orm = ormArrayParams ? bin.createTexture(ormArrayParams) : null;
+        return { color, normal, orm } as const;
     }
 
-    static diposeMaterialTextures(bin: ResourceBin, textures: MaterialTextures) {
-        const { color, normal, orm } = textures;
-        bin.delete(color, normal, orm);
+    static disposeMaterialTextures(bin: ResourceBin, textures: MaterialTextures | undefined) {
+        if (textures) {
+            const { color, normal, orm } = textures;
+            bin.delete(color, normal, orm);
+        }
     }
 
     readonly maxLines = 1024 * 1024; // TODO: find a proper size!

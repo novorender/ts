@@ -553,6 +553,10 @@ export interface RenderStateHighlightGroup {
     readonly outlineColor?: RGB;
     /** A set of unique object_id belonging to this group, sorted in ascending order. */
     readonly objectIds: Iterable<number>;
+    /** Texture index. */
+    readonly textureIndex?: number;
+    /** Texture scale. */
+    readonly textureScale?: number;
 }
 
 /**

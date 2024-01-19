@@ -100,7 +100,7 @@ export class RenderContext {
     /** WebGL Sampler used to sample other, non-mipmapped IBL textures bilinear. */
     readonly samplerSingle: WebGLSampler; // use to read the other textures
 
-    material: PBRMaterialData | undefined;
+    materials: Readonly<Record<string, PBRMaterialData>> = {};
 
     outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>();
 
