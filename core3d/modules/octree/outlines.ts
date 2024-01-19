@@ -329,23 +329,41 @@ export class OutlineRenderer {
     }
 
     *getLines(cluster: LineCluster): IterableIterator<[ReadonlyVec3, ReadonlyVec3]> {
-        const { points, vertices } = cluster;
+        const { vertices } = cluster;
         const { planeLocalMatrix } = this;
-        const end = vec3.create();
-        const start = vec3.create();
-        for (let i = 1; i < points.length; ++i) {
-            const startIdx = points[i - 1];
-            const endIdx = points[i];
-            start[0] = vertices[startIdx * 2 + 0];
-            start[1] = vertices[startIdx * 2 + 1];
-            end[2] = 0;
-            end[0] = vertices[endIdx * 2 + 0];
-            end[1] = vertices[endIdx * 2 + 1];
-            end[2] = 0;
+        for (let i = 0; i < vertices.length; i += 4) {
+            const [x1, y1, x2, y2] = vertices.subarray(i, i + 4);
+            const start = vec3.fromValues(x1, y1, 0);
+            const end = vec3.fromValues(x2, y2, 0);
             vec3.transformMat4(start, start, planeLocalMatrix);
             vec3.transformMat4(end, end, planeLocalMatrix);
             yield [start, end];
         }
+    }
+
+    *get2dLines(cluster: LineCluster): IterableIterator<[ReadonlyVec2, ReadonlyVec2]> {
+        const { vertices } = cluster;
+        for (let i = 0; i < vertices.length; i += 4) {
+            const [x1, y1, x2, y2] = vertices.subarray(i, i + 4);
+            const start = vec2.fromValues(x1, y1);
+            const end = vec2.fromValues(x2, y2);
+            yield [start, end];
+        }
+    }
+
+    transformToPlane(v: ReadonlyVec3): ReadonlyVec2 {
+        const { localPlaneMatrix, localSpaceTranslation } = this;
+        const p = vec3.sub(vec3.create(), v, localSpaceTranslation);
+        vec3.transformMat4(p, p, localPlaneMatrix);
+        return vec2.fromValues(p[0], p[1]);
+    }
+
+    transformFromPlane(v: ReadonlyVec2): ReadonlyVec3 {
+        const { planeLocalMatrix, localSpaceTranslation } = this;
+        const p = vec3.fromValues(v[0], v[1], 0);
+        vec3.transformMat4(p, p, planeLocalMatrix);
+        vec3.add(p, p, localSpaceTranslation);
+        return p;
     }
 }
 

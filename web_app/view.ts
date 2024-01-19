@@ -1,13 +1,14 @@
 import { type ReadonlyVec3, vec3, vec2, type ReadonlyQuat, mat3, type ReadonlyVec2, type ReadonlyVec4, glMatrix, vec4, mat4 } from "gl-matrix";
 import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
-import { flipState } from "./flip";
+import { flipGLtoCadVec, flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
-import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections, type OutlineIntersection, outlineLaser } from "./buffer_inspect";
+import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections } from "./buffer_inspect";
 import { downloadOfflineImports, manageOfflineStorage, type OfflineImportMap, type OfflineImports, type OfflineViewState, type SceneIndex } from "offline"
 import { loadSceneDataOffline, type DataContext } from "data";
 import * as DataAPI from "data/api";
 import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
+import { outlineLaser, type OutlineIntersection } from "./outline_inspect";
 
 /**
  * A view base class for Novorender content.
@@ -391,44 +392,75 @@ export class View<
      * Create a list of intersections between the x and y axis through the tracer position
      * @public
      * @param laserPosition position where to calculate intersections,  
-     * @param perspective For tracer to work in perspective the 3d tracer position and plane to intersect is required,  
+     * @param planeIndex The index of the plane where tracer should be placed, based on the list in render state,  
      * @returns list of intersections (right, left, up ,down) 
      * results will be ordered from  closest to furthest from the tracer poitn
      */
-    async outlineLaser(laserPosition: ReadonlyVec2, perspective?: { laserPosition3d: ReadonlyVec3, plane: ReadonlyVec4 }): Promise<OutlineIntersection | undefined> {
+
+    outlineLaser(laserPosition: ReadonlyVec3, planeIndex: number): OutlineIntersection | undefined {
         const context = this._renderContext;
-        const measure = this._measureView;
-        if (context && measure) {
-            const scale = devicePixelRatio * this.resolutionModifier;
-            if (perspective) {
-                const { laserPosition3d, plane } = perspective;
-                const dir = vec3.fromValues(plane[0], plane[1], plane[2]);
-                const u = glMatrix.equals(Math.abs(vec3.dot(vec3.fromValues(0, 0, 1), dir)), 1)
-                    ? vec3.fromValues(0, 1, 0)
-                    : vec3.fromValues(0, 0, 1);
-                const r = vec3.cross(vec3.create(), u, dir);
-                vec3.cross(u, dir, r);
-                vec3.normalize(u, u);
-
-                vec3.cross(r, u, dir);
-                vec3.normalize(r, r);
-
-                const pts = await measure.draw.toMarkerPoints([vec3.add(vec3.create(), laserPosition3d, r), vec3.add(vec3.create(), laserPosition3d, u)])
-                if (pts[0] == undefined || pts[1] == undefined) {
-                    return undefined;
+        const { renderState } = this;
+        const plane = renderState.clipping.planes[planeIndex].normalOffset;
+        if (context) {
+            let pos: ReadonlyVec3 | undefined;
+            const [nx, ny, nz] = plane;
+            const planeDir = vec3.fromValues(nx, ny, nz);
+            if (renderState.camera.kind === "orthographic") {
+                pos = laserPosition;
+            } else {
+                const rayDir = vec3.sub(vec3.create(), renderState.camera.position, laserPosition);
+                vec3.normalize(rayDir, rayDir);
+                const d = vec3.dot(planeDir, rayDir);
+                if (d) {
+                    const t = (plane[3] - vec3.dot(planeDir, renderState.camera.position)) / d;
+                    pos = vec3.scaleAndAdd(vec3.create(), renderState.camera.position, rayDir, t);
                 }
-                const left = vec2.sub(vec2.create(), laserPosition, pts[0]);
-                vec2.normalize(left, left);
-                const right = vec2.fromValues(-left[0], -left[1]);
-                const up = vec2.sub(vec2.create(), laserPosition, pts[1]);
-                vec2.normalize(up, up);
-                const down = vec2.fromValues(-up[0], -up[1]);
-                return outlineLaser(await context.getOutlines(), laserPosition, scale,
-                    { left, right, down, up, tracerPosition3d: vec3.fromValues(laserPosition3d[0], laserPosition3d[2], -laserPosition3d[1]) });
-
             }
-            return outlineLaser(await context.getOutlines(), laserPosition, scale);
+
+            if (pos) {
+                const flipToGl = (v: ReadonlyVec3) => vec3.fromValues(v[0], v[2], -v[1]);
+                const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
+                let flipLaser = false;
+                const minI = Math.abs(nx) < Math.abs(ny) && Math.abs(nx) < Math.abs(nz) ? 0 : Math.abs(ny) < Math.abs(nz) ? 1 : 2;
+                let flipY = 1;
+                let flipX = 1;
+                if (minI != 2) {
+                    flipLaser = true;
+                    const maxI = Math.abs(nx) > Math.abs(ny) ? 0 : 1;
+                    if (planeDir[maxI] < 0) {
+                        flipX = -1;
+                    } else {
+                        flipY = -1;
+                    }
+
+
+                }
+
+                const { outlineRenderers } = context;
+                const outlineRenderer = outlineRenderers.get(this.renderStateGL.clipping.planes[planeIndex].normalOffset);
+                if (outlineRenderer) {
+                    const lines: [ReadonlyVec2, ReadonlyVec2][] = [];
+                    for (const cluster of outlineRenderer.getLineClusters()) {
+                        for (const l of outlineRenderer.get2dLines(cluster)) {
+                            lines.push(l);
+                        }
+                    }
+
+                    const { up, down, right, left } = outlineLaser(
+                        lines,
+                        outlineRenderer.transformToPlane(flipToGl(pos)),
+                        flipLaser ? vec2.fromValues(0, 1 * flipY) : vec2.fromValues(1 * flipY, 0),
+                        flipLaser ? vec2.fromValues(1 * flipX, 0) : vec2.fromValues(0, 1 * flipX));
+                    return {
+                        up: up.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
+                        down: down.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
+                        right: right.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
+                        left: left.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
+                    }
+                }
+            }
         }
+        return undefined;
     }
 
     /**
