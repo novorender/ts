@@ -226,11 +226,10 @@ const struct OctreeTextures {
     lowp sampler2D materials;
     mediump sampler2D highlights;
     mediump sampler2D gradients;
-    // these textures should be arranged in texture arrays instead
-    mediump sampler2D base_color;
-    mediump sampler2D normal;
-    mediump sampler2D orm; // occlusion, roughness and metalness
     mediump sampler2D lut_ggx;
+    mediump sampler2DArray base_color;
+    mediump sampler2DArray normal;
+    mediump sampler2DArray orm; // occlusion, roughness and metalness
 };
 const struct NodeTextures {
     lowp sampler2D unlit_color;

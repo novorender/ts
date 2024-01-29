@@ -82,7 +82,7 @@ export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParam
                 }
                 else {
                     console.assert(target == gl.TEXTURE_2D_ARRAY);
-                    textureImage(gl.TEXTURE_3D, image, level, width / n, height / n, depth);
+                    textureImage(gl.TEXTURE_2D_ARRAY, image, level, width / n, height / n, depth);
                 }
             } else {
                 console.assert(target == gl.TEXTURE_2D);
@@ -196,7 +196,7 @@ export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGL
                 }
                 else {
                     console.assert(target == gl.TEXTURE_2D_ARRAY);
-                    textureImage(gl.TEXTURE_3D, image, level, width / n, height / n, depth);
+                    textureImage(gl.TEXTURE_2D_ARRAY, image, level, width / n, height / n, depth);
                 }
             } else {
                 console.assert(target == gl.TEXTURE_2D);
@@ -346,22 +346,22 @@ export interface TextureParams3DCompressedMipMapped extends Compressed, Size3D<P
 }
 
 // 2D Array
-export type TextureParams2DArrayUncompressed = Uncompressed & Size3D & GenMipMap & {
+export type TextureParams2DArrayUncompressed = Uncompressed & Size2DArray<Pow2> & GenMipMap & {
     readonly kind: "TEXTURE_2D_ARRAY";
     readonly image: BufferSource | null;
 }
 
-export interface TextureParams2DArrayCompressed extends Compressed, Size3D {
+export interface TextureParams2DArrayCompressed extends Compressed, Size2DArray<Pow2> {
     readonly kind: "TEXTURE_2D_ARRAY";
     readonly image: BufferSource;
 }
 
-export type TextureParams2DArrayUncompressedMipMapped = Uncompressed & Size3D<Pow2> & {
+export type TextureParams2DArrayUncompressedMipMapped = Uncompressed & Size2DArray<Pow2> & {
     readonly kind: "TEXTURE_2D_ARRAY";
     readonly mipMaps: number | readonly (BufferSource | null)[];
 }
 
-export interface TextureParams2DArrayCompressedMipMapped extends Compressed, Size3D<Pow2> {
+export interface TextureParams2DArrayCompressedMipMapped extends Compressed, Size2DArray<Pow2> {
     readonly kind: "TEXTURE_2D_ARRAY";
     readonly mipMaps: readonly (BufferSource)[];
 }
@@ -481,6 +481,12 @@ interface GenMipMap {
 interface Size2D<T extends number = number> {
     readonly width: T;
     readonly height: T;
+}
+
+interface Size2DArray<T extends number = number> {
+    readonly width: T;
+    readonly height: T;
+    readonly depth: number;
 }
 
 interface Size3D<T extends number = number> {

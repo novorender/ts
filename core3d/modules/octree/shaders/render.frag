@@ -61,12 +61,14 @@ struct NormalInfo {
     vec3 b;    // Pertubed bitangent
 };
 
+const float highLightsTextureRows = 6.;
+
 // Get normal, tangent and bitangent vectors.
 // params: (all in local/world space)
 // v - vector from fragment to camera
 // normal - vertex normal
-// uv - texture coordinates
-NormalInfo getNormalInfo(vec3 v, vec3 normal, vec2 uv) {
+// uvw - texture coordinates
+NormalInfo getNormalInfo(vec3 v, vec3 normal, vec3 uvw) {
     vec3 ng = normalize(normal);
     mat3 ts = triplanarTangentSpace(ng);
 
@@ -74,9 +76,10 @@ NormalInfo getNormalInfo(vec3 v, vec3 normal, vec2 uv) {
     float facing = step(0., dot(v, ng)) * 2. - 1.;
     ts *= facing;
     // Compute pertubed normals:
-    vec2 xy = texture(textures.normal, uv).rg; // RG16F for signed normals
+    vec3 n;
+    vec2 xy = texture(textures.normal, uvw).rg; // RG16F for signed normals
     float z = sqrt(1. - dot(xy, xy)); // compute z component from xy (to save memory and bandwith)
-    vec3 n = vec3(xy, z); // tangent-space normal
+    n = vec3(xy, z); // tangent-space normal
     n = ts * n; // transform into world space
     n = normalize(n);
 
@@ -103,10 +106,10 @@ struct MaterialInfo {
     mediump vec3 baseColor; // getBaseColor()
 };
 
-MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, mediump float f0_ior, vec2 uv) {
+MaterialInfo getMetallicRoughnessInfo(MaterialInfo info, mediump float f0_ior, vec3 uvw) {
     // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
     // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
-    vec4 mrSample = texture(textures.orm, uv);
+    vec4 mrSample = texture(textures.orm, uvw);
     info.perceptualRoughness = mrSample.g;
     info.metallic = mrSample.b;
     info.occlusion = mrSample.r;
@@ -191,13 +194,14 @@ void main() {
     rgba = baseColor = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange); //Modify base color to get 
 #elif (MODE == MODE_TRIANGLES)
     if(baseColor == vec4(0)) {
-        rgba = texture(node_textures.unlit_color, varyings.texCoord0);
+        rgba = baseColor = texture(node_textures.unlit_color, varyings.texCoord0);
     } else {
         rgba = baseColor;
     }
 
 #endif
 
+    highp vec4 textureInfo = vec4(-1);
 #if defined (HIGHLIGHT)
     if(highlight == 254U) {
         discard;
@@ -205,77 +209,83 @@ void main() {
     if(highlight != 0U || scene.applyDefaultHighlight) {
         mediump float u = (float(highlight) + 0.5) / float(maxHighlights);
         mediump mat4 colorTransform;
-        colorTransform[0] = texture(textures.highlights, vec2(u, 0.5 / 6.0));
-        colorTransform[1] = texture(textures.highlights, vec2(u, 1.5 / 6.0));
-        colorTransform[2] = texture(textures.highlights, vec2(u, 2.5 / 6.0));
-        colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / 6.0));
-        mediump vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / 6.0));
-        rgba = colorTransform * rgba + colorTranslation;
+        colorTransform[0] = texture(textures.highlights, vec2(u, 0.5 / highLightsTextureRows));
+        colorTransform[1] = texture(textures.highlights, vec2(u, 1.5 / highLightsTextureRows));
+        colorTransform[2] = texture(textures.highlights, vec2(u, 2.5 / highLightsTextureRows));
+        colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / highLightsTextureRows));
+        mediump vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / highLightsTextureRows));
+        textureInfo = texture(textures.highlights, vec2(u, 5.5 / highLightsTextureRows));
+        rgba = baseColor = colorTransform * rgba + colorTranslation;
     }
 #endif
 
 #if (PASS != PASS_PICK && MODE != MODE_POINTS)
     if(baseColor != vec4(0)) {
-
         // apply shading
 #if defined (PBR)
-        mediump float uvScale = .5; // TODO: get from uniforms/lut texture
-        vec3 pos = varyings.positionLS;
-        mediump vec3 n = varyings.normalLS;
-        if(dot(n, n) < .5)
-            n = cross(dFdx(pos), dFdy(pos)); // use derivatives to compute geometric normal when vertex normal is undefined/missing
-        mediump vec3 v = normalize(varyings.toCamera);
+        float array_index = textureInfo.r;
+        // float array_index = float(highlight) - 2.;
+        if(array_index >= 0.) {
+            mediump float uvScale = textureInfo.g;
+            // mediump float uvScale = .5; // TODO: get from uniforms/lut texture
+            vec3 pos = varyings.positionLS;
+            mediump vec3 n = varyings.normalLS;
+            if(dot(n, n) < .5)
+                n = cross(dFdx(pos), dFdy(pos)); // use derivatives to compute geometric normal when vertex normal is undefined/missing
+            mediump vec3 v = normalize(varyings.toCamera);
 
-        vec2 uv = triplanarProjection(pos, n);
-        uv *= uvScale; // apply scale
+            vec2 uv = triplanarProjection(pos, n);
+            uv *= uvScale; // apply scale
+            vec3 uvw = vec3(uv, array_index);
 
-        MaterialInfo materialInfo;
-        baseColor *= texture(textures.base_color, uv);
-        materialInfo.baseColor = baseColor.rgb;
+            MaterialInfo materialInfo;
+            baseColor *= texture(textures.base_color, uvw);
+            materialInfo.baseColor = baseColor.rgb;
 
-        NormalInfo normalInfo = getNormalInfo(v, n, uv);
-        n = normalInfo.n; // used bump-mapped normal for shading
+            NormalInfo normalInfo = getNormalInfo(v, n, uvw);
+            n = normalInfo.n; // used bump-mapped normal for shading
 
-        // The default index of refraction of 1.5 yields a dielectric normal incidence reflectance of 0.04.
-        mediump float ior = 1.5;
-        mediump float f0_ior = .04;
-        materialInfo = getMetallicRoughnessInfo(materialInfo, f0_ior, uv);
+            // The default index of refraction of 1.5 yields a dielectric normal incidence reflectance of 0.04.
+            mediump float ior = 1.5;
+            mediump float f0_ior = .04;
+            materialInfo = getMetallicRoughnessInfo(materialInfo, f0_ior, uvw);
 
-        // Roughness is authored as perceptual roughness; as is convention, convert to material roughness by squaring the perceptual roughness.
-        materialInfo.alphaRoughness = materialInfo.perceptualRoughness * materialInfo.perceptualRoughness;
+            // Roughness is authored as perceptual roughness; as is convention, convert to material roughness by squaring the perceptual roughness.
+            materialInfo.alphaRoughness = materialInfo.perceptualRoughness * materialInfo.perceptualRoughness;
 
-        mediump float reflectance = max(max(materialInfo.f0.r, materialInfo.f0.g), materialInfo.f0.b);
+            mediump float reflectance = max(max(materialInfo.f0.r, materialInfo.f0.g), materialInfo.f0.b);
 
-        // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
-        materialInfo.f90 = vec3(clamp(reflectance * 50., 0., 1.));
+            // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
+            materialInfo.f90 = vec3(clamp(reflectance * 50., 0., 1.));
 
-        // LIGHTING
-        mediump vec3 f_specular = getIBLRadianceGGX(n, v, materialInfo.perceptualRoughness, materialInfo.f0);
-        mediump vec3 f_diffuse = getIBLRadianceLambertian(n, materialInfo.albedoColor);
-        // TODO: emissive?
+            // LIGHTING
+            mediump vec3 f_specular = getIBLRadianceGGX(n, v, materialInfo.perceptualRoughness, materialInfo.f0);
+            mediump vec3 f_diffuse = getIBLRadianceLambertian(n, materialInfo.albedoColor);
+            // TODO: emissive?
 
-        mediump vec3 color = f_diffuse + f_specular;
-        color *= materialInfo.occlusion;
-        rgba = vec4(color, baseColor.a);
-        // rgba = baseColor;
-        // rgba.rgb = normalInfo.n * .5 + .5;
-
-#else
-        // fast, but fairly basic shading for weaker devices
-        mediump vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
-        mediump vec3 N = normalize(normalWS);
-        mediump vec4 diffuseOpacity = rgba;
-
-        mediump float perceptualRoughness = mix(.1, 1., baseColor.a);
-        perceptualRoughness *= perceptualRoughness;
-
-        mediump vec3 irradiance = texture(textures.ibl.diffuse, N).rgb * perceptualRoughness;
-        mediump float lod = perceptualRoughness * (scene.iblMipCount - 1.0);
-        mediump vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb * (1. - perceptualRoughness);
-
-        mediump vec3 rgb = diffuseOpacity.rgb * irradiance + reflection;
-        rgba = vec4(rgb, rgba.a);
+            mediump vec3 color = f_diffuse + f_specular;
+            color *= materialInfo.occlusion;
+            rgba = vec4(color, baseColor.a);
+            // rgba = vec4(materialInfo.baseColor, baseColor.a);
+            // rgba.rgb = normalInfo.n * .5 + .5;
+        } else
 #endif
+        {
+            // fast, but fairly basic shading for weaker devices
+            mediump vec3 V = camera.viewLocalMatrixNormal * normalize(varyings.positionVS);
+            mediump vec3 N = normalize(normalWS);
+            mediump vec4 diffuseOpacity = rgba;
+
+            mediump float perceptualRoughness = mix(.1, 1., baseColor.a);
+            perceptualRoughness *= perceptualRoughness;
+
+            mediump vec3 irradiance = texture(textures.ibl.diffuse, N).rgb * perceptualRoughness;
+            mediump float lod = perceptualRoughness * (scene.iblMipCount - 1.0);
+            mediump vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb * (1. - perceptualRoughness);
+
+            mediump vec3 rgb = diffuseOpacity.rgb * irradiance + reflection;
+            rgba = vec4(rgb, rgba.a);
+        }
     }
 #endif
 
