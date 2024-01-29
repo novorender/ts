@@ -33,9 +33,8 @@ export interface FollowParametricObject {
      * unless the parametric object specify otherwise start will be 0 and end will be the length of all segments
      */
     readonly parameterBounds: ParameterBounds;
-    /** 
-     * Returns camera values for given parameter T,
-     * if T is before start it will return camera values at start and if its larger than end it will return camera values for end
-     */
-    getCameraValues(t: number): Promise<CameraValues | undefined>;
+    /** @internal */
+    readonly emulatedCurve?: { start: ReadonlyVec3; dir: ReadonlyVec3 } | undefined;
+    /** @internal */
+    readonly lineStrip?: ReadonlyVec3[];
 }

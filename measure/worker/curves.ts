@@ -98,7 +98,7 @@ export class LineStrip3D implements Curve3D {
         const dir =
             segIndex < vertices.length - 1
                 ? vec3.subtract(vec3.create(), vertices[segIndex + 1], start)
-                : vec3.subtract(vec3.create(), vertices[segIndex - 1], start);
+                : vec3.subtract(vec3.create(), start, vertices[segIndex - 1]);
         vec3.normalize(dir, dir);
         if (point) {
             const segStartParam = tesselationParameters[segIndex];

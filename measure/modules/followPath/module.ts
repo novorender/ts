@@ -63,33 +63,6 @@ export class FollowModule extends BaseModule {
         }
 
         if (parameterBounds && type) {
-            async function getCameraValues(
-                t: number
-            ): Promise<CameraValues | undefined> {
-                if (emulatedCurve) {
-                    const param =
-                        t < 0 ? 0 : t > parameterBounds!.end ? parameterBounds!.end : t;
-                    return {
-                        position: vec3.scaleAndAdd(
-                            vec3.create(),
-                            emulatedCurve.start,
-                            emulatedCurve.dir,
-                            param
-                        ),
-                        normal: vec3.negate(vec3.create(), emulatedCurve.dir),
-                    };
-                }
-                const curveVaues = await workerScene.evalCurve(
-                    id,
-                    entity!.pathIndex,
-                    entity!.instanceIndex,
-                    t,
-                    entity!.drawKind == "edge" ? "edge" : "curveSegment"
-                );
-                if (curveVaues) {
-                    return { position: curveVaues[0], normal: curveVaues[1] };
-                }
-            }
             const selectedEntity: MeasureEntity = {
                 ...entity,
                 ObjectId: id,
@@ -100,7 +73,7 @@ export class FollowModule extends BaseModule {
                 ids: [id],
                 selectedEntity,
                 parameterBounds,
-                getCameraValues,
+                emulatedCurve,
             };
         }
     }
@@ -156,61 +129,92 @@ export class FollowModule extends BaseModule {
             }
 
             const parameterBounds = { start: 0, end: len };
-            async function getCameraValues(
-                t: number
-            ): Promise<CameraValues | undefined> {
-                const param =
-                    t < 0 ? 0 : t > parameterBounds!.end ? parameterBounds!.end : t;
-                let i = 1;
-                let length = 0;
-                let prevLength = 0;
-                let currLength = 0;
-                for (; i < lineStrip.length; ++i) {
-                    currLength = vec3.dist(lineStrip[i - 1], lineStrip[i]);
-                    length += currLength;
-                    if (length > param) {
-                        break;
-                    }
-                    prevLength = length;
-                }
-                if (i == lineStrip.length) {
-                    const dir = vec3.subtract(
-                        vec3.create(),
-                        lineStrip[i - 2],
-                        lineStrip[i - 1]
-                    );
-                    return {
-                        position: lineStrip[i - 1],
-                        normal: vec3.normalize(dir, dir),
-                    };
-                }
-
-                const dir = vec3.subtract(
-                    vec3.create(),
-                    lineStrip[i - 1],
-                    lineStrip[i]
-                );
-
-                return {
-                    position: vec3.lerp(
-                        vec3.create(),
-                        lineStrip[i - 1],
-                        lineStrip[i],
-                        (param - prevLength) / currLength
-                    ),
-                    normal: vec3.normalize(dir, dir),
-                };
-            }
 
             return {
                 type: lineStrip.length == 2 ? "cylinder" : "cylinders",
                 ids,
                 selectedEntity: undefined,
                 parameterBounds,
-                getCameraValues,
+                lineStrip
             };
         }
 
         return undefined;
+    }
+
+    /** 
+     * Returns camera values for given parameter T,
+     * if T is before start it will return camera values at start and if its larger than end it will return camera values for end
+     */
+    async getCameraValues(t: number, folowObject: FollowParametricObject): Promise<CameraValues | undefined> {
+        const workerScene = await this.worker;
+        const { parameterBounds, emulatedCurve, ids, selectedEntity, lineStrip } = folowObject;
+        if (emulatedCurve) {
+            const param =
+                t < 0 ? 0 : t > parameterBounds.end ? parameterBounds.end : t;
+            return {
+                position: vec3.scaleAndAdd(
+                    vec3.create(),
+                    emulatedCurve.start,
+                    emulatedCurve.dir,
+                    param
+                ),
+                normal: vec3.negate(vec3.create(), emulatedCurve.dir),
+            };
+        } else if (ids.length == 1 && selectedEntity && selectedEntity.pathIndex != undefined && selectedEntity.instanceIndex != undefined) {
+            const curveVaues = await workerScene.evalCurve(
+                ids[0],
+                selectedEntity.pathIndex,
+                selectedEntity.instanceIndex,
+                t,
+                selectedEntity.drawKind == "edge" ? "edge" : "curveSegment"
+            );
+            if (curveVaues) {
+                return { position: curveVaues[0], normal: curveVaues[1] };
+            }
+        }
+        else if (lineStrip) {
+            const param =
+                t < 0 ? 0 : t > parameterBounds!.end ? parameterBounds!.end : t;
+            let i = 1;
+            let length = 0;
+            let prevLength = 0;
+            let currLength = 0;
+            for (; i < lineStrip.length; ++i) {
+                currLength = vec3.dist(lineStrip[i - 1], lineStrip[i]);
+                length += currLength;
+                if (length > param) {
+                    break;
+                }
+                prevLength = length;
+            }
+            if (i == lineStrip.length) {
+                const dir = vec3.subtract(
+                    vec3.create(),
+                    lineStrip[i - 2],
+                    lineStrip[i - 1]
+                );
+                return {
+                    position: lineStrip[i - 1],
+                    normal: vec3.normalize(dir, dir),
+                };
+            }
+
+            const dir = vec3.subtract(
+                vec3.create(),
+                lineStrip[i - 1],
+                lineStrip[i]
+            );
+
+            return {
+                position: vec3.lerp(
+                    vec3.create(),
+                    lineStrip[i - 1],
+                    lineStrip[i],
+                    (param - prevLength) / currLength
+                ),
+                normal: vec3.normalize(dir, dir),
+            };
+        }
     }
 }

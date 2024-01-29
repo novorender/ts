@@ -405,7 +405,6 @@ export function centerLinesToLinesTrip(
     }
     const lineStrip: ReadonlyVec3[] = [];
     if (startSegment && startSegment.next === undefined) {
-        const len = vec3.distance(startSegment.start, startSegment.end);
         lineStrip.push(vec3.clone(startSegment.start));
         lineStrip.push(vec3.clone(startSegment.end));
     } else if (startSegment && startSegment.next !== undefined) {
