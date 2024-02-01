@@ -294,12 +294,24 @@ mediump float toLinear(mediump float f) {
     if(f <= 0.0404482362771082f) {
         return f / 12.92f;
     }
-    return pow(((f + 0.055f) / 1.055f), 2.4f);
+    return pow(((f + 0.055f) / 1.055f), GAMMA);
 }
 
 // sRGB to linear approximation (http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html)
 mediump vec3 sRGBToLinearComplex(mediump vec3 srgbIn) {
     return vec3(toLinear(srgbIn.r), toLinear(srgbIn.g), toLinear(srgbIn.b));
+}
+
+vec3 linearTosRGBComplex(vec3 color) {
+    vec3 srgb;
+    for(int i = 0; i < 3; ++i) {
+        if(color[i] <= 0.0031308f) {
+            srgb[i] = 12.92f * color[i];
+        } else {
+            srgb[i] = 1.055f * pow(color[i], INV_GAMMA) - 0.055f;
+        }
+    }
+    return srgb;
 }
 
 // gradients

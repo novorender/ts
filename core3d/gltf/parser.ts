@@ -134,7 +134,7 @@ export async function parseGLTF(buffers: ArrayBuffer[], gltf: GLTF.GlTf, externa
         }
         const image = await createImageBitmap(blob, { colorSpaceConversion: "none" });
         const { width, height } = image;
-        const params: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width, height, generateMipMaps: true, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image };
+        const params: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width, height, generateMipMaps: true, internalFormat: "SRGB8_ALPHA8", type: "UNSIGNED_BYTE", image };
         return { params } as RenderStateDynamicImage;
     }) ?? [];
     const images = await Promise.all(imagePromises);
