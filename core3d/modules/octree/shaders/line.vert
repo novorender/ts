@@ -66,11 +66,14 @@ void main() {
     vec4 v1CS = (camera.viewClipMatrix * v1VS);
 
     // clip line against front clipping plane (Z=0)
-    if(!clipZ(v0CS, v1CS, v0VS, v1VS)) {
-        gl_Position = vec4(0); // line segment is behind front clipping plane, i.e. invisible, and should be culled/degenerate.
-        return;
-    }
 
+    bool isOrtho = camera.viewClipMatrix[3][3] != 0.0f;
+    if(!isOrtho) {
+        if(!clipZ(v0CS, v1CS, v0VS, v1VS)) {
+            gl_Position = vec4(0); // line segment is behind front clipping plane, i.e. invisible, and should be culled/degenerate.
+            return;
+        }
+    }
     // compute pixel coordinates.
     vec2 p0 = v0CS.xy / v0CS.w * camera.viewSize * 0.5f;
     vec2 p1 = v1CS.xy / v1CS.w * camera.viewSize * 0.5f;
