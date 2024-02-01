@@ -281,7 +281,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
 
         if (renderContext.hasStateChanged({ clipping })) {
-            updateShaderCompileConstants({ clip: clipping.enabled });
+            updateShaderCompileConstants({ clippingPlanes: clipping.enabled ? clipping.planes.length : 0 });
         }
 
         if (renderContext.hasStateChanged({ output })) {

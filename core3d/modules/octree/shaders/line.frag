@@ -34,18 +34,48 @@ void main() {
     if (varyingsFlat.color.a == 0.) {
         discard;
     }
-    lowp float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
-    bool inside = clipping.mode == clippingModeIntersection ? (clipping.numPlanes + (outline.planeIndex >= 0 ? 1u : 0u)) > 0U : true;
-    for(lowp uint i = 0u; i < clipping.numPlanes; i++) {
+
+
+#if defined(SLOW_RECOMPILE)
+    lowp float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
+    bool inside = clipping.mode == clippingModeIntersection ? clipping.numPlanes > 0U : true;
+    for(lowp uint i = 0U; i < clipping.numPlanes; i++) {
         if(int(i) == outline.planeIndex) {
             inside = inside && clipping.mode != clippingModeIntersection;
         } else {
-            inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.;
+            inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
         }
     }
     if(clipping.mode == clippingModeIntersection ? inside : !inside) {
         discard;
     }
+#endif
+#if (NUM_CLIPPING_PLANES > 0)
+    lowp float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
+    if(clipping.mode == clippingModeIntersection) {
+        bool isInside = false;
+        for(int i = 0; i < NUM_CLIPPING_PLANES; i++) {
+            bool inside = dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
+            if(!inside) {
+                isInside = true;
+            }
+        }
+        if(!isInside) {
+            discard;
+        }
+    } else {
+        for(int i = 0; i < NUM_CLIPPING_PLANES; i++) {
+            if (int(i) != outline.planeIndex) {
+                bool inside = dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
+                if(!inside) {
+                    discard;
+                }
+            }
+
+        }
+
+    }
+#endif
 
     float pixelRadius = varyings.radius;
     vec2 uv = varyings.uv;

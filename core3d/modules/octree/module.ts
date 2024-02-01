@@ -82,19 +82,19 @@ export class OctreeModule implements RenderModule {
         }
 
         const { textureUniforms, uniformBufferBlocks } = OctreeModule;
-        const shadersPromise = OctreeModule.compileShaders(context, bin);
-        const [/*color, pick, pre,*/  line, point, debug, corePrograms] = await Promise.all([
-            // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.color, ShaderMode.triangles) }),
-            // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pick, ShaderMode.triangles) }),
-            // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pre, ShaderMode.triangles) }),
-            context.makeProgramAsync(bin, { name: "octree_line", ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
-            context.makeProgramAsync(bin, { name: "octree_point", ...shaders.point, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
-            context.makeProgramAsync(bin, { name: "octree_debug", ...shaders.debug, uniformBufferBlocks }),
-            shadersPromise,
-        ]);
-        const programs: Programs = { ...corePrograms, line, point, debug };
+        const programs = await OctreeModule.compileShaders(context, bin);
+        // const [/*color, pick, pre,*/  line, point, debug, corePrograms] = await Promise.all([
+        //     // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.color, ShaderMode.triangles) }),
+        //     // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pick, ShaderMode.triangles) }),
+        //     // context.makeProgramAsync(bin, { ...shaders.render, uniformBufferBlocks, textureUniforms, header: OctreeModule.shaderConstants(ShaderPass.pre, ShaderMode.triangles) }),
+        //     context.makeProgramAsync(bin, { name: "octree_line", ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
+        //     context.makeProgramAsync(bin, { name: "octree_point", ...shaders.point, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: { flags: context.deviceProfile.quirks.adreno600 ? ["ADRENO600"] : [] } }),
+        //     context.makeProgramAsync(bin, { name: "octree_debug", ...shaders.debug, uniformBufferBlocks }),
+        //     shadersPromise,
+        // ]);
         // const programs = { color, pick, pre, intersect, line, debug };
         // const programs = { intersect, line, debug };
+        //const programs = { ...compilePrograms };
         return {
             bin, programs,
             sceneUniforms, samplerNearest, defaultBaseColorTexture, materialTexture, highlightTexture, gradientsTexture
@@ -102,17 +102,17 @@ export class OctreeModule implements RenderModule {
     }
 
     static readonly defaultProgramFlags = {
-        clip: false as boolean,
+        clippingPlanes: 0 as number,
         dither: false as boolean,
         highlight: false as boolean,
         pbr: false as boolean,
     } as const;
 
     static shaderConstants(deviceProfile: DeviceProfile, pass: ShaderPass, mode: ShaderMode, programFlags = OctreeModule.defaultProgramFlags) {
-        const { clip, dither, highlight, pbr } = programFlags;
+        const { clippingPlanes, dither, highlight, pbr } = programFlags;
         const flags: string[] = [];
-        if (clip || deviceProfile.quirks.slowShaderRecompile) { //Always complie in clip on devices with slow recomplie.
-            flags.push("CLIP");
+        if (deviceProfile.quirks.slowShaderRecompile) { //Always complie in clip on devices with slow recomplie.
+            flags.push("SLOW_RECOMPILE");
         }
         if (dither) {
             flags.push("DITHER");
@@ -131,15 +131,35 @@ export class OctreeModule implements RenderModule {
         }
         const defines = [
             { name: "PASS", value: pass.toString() },
-            { name: "MODE", value: mode.toString() },
+            { name: "MODE", value: mode.toString() }
         ];
+        if (deviceProfile.quirks.slowShaderRecompile) { //Change clipping loop for shaders with slow shader recompilation
+            flags.push("SLOW_RECOMPILE");
+        } else {
+            defines.push({ name: "NUM_CLIPPING_PLANES", value: clippingPlanes.toString() });
+        }
         return { defines, flags } as const;
     }
 
-    static async compileShaders(context: RenderContext, bin: ResourceBin, programFlags = OctreeModule.defaultProgramFlags): Promise<PassPrograms> {
+
+
+    static outlineShaderConstants(deviceProfile: DeviceProfile, programFlags = OctreeModule.defaultProgramFlags) {
+        const { clippingPlanes, dither, highlight, pbr } = programFlags;
+        const flags: string[] = [];
+        if (deviceProfile.quirks.slowShaderRecompile) { //Always complie in clip on devices with slow recomplie.
+            flags.push("SLOW_RECOMPILE");
+        }
+        const defines = deviceProfile.quirks.slowShaderRecompile ?
+            [] :
+            [{ name: "NUM_CLIPPING_PLANES", value: clippingPlanes.toString() }];
+        return { defines, flags } as const;
+    }
+
+
+    static async compileShaders(context: RenderContext, bin: ResourceBin, programFlags = OctreeModule.defaultProgramFlags): Promise<Programs> {
         const shaders = context.imports.shaders.octree;
         const { textureUniforms, uniformBufferBlocks } = OctreeModule;
-        const programs = {} as Mutable<PassPrograms>;
+        const corePrograms = {} as Mutable<PassPrograms>;
         const promises: Promise<void>[] = [];
         for (const pass of OctreeModule.passes) {
             const modes = {} as Mutable<ModePrograms>;
@@ -150,9 +170,15 @@ export class OctreeModule implements RenderModule {
                 });
                 promises.push(compiledPromise);
             }
-            programs[pass] = modes;
+            corePrograms[pass] = modes;
         }
-        await Promise.all(promises);
+
+        const [/*color, pick, pre,*/  line, point, debug] = await Promise.all([
+            context.makeProgramAsync(bin, { name: "octree_line", ...shaders.line, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: OctreeModule.outlineShaderConstants(context.deviceProfile, programFlags) }),
+            context.makeProgramAsync(bin, { name: "octree_point", ...shaders.point, uniformBufferBlocks: ["Camera", "Clipping", "Outline"], header: OctreeModule.outlineShaderConstants(context.deviceProfile, programFlags) }),
+            context.makeProgramAsync(bin, { name: "octree_debug", ...shaders.debug, uniformBufferBlocks }),
+        ]);
+        const programs: Programs = { ...corePrograms, line, point, debug };
         return programs;
     }
 

@@ -147,18 +147,54 @@ mediump vec3 getIBLRadianceLambertian(mediump vec3 n, mediump vec3 diffuseColor)
 
 void main() {
     highp float linearDepth = -varyings.positionVS.z;
-#if defined(CLIP)
     if(linearDepth < camera.near)
         discard;
 
-    lowp float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
+#if defined(SLOW_RECOMPILE)
+    lowp float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
     bool inside = clipping.mode == clippingModeIntersection ? clipping.numPlanes > 0U : true;
     for(lowp uint i = 0U; i < clipping.numPlanes; i++) {
-        inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.;
+        inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
     }
     if(clipping.mode == clippingModeIntersection ? inside : !inside) {
         discard;
     }
+#endif
+#if (NUM_CLIPPING_PLANES > 0)
+    lowp float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
+#if defined (ADRENO600)
+//Adreno des not like dynamic loops, breaks or continue.
+//The compiler also gets confused with ternaries and combining boolean multiple times.
+//This code runs fine on adreno please dont touch.
+    if(clipping.mode == clippingModeIntersection) { 
+        bool isInside = false;
+        for(int i = 0; i < NUM_CLIPPING_PLANES; i++) {
+            bool inside = dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
+            if(!inside) {
+                isInside = true;
+            }
+        }
+        if(!isInside) {
+            discard;
+        }
+    } else {
+        for(int i = 0; i < NUM_CLIPPING_PLANES; i++) {
+            bool inside = dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
+            if(!inside) {
+                discard;
+            }
+        }
+    }
+#else
+    bool inside = clipping.mode == clippingModeIntersection ? NUM_CLIPPING_PLANES > 0 : true;
+    for(int i = 0; i < NUM_CLIPPING_PLANES; i++) {
+        inside = inside && dot(vec4(varyings.positionVS, 1), clipping.planes[i]) * s < 0.f;
+    }
+
+    if(clipping.mode == clippingModeIntersection ? inside : !inside) {
+        discard;
+    }
+#endif
 #endif
 
     mediump vec4 baseColor;
