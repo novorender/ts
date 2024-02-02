@@ -226,17 +226,17 @@ void main() {
     mediump vec4 rgba = vec4(0);
 #if (MODE == MODE_POINTS)
     rgba = baseColor;
-#elif (MODE == MODE_TERRAIN)
+#elif (MODE == MODE_TERRAIN) //This mode is for rendering terrein height map as colors
     rgba = baseColor = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange); //Modify base color to get 
 #elif (MODE == MODE_TRIANGLES)
     if(baseColor == vec4(0)) {
-        rgba = baseColor = texture(node_textures.unlit_color, varyings.texCoord0);
+        rgba =  texture(node_textures.unlit_color, varyings.texCoord0);
     } else {
         rgba = baseColor;
     }
 
 #endif
-
+    bool shouldBeShaded = baseColor != vec4(0);
     highp vec4 textureInfo = vec4(-1);
 #if defined (HIGHLIGHT)
     if(highlight == 254U) {
@@ -255,8 +255,8 @@ void main() {
     }
 #endif
 
-#if (PASS != PASS_PICK && MODE != MODE_POINTS)
-    if(baseColor != vec4(0)) {
+#if (PASS != PASS_PICK && MODE == MODE_TRIANGLES)
+    if(shouldBeShaded) {
         // apply shading
 #if defined (PBR)
         float array_index = textureInfo.r;
