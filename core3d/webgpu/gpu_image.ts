@@ -1,5 +1,4 @@
 import type { CubeImages, TextureImageSource, TextureParams } from "webgl2"
-import generate_mipmaps from "./shaders/generate_mipmaps.wgsl";
 
 export type Image = {
     descriptor: GPUTextureDescriptor,
@@ -177,13 +176,8 @@ export function GPUImageFromTextureParams(textureParams: TextureParams, usage: n
     };
 }
 
-export function generateMipmaps(device: GPUDevice, texture: GPUTexture, normalize: boolean) {
-    const module = device.createShaderModule({
-        label: "Mipmap shader",
-        code: generate_mipmaps,
-    });
-
-    const blockDim = 16;
+export const generateMipmapsBlockDim = 16;
+export function generateMipmaps(device: GPUDevice, mipmapsPipeline: GPUComputePipeline, texture: GPUTexture) {
     const maxSide = Math.max(texture.width, texture.height);
     const mipLevelCount = Math.floor(Math.log2(maxSide)) + 1;
     const output = device.createTexture({
@@ -197,18 +191,6 @@ export function generateMipmaps(device: GPUDevice, texture: GPUTexture, normaliz
             | GPUTextureUsage.TEXTURE_BINDING
             | GPUTextureUsage.COPY_SRC
             | GPUTextureUsage.COPY_DST
-    });
-
-    const computePipeline = device.createComputePipeline({
-        layout: "auto",
-        compute: {
-            module,
-            entryPoint: "generate_mipmaps_linear",
-            constants: {
-                0: normalize ? 1 : 0,
-                1: blockDim,
-            }
-        },
     });
 
     const encoder = device.createCommandEncoder();
@@ -231,7 +213,7 @@ export function generateMipmaps(device: GPUDevice, texture: GPUTexture, normaliz
             mipLevelCount: 1,
         });
 
-        let bindGroupLayout = computePipeline.getBindGroupLayout(0);
+        let bindGroupLayout = mipmapsPipeline.getBindGroupLayout(0);
         let bindGroup = device.createBindGroup({
             layout: bindGroupLayout,
             entries: [
@@ -247,9 +229,9 @@ export function generateMipmaps(device: GPUDevice, texture: GPUTexture, normaliz
         });
 
         const cpass = encoder.beginComputePass();
-        cpass.setPipeline(computePipeline);
+        cpass.setPipeline(mipmapsPipeline);
         cpass.setBindGroup(0, bindGroup);
-        cpass.dispatchWorkgroups(Math.ceil(width / blockDim), Math.ceil(height / blockDim));
+        cpass.dispatchWorkgroups(Math.ceil(width / generateMipmapsBlockDim), Math.ceil(height / generateMipmapsBlockDim));
         cpass.end();
 
         width = Math.max(width >> 1, 1);

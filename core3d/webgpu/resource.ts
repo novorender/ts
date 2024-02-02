@@ -1,5 +1,6 @@
 import { TextureImageSourceClasses } from "webgl2";
-import { generateMipmaps, type Image } from "./gpu_image";
+import { generateMipmaps, generateMipmapsBlockDim, type Image } from "./gpu_image";
+import generate_mipmaps from "./shaders/generate_mipmaps.wgsl";
 
 type GPUResource = GPUTexture | GPUBuffer | GPUShaderModule | GPUSampler | GPURenderPipeline | GPUComputePipeline | GPUBindGroup | GPUBindGroupLayout | GPUPipelineLayout;
 
@@ -11,6 +12,7 @@ type GPUResource = GPUTexture | GPUBuffer | GPUShaderModule | GPUSampler | GPURe
  */
 export class ResourceBin {
     private readonly resourceMap = new Map<GPUResource, ResourceInfo[]>();
+    private mipmapsPipeline: GPUComputePipeline | undefined;
 
     /** @internal */
     constructor(
@@ -115,9 +117,30 @@ export class ResourceBin {
                 levelNum += 1;
             }
         }else if(TextureImageSourceClasses.some(T => image.data instanceof T)){
-            this.device.queue.copyExternalImageToTexture({source: image.data as any}, {texture}, [texture.width, texture.height])
+            this.device.queue.copyExternalImageToTexture({source: image.data as any}, {texture}, [texture.width, texture.height]);
+            // TODO: This probably should go somewhere else
+            // In the context?
             if (image.generateMipMaps) {
-                texture = generateMipmaps(this.device, texture, false); //TODO: image.normalizeMips)
+                if(!this.mipmapsPipeline) {
+                    const module = this.device.createShaderModule({
+                        label: "Mipmap shader",
+                        code: generate_mipmaps,
+                    });
+
+                    const normalize = false;
+                    this.mipmapsPipeline = this.device.createComputePipeline({
+                        layout: "auto",
+                        compute: {
+                            module,
+                            entryPoint: "generate_mipmaps_linear",
+                            constants: {
+                                0: normalize ? 1 : 0,
+                                1: generateMipmapsBlockDim,
+                            }
+                        },
+                    });
+                }
+                texture = generateMipmaps(this.device, this.mipmapsPipeline, texture); //TODO: image.normalizeMips)
             }
         }
 
