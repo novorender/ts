@@ -670,6 +670,9 @@ export interface RenderStateOutlines {
 
     /** The outline intersection plane. */
     readonly plane: ReadonlyVec4;
+
+    /** Minimum angle to create breaking points from outlines in degrees */
+    readonly breakingPointAngleThreshold: number;
 }
 
 /** Tone mapping related render state.

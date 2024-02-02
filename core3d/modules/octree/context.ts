@@ -70,7 +70,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         const { renderContext, resources, uniforms, projectedSizeSplitThreshold, module, currentProgramFlags } = this;
         const { gl, deviceProfile } = renderContext;
-        const { scene, localSpaceTranslation, highlights, points, terrain, pick, output, clipping } = state;
+        const { scene, localSpaceTranslation, highlights, points, terrain, pick, output, clipping, outlines } = state;
         const { values } = uniforms.scene;
 
         let { nextProgramFlags } = this;
@@ -107,6 +107,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             updateGradients = true;
         }
 
+
         if (renderContext.hasStateChanged({ terrain })) {
             const { values } = uniforms.scene;
             values.elevationRange = gradientRange(terrain.elevationGradient);
@@ -118,6 +119,10 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         if (renderContext.hasStateChanged({ pick })) {
             const { values } = uniforms.scene;
             values.pickOpacityThreshold = pick.opacityThreshold;
+        }
+
+        if (outlines && renderContext.prevState?.outlines && outlines.breakingPointAngleThreshold != renderContext.prevState.outlines.breakingPointAngleThreshold) {
+            renderContext.outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>; // all outline renderers has to go
         }
 
         if (updateGradients) {
@@ -651,7 +656,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const [x, y, z, offset] = plane;
             const p = vec4.fromValues(x, y, z, -offset);
             //TODO: Sync with renderstate.
-            const edgeAngleThreshold = 30; // don't render intersecting edges (as points) that has smaller angles than this threshold between their neighboring triangles.
+            const edgeAngleThreshold = state.outlines.breakingPointAngleThreshold; // don't render intersecting edges (as points) that has smaller angles than this threshold between their neighboring triangles.
             const minVertexSpacing = state.outlines.linearThickness;
             outlineRenderer = new OutlineRenderer(this, state.localSpaceTranslation, p, edgeAngleThreshold, minVertexSpacing, highlights);
             outlineRenderers.set(plane, outlineRenderer);

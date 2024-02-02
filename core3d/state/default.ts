@@ -77,6 +77,7 @@ export function defaultRenderState(): RenderState {
             lineColor: [4, 4, 4], // bright white (overexposed)
             vertexColor: [0, .5, 0], // green
             plane: [0, 0, 1, 0],
+            breakingPointAngleThreshold: 30
         },
         tonemapping: {
             exposure: 0,
