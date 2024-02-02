@@ -321,6 +321,7 @@ export class RenderContextWebGPU {
                 },
                 usage: GPUTextureUsage.TEXTURE_BINDING,
             },
+            generateMipMaps: false,
             data: this.imports.lutGGX
         }
         this.lut_ggx = defaultBin.createTextureFromImage(lutImage);

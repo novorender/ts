@@ -1,5 +1,5 @@
 import { TextureImageSourceClasses } from "webgl2";
-import type { Image } from "./gpu_image";
+import { generateMipmaps, type Image } from "./gpu_image";
 
 type GPUResource = GPUTexture | GPUBuffer | GPUShaderModule | GPUSampler | GPURenderPipeline | GPUComputePipeline | GPUBindGroup | GPUBindGroupLayout | GPUPipelineLayout;
 
@@ -58,7 +58,13 @@ export class ResourceBin {
         if(TextureImageSourceClasses.some(T => image.data instanceof T)) {
             image.descriptor.usage |= GPUTextureUsage.RENDER_ATTACHMENT;
         }
-        const texture = this.add(this.device.createTexture(image.descriptor), { kind: "Texture", byteSize: textureBytes(image.descriptor) });
+        if(TextureImageSourceClasses.some(T => image.data instanceof T)) {
+            image.descriptor.usage |= GPUTextureUsage.COPY_SRC;
+        }
+        let texture = this.add(
+            this.device.createTexture(image.descriptor),
+            { kind: "Texture", byteSize: textureBytes(image.descriptor) }
+        );
         if(image.data instanceof ArrayBuffer || ArrayBuffer.isView(image.data)) {
             this.device.queue.writeTexture(
                 { texture },
@@ -109,8 +115,10 @@ export class ResourceBin {
                 levelNum += 1;
             }
         }else if(TextureImageSourceClasses.some(T => image.data instanceof T)){
-            // TODO: check generateMipmaps and generate them
             this.device.queue.copyExternalImageToTexture({source: image.data as any}, {texture}, [texture.width, texture.height])
+            if (image.generateMipMaps) {
+                texture = generateMipmaps(this.device, texture, false); //TODO: image.normalizeMips)
+            }
         }
 
         return texture

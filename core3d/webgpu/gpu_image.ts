@@ -1,7 +1,9 @@
 import type { CubeImages, TextureImageSource, TextureParams } from "webgl2"
+import generate_mipmaps from "./shaders/generate_mipmaps.wgsl";
 
 export type Image = {
     descriptor: GPUTextureDescriptor,
+    generateMipMaps: boolean,
     data: number | BufferSource | readonly (BufferSource | null)[] | readonly (CubeImages | null)[] | TextureImageSource | null
 }
 
@@ -170,6 +172,93 @@ export function GPUImageFromTextureParams(textureParams: TextureParams, usage: n
             label,
             mipLevelCount: "mipMaps" in textureParams ? typeof(textureParams.mipMaps) == "number" ? textureParams.mipMaps : textureParams.mipMaps.length : undefined,
         },
+        generateMipMaps: ("generateMipMaps" in textureParams && textureParams.generateMipMaps) ?? false,
         data: "image" in textureParams ? textureParams.image : textureParams.mipMaps
     };
+}
+
+export function generateMipmaps(device: GPUDevice, texture: GPUTexture, normalize: boolean) {
+    const module = device.createShaderModule({
+        label: "Mipmap shader",
+        code: generate_mipmaps,
+    });
+
+    const blockDim = 16;
+    const maxSide = Math.max(texture.width, texture.height);
+    const mipLevelCount = Math.floor(Math.log2(maxSide)) + 1;
+    const output = device.createTexture({
+        label: "Mipmap generation output",
+        dimension: texture.dimension,
+        size: { width: texture.width, height: texture.height },
+        mipLevelCount,
+        sampleCount: 1,
+        format: texture.format,
+        usage: GPUTextureUsage.STORAGE_BINDING
+            | GPUTextureUsage.TEXTURE_BINDING
+            | GPUTextureUsage.COPY_SRC
+            | GPUTextureUsage.COPY_DST
+    });
+
+    const computePipeline = device.createComputePipeline({
+        layout: "auto",
+        compute: {
+            module,
+            entryPoint: "generate_mipmaps_linear",
+            constants: {
+                0: normalize ? 1 : 0,
+                1: blockDim,
+            }
+        },
+    });
+
+    const encoder = device.createCommandEncoder();
+
+    encoder.copyTextureToTexture({texture}, {texture: output}, {width: texture.width, height: texture.height});
+
+    let side = maxSide >> 1;
+    let width = Math.max(texture.width >> 1, 1);
+    let height = Math.max(texture.height >> 1, 1);
+    let level = 0;
+    while (side > 0) {
+        const outputView = output.createView({
+            dimension: "2d",
+            baseMipLevel: level + 1,
+            mipLevelCount: 1,
+        });
+        let inputView = output.createView({
+            dimension: "2d",
+            baseMipLevel: level,
+            mipLevelCount: 1,
+        });
+
+        let bindGroupLayout = computePipeline.getBindGroupLayout(0);
+        let bindGroup = device.createBindGroup({
+            layout: bindGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: inputView,
+                },
+                {
+                    binding: 1,
+                    resource: outputView
+                }
+            ]
+        });
+
+        const cpass = encoder.beginComputePass();
+        cpass.setPipeline(computePipeline);
+        cpass.setBindGroup(0, bindGroup);
+        cpass.dispatchWorkgroups(Math.ceil(width / blockDim), Math.ceil(height / blockDim));
+        cpass.end();
+
+        width = Math.max(width >> 1, 1);
+        height = Math.max(height >> 1, 1);
+        side = side >> 1;
+        level += 1;
+    }
+
+    device.queue.submit([encoder.finish()]);
+
+    return output;
 }
