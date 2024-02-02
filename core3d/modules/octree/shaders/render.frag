@@ -226,7 +226,7 @@ void main() {
     mediump vec4 rgba = vec4(0);
 #if (MODE == MODE_POINTS)
     rgba = baseColor;
-#elif (MODE == MODE_TERRAIN) //This mode is for rendering terrein height map as colors
+#elif (MODE == MODE_TERRAIN) //This mode is for rendering terrain height map as colors
     rgba = baseColor = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange); //Modify base color to get 
 #elif (MODE == MODE_TRIANGLES)
     if(baseColor == vec4(0)) {
