@@ -312,8 +312,8 @@ void main() {
             mediump vec3 N = normalize(normalWS);
             mediump vec4 diffuseOpacity = rgba;
 
-            mediump float perceptualRoughness = mix(.1, 1., baseColor.a);
-            perceptualRoughness *= perceptualRoughness;
+            mediump float perceptualRoughness = mix(.75, 1., baseColor.a);
+            //perceptualRoughness *= perceptualRoughness;
 
             mediump vec3 irradiance = texture(textures.ibl.diffuse, N).rgb * perceptualRoughness;
             mediump float lod = perceptualRoughness * (scene.iblMipCount - 1.0);
