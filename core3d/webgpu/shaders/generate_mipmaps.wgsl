@@ -45,6 +45,9 @@ fn generate_mipmaps_linear(@builtin(global_invocation_id) global_id: vec3<u32>) 
     let p22 = textureLoad(input, in_uv + vec2(1, 1), 0);
     var color = p11 * fx2 * fy2 + p21 * fx1 * fy2 + p12 * fx2 * fy1 + p22 * fx1 * fy1;
 
+    // reduce "contrast" by gradually reducing the xyz components
+    // xyz = mix(uniforms.neutral, xyz, uniforms.contrast);
+
     if(NORMALIZE) {
         color = vec4(normalize(color.rgb), color.a);
     }
@@ -56,8 +59,6 @@ fn generate_mipmaps_linear(@builtin(global_invocation_id) global_id: vec3<u32>) 
 @workgroup_size(BLOCK_DIM, BLOCK_DIM, 1)
 fn generate_mipmaps_nearest(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var weights = array<f32, n2>(.25, .25, .25, .25);
-    let targetSize = textureDimensions(output); // the texture view's baseMipLevel determines both dimensions and is what level 0 is
-    // let neutral = uniforms.neutral;
 	let out_uv = global_id.xy;
     if !any(out_uv < textureDimensions(output)) {
         return;
@@ -74,7 +75,7 @@ fn generate_mipmaps_nearest(@builtin(global_invocation_id) global_id: vec3<u32>)
     }
 
     // reduce "contrast" by gradually reducing the xyz components
-    // xyz = mix(neutral, xyz, uniforms.contrast);
+    // xyz = mix(uniforms.neutral, xyz, uniforms.contrast);
 
     if(NORMALIZE) {
         color = vec4(normalize(color.rgb), color.a);
