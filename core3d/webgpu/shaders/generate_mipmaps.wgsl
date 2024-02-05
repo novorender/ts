@@ -44,9 +44,11 @@ fn generate_mipmaps_linear(@builtin(global_invocation_id) global_id: vec3<u32>) 
     let p12 = textureLoad(input, in_uv + vec2(0, 1), 0);
     let p22 = textureLoad(input, in_uv + vec2(1, 1), 0);
     var color = p11 * fx2 * fy2 + p21 * fx1 * fy2 + p12 * fx2 * fy1 + p22 * fx1 * fy1;
+
     if(NORMALIZE) {
         color = vec4(normalize(color.rgb), color.a);
     }
+
     textureStore(output, out_uv, color);
 }
 
@@ -56,21 +58,27 @@ fn generate_mipmaps_nearest(@builtin(global_invocation_id) global_id: vec3<u32>)
     var weights = array<f32, n2>(.25, .25, .25, .25);
     let targetSize = textureDimensions(output); // the texture view's baseMipLevel determines both dimensions and is what level 0 is
     // let neutral = uniforms.neutral;
-    let uv = global_id.xy;
-    if all(uv < targetSize) {
-        // filter pixel
-        var color = vec4f(0.);
-        for (var y = 0u; y < n; y++) {
-            for (var x = 0u; x < n; x++) {
-                color += textureLoad(input, uv * 2u + vec2u(x, y), 0) * weights[x + y * n];
-            }
-        }
-        // reduce "contrast" by gradually reducing the xyz components
-        // xyz = mix(neutral, xyz, uniforms.contrast);
-        if(NORMALIZE) {
-            color = vec4(normalize(color.rgb), color.a);
-        }
-
-        textureStore(output, uv, color);
+	let out_uv = global_id.xy;
+    if !any(out_uv < textureDimensions(output)) {
+        return;
     }
+
+    var in_uv = out_uv * 2;
+
+    // filter pixel
+    var color = vec4f(0.);
+    for (var y = 0u; y < n; y++) {
+        for (var x = 0u; x < n; x++) {
+            color += textureLoad(input, in_uv + vec2u(x, y), 0) * weights[x + y * n];
+        }
+    }
+
+    // reduce "contrast" by gradually reducing the xyz components
+    // xyz = mix(neutral, xyz, uniforms.contrast);
+
+    if(NORMALIZE) {
+        color = vec4(normalize(color.rgb), color.a);
+    }
+
+    textureStore(output, out_uv, color);
 }
