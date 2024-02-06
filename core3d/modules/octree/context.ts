@@ -1,10 +1,10 @@
-import type { DerivedRenderState, PBRMaterialData, RenderContext, RenderStateGroupAction, RenderStateHighlightGroups, RenderStateScene, RGB, RGBATransform } from "core3d";
+import type { DerivedRenderState, PBRMaterialData, RenderContext, RenderStateGroupAction, RenderStateHighlightGroups, RenderStateHighlightGroupTexture, RenderStateScene, RGB, RGBATransform } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
 import { glClear, glDelete, glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
 import { getMultiDrawParams, MaterialType } from "./mesh";
-import { type ReadonlyVec3, vec3, vec4, type ReadonlyVec4 } from "gl-matrix";
+import { type ReadonlyVec3, vec3, vec4, type ReadonlyVec4, glMatrix } from "gl-matrix";
 import type { NodeLoader } from "./loader";
 import { computeGradientColors, gradientRange } from "./gradient";
 // import { BufferFlags } from "@novorender/core3d/buffers";
@@ -38,7 +38,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     suspendUpdates = false;
 
     materialParams: Readonly<Record<string, PBRMaterialData>>;
-    materialTextures: MaterialTextures = { color: null, normal: null, orm: null };
+    materialTextures: MaterialTextures = { color: null, nor: null };
 
     localSpaceTranslation = vec3.create() as ReadonlyVec3;
     localSpaceChanged = false;
@@ -138,7 +138,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 this.materialTextures = OctreeModule.createMaterialTextures(this.resources.bin, materialParams[0], materialParams);
             } else {
                 updateShaderCompileConstants({ pbr: false });
-                this.materialTextures = { color: null, normal: null, orm: null };
+                this.materialTextures = { color: null, nor: null };
             }
         }
 
@@ -433,7 +433,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     render(state: DerivedRenderState) {
         const { resources, renderContext, debug } = this;
         const { usePrepass, samplerSingle, samplerMip, samplerEnvMip, samplerMipRepeat } = renderContext;
-        const { color, normal, orm } = this.materialTextures;
+        const { color, nor } = this.materialTextures;
         const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
         const { gl, iblTextures, lut_ggx, cameraUniforms, clippingUniforms, deviceProfile } = renderContext;
 
@@ -458,8 +458,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 { kind: "TEXTURE_2D", texture: gradientsTexture, sampler: samplerNearest },
                 { kind: "TEXTURE_2D", texture: lut_ggx, sampler: samplerMip },
                 { kind: "TEXTURE_2D_ARRAY", texture: color, sampler: samplerMipRepeat }, // base_color
-                { kind: "TEXTURE_2D_ARRAY", texture: normal, sampler: samplerMipRepeat }, // normal map
-                { kind: "TEXTURE_2D_ARRAY", texture: orm, sampler: samplerMipRepeat }, // occlusion, roughness & metalness map
+                { kind: "TEXTURE_2D_ARRAY", texture: nor, sampler: samplerMipRepeat }, // normal, occlusion & roughness map
             ],
         });
         this.applyDefaultAttributeValues();
@@ -783,14 +782,20 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
         }
     }
 
-    function copyMatrix(index: number, rgbaTransform: RGBATransform, textureIndex?: number, textureScale?: number) {
+    function copyMatrix(index: number, rgbaTransform: RGBATransform, texture?: RenderStateHighlightGroupTexture) {
         for (let col = 0; col < 5; col++) {
             for (let row = 0; row < numColorMatrixRows; row++) {
                 colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform[col + row * 5];
             }
         }
         const col = numColorMatrixCols - 1;
-        const rgba = [textureIndex ?? -1, textureScale ?? 0, 0, 0];
+        const i = texture?.index ?? -1;
+        const s = 1 / (texture?.scale ?? 1);
+        const a = glMatrix.toRadian(texture?.rotation ?? 0);
+        const x = Math.cos(a) * s;
+        const y = Math.sin(a) * s;
+        const m = texture?.metalness ?? 0;
+        const rgba = [i, x, y, m];
         for (let row = 0; row < numColorMatrixRows; row++) {
             colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgba[row];
         }
@@ -800,8 +805,7 @@ function createColorTransforms(highlights: RenderStateHighlightGroups) {
     const { defaultAction, groups } = highlights;
     copyMatrix(0, getRGBATransform(defaultAction));
     for (let i = 0; i < groups.length; i++) {
-        const { textureIndex, textureScale } = groups[i];
-        copyMatrix(i + 1, getRGBATransform(groups[i].action), textureIndex, textureScale ? 1 / textureScale : undefined); // TODO: move texture scale into separate array
+        copyMatrix(i + 1, getRGBATransform(groups[i].action), groups[i].texture);
     }
     return colorMatrices;
 }

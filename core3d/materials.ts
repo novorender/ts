@@ -4,11 +4,8 @@ export interface PBRMaterialTextures {
     /** Base color texture mip-map pixels. */
     readonly albedoTexture: readonly BufferSource[];
 
-    /** Normal texture mip-map pixels. */
-    readonly normalTexture: readonly BufferSource[];
-
-    /** Occlusion/metallic/roughness texture mip-map pixels. */
-    readonly occlusionMetallicRoughnessTexture: readonly BufferSource[];
+    /** Normal, occlusion, roughness texture mip-map pixels. */
+    readonly norTexture: readonly BufferSource[];
 }
 
 export interface PBRMaterialCommon {

@@ -52,10 +52,10 @@ struct ClippingColors {
     mediump vec4 colors[6];
 };
 bool clip(highp vec3 point, ClippingUniforms clipping) {
-    float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
+    float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
     bool inside = clipping.mode == clippingModeIntersection ? clipping.numPlanes > 0U : true;
     for(uint i = 0U; i < clipping.numPlanes; i++) {
-        inside = inside && dot(vec4(point, 1), clipping.planes[i]) * s < 0.f;
+        inside = inside && dot(vec4(point, 1), clipping.planes[i]) * s < 0.;
     }
     return clipping.mode == clippingModeIntersection ? inside : !inside;
 }
@@ -75,10 +75,10 @@ struct OutlineUniforms {
 };
 
 bool clipOutlines(highp vec3 point, ClippingUniforms clipping) {
-    float s = clipping.mode == clippingModeIntersection ? -1.f : 1.f;
+    float s = clipping.mode == clippingModeIntersection ? -1. : 1.;
     bool inside = clipping.mode == clippingModeIntersection ? clipping.numPlanes > 0U : true;
     for(uint i = 0U; i < clipping.numPlanes; i++) {
-        inside = inside && dot(vec4(point, 1), clipping.planes[i]) * s < 0.f;
+        inside = inside && dot(vec4(point, 1), clipping.planes[i]) * s < 0.;
     }
     return !inside;
 }
@@ -232,8 +232,7 @@ const struct OctreeTextures {
     mediump sampler2D gradients;
     mediump sampler2D lut_ggx;
     mediump sampler2DArray base_color;
-    mediump sampler2DArray normal;
-    mediump sampler2DArray orm; // occlusion, roughness and metalness
+    mediump sampler2DArray nor; // normal, occlusion and roughness
 };
 const struct NodeTextures {
     lowp sampler2D unlit_color;
@@ -249,7 +248,7 @@ struct WatermarkUniforms {
 };
 
 // tonemapping
-const mediump float tonemapMaxDeviation = 1.f;
+const mediump float tonemapMaxDeviation = 1.;
 const lowp uint tonemapModeColor = 0U;
 const lowp uint tonemapModeNormal = 1U;
 const lowp uint tonemapModeDepth = 2U;
@@ -271,7 +270,7 @@ struct TonemappingTextures {
 };
 
 // dither transparency
-const mediump mat4 ditherThresholds = mat4(0.0f / 16.0f, 8.0f / 16.0f, 2.0f / 16.0f, 10.0f / 16.0f, 12.0f / 16.0f, 4.0f / 16.0f, 14.0f / 16.0f, 6.0f / 16.0f, 3.0f / 16.0f, 11.0f / 16.0f, 1.0f / 16.0f, 9.0f / 16.0f, 15.0f / 16.0f, 7.0f / 16.0f, 13.0f / 16.0f, 5.0f / 16.0f);
+const mediump mat4 ditherThresholds = mat4(0.0 / 16.0, 8.0 / 16.0, 2.0 / 16.0, 10.0 / 16.0, 12.0 / 16.0, 4.0 / 16.0, 14.0 / 16.0, 6.0 / 16.0, 3.0 / 16.0, 11.0 / 16.0, 1.0 / 16.0, 9.0 / 16.0, 15.0 / 16.0, 7.0 / 16.0, 13.0 / 16.0, 5.0 / 16.0);
 mediump float dither(highp vec2 xy) {
     lowp int x = int(xy.x) & 3;
     lowp int y = int(xy.y) & 3;
@@ -279,8 +278,8 @@ mediump float dither(highp vec2 xy) {
 }
 
 // sRGB
-const mediump float GAMMA = 2.2f;
-const mediump float INV_GAMMA = 1.0f / GAMMA;
+const mediump float GAMMA = 2.2;
+const mediump float INV_GAMMA = 1.0 / GAMMA;
 // linear to sRGB approximation (http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html)
 mediump vec3 linearTosRGB(mediump vec3 color) {
     return pow(color, vec3(INV_GAMMA));
@@ -291,10 +290,10 @@ mediump vec3 sRGBToLinear(mediump vec3 srgbIn) {
 }
 
 mediump float toLinear(mediump float f) {
-    if(f <= 0.0404482362771082f) {
-        return f / 12.92f;
+    if(f <= 0.0404482362771082) {
+        return f / 12.92;
     }
-    return pow(((f + 0.055f) / 1.055f), GAMMA);
+    return pow(((f + 0.055) / 1.055), GAMMA);
 }
 
 // sRGB to linear approximation (http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html)
@@ -305,22 +304,22 @@ mediump vec3 sRGBToLinearComplex(mediump vec3 srgbIn) {
 vec3 linearTosRGBComplex(vec3 color) {
     vec3 srgb;
     for(int i = 0; i < 3; ++i) {
-        if(color[i] <= 0.0031308f) {
-            srgb[i] = 12.92f * color[i];
+        if(color[i] <= 0.0031308) {
+            srgb[i] = 12.92 * color[i];
         } else {
-            srgb[i] = 1.055f * pow(color[i], INV_GAMMA) - 0.055f;
+            srgb[i] = 1.055 * pow(color[i], INV_GAMMA) - 0.055;
         }
     }
     return srgb;
 }
 
 // gradients
-const mediump float numGradients = 2.f;
-const mediump float deviationV = 0.f / numGradients + .5f / numGradients;
-const mediump float elevationV = 1.f / numGradients + .5f / numGradients;
+const mediump float numGradients = 2.;
+const mediump float deviationV = 0. / numGradients + .5 / numGradients;
+const mediump float elevationV = 1. / numGradients + .5 / numGradients;
 
 mediump vec4 getGradientColor(mediump sampler2D gradientTexture, highp float position, mediump float v, highp vec2 range) {
-    mediump float u = (range[0] >= range[1]) ? 0.f : (position - range[0]) / (range[1] - range[0]);
+    mediump float u = (range[0] >= range[1]) ? 0. : (position - range[0]) / (range[1] - range[0]);
     return texture(gradientTexture, vec2(u, v));
 }
 
@@ -328,20 +327,20 @@ mediump vec4 getGradientColor(mediump sampler2D gradientTexture, highp float pos
 
 // we use octrahedral packing of normals to map 3 components down to 2: https://jcgt.org/published/0003/02/01/
 mediump vec2 signNotZero(mediump vec2 v) { // returns ±1
-    return vec2((v.x >= 0.f) ? +1.f : -1.f, (v.y >= 0.f) ? +1.f : -1.f);
+    return vec2((v.x >= 0.) ? +1. : -1., (v.y >= 0.) ? +1. : -1.);
 }
 
 mediump vec2 float32x3_to_oct(mediump vec3 v) { // assume normalized input. Output is on [-1, 1] for each component.
     // project the sphere onto the octahedron, and then onto the xy plane
-    mediump vec2 p = v.xy * (1.f / (abs(v.x) + abs(v.y) + abs(v.z)));
+    mediump vec2 p = v.xy * (1. / (abs(v.x) + abs(v.y) + abs(v.z)));
     // reflect the folds of the lower hemisphere over the diagonals
-    return (v.z <= 0.f) ? ((1.f - abs(p.yx)) * signNotZero(p)) : p;
+    return (v.z <= 0.) ? ((1. - abs(p.yx)) * signNotZero(p)) : p;
 }
 
 mediump vec3 oct_to_float32x3(mediump vec2 e) {
-    mediump vec3 v = vec3(e.xy, 1.f - abs(e.x) - abs(e.y));
-    if(v.z < 0.f)
-        v.xy = (1.f - abs(v.yx)) * signNotZero(v.xy);
+    mediump vec3 v = vec3(e.xy, 1. - abs(e.x) - abs(e.y));
+    if(v.z < 0.)
+        v.xy = (1. - abs(v.yx)) * signNotZero(v.xy);
     return normalize(v);
 }
 
@@ -350,7 +349,7 @@ highp uvec2 packNormalAndDeviation(mediump vec3 normal, mediump float deviation)
 }
 
 highp uvec2 packNormal(mediump vec3 normal) {
-    return packNormalAndDeviation(normal, 0.f);
+    return packNormalAndDeviation(normal, 0.);
 }
 
 mediump vec4 unpackNormalAndDeviation(highp uvec2 normalAndDeviation) {
