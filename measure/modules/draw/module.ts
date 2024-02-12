@@ -8,7 +8,7 @@ import type { DuoMeasurementValues } from "../core";
 import type { ManholeMeasureValues } from "../manhole";
 import { lineSegmentIntersection, type Intersection2d } from "../../calculations_2d";
 
-const SCREEN_SPACE_EPSILON = 0.000001;
+const SCREEN_SPACE_EPSILON = 0.2;
 
 /**
  * Module for converting measure data to drawable objects. 
@@ -394,7 +394,7 @@ function toOnscreenText(points: ReadonlyVec3[],
         if (ortho && (head[2] < -cameraFar)) {
             return tail;
         }
-        if (head[2] > 0.1) {
+        if (head[2] > SCREEN_SPACE_EPSILON) {
             return tail;
         }
         const _p = toScreen(projMat, width, height, head);
@@ -501,7 +501,7 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                     width,
                     height,
                     camera.kind == "orthographic",
-                    camera.far + 0.1
+                    camera.far + 0.2
                 );
                 drawPart.vertices2D = points?.screenPoints;
                 drawPart.indicesOnScreen = points?.intdices;
@@ -515,7 +515,7 @@ function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
                     width,
                     height,
                     camera.kind == "orthographic",
-                    camera.far + 0.1
+                    camera.far + 0.2
                 );
                 if (points) {
                     const { screenPoints, indicesOnScreen } = points;
