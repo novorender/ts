@@ -553,10 +553,23 @@ export interface RenderStateHighlightGroup {
     readonly outlineColor?: RGB;
     /** A set of unique object_id belonging to this group, sorted in ascending order. */
     readonly objectIds: Iterable<number>;
-    /** Texture index. */
-    readonly textureIndex?: number;
-    /** Texture scale. */
-    readonly textureScale?: number;
+    /** Texture information. */
+    readonly texture?: RenderStateHighlightGroupTexture;
+}
+
+/**
+ * Render state for a highlight group texture.
+ * @category Render State
+ */
+export interface RenderStateHighlightGroupTexture {
+    /** Index into texture array. */
+    readonly index: number;
+    /** Scale, default = 1. */
+    readonly scale?: number;
+    /** Rotation in degrees, default = 0. */
+    readonly rotation?: number;
+    /** Metalness [0,1], default = 0. */
+    readonly metalness?: number;
 }
 
 /**

@@ -34,7 +34,7 @@ export class OctreeModule implements RenderModule {
     readonly gradientImageParams: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: Gradient.size, height: 2, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null };
     readonly maxHighlights = 8;
 
-    static readonly textureNames = ["unlit_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients", "lut_ggx", "base_color", "normal", "orm"] as const;
+    static readonly textureNames = ["unlit_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients", "lut_ggx", "base_color", "nor"] as const;
     static readonly textureUniforms = OctreeModule.textureNames.map(name => `textures.${name}`);
     static readonly uniformBufferBlocks = ["Camera", "Clipping", "Scene", "Node"];
     static readonly passes = [ShaderPass.color, ShaderPass.pick, ShaderPass.pre] as const;
@@ -184,7 +184,7 @@ export class OctreeModule implements RenderModule {
 
     static createMaterialTextures(bin: ResourceBin, common: PBRMaterialCommon, textures: readonly PBRMaterialTextures[]) {
         if (textures.length == 0) {
-            return { params: undefined, color: null, normal: null, orm: null } as const;
+            return { params: undefined, color: null, nor: null } as const;
         }
         const { width, height, mipCount } = common;
 
@@ -200,7 +200,7 @@ export class OctreeModule implements RenderModule {
         }
 
         // combine all mip map images into an array image
-        function flattenMips(key: "albedoTexture" | "normalTexture" | "occlusionMetallicRoughnessTexture") {
+        function flattenMips(key: "albedoTexture" | "norTexture") {
             const mergedMipMaps: BufferSource[] = [];
             for (let i = 0; i < mipCount; i++) {
                 const dst = new Uint8Array(textures[0][key][i].byteLength * textures.length);
@@ -221,23 +221,18 @@ export class OctreeModule implements RenderModule {
         // TODO: streamline loading and merging of mipmaps (textureUpdate with x,y,z offsets?)
 
         const baseColorTextures = flattenMips("albedoTexture");
-        const normalTextures = flattenMips("normalTexture");
-        const ormTextures = flattenMips("occlusionMetallicRoughnessTexture");
-        // const { baseColorTexture, normalTexture, occlusionMetallicRoughnessTexture } = materials[0];
+        const norTextures = flattenMips("norTexture");
         const colorArrayParams = arrayParams({ internalFormat: "R11F_G11F_B10F", type: "UNSIGNED_INT_10F_11F_11F_REV" }, baseColorTextures);
-        const normalArrayParams = arrayParams({ internalFormat: "RG16F", type: "HALF_FLOAT" }, normalTextures);
-        const ormArrayParams = arrayParams({ internalFormat: "RGB8", type: "UNSIGNED_BYTE" }, ormTextures);
-
+        const norArrayParams = arrayParams({ internalFormat: "RGBA8", type: "UNSIGNED_BYTE" }, norTextures);
         const color = colorArrayParams ? bin.createTexture(colorArrayParams) : null;
-        const normal = normalArrayParams ? bin.createTexture(normalArrayParams) : null;
-        const orm = ormArrayParams ? bin.createTexture(ormArrayParams) : null;
-        return { color, normal, orm } as const;
+        const nor = norArrayParams ? bin.createTexture(norArrayParams) : null;
+        return { color, nor } as const;
     }
 
     static disposeMaterialTextures(bin: ResourceBin, textures: MaterialTextures | undefined) {
         if (textures) {
-            const { color, normal, orm } = textures;
-            bin.delete(color, normal, orm);
+            const { color, nor } = textures;
+            bin.delete(color, nor);
         }
     }
 
