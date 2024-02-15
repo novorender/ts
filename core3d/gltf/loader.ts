@@ -75,11 +75,11 @@ export function parseGLB(data: ArrayBuffer) {
 }
 
 /** @internal */
-export async function loadData(url: URL, abortController?: AbortController) {
+export async function loadData(url: URL, abortController?: AbortController, extension?: "gltf" | "glb") {
     const path = url.pathname.toLowerCase();
     let gltf: GLTF.GlTf;
     let buffers: ArrayBuffer[];
-    if (path.endsWith(".gltf")) {
+    if (path.endsWith(".gltf") || extension === "gltf") {
         gltf = await downloadJson(url) as GLTF.GlTf;
         // fetch binary buffer(s)
         const bufferPromises = (gltf.buffers ?? []).map(async buf => {
@@ -89,7 +89,7 @@ export async function loadData(url: URL, abortController?: AbortController) {
             return downloadArrayBuffer(bufferUrl, abortController);
         });
         buffers = await Promise.all(bufferPromises);
-    } else if (path.endsWith(".glb")) {
+    } else if (path.endsWith(".glb") || extension === "glb") {
         const glb = await downloadArrayBuffer(url, abortController);
         const { json, buffer } = parseGLB(glb);
         gltf = JSON.parse(json) as GLTF.GlTf;
