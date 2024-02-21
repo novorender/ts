@@ -207,14 +207,19 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             const { values } = uniforms.scene;
             values.applyDefaultHighlight = highlights.defaultAction != undefined;
 
-            // are there any potential changes to filtering
+            const objectIds = groups.map(g => g.objectIds);
+            const prevObjectIds = prevState?.highlights.groups.map(g => g.objectIds) ?? [];
+            const objectIdsChanged = !sequenceEqual(objectIds, prevObjectIds);
+
+            // are there any potential changes to filtering ?
             if (scene) {
-                const n = Math.max(groups.length, prevGroups.length);
                 let reload = false;
                 const prevDefaultAction = prevState?.highlights.defaultAction;
                 const currDefaultAction = state.highlights.defaultAction;
                 if (prevDefaultAction != currDefaultAction && (prevDefaultAction == "filter" || currDefaultAction == "filter")) {
                     reload = true; // default action has changed from/to filter mode.
+                } else if (currDefaultAction == "filter" && objectIdsChanged) {
+                    reload = true; // Default action is filter and at least one of the groups has changed their object ids.
                 } else {
                     const filterGroups = new Set<Iterable<number>>(prevGroups.filter(g => g.action == "filter").map(g => g.objectIds));
                     for (const { action, objectIds } of groups) {
@@ -246,10 +251,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const image = createColorTransforms(highlights);
                 glUpdateTexture(gl, resources.highlightTexture, { kind: "TEXTURE_2D", width: 256, height: 6, internalFormat: "RGBA32F", type: "FLOAT", image });
             }
-
-            const objectIds = groups.map(g => g.objectIds);
-            const prevObjectIds = prevState?.highlights.groups.map(g => g.objectIds) ?? [];
-            const objectIdsChanged = !sequenceEqual(objectIds, prevObjectIds);
 
             const actions = groups.map(g => typeof g.action == "string" ? g.action : undefined);
             const prevActions = prevState?.highlights.groups.map(g => typeof g.action == "string" ? g.action : undefined) ?? [];
