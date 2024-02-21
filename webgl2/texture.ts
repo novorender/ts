@@ -136,104 +136,29 @@ export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParam
     return texture;
 }
 
-export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGLTexture, params: TextureParams) {
-    const width = params.width ?? params.image.width;
-    const height = params.height ?? params.image.height;
+export function glUpdateTexture(gl: WebGL2RenderingContext, targetTexture: WebGLTexture, params: TextureUpdateParams) {
     const target = gl[params.kind];
+    const { image, width, height } = params;
+    const level = params.level ?? 0;
     const depth = "depth" in params ? params.depth : undefined;
+    const x = params.x ?? 0;
+    const y = params.y ?? 0;
+    const z = "z" in params ? params.z : undefined;
+    const { format, type } = getFormatInfoUncompressed(gl, params.internalFormat, params.type);
+
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(target, targetTexture);
-
-    const { internalFormat, format, type, arrayType } = getFormatInfo(gl, params.internalFormat, "type" in params ? params.type : undefined);
-
-    type ImageTarget = typeof gl[TextureImageTargetString];
-
-    function textureImage(imgTarget: typeof gl[TextureImageTargetString], data: BufferSource | null, level: number, sizeX: number, sizeY: number, sizeZ = 0) {
-        if (!data)
-            return;
-        const source = data;
-        const view = ArrayBuffer.isView(source) ? source : undefined;
-        const buffer = ArrayBuffer.isView(view) ? view.buffer : source as ArrayBufferLike;
-        const byteOffset = view?.byteOffset ?? 0;
-        const byteLength = view?.byteLength ?? buffer?.byteLength;
-        const pixels = buffer === null ? null : new arrayType(buffer, byteOffset, byteLength / arrayType.BYTES_PER_ELEMENT);
-        const offsetX = 0;
-        const offsetY = 0
-        const offsetZ = 0;
-        if (type) {
-            if (sizeZ) {
-                gl.texSubImage3D(imgTarget, level, offsetX, offsetY, offsetZ, sizeX, sizeY, sizeZ, format as number, type, pixels);
-            } else {
-                gl.texSubImage2D(imgTarget, level, offsetX, offsetY, sizeX, sizeY, format as number, type, pixels);
-            }
+    if (target == gl.TEXTURE_3D || target == gl.TEXTURE_2D_ARRAY) {
+        if (ArrayBuffer.isView(image)) {
+            gl.texSubImage3D(target, level, x, y, z!, width, height, depth!, format, type, image);
         } else {
-            if (sizeZ) {
-                gl.compressedTexSubImage3D(imgTarget, level, offsetX, offsetY, offsetZ, sizeX, sizeY, sizeZ, internalFormat, pixels!);
-            } else {
-                gl.compressedTexSubImage2D(imgTarget, level, offsetX, offsetY, sizeX, sizeY, internalFormat, pixels!);
-            }
-        }
-    }
-
-    function textureMipLevel(level: number, image: BufferSource | readonly BufferSource[] | null) {
-        function isArray(img: typeof image): img is readonly BufferSource[] {
-            return Array.isArray(img);
-        }
-        const n = 1 << level;
-        if (isArray(image)) {
-            console.assert(target == gl.TEXTURE_CUBE_MAP);
-            const cubeImages = image[level];
-            if (cubeImages) {
-                let side = gl.TEXTURE_CUBE_MAP_POSITIVE_X;
-                for (let img of image) {
-                    textureImage((side++) as ImageTarget, img, level, width / n, height / n);
-                }
-            }
-        } else {
-            if (depth) {
-                if (target == gl.TEXTURE_3D) {
-                    textureImage(gl.TEXTURE_3D, image, level, width / n, height / n, depth / n);
-                }
-                else {
-                    console.assert(target == gl.TEXTURE_2D_ARRAY);
-                    textureImage(gl.TEXTURE_2D_ARRAY, image, level, width / n, height / n, depth);
-                }
-            } else {
-                console.assert(target == gl.TEXTURE_2D);
-                textureImage(gl.TEXTURE_2D, image, level, width / n, height / n);
-            }
-        }
-    }
-
-    if ("mipMaps" in params) {
-        // mip mapped
-        const { mipMaps } = params;
-        const isNumber = typeof mipMaps == "number";
-        const levels = isNumber ? mipMaps : mipMaps.length;
-        if (!isNumber) {
-            for (let level = 0; level < levels; level++) {
-                const mipMap = mipMaps[level];
-                if (mipMap) {
-                    textureMipLevel(level, mipMap);
-                }
-            }
-        }
-    } else if (isBufferSource(params.image)) {
-        const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
-        if (generateMipMaps && !(isPowerOf2(width) && isPowerOf2(height) && type)) {
-            throw new Error(`Cannot generate mip maps on a texture of non-power of two sizes (${width}, ${height})!`);
-        }
-        const levels = generateMipMaps ? Math.log2(Math.min(width, height)) : 1;
-        textureMipLevel(0, params.image);
-        if (generateMipMaps && params.image) {
-            gl.generateMipmap(target);
+            gl.texSubImage3D(target, level, x, y, z!, width, height, depth!, format, type, image);
         }
     } else {
-        const generateMipMaps = "generateMipMaps" in params && params.generateMipMaps;
-        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format!, type!, params.image as TextureImageSource);
-        if (generateMipMaps && isPowerOf2(width) && isPowerOf2(height)) {
-            gl.generateMipmap(target);
+        if (ArrayBuffer.isView(image)) {
+            gl.texSubImage2D(target, level, x, y, width, height, format, type, image);
+        } else {
+            gl.texSubImage2D(target, level, x, y, width, height, format, type, image);
         }
     }
     gl.bindTexture(target, null);
@@ -252,26 +177,33 @@ function isBufferSource(image: unknown): image is BufferSource {
 }
 
 function getFormatInfo(gl: WebGL2RenderingContext, internalFormatString: UncompressedTextureFormatString | CompressedTextureFormatString, typeString?: TexelTypeString) {
-    if (isFormatCompressed(internalFormatString)) {
-        const internalFormat = compressedFormats[internalFormatString];
-        const format = undefined;
-        const type = undefined;
-        const arrayType = Uint8Array;
-        return { internalFormat, format, type, arrayType };
-    } else {
-        const internalFormat = gl[internalFormatString] as keyof typeof internalFormat2FormatLookup;
-        const format = internalFormat2FormatLookup[internalFormat];
-        const type = gl[typeString!];
-        const arrayType = getBufferViewType(typeString!);
-        return { internalFormat, format, type, arrayType };
-    }
+    return isFormatCompressed(internalFormatString) ? getFormatInfoCompressed(internalFormatString) : getFormatInfoUncompressed(gl, internalFormatString, typeString!);
 }
+
+function getFormatInfoUncompressed(gl: WebGL2RenderingContext, internalFormatString: UncompressedTextureFormatString, typeString: TexelTypeString) {
+    const internalFormat = gl[internalFormatString] as keyof typeof internalFormat2FormatLookup;
+    const format = internalFormat2FormatLookup[internalFormat];
+    const type = gl[typeString!];
+    const arrayType = getBufferViewType(typeString!);
+    return { internalFormat, format, type, arrayType };
+}
+
+function getFormatInfoCompressed(internalFormatString: CompressedTextureFormatString) {
+    const internalFormat = compressedFormats[internalFormatString];
+    const format = undefined;
+    const type = undefined;
+    const arrayType = Uint8Array;
+    return { internalFormat, format, type, arrayType };
+}
+
 
 export type TextureParams =
     TextureParams2DUncompressedImage | TextureParams2DUncompressed | TextureParams2DCompressed | TextureParams2DUncompressedMipMapped | TextureParams2DCompressedMipMapped |
     TextureParamsCubeUncompressed | TextureParamsCubeCompressed | TextureParamsCubeUncompressedMipMapped | TextureParamsCubeCompressedMipMapped |
     TextureParams3DUncompressed | TextureParams3DCompressed | TextureParams3DUncompressedMipMapped | TextureParams3DCompressedMipMapped |
     TextureParams2DArrayUncompressed | TextureParams2DArrayCompressed | TextureParams2DArrayUncompressedMipMapped | TextureParams2DArrayCompressedMipMapped;
+
+export type TextureUpdateParams = TextureUpdateParams2DUncompressed | TextureUpdateParamsCubeUncompressed | TextureUpdateParams3DUncompressed | TextureUpdateParams2DArrayUncompressed; // TODO: Add update params compressed textures as well
 
 export type TextureTargetString = TextureParams["kind"];
 
@@ -303,6 +235,14 @@ export interface TextureParams2DCompressedMipMapped extends Compressed, Size2D<P
     readonly mipMaps: readonly (BufferSource)[];
 };
 
+export type TextureUpdateParams2DUncompressed = Uncompressed & Span2D & {
+    readonly kind: "TEXTURE_2D";
+    readonly level?: number;
+    readonly image: ArrayBufferView | TexImageSource;
+};
+
+
+
 // Cube
 export type TextureParamsCubeUncompressed = Uncompressed & Size2D & GenMipMap & {
     readonly kind: "TEXTURE_CUBE_MAP";
@@ -323,6 +263,16 @@ export interface TextureParamsCubeCompressedMipMapped extends Compressed, Size2D
     readonly kind: "TEXTURE_CUBE_MAP";
     readonly mipMaps: readonly (CubeImages)[];
 }
+
+export type TextureUpdateParamsCubeUncompressed = Uncompressed & Span3D & {
+    readonly kind:
+    "TEXTURE_CUBE_MAP_POSITIVE_X" | "TEXTURE_CUBE_MAP_NEGATIVE_X" |
+    "TEXTURE_CUBE_MAP_POSITIVE_Y" | "TEXTURE_CUBE_MAP_NEGATIVE_Y" |
+    "TEXTURE_CUBE_MAP_POSITIVE_Z" | "TEXTURE_CUBE_MAP_NEGATIVE_Z";
+    readonly level?: number;
+    readonly image: ArrayBufferView | TexImageSource;
+};
+
 
 // 3D
 export type TextureParams3DUncompressed = Uncompressed & Size3D & GenMipMap & {
@@ -345,6 +295,13 @@ export interface TextureParams3DCompressedMipMapped extends Compressed, Size3D<P
     readonly mipMaps: readonly (BufferSource)[];
 }
 
+export type TextureUpdateParams3DUncompressed = Uncompressed & Span3D & {
+    readonly kind: "TEXTURE_3D";
+    readonly level?: number;
+    readonly image: ArrayBufferView | TexImageSource;
+};
+
+
 // 2D Array
 export type TextureParams2DArrayUncompressed = Uncompressed & Size2DArray<Pow2> & GenMipMap & {
     readonly kind: "TEXTURE_2D_ARRAY";
@@ -365,6 +322,13 @@ export interface TextureParams2DArrayCompressedMipMapped extends Compressed, Siz
     readonly kind: "TEXTURE_2D_ARRAY";
     readonly mipMaps: readonly (BufferSource)[];
 }
+
+export type TextureUpdateParams2DArrayUncompressed = Uncompressed & Span2DArray & {
+    readonly kind: "TEXTURE_2D_ARRAY";
+    readonly level?: number;
+    readonly image: ArrayBufferView | TexImageSource;
+};
+
 
 export type TextureImageTargetString = "TEXTURE_2D" | "TEXTURE_3D" | "TEXTURE_2D_ARRAY" | "TEXTURE_CUBE_MAP_POSITIVE_X" | "TEXTURE_CUBE_MAP_NEGATIVE_X" | "TEXTURE_CUBE_MAP_POSITIVE_Y" | "TEXTURE_CUBE_MAP_NEGATIVE_Y" | "TEXTURE_CUBE_MAP_POSITIVE_Z" | "TEXTURE_CUBE_MAP_NEGATIVE_Z";
 
@@ -465,7 +429,7 @@ export type CompressedTextureFormatString =
     // EXT_texture_compression_rgtc
     "COMPRESSED_RED_RGTC1_EXT" | "COMPRESSED_SIGNED_RED_RGTC1_EXT" | "COMPRESSED_RED_GREEN_RGTC2_EXT" | "COMPRESSED_SIGNED_RED_GREEN_RGTC2_EXT";
 
-export type Pow2 = 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 | 32758 | 65536;
+export type Pow2 = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 | 32758 | 65536;
 export type CubeImages = readonly [posX: BufferSource, negX: BufferSource, posY: BufferSource, negZ: BufferSource, posZ: BufferSource, negZ: BufferSource];
 
 type Uncompressed = UncompressedTextureFormatType;
@@ -483,9 +447,25 @@ interface Size2D<T extends number = number> {
     readonly height: T;
 }
 
+interface Span2D {
+    readonly x?: number;
+    readonly y?: number;
+    readonly width: number;
+    readonly height: number;
+}
+
 interface Size2DArray<T extends number = number> {
     readonly width: T;
     readonly height: T;
+    readonly depth: number;
+}
+
+interface Span2DArray {
+    readonly x?: number;
+    readonly y?: number;
+    readonly z?: number;
+    readonly width: number;
+    readonly height: number;
     readonly depth: number;
 }
 
@@ -493,6 +473,15 @@ interface Size3D<T extends number = number> {
     readonly width: T;
     readonly height: T;
     readonly depth: T;
+}
+
+interface Span3D {
+    readonly x?: number;
+    readonly y?: number;
+    readonly z?: number;
+    readonly width: number;
+    readonly height: number;
+    readonly depth: number;
 }
 
 // https://www.khronos.org/registry/webgl/specs/latest/2.0/#TEXTURE_TYPES_FORMATS_FROM_DOM_ELEMENTS_TABLE
