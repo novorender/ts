@@ -26,7 +26,7 @@ async function getFileRecursive(sourceDir: string, files: string[]) {
 
 async function copyDir(sourceDir: string, targetDir: string) {
     const include = [
-        /\.(?:ts|js|glsl|vert|frag)$/, // source files
+        /\.(?:ts|js|glsl|vert|frag|json)$/, // source files
         /tsconfig\.json$/, // important for resolving library types
     ];
     function filter(source: string): boolean {

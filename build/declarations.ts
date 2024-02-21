@@ -130,7 +130,7 @@ function importExportVisitor(
                         ctx.factory.createLiteralTypeNode(
                             ctx.factory.createStringLiteral(rewrittenPath)
                         ),
-                        node.assertions,
+                        node.attributes,
                         node.qualifier,
                         node.typeArguments,
                         node.isTypeOf
