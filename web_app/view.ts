@@ -1,5 +1,5 @@
 import { type ReadonlyVec3, vec3, vec2, type ReadonlyQuat, mat3, type ReadonlyVec2, type ReadonlyVec4, glMatrix, vec4, mat4 } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports, defaultMaterialParamsRecord } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipGLtoCadVec, flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
@@ -199,7 +199,7 @@ export class View<
     isTopDown() {
         const { _stateChanges, renderState } = this;
         const rot = (_stateChanges?.camera?.rotation ?? renderState.camera.rotation) as ReadonlyQuat;
-        const mat = mat3.fromQuat(mat3.create(), rot);
+        const mat = mat3.fromQuat(mat3.create(), rot); // TODO: Rotate vector instead?
         return Math.abs(mat[8]) > 0.98;
     }
 
@@ -229,13 +229,22 @@ export class View<
     }
 
     /**
+     * Retrieve list of available textures.
+     * @public
+     * @returns A promise of a list of environments.
+     */
+    static availableTextures(): readonly TextureDescription[] {
+        return Object.keys(defaultMaterialParamsRecord).map(name => ({ name }));
+    }
+
+    /**
      * Retrieve list of available background/IBL environments.
      * @public
      * @param indexUrl
      * The absolute url of the index.json file.
      * @returns A promise of a list of environments.
      */
-    static async availableEnvironments(indexUrl: URL): Promise<EnvironmentDescription[]> {
+    static async availableEnvironments(indexUrl: URL): Promise<readonly EnvironmentDescription[]> {
         let environments: EnvironmentDescription[] = [];
         const response = await fetch(indexUrl.toString(), { mode: "cors" });
         if (response.ok) {
@@ -248,7 +257,7 @@ export class View<
     }
 
     /** @deprecated Use static {@link View.availableEnvironments} instead. */
-    async availableEnvironments(indexUrl: URL): Promise<EnvironmentDescription[]> {
+    async availableEnvironments(indexUrl: URL): Promise<readonly EnvironmentDescription[]> {
         return View.availableEnvironments(indexUrl);
     }
 
@@ -258,7 +267,7 @@ export class View<
      * @remarks
      * The returned requests are suitable for [Cache API](https://developer.mozilla.org/en-US/docs/Web/API/Cache/addAll).
      */
-    static environmentRequests(...environments: EnvironmentDescription[]): readonly Request[] {
+    static environmentRequests(...environments: readonly EnvironmentDescription[]): readonly Request[] {
         const urls: URL[] = [];
         for (const environment of environments) {
             const { url, thumnbnailURL } = environment;
@@ -933,6 +942,20 @@ export interface EnvironmentDescription {
 
     /** Thumbnail URL. */
     readonly thumnbnailURL: string;
+}
+
+/** PBR Material texture description
+ * @category Render View
+ */
+export interface TextureDescription {
+    /** Display name of texture */
+    readonly name: string;
+
+    // /** Texture URL. */
+    // readonly url: string;
+
+    // /** Thumbnail URL. */
+    // readonly thumnbnailURL: string;
 }
 
 /** View related render statistics.
