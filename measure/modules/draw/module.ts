@@ -8,7 +8,7 @@ import type { DuoMeasurementValues } from "../core";
 import type { ManholeMeasureValues } from "../manhole";
 import { lineSegmentIntersection, type Intersection2d } from "../../calculations_2d";
 
-const SCREEN_SPACE_EPSILON = 0.2;
+const SCREEN_SPACE_EPSILON = 0.001;
 
 /**
  * Module for converting measure data to drawable objects. 

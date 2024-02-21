@@ -77,6 +77,15 @@ export class CoreModule extends BaseModule {
         return await workerScene.pickEntityOnCurrentObject(id, pos, tolerance);
     }
 
+    /** Novorender attempts to generate parametric data from tesselated objects if it is not provided in the file.
+     * @param id The object id of selected object
+     * @returns true if the parametric data is generated from novorender and not directly from parametric file
+     * **/
+    async isParametricDataGenerated(id: ObjectId) {
+        const workerScene = await this.worker;
+        return await workerScene.isBrepGenerated(id);
+    }
+
     /**
      * @ignore
      * @privateRemarks not currently in use

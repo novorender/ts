@@ -94,8 +94,11 @@ export class GeometryFactory {
         private readonly buffer: Float64Array
     ) { }
 
-    getCurve2D(data: ProductData, halfEdgeIndex: number): Curve2D {
+    getCurve2D(data: ProductData, halfEdgeIndex: number): Curve2D | undefined {
         const halfEdgeData = data.halfEdges[halfEdgeIndex];
+        if (halfEdgeData.curve2D == undefined) {
+            return undefined;
+        }
         let [beginParam, endParam] = halfEdgeData.parameterBounds;
         let sense: 1 | -1 = 1;
         if (halfEdgeData.direction < 0) {
@@ -149,7 +152,15 @@ export class GeometryFactory {
     }
 
     getHalfEdgeAABB(data: ProductData, halfEdgeIndex: number): AABB2 | undefined {
+        const halfEdgeData = data.halfEdges[halfEdgeIndex];
+        if (halfEdgeData.aabb) {
+            return halfEdgeData.aabb;
+        }
+
         const curve = this.getCurve2D(data, halfEdgeIndex);
+        if (!curve) {
+            return undefined;
+        }
         const points: vec2[] = [];
 
         switch (curve.kind) {
@@ -381,11 +392,18 @@ export class GeometryFactory {
     }
 
     getFaces(product: ProductData) {
-        const curves2D = product.halfEdges.map((_, i) => {
-            return this.getCurve2D(product, i);
-        }); // we map curve2D as 1:1 with halfedges
+        const curves2D: Curve2D[] = [];
+        for (let i = 0; i < product.halfEdges.length; ++i) {
+            const curve = this.getCurve2D(product, i);
+            if (curve) {
+                curves2D.push(curve);
+            }
+        }
         const faces: Face[] = [];
 
+        if (curves2D.length == 0) {
+            return faces;
+        }
         for (let i = 0; i < product.instances.length; ++i) {
             const instance = product.instances[i];
 
