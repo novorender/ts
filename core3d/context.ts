@@ -1,4 +1,4 @@
-import { CoordSpace, TonemappingMode, type RGB } from "./";
+import { CoordSpace, TonemappingMode, type RGB, defaultMaterialCommon, defaultMaterialParamsRecord } from "./";
 import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports, RenderStateOutlines, PBRMaterialData } from "./";
 import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits } from "webgl2";
 import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "webgl2";
@@ -100,7 +100,12 @@ export class RenderContext {
     /** WebGL Sampler used to sample other, non-mipmapped IBL textures bilinear. */
     readonly samplerSingle: WebGLSampler; // use to read the other textures
 
-    materials: Readonly<Record<string, PBRMaterialData>> = {};
+    /** @internal */
+    materialCommon = defaultMaterialCommon;
+    /** @internal */
+    materialParams = defaultMaterialParamsRecord;
+    /** @internal Use to map textures to local disk - for internal debugging and testing only! */
+    materialFiles: Map<string, File> | undefined;
 
     outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>();
 

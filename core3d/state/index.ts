@@ -562,8 +562,8 @@ export interface RenderStateHighlightGroup {
  * @category Render State
  */
 export interface RenderStateHighlightGroupTexture {
-    /** Index into texture array. */
-    readonly index: number;
+    /** Index into {@link RenderStateHighlightGroups.textures} array. */
+    readonly index: ActiveTextureIndex;
     /** Scale, default = 1. */
     readonly scale?: number;
     /** Rotation in degrees, default = 0. */
@@ -600,7 +600,22 @@ export interface RenderStateHighlightGroups {
 
     /** Highlight groups, max 250. */
     readonly groups: readonly RenderStateHighlightGroup[];
+
+    /** Names of active textures.
+     * @remarks
+     * The textures are downloaded in the background and may take some time to become available.
+     */
+    readonly textures?: ActiveTexturesArray;
 }
+
+/** Fixed sized array of active texture names. */
+export type ActiveTexturesArray = FixedSizeArray<MaxActiveTextures, string | undefined>;
+
+/** Maximum number of simultaneous textures allowed. */
+export type MaxActiveTextures = 10;
+
+/** Active texture index. */
+export type ActiveTextureIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 /** Used to visualize internal render buffers.
  * @defaultValue `TonemappingMode.color`.

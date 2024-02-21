@@ -1,8 +1,8 @@
-import type { DerivedRenderState, PBRMaterialData, RenderContext, RenderStateGroupAction, RenderStateHighlightGroups, RenderStateHighlightGroupTexture, RenderStateScene, RGB, RGBATransform } from "core3d";
+import { createPBRMaterial, type ActiveTexturesArray, type DerivedRenderState, type MaxActiveTextures, type RenderContext, type RenderStateGroupAction, type RenderStateHighlightGroups, type RenderStateHighlightGroupTexture, type RenderStateScene, type RGB, type RGBATransform, type ActiveTextureIndex, type PBRMaterialParams, type PBRMaterialTextures } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
-import { glClear, glDelete, glDraw, glState, glTransformFeedback, glUpdateTexture } from "webgl2";
+import { glClear, glDelete, glDraw, glState, glUpdateTexture, type TextureUpdateParams2DArrayUncompressed, type UncompressedTextureFormatType } from "webgl2";
 import { getMultiDrawParams, MaterialType } from "./mesh";
 import { type ReadonlyVec3, vec3, vec4, type ReadonlyVec4, glMatrix } from "gl-matrix";
 import type { NodeLoader } from "./loader";
@@ -37,8 +37,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     debug = false;
     suspendUpdates = false;
 
-    materialParams: Readonly<Record<string, PBRMaterialData>>;
     materialTextures: MaterialTextures = { color: null, nor: null };
+    currentActiveTextures: ActiveTexturesArray | undefined;
 
     localSpaceTranslation = vec3.create() as ReadonlyVec3;
     localSpaceChanged = false;
@@ -58,7 +58,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             indices: new Uint8Array(buffer, 4),
             mutex: new Mutex(buffer),
         } as const;
-        this.materialParams = renderContext.materials;
     }
 
     get highlights() {
@@ -127,19 +126,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         if (updateGradients) {
             glUpdateTexture(gl, resources.gradientsTexture, { ...module.gradientImageParams, image: this.gradientsImage });
-        }
-
-        if (this.materialParams != renderContext.materials) {
-            OctreeModule.disposeMaterialTextures(this.resources.bin, this.materialTextures);
-            this.materialParams = renderContext.materials;
-            const materialParams = Object.values(this.materialParams);
-            if (materialParams.length > 0) {
-                updateShaderCompileConstants({ pbr: true });
-                this.materialTextures = OctreeModule.createMaterialTextures(this.resources.bin, materialParams[0], materialParams);
-            } else {
-                updateShaderCompileConstants({ pbr: false });
-                this.materialTextures = { color: null, nor: null };
-            }
         }
 
         if (renderContext.hasStateChanged({ scene })) {
@@ -283,6 +269,37 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     node.applyHighlights(highlight.indices);
                 }
             };
+
+            // textures
+            if (highlights.textures != renderContext.prevState?.highlights.textures) {
+                if (highlights.textures) {
+                    const maxTextures: MaxActiveTextures = 10;
+                    updateShaderCompileConstants({ pbr: true });
+                    if (!this.materialTextures.color) {
+                        this.materialTextures = OctreeModule.createMaterialTextureArrays(resources.bin, renderContext.materialCommon, maxTextures);
+                    }
+
+                    // update texture array slices, as needed
+                    const newTextures = highlights.textures;
+                    const prevTextures = renderContext.prevState?.highlights.textures ?? [];
+                    const loadTextures: LoadTextureParams[] = [];
+                    for (let i = 0; i < maxTextures; i++) {
+                        if (newTextures[i] && newTextures[i] != prevTextures[i]) {
+                            const index = i as ActiveTextureIndex;
+                            const name = newTextures[i]!;
+                            const params: PBRMaterialParams = { ...renderContext.materialCommon, ...renderContext.materialParams[name] };
+                            loadTextures.push({ index, name, params });
+                        }
+                    }
+                    this.loadMaterialTextures(loadTextures);
+                } else {
+                    if (this.materialTextures.color) {
+                        OctreeModule.disposeMaterialTextures(this.resources.bin, this.materialTextures);
+                        this.materialTextures = { color: null, nor: null };
+                    }
+                    updateShaderCompileConstants({ pbr: false });
+                }
+            }
         }
 
         if (renderContext.hasStateChanged({ clipping })) {
@@ -713,6 +730,46 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         this.suspendUpdates = false;
         this.renderContext.changed = true;
     }
+
+    async loadMaterialTextures(textures: Iterable<LoadTextureParams>): Promise<void> {
+        const { materialFiles } = this.renderContext;
+        if (materialFiles) {
+            for (const { name, index, params } of textures) {
+                const file = materialFiles.get(`${name}.tex`);
+                if (file) {
+                    const data = await createPBRMaterial(params, file);
+                    this.updateMaterialTextures(index, data);
+                } else {
+                    throw new Error(`File ${file} not found!`);
+                }
+            }
+        } else {
+            for (const { name, index, params } of textures) {
+                const url = new URL(`/assets/textures/${name}.tex`, import.meta.url);
+                const data = await createPBRMaterial(params, url);
+                this.updateMaterialTextures(index, data);
+            }
+        }
+    }
+
+    updateMaterialTextures(index: ActiveTextureIndex, source: PBRMaterialTextures) {
+        const { renderContext, materialTextures } = this;
+        const { gl, materialCommon } = renderContext;
+        for (let level = 0; level < materialCommon.mipCount; level++) {
+            const width = materialCommon.width >> level;
+            const height = materialCommon.width >> level;
+            function updateParams(format: UncompressedTextureFormatType, image: ArrayBufferView): TextureUpdateParams2DArrayUncompressed {
+                return {
+                    kind: "TEXTURE_2D_ARRAY",
+                    level, z: index, width, height, depth: 1,
+                    ...format,
+                    image,
+                };
+            }
+            glUpdateTexture(gl, materialTextures.color!, updateParams({ internalFormat: "R11F_G11F_B10F", type: "UNSIGNED_INT_10F_11F_11F_REV" }, source.albedoTexture[level]));
+            glUpdateTexture(gl, materialTextures.nor!, updateParams({ internalFormat: "RGBA8", type: "UNSIGNED_BYTE" }, source.norTexture[level]));
+        }
+    }
 }
 
 function makeMaterialAtlas(state: DerivedRenderState) {
@@ -862,4 +919,10 @@ const enum VertexAttributeIds {
 interface MeshState {
     mode?: ShaderMode;
     doubleSided?: boolean;
+}
+
+interface LoadTextureParams {
+    readonly index: ActiveTextureIndex;
+    readonly name: string;
+    readonly params: PBRMaterialParams;
 }

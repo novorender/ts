@@ -1,6 +1,6 @@
-import type { DeviceProfile, PBRMaterialCommon, PBRMaterialData, PBRMaterialTextures, RenderContext } from "core3d";
+import { defaultMaterialCommon, defaultMaterialParamsRecord, type DeviceProfile, type MaxActiveTextures, type PBRMaterialCommon, type PBRMaterialInfo, type PBRMaterialTextures, type RenderContext } from "core3d";
 import type { RenderModule } from "..";
-import { glUBOProxy, type Pow2, type TexelTypeString, type TextureParams2DArrayUncompressedMipMapped, type TextureParams2DUncompressed, type TextureParams2DUncompressedMipMapped, type UncompressedTextureFormatType, type UniformTypes } from "webgl2";
+import { glUBOProxy, type Pow2, type TextureParams2DArrayUncompressedMipMapped, type TextureParams2DUncompressed, type UncompressedTextureFormatType, type UniformTypes } from "webgl2";
 import type { ResourceBin } from "core3d/resource";
 import { OctreeModuleContext } from "./context";
 import { NodeLoader } from "./loader";
@@ -141,8 +141,6 @@ export class OctreeModule implements RenderModule {
         return { defines, flags } as const;
     }
 
-
-
     static outlineShaderConstants(deviceProfile: DeviceProfile, programFlags = OctreeModule.defaultProgramFlags) {
         const { clippingPlanes, dither, highlight, pbr } = programFlags;
         const flags: string[] = [];
@@ -154,7 +152,6 @@ export class OctreeModule implements RenderModule {
             [{ name: "NUM_CLIPPING_PLANES", value: clippingPlanes.toString() }];
         return { defines, flags } as const;
     }
-
 
     static async compileShaders(context: RenderContext, bin: ResourceBin, programFlags = OctreeModule.defaultProgramFlags): Promise<Programs> {
         const shaders = context.imports.shaders.octree;
@@ -184,7 +181,7 @@ export class OctreeModule implements RenderModule {
 
     static createMaterialTextures(bin: ResourceBin, common: PBRMaterialCommon, textures: readonly PBRMaterialTextures[]) {
         if (textures.length == 0) {
-            return { params: undefined, color: null, nor: null } as const;
+            return { color: null, nor: null } as const;
         }
         const { width, height, mipCount } = common;
 
@@ -226,6 +223,21 @@ export class OctreeModule implements RenderModule {
         const norArrayParams = arrayParams({ internalFormat: "RGBA8", type: "UNSIGNED_BYTE" }, norTextures);
         const color = colorArrayParams ? bin.createTexture(colorArrayParams) : null;
         const nor = norArrayParams ? bin.createTexture(norArrayParams) : null;
+        return { color, nor } as const;
+    }
+
+    static createMaterialTextureArrays(bin: ResourceBin, common: PBRMaterialCommon, size: MaxActiveTextures) {
+        function arrayParams(format: UncompressedTextureFormatType): TextureParams2DArrayUncompressedMipMapped {
+            const { width, height, mipCount } = common;
+            return {
+                kind: "TEXTURE_2D_ARRAY",
+                width, height, depth: size,
+                ...format,
+                mipMaps: mipCount,
+            };
+        }
+        const color = bin.createTexture(arrayParams({ internalFormat: "R11F_G11F_B10F", type: "UNSIGNED_INT_10F_11F_11F_REV" }));
+        const nor = bin.createTexture(arrayParams({ internalFormat: "RGBA8", type: "UNSIGNED_BYTE" }));
         return { color, nor } as const;
     }
 
