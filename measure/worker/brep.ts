@@ -28,6 +28,7 @@ export interface Triangulation {
 }
 
 export interface ProductData {
+    readonly version?: string;
     readonly units: string;
     readonly vertices: readonly VertexData[];
     readonly geometries: readonly GeometryData[];
@@ -111,7 +112,7 @@ export interface CurveSegmentData {
 
 export interface HalfEdgeData {
     readonly edge: Index;
-    readonly curve2D: Index;
+    readonly curve2D?: Index;
     readonly parameterBounds: readonly [number, number];
     readonly direction: -1 | 1;
     readonly face: Index;

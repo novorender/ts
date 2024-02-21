@@ -142,6 +142,14 @@ export class MeasureTool {
         return product ?? undefined;
     }
 
+    async isBrepGenerated(id: ObjectId) {
+        const product = await this.getProduct(id);
+        if (product) {
+            return product.version !== undefined;
+        }
+        return false;
+    }
+
     async getCameraValuesFromFace(
         id: ObjectId,
         faceIdx: number,
