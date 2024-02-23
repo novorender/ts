@@ -219,7 +219,41 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 if (prevDefaultAction != currDefaultAction && (prevDefaultAction == "filter" || currDefaultAction == "filter")) {
                     reload = true; // default action has changed from/to filter mode.
                 } else if (currDefaultAction == "filter" && objectIdsChanged) {
-                    reload = true; // Default action is filter and at least one of the groups has changed their object ids.
+                    const numUnfilteredObjIds = groups.filter(g => g.action != "filter").map(g => "length" in g.objectIds ? g.objectIds.length as number : 0).reduce((a, b) => (a + b));
+                    const maxIds = 1_000_000;
+                    if (numUnfilteredObjIds < maxIds) {
+                        const unfilteredGroupsPrev = new Set<number>(prevGroups.filter(g => g.action != "filter").flatMap(g => [...g.objectIds]));
+                        const unfilteredGroupsCurr = new Set<number>(groups.filter(g => g.action != "filter").flatMap(g => [...g.objectIds]));
+
+                        if (unfilteredGroupsPrev.size != unfilteredGroupsCurr.size) {
+                            reload = true;
+                        }
+                        if (!reload) {
+                            if ("isSubsetOf" in unfilteredGroupsPrev && "isSubsetOf" in unfilteredGroupsCurr) {
+                                const areEqual = (unfilteredGroupsPrev as any).isSubsetOf(unfilteredGroupsCurr) && (unfilteredGroupsCurr as any).isSubsetOf(unfilteredGroupsPrev);
+                                if (!areEqual) {
+                                    reload = true;
+                                }
+                            } else {
+                                for (const objId of unfilteredGroupsPrev) {
+                                    if (!unfilteredGroupsCurr.has(objId)) {
+                                        reload = true;
+                                        break;
+                                    }
+                                }
+                                if (!reload) {
+                                    for (const objId of unfilteredGroupsCurr) {
+                                        if (!unfilteredGroupsPrev.has(objId)) {
+                                            reload = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        reload = true;
+                    }
                 } else {
                     const filterGroups = new Set<Iterable<number>>(prevGroups.filter(g => g.action == "filter").map(g => g.objectIds));
                     for (const { action, objectIds } of groups) {
