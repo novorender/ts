@@ -451,7 +451,8 @@ function toPathPointsFromMatrices(
             const _p = toScreen(projMat, width, height, p0);
             points2d.push(_p);
             indicesOnScreen.push(currentIdx++);
-            return tail.concat([_p]);
+            tail.push(_p);
+            return tail;
         }
         const _p = toScreen(projMat, width, height, head);
         points2d.push(_p);
@@ -460,10 +461,12 @@ function toPathPointsFromMatrices(
             const _p0 = toScreen(projMat, width, height, p0);
             indicesOnScreen.push(currentIdx);
             indicesOnScreen.push(currentIdx++);
-            return tail.concat([_p0], [_p]);
+            tail.push(_p0, _p);
+            return tail;
         }
         indicesOnScreen.push(currentIdx++);
-        return tail.concat([_p]);
+        tail.push(_p);
+        return tail;
     }, [] as ReadonlyVec2[]);
     if (screenPoints.length) {
         return { screenPoints, points2d, indicesOnScreen };
