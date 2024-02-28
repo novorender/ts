@@ -420,34 +420,40 @@ function toPathPointsFromMatrices(
     ortho: boolean,
     cameraFar: number
 ): { screenPoints: ReadonlyVec2[], points2d: ReadonlyVec2[], indicesOnScreen: number[] } | undefined {
-    const clip = (p: vec3, p0: vec3) => {
-        const d = vec3.sub(vec3.create(), p0, p);
+    const clip = (out: vec3, p: vec3, p0: vec3) => {
+        const d = vec3.sub(out, p0, p);
         vec3.scale(d, d, (-near - p[2]) / d[2]);
         return vec3.add(d, d, p);
     };
 
     const points2d: ReadonlyVec2[] = [];
     const indicesOnScreen: number[] = [];
-    const sv = points.map((v) => vec3.transformMat4(vec3.create(), v, camMat));
     let currentIdx = 0;
 
-    const screenPoints = sv.reduce((tail, head, i) => {
+    const clipVec = vec3.create();
+    const prevHead = vec3.create();
+    const head = vec3.create();
+    const screenPoints = points.reduce((tail, point, i) => {
+        if (i !== 0) { 
+            vec3.copy(prevHead, head);
+        }
+        vec3.transformMat4(head, point, camMat);
         if (ortho) {
             //Avoid objects very near the camera, put them behind instead
-            if (sv[i][2] > 0 && sv[i][2] < 0.1) {
-                sv[i][2] = -0.0001;
+            if (head[2] > 0 && head[2] < 0.1) {
+                head[2] = -0.0001;
             }
-            if (sv[i][2] < -cameraFar) {
+            if (head[2] < -cameraFar) {
                 currentIdx++
                 return tail;
             }
         }
         if (head[2] > SCREEN_SPACE_EPSILON) {
-            if (i === 0 || sv[i - 1][2] > 0) {
+            if (i === 0 || prevHead[2] > 0) {
                 currentIdx++
                 return tail;
             }
-            const p0 = clip(sv[i - 1], head);
+            const p0 = clip(clipVec, prevHead, head);
             const _p = toScreen(projMat, width, height, p0);
             points2d.push(_p);
             indicesOnScreen.push(currentIdx++);
@@ -456,8 +462,8 @@ function toPathPointsFromMatrices(
         }
         const _p = toScreen(projMat, width, height, head);
         points2d.push(_p);
-        if (i !== 0 && sv[i - 1][2] > SCREEN_SPACE_EPSILON) {
-            const p0 = clip(head, sv[i - 1]);
+        if (i !== 0 && prevHead[2] > SCREEN_SPACE_EPSILON) {
+            const p0 = clip(clipVec, head, prevHead);
             const _p0 = toScreen(projMat, width, height, p0);
             indicesOnScreen.push(currentIdx);
             indicesOnScreen.push(currentIdx++);
@@ -474,20 +480,28 @@ function toPathPointsFromMatrices(
     return undefined;
 }
 
-function toScreen(projMat: mat4, width: number, height: number, p: ReadonlyVec3): ReadonlyVec2 {
-    const _p = vec4.transformMat4(
-        vec4.create(),
-        vec4.fromValues(p[0], p[1], p[2], 1),
-        projMat
-    );
+const toScreen = (() => {
+    const _toScreenVec1Buf = vec4.create();
+    const _toScreenVec2Buf = vec4.create();
+    return function toScreen(projMat: mat4, width: number, height: number, p: ReadonlyVec3): ReadonlyVec2 {
+        vec4.set(_toScreenVec2Buf, p[0], p[1], p[2], 1);
+        const _p = vec4.transformMat4(
+            _toScreenVec1Buf,
+            _toScreenVec2Buf,
+            projMat
+        );
 
-    const pt = vec2.fromValues(
-        Math.round(((_p[0] * 0.5) / _p[3] + 0.5) * width),
-        Math.round((0.5 - (_p[1] * 0.5) / _p[3]) * height)
-    );
+        const pt = vec2.fromValues(
+            Math.round(((_p[0] * 0.5) / _p[3] + 0.5) * width),
+            Math.round((0.5 - (_p[1] * 0.5) / _p[3]) * height)
+        );
 
-    return pt.every((num) => !Number.isNaN(num) && Number.isFinite(num)) ? pt : vec2.fromValues(-100, -100);
-};
+        if (!Number.isFinite(pt[0]) || !Number.isFinite(pt[1])) {
+            vec2.set(pt, -100, -100);
+        }
+        return pt;
+    };
+})();
 
 function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
     const { width, height, camera } = context;
