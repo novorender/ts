@@ -39,6 +39,23 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
     let adreno600 = false;
     let slowShaderRecompile = false;
     let iosInterpolationBug = false;
+    let materialTextureResolution: null | 256 | 512 | 1024 = null;
+    if (tier >= 1) {
+        materialTextureResolution = 256;
+    }
+    if (tier >= 2) {
+        materialTextureResolution = 512;
+    }
+    if (tier >= 3) {
+        materialTextureResolution = 1024;
+    }
+    let materialTextureRendering: "None" | "Basic" | "PBR" = "None"
+    if (tier >= 1) {
+        materialTextureRendering = "Basic";
+    }
+    if (tier >= 2) {
+        materialTextureRendering = "PBR";
+    }
 
     const canvas: HTMLCanvasElement = document.createElement("canvas") as HTMLCanvasElement;
     canvas.width = 1;
@@ -85,6 +102,8 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
         ...coreProfile,
         renderResolution,
         framerateTarget: 30,
+        materialTextureRendering,
+        materialTextureResolution,
         tier
     } as const;
 }

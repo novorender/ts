@@ -1,5 +1,5 @@
 import { type ReadonlyVec3, vec3, vec2, type ReadonlyQuat, mat3, type ReadonlyVec2, type ReadonlyVec4, glMatrix, vec4, mat4 } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports, defaultMaterialParamsRecord } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports, type PBRMaterialInfo, type RGB, type RenderStateTextureReference, type ActiveTextureIndex, type MaxActiveTextures, emptyActiveTexturesArray } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipGLtoCadVec, flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
@@ -229,15 +229,6 @@ export class View<
     }
 
     /**
-     * Retrieve list of available textures.
-     * @public
-     * @returns A promise of a list of environments.
-     */
-    static availableTextures(): readonly TextureDescription[] {
-        return Object.keys(defaultMaterialParamsRecord).map(name => ({ name }));
-    }
-
-    /**
      * Retrieve list of available background/IBL environments.
      * @public
      * @param indexUrl
@@ -275,6 +266,43 @@ export class View<
             urls.push(new URL("irradiance.ktx", url));
             urls.push(new URL("background.ktx", url));
             urls.push(new URL(thumnbnailURL));
+        }
+        return urls.map(url => (new Request(url, { mode: "cors" })));
+    }
+
+    /**
+     * Retrieve list of available textures.
+     * @public
+     * @param indexUrl
+     * The absolute url of the index.json file.
+     * @returns A promise of a list of environments.
+     */
+    async availableTextures(indexUrl: URL): Promise<readonly TextureDescription[]> {
+        let materials: Readonly<Record<string, TextureDescription>> = {};
+        const response = await fetch(indexUrl.toString(), { mode: "cors" });
+        if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status} from ${indexUrl}`);
+        }
+        // TODO: Handle varing resolutions.
+        const materialIndex = await response.json();
+        console.assert(materialIndex.width != this.renderContext?.materialCommon);
+        materials = materialIndex.materials as Readonly<Record<string, TextureDescription>>;
+        return Object.entries(materials).map(([name, value]) => (
+            { ...value, name, url: new URL(`${name}.tex`, indexUrl).toString() }
+        )).sort((a, b) => (a.name.localeCompare(b.name)));
+    }
+
+    /**
+     * Retrieve list of network requests for given texture(s) for cache/offline purposes.
+     * @param environments The texture description objects.
+     * @remarks
+     * The returned requests are suitable for [Cache API](https://developer.mozilla.org/en-US/docs/Web/API/Cache/addAll).
+     */
+    static textureRequests(...textures: readonly TextureDescription[]): readonly Request[] {
+        const urls: URL[] = [];
+        for (const texture of textures) {
+            urls.push(new URL(texture.url));
+            // urls.push(texture.thumnbnailURL);
         }
         return urls.map(url => (new Request(url, { mode: "cors" })));
     }
@@ -812,6 +840,50 @@ export class View<
      */
     render?(params: { isIdleFrame: boolean, cameraMoved: boolean }): void;
 
+    /**
+     * Helper function for assigning an index to the specified texture reference.
+     * @param texture Texture reference to assign index to.
+     * @param addCB Optional callback to be called if the texture reference
+     * @returns A valid texture index slot and a flag indictating whether the slot existed or not.
+     * @remarks
+     * This function check if the reference object already exists in the current render state and if so, return the existing index.
+     * If not, it will find the first available slot that currently has no references, i.e. no highlight groups referring to it.
+     * In the latter case, it will update the render state to reflect the new texture reference.
+     * If the maximum amount of textures {@link MaxActiveTextures} are exceeded, this function will throw an exception.
+     */
+    assignTextureSlot(texture: RenderStateTextureReference): TextureSlot {
+        const { highlights } = this.currentRenderState;
+        let { groups, textures } = highlights;
+        textures ??= emptyActiveTexturesArray();
+        const idx = textures.indexOf(texture); // this variant relies on object reference comparison, rather than similartiy
+        // const idx = textures.findIndex(t => texture.url.localeCompare(t?.url ?? ""));
+        const n: MaxActiveTextures = 10;
+        let existed = true;
+        let index: ActiveTextureIndex | undefined = idx >= 0 && idx < n ? idx as ActiveTextureIndex : undefined;
+        if (index == undefined) {
+            existed = false;
+            // build set of referenced texture indices
+            var refs = new Set<number>();
+            for (const { texture } of groups) {
+                if (texture) {
+                    refs.add(texture.index);
+                }
+            }
+            // find the first unreferenced/available texture index/slot, if any
+            for (let i = 0; i < n; i++) {
+                if (!refs.has(i)) {
+                    index = i as ActiveTextureIndex;
+                    this.modifyRenderState({ highlights: { textures: textures.with(index, texture) } })
+                    break;
+                }
+            }
+        }
+        if (index == undefined) {
+            throw new Error("No available texture slot!");
+        }
+        return { index, existed };
+    }
+
     /** 
      * Callback function to update render context.
      * @param context A new render context.
@@ -823,6 +895,12 @@ export class View<
     protected readonly setRenderContext = (context: RenderContext) => {
         this._renderContext = context;
         this.useDeviceProfile(this._deviceProfile);
+    }
+
+    private get currentRenderState() {
+        const state = this.renderStateCad;
+        const changes = this._stateChanges;
+        return changes ? mergeRecursive(state, changes) as RenderState : state;
     }
 
     private useDeviceProfile(deviceProfile: DeviceProfile) {
@@ -947,15 +1025,25 @@ export interface EnvironmentDescription {
 /** PBR Material texture description
  * @category Render View
  */
-export interface TextureDescription {
-    /** Display name of texture */
+export interface TextureDescription extends RenderStateTextureReference, PBRMaterialInfo {
+    /** Display name of texture. */
     readonly name: string;
 
-    // /** Texture URL. */
-    // readonly url: string;
+    /** Texture tags. */
+    readonly tags: readonly string[];
 
     // /** Thumbnail URL. */
     // readonly thumnbnailURL: string;
+}
+
+/** Texture slot assignment return value.
+ * @see {@link View.assignTextureSlot}
+ */
+export interface TextureSlot {
+    /* The assigned index assign to this texture reference. */
+    readonly index: ActiveTextureIndex;
+    /* True if the texture reference already existed in the current render state, false if not. */
+    readonly existed: boolean;
 }
 
 /** View related render statistics.
