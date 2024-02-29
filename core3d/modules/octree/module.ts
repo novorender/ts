@@ -1,6 +1,6 @@
-import { defaultMaterialCommon, defaultMaterialParamsRecord, type DeviceProfile, type MaxActiveTextures, type PBRMaterialCommon, type PBRMaterialInfo, type PBRMaterialTextures, type RenderContext } from "core3d";
+import { type DeviceProfile, type MaxActiveTextures, type PBRMaterialCommon, type PBRMaterialTextures, type RenderContext } from "core3d";
 import type { RenderModule } from "..";
-import { glUBOProxy, type Pow2, type TextureParams2DArrayUncompressedMipMapped, type TextureParams2DUncompressed, type UncompressedTextureFormatType, type UniformTypes } from "webgl2";
+import { glUBOProxy, type TextureParams2DArrayUncompressedMipMapped, type TextureParams2DUncompressed, type UncompressedTextureFormatType, type UniformTypes } from "webgl2";
 import type { ResourceBin } from "core3d/resource";
 import { OctreeModuleContext } from "./context";
 import { NodeLoader } from "./loader";

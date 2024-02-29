@@ -248,18 +248,19 @@ void main() {
 #endif
     bool shouldBeShaded = baseColor != vec4(0);
     highp vec4 textureInfo = vec4(-1);
+    mediump mat4 colorTransform = mat4(1.);
+    mediump vec4 colorTranslation = vec4(0);
 #if defined (HIGHLIGHT)
     if(highlight == 254U) {
         discard;
     }
     if(highlight != 0U || scene.applyDefaultHighlight) {
         mediump float u = (float(highlight) + 0.5) / float(maxHighlights);
-        mediump mat4 colorTransform;
         colorTransform[0] = texture(textures.highlights, vec2(u, 0.5 / highLightsTextureRows));
         colorTransform[1] = texture(textures.highlights, vec2(u, 1.5 / highLightsTextureRows));
         colorTransform[2] = texture(textures.highlights, vec2(u, 2.5 / highLightsTextureRows));
         colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / highLightsTextureRows));
-        mediump vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / highLightsTextureRows));
+        colorTranslation = texture(textures.highlights, vec2(u, 4.5 / highLightsTextureRows));
         textureInfo = texture(textures.highlights, vec2(u, 5.5 / highLightsTextureRows));
         rgba = baseColor = colorTransform * rgba + colorTranslation;
     }
@@ -284,7 +285,8 @@ void main() {
             uv = uvMat * uv; // apply rotation & scale
             vec3 uvw = vec3(uv, array_index);
 
-            baseColor *= texture(textures.base_color, uvw);
+            baseColor = varyingsFlat.color * texture(textures.base_color, uvw); // reset base color (undo any previous transforms)
+            baseColor = colorTransform * baseColor + colorTranslation; // apply color transform
             vec4 norSample = texture(textures.nor, uvw);
 
             NormalInfo normalInfo = getNormalInfo(v, n, norSample.xy * 2. - 1.);
@@ -294,9 +296,9 @@ void main() {
             n = normalInfo.n; // used bump-mapped normal for shading
             mediump vec3 f_specular = getIBLRadianceGGX(n, v, materialInfo.perceptualRoughness, materialInfo.f0);
             mediump vec3 f_diffuse = getIBLRadianceLambertian(n, materialInfo.albedoColor);
-            // TODO: emissive?
+            mediump vec3 f_ambient = vec3(.0);
 
-            mediump vec3 color = f_diffuse + f_specular;
+            mediump vec3 color = f_diffuse + f_specular + f_ambient;
             color *= materialInfo.occlusion;
             rgba = vec4(color, baseColor.a);
             // rgba = vec4(materialInfo.baseColor, baseColor.a);

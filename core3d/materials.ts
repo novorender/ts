@@ -1,12 +1,20 @@
-import type { Pow2, RGBA } from "webgl2";
-import materialIndex from "./materials.json";
-import type { RGB } from "./state";
+import type { Pow2 } from "webgl2";
+import type { ActiveTexturesArray, RGB } from "./state";
+import type { DeviceProfile } from "./device";
 
 /** @internal */
-export const defaultMaterialCommon: PBRMaterialCommon = { width: materialIndex.width as Pow2, height: materialIndex.height as Pow2, mipCount: materialIndex.mipCount };
-/** @internal */
-export const defaultMaterialParamsRecord = materialIndex.materials as unknown as Readonly<Record<string, PBRMaterialInfo>>;
+export function getMaterialCommon(deviceProfile: DeviceProfile): PBRMaterialCommon | undefined {
+    const { materialTextureResolution } = deviceProfile;
+    if (materialTextureResolution != null) {
+        // TODO: Adjust sizes/mips according to device profile! -> implement varying sizes!
+        return { width: 1024, height: 1024, mipCount: 11 };
+    }
+}
 
+/** @internal */
+export function emptyActiveTexturesArray(): ActiveTexturesArray {
+    return [null, null, null, null, null, null, null, null, null, null] as unknown as ActiveTexturesArray;
+}
 
 /** @internal PBR material common info. */
 export interface PBRMaterialCommon {
@@ -22,9 +30,6 @@ export interface PBRMaterialCommon {
 
 /** @internal PBR material info. */
 export interface PBRMaterialInfo {
-    // /** Material name/id. */
-    // readonly name: string;
-
     /** Linear scale, i.e. size per "tile" in meters. */
     readonly scale: number;
 
@@ -47,22 +52,16 @@ export interface PBRMaterialTextures {
     readonly norTexture: readonly ArrayBufferView[];
 }
 
-/** @internal PBR material/texture parameters. */
-export interface PBRMaterialParams extends PBRMaterialInfo, PBRMaterialCommon { };
-
-/** @internal PBR material/texture data. */
-export interface PBRMaterialData extends PBRMaterialParams, PBRMaterialTextures { };
-
-async function load(file: URL | Blob) {
-    if (file instanceof URL) {
-        const response = await fetch(file);
+async function load(source: URL | Blob) {
+    if (source instanceof URL) {
+        const response = await fetch(source);
         if (response.ok) {
             return await response.arrayBuffer();
         } else {
-            throw new Error(`Failed to download "${file.href}" - HTTP error: ${response.status}!`);
+            throw new Error(`Failed to download "${source.href}" - HTTP error: ${response.status}!`);
         }
     } else {
-        return await file.arrayBuffer();
+        return await source.arrayBuffer();
     }
 }
 
@@ -95,8 +94,8 @@ function getMipMaps<T extends TypedArray>(buffer: ArrayBuffer, byteOffset: numbe
 }
 
 /** @internal */
-export async function createPBRMaterial(params: PBRMaterialParams, source: URL | File): Promise<PBRMaterialData> {
-    const { width, height, mipCount, scale, albedo, roughness, metalness } = params;
+export async function createPBRMaterial(params: PBRMaterialCommon, source: URL | File): Promise<PBRMaterialTextures> {
+    const { width, height, mipCount } = params;
     const buf = await load(source);
     let mipBytes = width * height * 4;
     let totalBytes = 0;
@@ -106,6 +105,6 @@ export async function createPBRMaterial(params: PBRMaterialParams, source: URL |
     }
     let albedoTexture = await getMipMaps(buf, 0, params, 1, Uint32Array);
     let norTexture = await getMipMaps(buf, totalBytes, params, 4, Uint8Array);
-    const matInfo: PBRMaterialData = { scale, width, height, mipCount, albedo, roughness, metalness, albedoTexture, norTexture };
+    const matInfo: PBRMaterialTextures = { albedoTexture, norTexture };
     return matInfo;
 }

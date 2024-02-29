@@ -609,13 +609,22 @@ export interface RenderStateHighlightGroups {
 }
 
 /** Fixed sized array of active texture names. */
-export type ActiveTexturesArray = FixedSizeArray<MaxActiveTextures, string | undefined>;
+export type ActiveTexturesArray = Omit<FixedSizeArray<MaxActiveTextures, RenderStateTextureReference | null>, "with">
+    & { with(index: ActiveTextureIndex, value: RenderStateTextureReference): ActiveTexturesArray };
 
 /** Maximum number of simultaneous textures allowed. */
 export type MaxActiveTextures = 10;
 
 /** Active texture index. */
 export type ActiveTextureIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+/** PBR Material texture reference
+ * @category Render View
+ */
+export interface RenderStateTextureReference {
+    /** Texture URL. */
+    readonly url: string;
+}
 
 /** Used to visualize internal render buffers.
  * @defaultValue `TonemappingMode.color`.

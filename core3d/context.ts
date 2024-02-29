@@ -1,5 +1,5 @@
-import { CoordSpace, TonemappingMode, type RGB, defaultMaterialCommon, defaultMaterialParamsRecord } from "./";
-import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports, RenderStateOutlines, PBRMaterialData } from "./";
+import { CoordSpace, TonemappingMode, type RGB, getMaterialCommon } from "./";
+import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports, RenderStateOutlines, PBRMaterialInfo, PBRMaterialCommon } from "./";
 import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits } from "webgl2";
 import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
@@ -101,9 +101,7 @@ export class RenderContext {
     readonly samplerSingle: WebGLSampler; // use to read the other textures
 
     /** @internal */
-    materialCommon = defaultMaterialCommon;
-    /** @internal */
-    materialParams = defaultMaterialParamsRecord;
+    readonly materialCommon: PBRMaterialCommon | undefined;
     /** @internal Use to map textures to local disk - for internal debugging and testing only! */
     materialFiles: Map<string, File> | undefined;
 
@@ -154,6 +152,8 @@ export class RenderContext {
         readonly imports: Core3DImports,
         webGLOptions?: WebGLContextAttributes,
     ) {
+        this.materialCommon = getMaterialCommon(deviceProfile);
+
         // init gl context
         const gl = canvas.getContext("webgl2", webGLOptions);
         if (!gl)

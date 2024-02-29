@@ -39,7 +39,7 @@ export interface DeviceProfile {
      * @remarks
      * A value of 1.0 is a reasonable default for mid-end devices and acts as a baseline.
      * Smaller values will reduce resolution, which may improve rendering performance at the cost of less image fidelity.
-     * Larger values will increase more details, which in turn requires more powerful GPU to keep performance acceptable.
+     * Larger values will increase resolution, which in turn requires more powerful GPU to keep performance acceptable.
      * The formula is essentially this:
      * `effective_resolution = default_resolution * renderResolution`
      */
@@ -54,10 +54,25 @@ export interface DeviceProfile {
      */
     readonly framerateTarget: number;
 
+    /** How to render material textures.
+     * @remarks
+     * Mobile devices may not have enough memory or performance for physically based rendering (PBR).
+     * In these cases, we revert to a faster and more basic rendering technique.
+     * The weakest devices will only render the average color of the texture.
+     */
+    readonly materialTextureRendering: "None" | "Basic" | "PBR";
+
+    /** Resolution to use for material textures.
+     * @remarks
+     * Higher resolutions requires more memory and are more taxing on memory bandwidth/performance.
+     * Most mobile devices will not benefit much from higher resolutions as their screens are much smaller than a PC monitor.
+     */
+    readonly materialTextureResolution: null | 256 | 512 | 1024;
+
     /** General GPU tier for this device.
      * @remarks
      * 0 is weakest, while higher tiers represent more powerful GPUs.
-     * The tier system is a gross simplification of GPU performance estimation and does not allow for device specific fine tuning.
+     * The tier system is a gross simplification of GPU performance estimation and does not allow for device-specific fine tuning.
      * Use as a starting point only.
      */
     readonly tier: GPUTier;
