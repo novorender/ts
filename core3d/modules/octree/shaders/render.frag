@@ -248,19 +248,18 @@ void main() {
 #endif
     bool shouldBeShaded = baseColor != vec4(0);
     highp vec4 textureInfo = vec4(-1);
-    mediump mat4 colorTransform = mat4(1.);
-    mediump vec4 colorTranslation = vec4(0);
 #if defined (HIGHLIGHT)
     if(highlight == 254U) {
         discard;
     }
     if(highlight != 0U || scene.applyDefaultHighlight) {
+        mediump mat4 colorTransform;
         mediump float u = (float(highlight) + 0.5) / float(maxHighlights);
         colorTransform[0] = texture(textures.highlights, vec2(u, 0.5 / highLightsTextureRows));
         colorTransform[1] = texture(textures.highlights, vec2(u, 1.5 / highLightsTextureRows));
         colorTransform[2] = texture(textures.highlights, vec2(u, 2.5 / highLightsTextureRows));
         colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / highLightsTextureRows));
-        colorTranslation = texture(textures.highlights, vec2(u, 4.5 / highLightsTextureRows));
+        mediump vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / highLightsTextureRows));
         textureInfo = texture(textures.highlights, vec2(u, 5.5 / highLightsTextureRows));
         rgba = baseColor = colorTransform * rgba + colorTranslation;
     }
@@ -285,8 +284,7 @@ void main() {
             uv = uvMat * uv; // apply rotation & scale
             vec3 uvw = vec3(uv, array_index);
 
-            baseColor = varyingsFlat.color * texture(textures.base_color, uvw); // reset base color (undo any previous transforms)
-            baseColor = colorTransform * baseColor + colorTranslation; // apply color transform
+            baseColor *= texture(textures.base_color, uvw);
             vec4 norSample = texture(textures.nor, uvw);
 
             NormalInfo normalInfo = getNormalInfo(v, n, norSample.xy * 2. - 1.);
