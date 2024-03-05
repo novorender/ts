@@ -26,7 +26,7 @@ function getTransform(node: GLTF.Node) {
     } else if (translation || rotation) {
         const t = translation ? vec3.fromValues(...(translation as Parameters<typeof vec3.fromValues>)) : vec3.create();
         const r = rotation ? quat.fromValues(...(rotation as Parameters<typeof quat.fromValues>)) : quat.create();
-        const s = scale ? vec3.fromValues(...(rotation as Parameters<typeof vec3.fromValues>)) : vec3.fromValues(1, 1, 1);
+        const s = scale ? vec3.fromValues(...(scale as Parameters<typeof vec3.fromValues>)) : vec3.fromValues(1, 1, 1);
         mat4.fromRotationTranslationScale(transform, r, t, s);
     }
     return transform;
