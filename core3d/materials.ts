@@ -41,6 +41,9 @@ export interface PBRMaterialInfo {
 
     /** Default roughness factor, i.e. 0 = shiny, 1 = rough. */
     readonly roughness: number;
+
+    /** Ambient light factor factor [0,1], default = 0. */
+    readonly ambient: number;
 };
 
 /** @internal PBR material textures. */
