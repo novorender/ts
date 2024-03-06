@@ -10,6 +10,9 @@ import * as DataAPI from "data/api";
 import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
 import { outlineLaser, type OutlineIntersection } from "./outline_inspect";
 
+const TERRAIN_MAX_ID = 99;
+
+
 /**
  * A view base class for Novorender content.
  * @template CameraControllerType Types of camera controllers used by this view.
@@ -604,6 +607,11 @@ export class View<
                         if (b.clippingOutline == false) {
                             return a;
                         }
+                    }
+                    if (a.objectId <= TERRAIN_MAX_ID && b.objectId > TERRAIN_MAX_ID) {
+                        return b;
+                    } else if (b.objectId <= TERRAIN_MAX_ID) {
+                        return a;
                     }
                     return a.depth < b.depth ? a : b
                 });
