@@ -770,7 +770,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         if (highlights) {
             const { gl } = renderContext;
             const image = createColorTransforms(highlights, this.textureValid);
-            glUpdateTexture(gl, resources.highlightTexture, { kind: "TEXTURE_2D", width: 256, height: 6, internalFormat: "RGBA32F", type: "FLOAT", image });
+            glUpdateTexture(gl, resources.highlightTexture, { kind: "TEXTURE_2D", width: 256, height: 8, internalFormat: "RGBA32F", type: "FLOAT", image });
         }
     }
 
@@ -891,7 +891,7 @@ function* iterateNodes(node: OctreeNode | undefined): IterableIterator<OctreeNod
 
 function createColorTransforms(highlights: RenderStateHighlightGroups, textureValid: readonly boolean[]) {
     const numColorMatrices = 256;
-    const numColorMatrixCols = 6;
+    const numColorMatrixCols = 8;
     const numColorMatrixRows = 4;
 
     const colorMatrices = new Float32Array(numColorMatrices * numColorMatrixRows * numColorMatrixCols);
@@ -903,12 +903,15 @@ function createColorTransforms(highlights: RenderStateHighlightGroups, textureVa
     }
 
     function copyMatrix(index: number, rgbaTransform: RGBATransform, texture?: RenderStateHighlightGroupTexture) {
+        // set color transform matrix
         for (let col = 0; col < 5; col++) {
             for (let row = 0; row < numColorMatrixRows; row++) {
                 colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgbaTransform[col + row * 5];
             }
         }
-        const col = numColorMatrixCols - 1;
+        // set texture info
+        const textureInfoCol0 = 5;
+        const textureInfoCol1 = 6;
         let i: number = -1;
         if (texture && textureValid[texture.index]) {
             i = texture.index;
@@ -918,11 +921,13 @@ function createColorTransforms(highlights: RenderStateHighlightGroups, textureVa
         const x = Math.cos(a) * s;
         const y = Math.sin(a) * s;
         const m = texture?.metalness ?? 0;
-        const rgba = [i, x, y, m];
+        const ambient = texture?.ambient ?? 0;
+        const textureInfo0 = [i, x, y, m];
+        const textureInfo1 = [0, 0, 0, ambient];
         for (let row = 0; row < numColorMatrixRows; row++) {
-            colorMatrices[(numColorMatrices * col + index) * 4 + row] = rgba[row];
+            colorMatrices[(numColorMatrices * textureInfoCol0 + index) * 4 + row] = textureInfo0[row];
+            colorMatrices[(numColorMatrices * textureInfoCol1 + index) * 4 + row] = textureInfo1[row];
         }
-
     }
     // Copy transformation matrices
     const { defaultAction, groups } = highlights;

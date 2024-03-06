@@ -35,7 +35,7 @@ vec2 triplanarProjection(vec3 xyz, vec3 normal) {
         return vec2(xyz.x * s.z, xyz.y);
 }
 
-    // pick a perpendicular'ish u direction based on normal dominate coordinate
+// pick a perpendicular'ish u direction based on normal dominate coordinate
 vec3 triplanarTangentDir(vec3 normal) {
     vec3 n = abs(normalize(normal));
     vec3 s = sign(normal);
@@ -61,7 +61,7 @@ struct NormalInfo {
     vec3 b;    // Pertubed bitangent
 };
 
-const float highLightsTextureRows = 6.;
+const float highLightsTextureRows = 8.;
 
 // Get normal, tangent and bitangent vectors.
 // params: (all in local/world space)
@@ -247,7 +247,8 @@ void main() {
 
 #endif
     bool shouldBeShaded = baseColor != vec4(0);
-    highp vec4 textureInfo = vec4(-1);
+    highp vec4 textureInfo0 = vec4(-1);
+    highp vec4 textureInfo1 = vec4(-1);
 #if defined (HIGHLIGHT)
     if(highlight == 254U) {
         discard;
@@ -260,7 +261,8 @@ void main() {
         colorTransform[2] = texture(textures.highlights, vec2(u, 2.5 / highLightsTextureRows));
         colorTransform[3] = texture(textures.highlights, vec2(u, 3.5 / highLightsTextureRows));
         mediump vec4 colorTranslation = texture(textures.highlights, vec2(u, 4.5 / highLightsTextureRows));
-        textureInfo = texture(textures.highlights, vec2(u, 5.5 / highLightsTextureRows));
+        textureInfo0 = texture(textures.highlights, vec2(u, 5.5 / highLightsTextureRows));
+        textureInfo1 = texture(textures.highlights, vec2(u, 6.5 / highLightsTextureRows));
         rgba = baseColor = colorTransform * rgba + colorTranslation;
     }
 #endif
@@ -270,10 +272,10 @@ void main() {
         // apply shading
 
 #if defined (PBR)
-        float array_index = textureInfo.r;
+        float array_index = textureInfo0.r;
         // float array_index = float(highlight) - 2.;
         if(array_index >= 0.) {
-            mediump mat2 uvMat = mat2(textureInfo.gb, vec2(-textureInfo.b, textureInfo.g));
+            mediump mat2 uvMat = mat2(textureInfo0.gb, vec2(-textureInfo0.b, textureInfo0.g));
             vec3 pos = varyings.positionLS;
             mediump vec3 n = varyings.normalLS;
             if(dot(n, n) < .5)
@@ -288,13 +290,13 @@ void main() {
             vec4 norSample = texture(textures.nor, uvw);
 
             NormalInfo normalInfo = getNormalInfo(v, n, norSample.xy * 2. - 1.);
-            MaterialInfo materialInfo = getMaterialInfo(baseColor.rgb, norSample.z, norSample.w, textureInfo.a);
+            MaterialInfo materialInfo = getMaterialInfo(baseColor.rgb, norSample.z, norSample.w, textureInfo0.a);
 
             // LIGHTING
             n = normalInfo.n; // used bump-mapped normal for shading
             mediump vec3 f_specular = getIBLRadianceGGX(n, v, materialInfo.perceptualRoughness, materialInfo.f0);
             mediump vec3 f_diffuse = getIBLRadianceLambertian(n, materialInfo.albedoColor);
-            mediump vec3 f_ambient = vec3(.0);
+            mediump vec3 f_ambient = vec3(textureInfo1.a);
 
             mediump vec3 color = f_diffuse + f_specular + f_ambient;
             color *= materialInfo.occlusion;

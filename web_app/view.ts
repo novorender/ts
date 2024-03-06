@@ -291,7 +291,7 @@ export class View<
         console.assert(materialIndex.width != this.renderContext?.materialCommon);
         materials = materialIndex.materials as Readonly<Record<string, TextureDescription>>;
         return Object.entries(materials).map(([name, value]) => (
-            { ...value, name, url: new URL(`${name}.tex`, indexUrl).toString() }
+            { ...value, name, url: new URL(`${name}.tex`, indexUrl).toString(), thumnbnailURL: new URL(`${name}_1k.jpg`, indexUrl).toString() }
         )).sort((a, b) => (a.name.localeCompare(b.name)));
     }
 
@@ -1040,8 +1040,8 @@ export interface TextureDescription extends RenderStateTextureReference, PBRMate
     /** Texture tags. */
     readonly tags: readonly string[];
 
-    // /** Thumbnail URL. */
-    // readonly thumnbnailURL: string;
+    /** Thumbnail URL. */
+    readonly thumnbnailURL?: string;
 }
 
 /** Texture slot assignment return value.

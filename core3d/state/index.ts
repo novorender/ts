@@ -570,6 +570,8 @@ export interface RenderStateHighlightGroupTexture {
     readonly rotation?: number;
     /** Metalness [0,1], default = 0. */
     readonly metalness?: number;
+    /** Ambient light factor [0,1], default = 0. */
+    readonly ambient?: number;
 }
 
 /**
