@@ -32,6 +32,10 @@ export class View<
     CameraControllerTypes extends CameraControllers = BuiltinCameraControllerType,
     CameraControllerKind extends string = Extract<keyof CameraControllerTypes, string>
 > implements Disposable {
+
+    static readonly terrainMaxId = 99;
+    static readonly maxHighlightGroups = 250;
+
     /** Available camera controller types. */
     controllers: CameraControllerTypes;
 
@@ -604,6 +608,11 @@ export class View<
                         if (b.clippingOutline == false) {
                             return a;
                         }
+                    }
+                    if (a.objectId <= View.terrainMaxId && b.objectId > View.terrainMaxId) {
+                        return b;
+                    } else if (b.objectId <= View.terrainMaxId) {
+                        return a;
                     }
                     return a.depth < b.depth ? a : b
                 });
