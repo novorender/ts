@@ -14,6 +14,7 @@ struct CameraUniforms {
     highp mat4 viewLocalMatrix;
     highp mat3 localViewMatrixNormal;
     highp mat3 viewLocalMatrixNormal;
+    highp mat3 localBackgroundMatrixNormal;
     highp vec2 viewSize;
     highp float near; // near clipping plane distance
 };

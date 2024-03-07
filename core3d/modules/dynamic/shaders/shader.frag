@@ -130,13 +130,13 @@ mediump vec3 getIBLRadianceGGX(mediump vec3 n, vec3 v, mediump float perceptualR
     vec2 brdfSamplePoint = clamp(vec2(NdotV, perceptualRoughness), vec2(0), vec2(1));
     mediump vec2 brdf = texture(textures.lut_ggx, brdfSamplePoint).rg;
     mediump float lod = perceptualRoughness * float(material.radianceMipCount);
-    mediump vec4 specularSample = textureLod(textures.ibl.specular, reflection, lod);
+    mediump vec4 specularSample = textureLod(textures.ibl.specular, camera.localBackgroundMatrixNormal * reflection, lod);
     mediump vec3 specularLight = specularSample.rgb;
     return specularLight * (specularColor * brdf.x + brdf.y);
 }
 
 mediump vec3 getIBLRadianceLambertian(mediump vec3 n, mediump vec3 diffuseColor) {
-    vec3 diffuseLight = texture(textures.ibl.diffuse, n).rgb;
+    vec3 diffuseLight = texture(textures.ibl.diffuse, camera.localBackgroundMatrixNormal * n).rgb;
     return diffuseLight * diffuseColor;
 }
 

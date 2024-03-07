@@ -7,7 +7,7 @@ import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
 import type { WasmInstance } from "./wasm";
 import type { ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
-import { mat3, mat4, vec3, vec4 } from "gl-matrix";
+import { glMatrix, mat3, mat4, quat, vec3, vec4 } from "gl-matrix";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
 import { orthoNormalBasisMatrixFromPlane } from "./util";
@@ -205,6 +205,7 @@ export class RenderContext {
             viewLocalMatrix: "mat4",
             localViewMatrixNormal: "mat3",
             viewLocalMatrixNormal: "mat3",
+            localBackgroundMatrixNormal: "mat3",
             windowSize: "vec2",
             near: "float",
         });
@@ -870,8 +871,9 @@ export class RenderContext {
 
     private updateCameraUniforms(state: DerivedRenderState) {
         const { cameraUniformsData, localSpaceTranslation } = this;
-        const { output, camera, matrices } = state;
+        const { output, camera, matrices, background } = state;
         const { values } = cameraUniformsData;
+        const r = -glMatrix.toRadian(background.rotation ?? 0);
         const worldViewMatrix = matrices.getMatrix(CoordSpace.World, CoordSpace.View);
         const viewWorldMatrix = matrices.getMatrix(CoordSpace.View, CoordSpace.World);
         const worldLocalMatrix = mat4.fromTranslation(mat4.create(), vec3.negate(vec3.create(), localSpaceTranslation));
@@ -883,6 +885,7 @@ export class RenderContext {
         values.viewLocalMatrix = mat4.multiply(mat4.create(), worldLocalMatrix, viewWorldMatrix,);
         values.localViewMatrixNormal = matrices.getMatrixNormal(CoordSpace.World, CoordSpace.View);
         values.viewLocalMatrixNormal = matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World);
+        values.localBackgroundMatrixNormal = mat3.fromQuat(mat3.create(), quat.fromValues(0, Math.sin(r), 0, Math.cos(r)));
         values.windowSize = [output.width, output.height];
         values.near = camera.near;
         this.updateUniformBuffer(this.cameraUniforms, this.cameraUniformsData);

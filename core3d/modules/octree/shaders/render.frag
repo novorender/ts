@@ -145,13 +145,13 @@ mediump vec3 getIBLRadianceGGX(mediump vec3 n, vec3 v, mediump float perceptualR
     vec2 brdfSamplePoint = clamp(vec2(NdotV, perceptualRoughness), vec2(0), vec2(1));
     mediump vec2 brdf = texture(textures.lut_ggx, brdfSamplePoint).rg;
     mediump float lod = perceptualRoughness * float(scene.iblMipCount);
-    mediump vec4 specularSample = textureLod(textures.ibl.specular, reflection, lod);
+    mediump vec4 specularSample = textureLod(textures.ibl.specular, camera.localBackgroundMatrixNormal * reflection, lod);
     mediump vec3 specularLight = specularSample.rgb;
     return specularLight * (specularColor * brdf.x + brdf.y);
 }
 
 mediump vec3 getIBLRadianceLambertian(mediump vec3 n, mediump vec3 diffuseColor) {
-    vec3 diffuseLight = texture(textures.ibl.diffuse, n).rgb;
+    vec3 diffuseLight = texture(textures.ibl.diffuse, camera.localBackgroundMatrixNormal * n).rgb;
     return diffuseLight * diffuseColor;
 }
 
@@ -296,9 +296,9 @@ void main() {
             n = normalInfo.n; // used bump-mapped normal for shading
             mediump vec3 f_specular = getIBLRadianceGGX(n, v, materialInfo.perceptualRoughness, materialInfo.f0);
             mediump vec3 f_diffuse = getIBLRadianceLambertian(n, materialInfo.albedoColor);
-            mediump vec3 f_ambient = vec3(textureInfo1.a);
+            mediump vec3 f_ambient = vec3(1);
 
-            mediump vec3 color = f_diffuse + f_specular + f_ambient;
+            mediump vec3 color = mix(f_diffuse + f_specular, f_ambient, textureInfo1.a);
             color *= materialInfo.occlusion;
             rgba = vec4(color, baseColor.a);
             // rgba = vec4(materialInfo.baseColor, baseColor.a);
@@ -314,9 +314,9 @@ void main() {
             mediump float perceptualRoughness = mix(.75, 1., baseColor.a);
             //perceptualRoughness *= perceptualRoughness;
 
-            mediump vec3 irradiance = texture(textures.ibl.diffuse, N).rgb * perceptualRoughness;
+            mediump vec3 irradiance = texture(textures.ibl.diffuse, camera.localBackgroundMatrixNormal * N).rgb * perceptualRoughness;
             mediump float lod = perceptualRoughness * (scene.iblMipCount - 1.0);
-            mediump vec3 reflection = textureLod(textures.ibl.specular, reflect(V, N), lod).rgb * (1. - perceptualRoughness);
+            mediump vec3 reflection = textureLod(textures.ibl.specular, camera.localBackgroundMatrixNormal * reflect(V, N), lod).rgb * (1. - perceptualRoughness);
 
             mediump vec3 rgb = diffuseOpacity.rgb * irradiance + reflection;
             rgba = vec4(rgb, rgba.a);

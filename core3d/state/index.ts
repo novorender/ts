@@ -205,6 +205,9 @@ export interface RenderStateBackground {
      * Blurring is useful for not overly cluttering up the image with backgrounds while still retaining the ambience and lighting characteristics.
      */
     readonly blur?: number;
+
+    /** The horizontal rotation angle, in degrees. */
+    readonly rotation?: number;
 }
 
 /** Camera related render state.

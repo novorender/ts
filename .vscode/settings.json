@@ -22,6 +22,7 @@
         "    highp mat4 viewLocalMatrix;\r",
         "    highp mat3 localViewMatrixNormal;\r",
         "    highp mat3 viewLocalMatrixNormal;\r",
+        "    highp mat3 localBackgroundMatrixNormal;\r",
         "    highp vec2 viewSize;\r",
         "    highp float near; // near clipping plane distance\r",
         "};\r",
