@@ -127,6 +127,6 @@ void main() {
     if(edge < 0.3f) {
         discard;
     }
-    fragColor = vec4(0, 0, 0, 1) * edge;
-    //fragColor = vec4(toonOutline.color, 1) * edge;
+    //fragColor = vec4(0, 0, 0, 1) * edge;
+    fragColor = vec4(toonOutline.color, 1) * edge;
 }
