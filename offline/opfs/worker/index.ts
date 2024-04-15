@@ -176,26 +176,30 @@ async function handleIORequest(data: IORequest): Promise<ResponseMessage> {
         }
         case "write": {
             let error: string | undefined;
+            let errorName: string | undefined;
             try {
                 await writeFile(data.dir, data.file, data.buffer);
             } catch (ex: any) {
                 error = ex.message ?? ex.toString();
+                errorName = ex.name;
                 console.warn(`${data.file}: ${error}`);
             }
-            response = { kind: "write", id: data.id, error } as const satisfies WriteResponse;
+            response = { kind: "write", id: data.id, error, errorName } as const satisfies WriteResponse;
             break;
         }
         case "open_write_stream": {
             let error: string | undefined;
+            let errorName: string | undefined;
             try {
                 const handle = await createFile(data.dir, data.file, data.size);
                 const key = `${data.dir}/${data.file}`;
                 streamHandles.set(key, handle);
             } catch (ex: any) {
                 error = ex.message ?? ex.toString();
+                errorName = ex.name;
                 console.warn(`${data.file}: ${error}`);
             }
-            response = { kind: "open_write_stream", id: data.id, error } as const satisfies OpenStreamResponse;
+            response = { kind: "open_write_stream", id: data.id, error, errorName } as const satisfies OpenStreamResponse;
             break;
         }
         case "append_stream": {

@@ -21,7 +21,7 @@ export interface Logger {
      * Log an error message.
      * @param message: The error message to be displayed.
      */
-    error(message: string): void;
+    error(message: OfflineErrorMessage): void;
 
     /**
      * Update progress for potentially long running processes, such as synchronization.
@@ -32,3 +32,30 @@ export interface Logger {
     progress?(value: number, max: number | undefined, operation: "scan" | "download"): void;
 }
 
+/**
+ * Offline error message
+ */
+export interface OfflineErrorMessage {
+    /**
+     * Human readable error message
+     */
+    message: string;
+    /**
+     * Possible error type if it can be provided
+     */
+    id?: OfflineErrorCode;
+}
+
+/**
+ * Offline error code
+ */
+export enum OfflineErrorCode {
+    /**
+     * Device disk drive quota exceeded
+     */
+    quotaExceeded,
+    /**
+     * Device is offline
+     */
+    offline
+}

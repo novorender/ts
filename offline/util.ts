@@ -1,3 +1,4 @@
+import type { OfflineErrorCode, OfflineErrorMessage } from "./logger";
 import { type PathNameFormatter, type PathNameParser, type ResourceType } from "./storage";
 
 /**
@@ -16,10 +17,10 @@ import { type PathNameFormatter, type PathNameParser, type ResourceType } from "
  * @param value The exception
  * @returns Error.message, if "message" exists, value.toString() if not.
  */
-export function errorMessage(value: unknown): string {
+export function errorMessage(value: unknown, id?: OfflineErrorCode): OfflineErrorMessage {
     function isError(value: any): value is Error {
         return value && "message" in value;
     }
-    return isError(value) ? value.message : typeof (value) == "string" ? value : (value as any).toString();
+    const message = isError(value) ? value.message : typeof (value) == "string" ? value : (value as any).toString();
+    return { message, id };
 }
-

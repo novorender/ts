@@ -300,7 +300,11 @@ class OfflineDirectoryOPFS {
         worker.postMessage(msg, [buffer]);
         const response = await promises.create<WriteResponse>(id);
         if (response.error) {
-            throw new Error(response.error);
+            const error = new Error(response.error);
+            if (response.errorName) {
+                error.name = response.errorName;
+            }
+            throw error;
         }
     }
 
@@ -322,7 +326,11 @@ class OfflineDirectoryOPFS {
         worker.postMessage(openMsg);
         const openResponse = await promises.create<OpenStreamResponse>(openId);
         if (openResponse.error) {
-            throw new Error(openResponse.error);
+            const error = new Error(openResponse.error);
+            if (openResponse.errorName) {
+                error.name = openResponse.errorName;
+            }
+            throw error;
         }
         const reader = stream.getReader();
 
