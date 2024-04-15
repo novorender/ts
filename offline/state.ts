@@ -56,7 +56,7 @@ class OfflineViewState {
     async addScene(id: string): Promise<OfflineScene | undefined> {
         const { storage, scenes, logger } = this;
         if (scenes.has(id)) {
-            logger?.error("scene already added");
+            logger?.error(errorMessage("scene already added"));
         }
         try {
             logger?.status("adding scene");

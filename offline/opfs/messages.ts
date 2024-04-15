@@ -154,6 +154,7 @@ export interface WriteResponse {
     readonly kind: "write";
     readonly id: number;
     readonly error?: string;
+    readonly errorName?: string;
 }
 
 /** @internal */
@@ -161,6 +162,7 @@ export interface OpenStreamResponse {
     readonly kind: "open_write_stream";
     readonly id: number;
     readonly error?: string;
+    readonly errorName?: string;
 }
 
 /** @internal */

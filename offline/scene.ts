@@ -1,4 +1,4 @@
-import type { Logger } from "./";
+import { OfflineErrorCode, type Logger } from "./";
 import type { OfflineViewState } from "./state";
 import { SceneManifest, type SceneManifestData, type SceneManifestEntry } from "./manifest";
 import type { ResourceType } from "./storage";
@@ -94,7 +94,7 @@ export class OfflineScene {
         const manifestResponse = await fetch(manifestRequest); // always fetch online (for now)
         if (!manifestResponse.ok) {
             logger?.status("invalid format");
-            logger?.error(`Failed to retrieve manifest file ${manifestResponse.statusText}`);
+            logger?.error(errorMessage(`Failed to retrieve manifest file ${manifestResponse.statusText}`));
             return undefined;
         }
         const manifestData = await manifestResponse.json() as SceneManifestData;
@@ -120,7 +120,7 @@ export class OfflineScene {
         const { storage } = context;
         if (!navigator.onLine) {
             logger?.status("offline");
-            logger?.error("You must be online to synchronize files!");
+            logger?.error(errorMessage("You must be online to synchronize files!", OfflineErrorCode.offline));
             return false;
         }
 
@@ -169,6 +169,8 @@ export class OfflineScene {
             const maxSimulataneousDownloads = 8;
             const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
             const maxErrors = 100;
+            const maxQuotaExceededErrors = 5;
+            let quotaExceededErrorCount = 0;
             const errorQueue: { name: string, size: number }[] = [];
 
             async function downloadFiles(files: Iterable<SceneManifestEntry>, type: ResourceType) {
@@ -218,6 +220,10 @@ export class OfflineScene {
                                 if (typeof error == "object" && error instanceof DOMException && error.name == "AbortError") {
                                     throw error;
                                 }
+                                if (typeof error == "object" && error instanceof Error && error.name === "QuotaExceededError") {
+                                    throw error;
+                                }
+                                
                                 errorQueue.push({ name, size });
                             }
                         }
@@ -227,8 +233,20 @@ export class OfflineScene {
                         if (errorQueue.length > maxErrors) {
                             break;
                         }
+
                         if (!existingFiles.has(name)) {
-                            await downloadFile(name, size);
+                            try {
+                                await downloadFile(name, size);
+                            } catch (error) {
+                                if (typeof error == "object" && error instanceof Error && error.name === "QuotaExceededError") {
+                                    quotaExceededErrorCount++;
+                                    if (quotaExceededErrorCount > maxQuotaExceededErrors) {
+                                        throw new DOMException("Not enough disk space", "QuotaExceededError");
+                                    }
+                                } else {
+                                    throw error;
+                                }
+                            }
                         } else {
                             totalDownload += size;
                         }
@@ -287,7 +305,11 @@ export class OfflineScene {
                 logger?.status("aborted");
             } else {
                 logger?.status("error");
-                logger?.error(errorMessage(error));
+                let id: OfflineErrorCode | undefined;
+                if (error instanceof DOMException && error.name === "QuotaExceededError") {
+                    id = OfflineErrorCode.quotaExceeded;
+                }
+                logger?.error(errorMessage(error, id));
             }
             return false;
         }
