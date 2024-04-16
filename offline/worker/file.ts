@@ -4,6 +4,14 @@ export async function storeOfflineFileSync(response: Response, dirHandle: FileSy
     const buffer = await response.clone().arrayBuffer();
     const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
     const file = await fileHandle.createSyncAccessHandle();
-    file.write(new Uint8Array(buffer));
-    file.close();
+    try {
+        file.write(new Uint8Array(buffer));
+        file.close();
+    } catch (e: unknown) {
+        if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+            file.close();
+            dirHandle.removeEntry(filename);
+        }
+        throw e;
+    }
 }
