@@ -359,7 +359,15 @@ async function createFile(dir: string, file: string, size: number): Promise<Stre
     const dirHandle = await getDirHandle(dir);
     const fileHandle = await dirHandle.getFileHandle(file, { create: true });
     const accessHandle = await fileHandle.createSyncAccessHandle();
-    accessHandle.truncate(size);
+    try {
+        accessHandle.truncate(size);
+    } catch (e) {
+        if (e.name === 'QuotaExceededError') {
+            accessHandle.close();
+            dirHandle.removeEntry(file);
+        }
+        throw e;
+    }
     return { accessHandle, offset: 0, dir, file, size };
 }
 
@@ -390,7 +398,16 @@ async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {
         const dirHandle = await getDirHandle(dir);
         const fileHandle = await dirHandle.getFileHandle(file, { create: true });
         accessHandle = await fileHandle.createSyncAccessHandle();
-        accessHandle.truncate(buffer.byteLength);
+        try {
+            accessHandle.truncate(buffer.byteLength);
+        } catch (e) {
+            if (e.name === 'QuotaExceededError') {
+                accessHandle.close();
+                accessHandle = undefined;
+                dirHandle.removeEntry(file);
+            }
+            throw e;
+        }
         const bytesWritten = accessHandle.write(new Uint8Array(buffer), { at: 0 });
         console.assert(bytesWritten == buffer.byteLength);
         accessHandle.flush();
@@ -398,7 +415,6 @@ async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {
     } finally {
         accessHandle?.close();
     }
-
 }
 
 async function readJournal(dir: string) {
