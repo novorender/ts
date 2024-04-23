@@ -227,11 +227,20 @@ class OfflineDirectoryOPFS {
                 while (prevIndex < buffer.length) {
                     let index = buffer.indexOf(10, prevIndex);
                     const line = buffer.subarray(prevIndex, index);
-                    const text = decoder.decode(line, { stream: true });
-                    const [name, sizeStr] = text.split(",");
-                    const size = Number.parseInt(sizeStr);
-                    prevIndex = index + 1;
-                    yield { name, size };
+                    try {
+                        const text = decoder.decode(line, { stream: true });
+                        const [name, sizeStr] = text.split(",");
+                        const size = Number.parseInt(sizeStr);
+                        if (Number.isNaN(size)) {
+                            console.warn(`Error reading offline journal: parsed size ${sizeStr} is not a number`);
+                            break;
+                        }
+                        prevIndex = index + 1;
+                        yield { name, size };
+                    } catch (ex) {
+                        console.warn("Error reading offline journal", ex);
+                        break;
+                    }
                 }
             }
         }
