@@ -334,7 +334,7 @@ export class FlightController extends BaseController {
         this._pivot = { center, offset, distance, active };
     }
 
-    /** @internal */
+    /** Function for getting input modifiers based on how far the 3d objects are from the mouse cursor */
     protected modifiers() {
         const { params, recordedMoveBegin, _position, _fov } = this;
         const { proportionalCameraSpeed, enableShiftModifierOnWheel } = params;
@@ -358,7 +358,9 @@ export class FlightController extends BaseController {
         }
     }
 
-    /** @internal */
+    /** Function to get transformations since last updated. 
+     *  This can be overwritten to easily change direction and scale of input while keeping the standard caluculation for flight controller
+     */
     protected getTransformations(): CameraTransformations {
         const { axes, arrowKeyScale } = this;
         const rotX = -axes.keyboard_arrow_up_down * arrowKeyScale - axes.mouse_lmb_move_y + axes.touch_1_move_y;
