@@ -48,7 +48,6 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
     const r2Label = minLabelPixelRadius * minLabelPixelRadius;
     const r2Line = minPixelRadiusLine * minPixelRadiusLine;
     const glCenterPos = settings.projection ? vec3.fromValues(settings.projection.centerPoint3d[0], settings.projection.centerPoint3d[2], -settings.projection.centerPoint3d[1]) : undefined;
-    const maxDistFromCl2 = 12 * 12;
     for (let i = 0; i < sortedDeviations.length; ++i) {
         const currentSample = sortedDeviations[i];
         let addLabel = true;
@@ -62,9 +61,6 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
                 addLabel = false;
                 break;
             }
-        }
-        if (addLabel && glCenterPos) {
-            addLabel = vec3.squaredDistance(glCenterPos, currentSample.position) < maxDistFromCl2;
         }
         if (addLabel) {
             labels.push({ position: vec2.clone(position), deviation: currentSample.deviation.toFixed(3) })
@@ -88,9 +84,6 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
                         break;
                     }
                 }
-                if (addLinePoint && glCenterPos) {
-                    addLinePoint = vec3.squaredDistance(glCenterPos, currentSample.position) < maxDistFromCl2;
-                }
                 if (addLinePoint) {
                     linePoints.push({ position, position3d: currentSample.position, depth: currentSample.depth });
                 }
@@ -99,13 +92,13 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
     }
 
     if (settings.projection) {
+
         for (let i = 0; i < labels.length; ++i) {
             const pos = labels[i].position;
             const dir = vec2.sub(vec2.create(), pos, settings.projection.centerPoint2d);
             vec2.normalize(dir, dir);
             vec2.scaleAndAdd(labels[i].position, pos, dir, 50);
         }
-
 
         let anglesIdxMap: { angle: number, i: number }[] = [];
         for (let i = 0; i < linePoints.length; ++i) {
@@ -118,23 +111,58 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
             anglesIdxMap.push({ angle, i });
         }
         anglesIdxMap = anglesIdxMap.sort((a, b) => a.angle - b.angle);
-        if (anglesIdxMap.length > 1) {
+
+        if (anglesIdxMap.length > 10) {
+            //Guess the max tunnel radius based on the first 10 points 
+            const radBuckets: { min: number, max: number }[] = [];
+            if (glCenterPos) {
+                for (let i = 0; i < Math.min(10, anglesIdxMap.length); ++i) {
+                    const rad = vec3.dist(linePoints[anglesIdxMap[i].i].position3d, glCenterPos);
+                    let j = 0;
+                    for (; j < radBuckets.length; ++j) {
+                        if (Math.abs(rad - radBuckets[j].min) < 1 || Math.abs(rad - radBuckets[j].max) < 1) {
+                            radBuckets[j].min = Math.min(rad, radBuckets[j].min);
+                            radBuckets[j].max = Math.max(rad, radBuckets[j].max);
+                            break;
+                        }
+                    }
+                    if (j == radBuckets.length) {
+                        radBuckets.push({ min: rad, max: rad });
+                    }
+                }
+            }
+            radBuckets.sort((a, b) => a.min - b.min)
+            const maxTunnelStartRadius = (radBuckets[0].max + 1) * (radBuckets[0].max + 1);
+
             const line: vec2[] = [];
             const line3d: ReadonlyVec3[] = [];
-            let prev = linePoints[anglesIdxMap[0].i];
+            let i = 0;
+            if (glCenterPos) {
+                for (; i < anglesIdxMap.length - 1; ++i) {
+                    const rad = vec3.sqrDist(linePoints[anglesIdxMap[i].i].position3d, glCenterPos);
+                    if (rad < maxTunnelStartRadius) {
+                        ++i;
+                        break;
+                    }
+                }
+            } else {
+                i = 1;
+            }
+            let prev = linePoints[anglesIdxMap[i - 1].i];
             line.push(prev.position);
             line3d.push(prev.position3d);
-            let current = linePoints[anglesIdxMap[1].i];
-            let next = linePoints[anglesIdxMap[0].i];
-            let dirToPrev = vec2.sub(vec2.create(), current.position, prev.position)
-            for (let i = 1; i < anglesIdxMap.length - 1; ++i) {
+            let current = linePoints[anglesIdxMap[i].i];
+            let next = linePoints[anglesIdxMap[i - 1].i];
+
+            let dirToPrev = vec2.sub(vec2.create(), current.position, prev.position);
+            for (; i < anglesIdxMap.length - 1; ++i) {
                 next = linePoints[anglesIdxMap[i + 1].i];
                 const dirToNext = vec2.sub(vec2.create(), next.position, current.position);
                 const angle2d = vec2.angle(dirToPrev, dirToNext);
                 if (angle2d > Math.PI * 0.6) {
                     continue;
                 }
-                if (vec3.squaredDistance(prev.position3d, current.position3d) > 50) {
+                if (vec3.squaredDistance(prev.position3d, current.position3d) > 25) {
                     continue;
                 }
                 line.push(current.position);
