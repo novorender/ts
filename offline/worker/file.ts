@@ -8,9 +8,11 @@ export async function storeOfflineFileSync(response: Response, dirHandle: FileSy
         file.write(new Uint8Array(buffer));
         file.close();
     } catch (e: unknown) {
-        if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        try {
             file.close();
             dirHandle.removeEntry(filename);
+        } catch (e2) {
+            console.warn("Error closing/removing file after failed truncation", e2);
         }
         throw e;
     }

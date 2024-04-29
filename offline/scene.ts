@@ -221,7 +221,15 @@ export class OfflineScene {
                                     throw error;
                                 }
                                 if (typeof error == "object" && error instanceof Error && error.name === "QuotaExceededError") {
-                                    throw error;
+                                    throw new DOMException();
+                                }
+
+                                // iOS verison of QuotaExceededError. It's more generic, but consider it's quota exceeded here.
+                                // The other possible reason is that the write handle is closed, which is not supposed to be the case
+                                // because truncate happens right after handle creation.
+                                if (typeof error == "object" && error instanceof Error && error.name === "InvalidStateError" &&
+                                    (error.message === "Failed to truncate file" || error.message === "Failed to write to file")) {
+                                    throw new DOMException("Not enough disk space", "QuotaExceededError");
                                 }
                                 
                                 errorQueue.push({ name, size });
