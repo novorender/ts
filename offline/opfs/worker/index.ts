@@ -362,9 +362,11 @@ async function createFile(dir: string, file: string, size: number): Promise<Stre
     try {
         accessHandle.truncate(size);
     } catch (e) {
-        if (e.name === 'QuotaExceededError') {
+        try {
             accessHandle.close();
             dirHandle.removeEntry(file);
+        } catch (e2) {
+            console.warn("Error closing/removing file after failed truncation", e2);
         }
         throw e;
     }
@@ -393,27 +395,24 @@ async function finalizeFile(streamHandle: StreamHandle) {
 
 async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {
     // console.log(`${dir}/${file}[${buffer.byteLength}]`);
-    let accessHandle: FileSystemSyncAccessHandle | undefined;
+    const dirHandle = await getDirHandle(dir);
+    const fileHandle = await dirHandle.getFileHandle(file, { create: true });
+    const accessHandle = await fileHandle.createSyncAccessHandle();
     try {
-        const dirHandle = await getDirHandle(dir);
-        const fileHandle = await dirHandle.getFileHandle(file, { create: true });
-        accessHandle = await fileHandle.createSyncAccessHandle();
-        try {
-            accessHandle.truncate(buffer.byteLength);
-        } catch (e) {
-            if (e.name === 'QuotaExceededError') {
-                accessHandle.close();
-                accessHandle = undefined;
-                dirHandle.removeEntry(file);
-            }
-            throw e;
-        }
+        accessHandle.truncate(buffer.byteLength);
         const bytesWritten = accessHandle.write(new Uint8Array(buffer), { at: 0 });
         console.assert(bytesWritten == buffer.byteLength);
         accessHandle.flush();
+        accessHandle.close();
         await appendJournal(dir, file, bytesWritten);
-    } finally {
-        accessHandle?.close();
+    } catch (ex) {
+        try {
+            accessHandle.close();
+            dirHandle.removeEntry(file);
+        } catch (e2) {
+            console.warn("Error closing/removing file after failed write", e2);
+        }
+        throw ex;
     }
 }
 
