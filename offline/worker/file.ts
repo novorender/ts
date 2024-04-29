@@ -12,7 +12,7 @@ export async function storeOfflineFileSync(response: Response, dirHandle: FileSy
             file.close();
             dirHandle.removeEntry(filename);
         } catch (e2) {
-            console.warn("Error closing/removing file after failed truncation", e2);
+            console.warn("Error closing/removing file after failed write", e2);
         }
         throw e;
     }
