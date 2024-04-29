@@ -264,6 +264,10 @@ export class OfflineScene {
                     for (const error of errors) {
                         await downloadFile(error.name, error.size);
                     }
+
+                    if (errorQueue.length > 0) {
+                        throw new Error(`Failed to download ${errorQueue.length} files!`);
+                    }
                 }
             }
             await downloadFiles(onlineManifest.glFiles, "webgl2_bin");
@@ -273,13 +277,13 @@ export class OfflineScene {
 
             logger?.progress?.(totalByteSize, totalByteSize, "download");
 
-            // add manifest.
-            const manifestBuffer = new TextEncoder().encode(JSON.stringify(manifestData)).buffer;
-            await dir.write(manifestName, manifestBuffer); // TODO: use hashed version?
-
             if (errorQueue.length > 0) {
                 throw new Error(`Failed to download ${errorQueue.length} files!`);
             }
+
+            // add manifest.
+            const manifestBuffer = new TextEncoder().encode(JSON.stringify(manifestData)).buffer;
+            await dir.write(manifestName, manifestBuffer); // TODO: use hashed version?
 
             // add index.json to local files last to mark the completion of sync.
             const indexBuffer = new TextEncoder().encode(JSON.stringify(sceneIndex)).buffer;
