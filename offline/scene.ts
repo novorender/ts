@@ -264,10 +264,10 @@ export class OfflineScene {
                     for (const error of errors) {
                         await downloadFile(error.name, error.size);
                     }
+                }
 
-                    if (errorQueue.length > 0) {
-                        throw new Error(`Failed to download ${errorQueue.length} files!`);
-                    }
+                if (errorQueue.length > 0) {
+                    throw new Error(`Failed to download ${errorQueue.length} files!`);
                 }
             }
             await downloadFiles(onlineManifest.glFiles, "webgl2_bin");
