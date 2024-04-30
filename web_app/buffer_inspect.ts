@@ -38,7 +38,6 @@ export type DeviationInspections = {
 
 /** @internal */
 export function inspectDeviations(deviations: DeviationSample[], screenScaling: number, settings: DeviationInspectionSettings): DeviationInspections {
-    console.log(deviations.length);
     const sortedDeviations = deviations.sort(
         (a, b) => settings.deviationPrioritization == "minimum" ? Math.abs(a.deviation) - Math.abs(b.deviation) : Math.abs(b.deviation) - Math.abs(a.deviation)
     );
