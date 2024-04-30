@@ -29,12 +29,17 @@ export class ControllerInput {
     private _zoomX = 0;
     private readonly _prevTouchCenter = [0, 0] as vec2;
     private _touchZoomDistancePrev = 0;
+    private _mouseDownClientPos = vec2.create();
+    private _mouseMoveStarted = false;
 
     private _mouseWheelLastActive = 0;
     private static readonly _gestureKeys = ["KeyW", "KeyS", "KeyA", "KeyD", "KeyQ", "KeyE", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
 
     /** Whether to use {@link https://developer.mozilla.org/en-US/docs/Web/API/Pointer_Lock_API | mouse pointer lock} or not. */
     usePointerLock = true;
+
+    /** Consider mouse started moving after mouse passed this distance. Default is 0 */
+    mouseMoveSensitivity = 0;
 
     /**
      * @param domElement The HTMLElement to subscribe to input events from.
@@ -182,7 +187,11 @@ export class ControllerInput {
 
     private mousedown = async (e: MouseEvent) => {
         const { domElement, axes } = this;
-        this._mouseButtonDown = true;
+        vec2.set(this._mouseDownClientPos, e.clientX, e.clientY);
+        if (this.mouseMoveSensitivity <= 0) {
+            this._mouseButtonDown = true;
+            this._mouseMoveStarted = true;
+        }
         domElement.focus();
         e.preventDefault();
         this.updateModifierKeys(e);
@@ -201,6 +210,7 @@ export class ControllerInput {
         if ("exitPointerLock" in document) document.exitPointerLock();
         this.callbacks?.mouseButtonChanged?.(e);
         this._mouseButtonDown = false;
+        this._mouseMoveStarted = false;
     };
 
     private wheel = async (e: WheelEvent) => {
@@ -216,6 +226,15 @@ export class ControllerInput {
     private mousemove = (e: MouseEvent) => {
         if (e.buttons < 1) return;
         this.updateModifierKeys(e);
+        if (!this._mouseMoveStarted) {
+            const dist = vec2.dist(this._mouseDownClientPos, vec2.fromValues(e.clientX, e.clientY));
+            if (dist >= this.mouseMoveSensitivity) {
+                this._mouseMoveStarted = true;
+                this._mouseButtonDown = true;
+            } else {
+                return;
+            }
+        }
         if (this._mouseButtonDown && this.usePointerLock) {
             (e.currentTarget as HTMLElement).requestPointerLock();
             this._mouseButtonDown = false;
