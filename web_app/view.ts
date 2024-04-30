@@ -427,7 +427,7 @@ export class View<
             const scale = devicePixelRatio * this.resolutionModifier;
             const deviations = await context.getDeviations();
             const { output } = this.renderStateGL;
-            if (deviations.length < (output.height * output.width) / 5) {
+            if (deviations.length < (output.height * output.width) / 20) {
                 return inspectDeviations(deviations, scale, settings);
             }
         }
