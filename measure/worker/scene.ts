@@ -40,6 +40,7 @@ import type { Curve3D } from "./curves";
 
 glMatrix.setMatrixArrayType(Array);
 export const epsilon = 0.0001;
+const emptyHash = "00000000000000000000000000000000";
 
 export class MeasureTool {
     downloader: Downloader = undefined!;
@@ -49,6 +50,11 @@ export class MeasureTool {
     nextSnapIdx = 0;
     static geometryFactory: GeometryFactory = undefined!;
     idToHash: Uint8Array | undefined;
+    private hasIdToHash = false;
+    private lutPath: string | undefined;
+    // For async access (unlike idToHash)
+    private idToHashCache = new Map<number, string | Promise<string>>();
+    private idToHashFileSize = 0;
 
     constructor() {
     }
@@ -58,12 +64,40 @@ export class MeasureTool {
         if (idToHash && id < idToHash.length / 16) {
             const offset = id * 16;
             const slice = idToHash.subarray(offset, offset + 16);
-            return [...slice].map(b => {
-                const s = b.toString(16);
-                return s.length < 2 ? s.length == 1 ? "0" + s : "00" : s;
-            }).join("").toUpperCase();
+            return this.byteSliceToHash(slice);
         }
         return undefined;
+    }
+
+    private async lookupHashAsync(id: number) {
+        if (id < 0 || id >= this.idToHashFileSize / 16) {
+            return;
+        }
+
+        let result = this.idToHashCache.get(id);
+        if (!result) {
+            const offset = id * 16;
+            result = this.downloader.request(this.lutPath!, {
+                headers: {
+                    Range: `bytes=${offset}-${offset + 15}`
+                }
+            })
+                .then(resp => resp.arrayBuffer())
+                .then(slice => {
+                    const result = this.byteSliceToHash(new Uint8Array(slice));
+                    this.idToHashCache.set(id, result);
+                    return result;
+                });
+            this.idToHashCache.set(id, result);
+        }
+        return await result;
+    }
+
+    private byteSliceToHash(bytes: Uint8Array) {
+        return [...bytes].map(b => {
+            const s = b.toString(16);
+            return s.length < 2 ? s.length == 1 ? "0" + s : "00" : s;
+        }).join("").toUpperCase();
     }
 
     async init(wasm: string | ArrayBuffer) {
@@ -82,8 +116,21 @@ export class MeasureTool {
         if (lutPath.length === 0) {
             lutPath = "object_id_to_brep_hash";
         }
+        this.lutPath = lutPath;
         try {
-            this.idToHash = new Uint8Array(await this.downloader.downloadArrayBuffer(lutPath));
+            // Offline storage doesn't distinguish between request methods,
+            // so we'll get GET from offline which is ok
+            // In this case use sync id hash
+            const resp = await this.downloader.request(lutPath, { method: 'HEAD' });
+            this.hasIdToHash = resp.status === 200;
+            if (this.hasIdToHash) {
+                const body = await resp.arrayBuffer();
+                if (body.byteLength > 0) {
+                    this.idToHash = new Uint8Array(body);
+                } else {
+                    this.idToHashFileSize = Number(resp.headers.get('Content-Length'));
+                }
+            }
         } catch {
             this.idToHash = undefined;
         }
@@ -110,11 +157,10 @@ export class MeasureTool {
     }
 
     async downloadBrep(id: number): Promise<ProductData | null> {
-        const { idToHash } = this;
-        if (idToHash) {
-            const hash = this.lookupHash(id);
+        if (this.hasIdToHash) {
+            const hash = this.idToHash ? this.lookupHash(id) : await this.lookupHashAsync(id);
             try {
-                return hash ? await this.downloader.downloadJson(hash) : null;
+                return hash && hash !== emptyHash ? await this.downloader.downloadJson(hash) : null;
             } catch {
                 return null;
             }
