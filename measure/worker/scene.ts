@@ -45,7 +45,7 @@ const emptyHash = "00000000000000000000000000000000";
 export class MeasureTool {
     downloader: Downloader = undefined!;
     crossSectionTool: RoadTool = undefined!;
-    data = new Map<ObjectId, ProductData | null>();
+    data = new Map<ObjectId, ProductData | null | Promise<ProductData | undefined>>();
     snapObjects = new Array<PickInterface>();
     nextSnapIdx = 0;
     static geometryFactory: GeometryFactory = undefined!;
@@ -178,14 +178,18 @@ export class MeasureTool {
     ): Promise<ProductData | undefined> {
         let product = this.data.get(id);
         if (product === undefined) {
-            product = await this.downloadBrep(id);
-            if (product && product.instances === undefined) {
-                this.data.set(id, null);
-                return undefined;
-            }
+            product = this.downloadBrep(id)
+                .then(product => {
+                    if (product && product.instances === undefined) {
+                        this.data.set(id, null);
+                        return undefined;
+                    }
+                    this.data.set(id, product);
+                    return product ?? undefined;
+                });
             this.data.set(id, product);
         }
-        return product ?? undefined;
+        return await product ?? undefined;
     }
 
     async isBrepGenerated(id: ObjectId) {
@@ -339,7 +343,7 @@ export class MeasureTool {
 
     async pickEntityOnCurrentObject(id: ObjectId, position: vec3, tolerance: SnapTolerance):
         Promise<{ entity: MeasureEntity | undefined, status: LoadStatus, connectionPoint?: vec3 }> {
-        const product = this.data.get(id);
+        const product = await this.data.get(id);
         if (product === null) {
             return {
                 entity: undefined, status: "missing"
