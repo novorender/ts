@@ -149,11 +149,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
 
                 // delete existing scene
-                for (const rootNode of Object.values(this.rootNodes)) {
-                    rootNode.dispose();
-                }
-                this.rootNodes = {};
-
+                this.disposeRootNodes();
+                
                 // update material atlas if url has changed
                 const url = scene?.url;
                 if (url != this.url) {
@@ -750,6 +747,13 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     dispose() {
         this.contextLost();
         this.resources.bin.dispose();
+        this.disposeRootNodes();
+    }
+
+    private disposeRootNodes() {
+        for (const rootNode of Object.values(this.rootNodes)) {
+            rootNode.dispose();
+        }
         this.rootNodes = {};
     }
 
@@ -758,6 +762,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         await this.loader.abortAllPromise; // make sure we wait for any previous aborts to complete
         const rootNodes = await createSceneRootNodes(this, scene.config, this.renderContext.deviceProfile);
         if (rootNodes) {
+            this.disposeRootNodes();
             this.rootNodes = rootNodes;
         }
         this.suspendUpdates = false;
