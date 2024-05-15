@@ -18,6 +18,7 @@ function getWebGL2Extensions(gl: WebGL2RenderingContext) {
         disjointTimerQuery: gl.getExtension('EXT_disjoint_timer_query_webgl2') as EXT_disjoint_timer_query_webgl2_ext,
         provokingVertex: gl.getExtension('WEBGL_provoking_vertex') as WEBGL_provoking_vertex | null,
         textureFilterAnisotropic: gl.getExtension('EXT_texture_filter_anisotropic'),
+        polygonMode: gl.getExtension("WEBGL_polygon_mode"),
     } as const;
 }
 

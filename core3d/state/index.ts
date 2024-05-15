@@ -280,8 +280,14 @@ export interface RenderStateQuality {
     readonly detail: number;
 }
 
-/** @internal */
+/** Debug related state.
+ * @category Render State
+ */
 export interface RenderStateDebug {
+    /** Draw triangles as wireframe. @default false. */
+    readonly wireframe: boolean;
+
+    /** Render bounding box around octree nodes. @default false. */
     readonly showNodeBounds: boolean;
 }
 

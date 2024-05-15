@@ -23,6 +23,7 @@ export function defaultRenderState(): RenderState {
             detail: 1,
         },
         debug: {
+            wireframe: false,
             showNodeBounds: false,
         },
         grid: {

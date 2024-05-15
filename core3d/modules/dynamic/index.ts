@@ -1,6 +1,6 @@
 import type { DerivedRenderState, RenderContext, RenderStateDynamicGeometry, RenderStateDynamicImage, RenderStateDynamicInstance, RenderStateDynamicMaterial, RenderStateDynamicMeshPrimitive, RenderStateDynamicObject, RenderStateDynamicSampler, RenderStateDynamicTexture, RenderStateDynamicTextureReference, RenderStateDynamicVertexAttribute } from "core3d";
 import type { RenderModuleContext, RenderModule } from "..";
-import { glUBOProxy, glDraw, glState, type UniformTypes, type VertexArrayParams, type VertexAttribute, type DrawParamsElements, type DrawParamsArrays, type StateParams, type DrawParamsArraysInstanced, type DrawParamsElementsInstanced, glUpdateBuffer } from "webgl2";
+import { glUBOProxy, glDraw, glState, type UniformTypes, type VertexArrayParams, type VertexAttribute, type DrawParamsElements, type DrawParamsArrays, type StateParams, type DrawParamsArraysInstanced, type DrawParamsElementsInstanced, glUpdateBuffer, glExtensions } from "webgl2";
 import { mat3, mat4, vec3, type ReadonlyVec3 } from "gl-matrix";
 import { BufferFlags } from "core3d/buffers";
 import { ResourceBin } from "core3d/resource";
@@ -124,6 +124,10 @@ class DynamicModuleContext implements RenderModuleContext {
             },
         });
 
+        if (state.debug.wireframe) {
+            context.setPolygonFillMode("LINE");
+        }
+
         const { objects, geometries, materials } = this;
         const meshes: { readonly material: MaterialAsset; readonly geometry: GeometryAsset; readonly object: ObjectAsset }[] = [];
         let numPrimitives = 0;
@@ -177,6 +181,7 @@ class DynamicModuleContext implements RenderModuleContext {
             gl.bindBuffer(gl.ARRAY_BUFFER, null);
             const kind = `${geometry.drawParams.kind}_instanced` as const;
             const params = { ...geometry.drawParams, kind, instanceCount: object.numInstances } as (DrawParamsArraysInstanced | DrawParamsElementsInstanced);
+
             const stats = glDraw(gl, params);
             gl.bindVertexArray(null);
             context.addRenderStatistics(stats);

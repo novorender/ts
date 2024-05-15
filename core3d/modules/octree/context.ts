@@ -489,6 +489,10 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         // glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
 
+        if (state.debug.wireframe) {
+            renderContext.setPolygonFillMode("LINE");
+        }
+
         const { diffuse, specular } = iblTextures;
         glState(gl, {
             program: programs.color,

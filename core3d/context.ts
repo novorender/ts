@@ -107,6 +107,8 @@ export class RenderContext {
 
     outlineRenderers = new WeakMap<ReadonlyVec4, OutlineRenderer>();
 
+    private polygonMode;
+
     // shared mutable state
     /** {@link RenderState} used to render the previous frame, if any. */
     prevState: DerivedRenderState | undefined;
@@ -167,6 +169,7 @@ export class RenderContext {
         if (provokingVertex) {
             provokingVertex.provokingVertexWEBGL(provokingVertex.FIRST_VERTEX_CONVENTION_WEBGL);
         }
+        this.polygonMode = extensions.polygonMode;
         this.commonChunk = imports.shaders.common;
         this.wasm = imports.wasmInstance;
 
@@ -476,6 +479,11 @@ export class RenderContext {
         });
     }
 
+    private resetGLState() {
+        glState(this.gl, null);
+        this.setPolygonFillMode("FILL");
+    }
+
     private resetStatistics() {
         const { statistics } = this;
         statistics.points = 0;
@@ -646,11 +654,14 @@ export class RenderContext {
         // pick frame buffer and clear z-buffer
         const { width, height } = canvas;
 
+        this.setPolygonFillMode("FILL");
+
         const frameBufferName = effectiveSamplesMSAA > 1 ? "colorMSAA" : "color";
         const frameBuffer = buffers.frameBuffers[frameBufferName];
         buffers.invalidate(frameBufferName, BufferFlags.all);
         glState(gl, { viewport: { width, height }, frameBuffer });
         glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
+
 
         // apply module render z-buffer pre-pass
         if (this.usePrepass) {
@@ -663,8 +674,7 @@ export class RenderContext {
                         // colorMask: [false, false, false, false],
                     });
                     module.prepass(derivedState);
-                    // reset gl state
-                    glState(gl, null);
+                    this.resetGLState();
                 }
             }
         }
@@ -679,8 +689,7 @@ export class RenderContext {
                     sample: { alphaToCoverage: effectiveSamplesMSAA > 1 },
                 });
                 module.render(derivedState);
-                // reset gl state
-                glState(gl, null);
+                this.resetGLState();
             }
         }
 
@@ -753,8 +762,7 @@ export class RenderContext {
                 if (module) {
                     glState(gl, stateParams);
                     module.pick?.(currentState);
-                    // reset gl state
-                    glState(gl, null);
+                    this.resetGLState();
                 }
             }
 
@@ -770,8 +778,7 @@ export class RenderContext {
                 // });
 
                 tonemapModule?.render(currentState);
-                // reset gl state
-                glState(gl, null);
+                this.resetGLState();
             }
             this.pickBuffersValid = true;
         }
@@ -1042,6 +1049,14 @@ export class RenderContext {
             return [];
         }
         return this.extractPick(currentPick, x, y, sampleDiscRadius, pickCameraPlane);
+    }
+
+    setPolygonFillMode(mode: "FILL" | "LINE") {
+        const { gl, polygonMode } = this;
+        if (polygonMode) {
+            const modeVal = polygonMode[`${mode}_WEBGL`];
+            polygonMode.polygonModeWEBGL(gl.FRONT_AND_BACK, modeVal);
+        }
     }
 
 }
