@@ -408,6 +408,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
             renderContext.addLoadStatistics(primitives);
 
+            // sessionStorage.setItem("gpu_mb", (gpuBytes / (1024*1024)).toFixed(2));
+
             const maxDownloads = 8;
             let availableDownloads = maxDownloads - this.loader.activeDownloads;
             for (const node of nodes) {
