@@ -244,29 +244,29 @@ export function pick(pickInterface: PickInterface, position: ReadonlyVec3, toler
                                     connectionPoint: vec3.clone(curvePoint)
                                 }
                             }
-                            const distToEnd = Math.abs(edge.data.parameterBounds[1] - t);
-                            if (distToEnd < pointTolerance && distToEnd < closestDistance) {
-                                edge.curve.eval(
-                                    edge.data.parameterBounds[1],
-                                    curvePoint,
-                                    undefined
-                                );
-                                const actualDistance = vec3.dist(curvePoint, localPoint);
-                                if (actualDistance < pointTolerance && actualDistance < closestDistance) {
-                                    pointSelected = true;
-                                    closestDistance = actualDistance;
-                                    vec3.transformMat4(curvePoint, curvePoint, instanceEdge.instanceMat);
-                                    closestCandidate = {
-                                        entity: {
-                                            ObjectId: pickInterface.objectId,
-                                            drawKind: "vertex",
-                                            pathIndex: edge.data.vertices[1],
-                                            instanceIndex: instanceEdge.instanceIdx,
-                                            parameter: vec3.clone(curvePoint),
-                                        },
-                                        connectionPoint: vec3.clone(curvePoint)
-                                    };
-                                }
+                        }
+                        const distToEnd = Math.abs(edge.data.parameterBounds[1] - t);
+                        if (distToEnd < pointTolerance && distToEnd < closestDistance) {
+                            edge.curve.eval(
+                                edge.data.parameterBounds[1],
+                                curvePoint,
+                                undefined
+                            );
+                            const actualDistance = vec3.dist(curvePoint, localPoint);
+                            if (actualDistance < pointTolerance && actualDistance < closestDistance) {
+                                pointSelected = true;
+                                closestDistance = actualDistance;
+                                vec3.transformMat4(curvePoint, curvePoint, instanceEdge.instanceMat);
+                                closestCandidate = {
+                                    entity: {
+                                        ObjectId: pickInterface.objectId,
+                                        drawKind: "vertex",
+                                        pathIndex: edge.data.vertices[1],
+                                        instanceIndex: instanceEdge.instanceIdx,
+                                        parameter: vec3.clone(curvePoint),
+                                    },
+                                    connectionPoint: vec3.clone(curvePoint)
+                                };
                             }
                         }
                     }
