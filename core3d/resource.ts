@@ -8,6 +8,7 @@ import { glCreateBuffer, glCreateFrameBuffer, glCreateProgram, glCreateRenderbuf
  */
 export class ResourceBin {
     private readonly resourceMap = new Map<WebGLResource, ResourceInfo[]>();
+    private readonly refMap = new WeakMap<WebGLResource, number>();
 
     /** @internal */
     constructor(
@@ -98,6 +99,33 @@ export class ResourceBin {
 
     delete(...resources: readonly (WebGLResource | null)[]) {
         this.del(resources);
+    }
+
+    addReference(resource: WebGLResource | null) {
+        if (resource) {
+            const { refMap } = this;
+            const refCount = (refMap.get(resource) ?? 0) + 1;
+            this.refMap.set(resource, refCount);
+            return refCount;
+        }
+    }
+
+    removeReference(resource: WebGLResource | null) {
+        if (resource) {
+            const { refMap } = this;
+            const refCount = (refMap.get(resource) ?? 0) - 1;
+            if (refCount <= 0) {
+                this.delete(resource);
+                if (refCount == 0) {
+                    refMap.delete(resource);
+                } else {
+                    console.error("Negative resource refcount", resource);
+                }
+            } else {
+                refMap.set(resource, refCount);
+            }
+            return refCount;
+        }
     }
 
     private del(resources: readonly (WebGLResource | null)[], deleteInfos?: ResourceInfo[]) {

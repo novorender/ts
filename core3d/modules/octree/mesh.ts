@@ -77,6 +77,7 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
             { kind: "arrays", mode: subMesh.primitiveType, count };
         const baseColorTextureIndex = subMesh.baseColorTexture as number;
         const baseColorTexture = textures[baseColorTextureIndex] ?? null;
+        resourceBin.addReference(baseColorTexture);
         yield { vao, vaoPosOnly, idxBuf: ib ?? null, posVB, highlightVB, drawParams, drawRanges, numVertices, numTriangles, objectRanges, materialType: materialType as unknown as MaterialType, baseColorTexture } as const satisfies Mesh;
     }
 }
@@ -101,7 +102,8 @@ export function updateMeshHighlights(gl: WebGL2RenderingContext, mesh: Mesh, hig
 /** @internal */
 export function deleteMesh(resourceBin: ResourceBin, mesh: Mesh) {
     const { vao, vaoPosOnly, idxBuf, posVB, highlightVB, baseColorTexture } = mesh;
-    resourceBin.delete(vao, vaoPosOnly, idxBuf, posVB, highlightVB, baseColorTexture);
+    resourceBin.removeReference(baseColorTexture);
+    resourceBin.delete(vao, vaoPosOnly, idxBuf, posVB, highlightVB);
 }
 
 /** @internal */
