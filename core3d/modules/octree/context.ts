@@ -541,7 +541,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail,
                     this.rootNodes[NodeGeometryKind.triangles], this.rootNodes[NodeGeometryKind.terrain]);
 
-                this.renderNodeClippingOutline(plane, state, renderNodes);
+                this.renderNodeClippingOutline(plane, state, renderNodes, state.outlines.hidden);
             }
             if (state.outlines.enabled) {
                 renderOutlines(state.outlines.plane, state.outlines.lineColor);
@@ -639,7 +639,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const p = vec4.fromValues(x, y, z, -offset);
                 renderContext.updateOutlinesUniforms(state.outlines, p, planeIndex, color);
 
-                this.renderNodeClippingOutline(plane, state, renderNodes);
+                this.renderNodeClippingOutline(plane, state, renderNodes, state.outlines.hidden);
             }
             if (state.outlines.enabled) {
                 renderOutlines(state.outlines.plane);
@@ -702,7 +702,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
     }
 
-    renderNodeClippingOutline(plane: ReadonlyVec4, state: DerivedRenderState, renderNodes: readonly RenderNode[]) {
+    renderNodeClippingOutline(plane: ReadonlyVec4, state: DerivedRenderState, renderNodes: readonly RenderNode[], hidden: boolean) {
         const begin = performance.now();
         const { gl, outlineRenderers } = this.renderContext;
         const { highlights } = this;
@@ -719,7 +719,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         let lineCount = 0, pointCount = 0;
         // TODO: offload to worker (mainly to avoid timeout and stuttering)?
         const [...lineClusters] = outlineRenderer.intersectTriangles(renderNodes);
-        {
+        if (!hidden) {
             const buffers = outlineRenderer.makeBuffers(lineClusters, state);
             if (buffers) {
                 const { linesCount, pointsCount, linesVAO, pointsVAO } = buffers;

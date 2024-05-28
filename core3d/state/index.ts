@@ -674,6 +674,9 @@ export interface RenderStateOutlines {
     */
     readonly on: boolean;
 
+    /** Hide outline on screen, it can still be used for measurement */
+    readonly hidden: boolean;
+
     /** Whether to do outline rendering. */
     readonly enabled: boolean;
 
