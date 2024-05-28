@@ -25,6 +25,8 @@ export class OctreeModule implements RenderModule {
         deviationIndex: "int",
         deviationFactor: "float",
         deviationRange: "vec2",
+        deviationVisibleRangeStart: "float",
+        deviationVisibleRangeEnd: "float",
         deviationUndefinedColor: "vec4",
         useProjectedPosition: "bool",
         elevationRange: "vec2",
