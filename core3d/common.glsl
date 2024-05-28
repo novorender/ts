@@ -212,6 +212,8 @@ struct SceneUniforms {
     lowp int deviationIndex;
     mediump float deviationFactor;
     mediump vec2 deviationRange;
+    mediump float deviationVisibleRangeStart;
+    mediump float deviationVisibleRangeEnd;
     mediump vec4 deviationUndefinedColor;
     bool useProjectedPosition;
     // terrain elevation

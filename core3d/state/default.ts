@@ -104,7 +104,9 @@ export function defaultRenderState(): RenderState {
                         { position: 0.5, color: [1, 1, 0, 1] },
                         { position: 1, color: [0, 1, 0, 1] },
                     ],
-                }
+                },
+                visibleRangeStart: Number.MIN_SAFE_INTEGER,
+                visibleRangeEnd: Number.MAX_SAFE_INTEGER
             },
             useProjectedPosition: false
         },

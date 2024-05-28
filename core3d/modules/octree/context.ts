@@ -101,6 +101,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             values.deviationFactor = deviation.mixFactor;
             values.deviationUndefinedColor = deviation.undefinedColor ?? vec4.fromValues(0, 0, 0, 0);
             values.deviationRange = gradientRange(deviation.colorGradient);
+            values.deviationVisibleRangeStart = deviation.visibleRangeStart ?? Number.MIN_SAFE_INTEGER;
+            values.deviationVisibleRangeEnd = deviation.visibleRangeEnd ?? Number.MAX_SAFE_INTEGER;
             values.useProjectedPosition = points.useProjectedPosition;
             const deviationColors = computeGradientColors(Gradient.size, deviation.colorGradient);
             this.gradientsImage.set(deviationColors, 0 * Gradient.size * 4);
