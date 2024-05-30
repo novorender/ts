@@ -168,8 +168,19 @@ export class RenderBuffers {
 
     /** @internal */
     dispose() {
+        this.rejectPromises();
         this.deletePickFence();
         this.resourceBin.dispose();
+    }
+
+    private rejectPromises() {
+        const { pickFence } = this;
+        if (pickFence) {
+            for (const promise of pickFence.promises) {
+                promise.reject("disposed");
+            }
+            pickFence.promises.length = 0;
+        }
     }
 
     /** @internal */
@@ -177,6 +188,11 @@ export class RenderBuffers {
         const { gl, pickFence, readBuffers, typedArrays } = this;
         if (pickFence) {
             const { sync, promises } = pickFence;
+            if (!sync) {
+                this.rejectPromises();
+                return;
+            }
+
             const status = gl.clientWaitSync(sync, gl.SYNC_FLUSH_COMMANDS_BIT, 0);
             if (status == gl.WAIT_FAILED) {
                 for (const promise of promises) {
