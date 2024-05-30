@@ -444,7 +444,7 @@ export class View<
 
     outlineLaser(laserPosition: ReadonlyVec3, planeIndex?: number): OutlineIntersection | undefined {
         const context = this._renderContext;
-        const { renderState } = this;
+        const { renderState, renderStateGL } = this;
         const plane = planeIndex != undefined ? renderState.clipping.planes[planeIndex].normalOffset : renderState.outlines.plane;
         if (context) {
             let pos: ReadonlyVec3 | undefined;
@@ -456,9 +456,11 @@ export class View<
                 const rayDir = vec3.sub(vec3.create(), renderState.camera.position, laserPosition);
                 vec3.normalize(rayDir, rayDir);
                 const d = vec3.dot(planeDir, rayDir);
-                if (d) {
+                if (d != 0) {
                     const t = (plane[3] - vec3.dot(planeDir, renderState.camera.position)) / d;
                     pos = vec3.scaleAndAdd(vec3.create(), renderState.camera.position, rayDir, t);
+                } else {
+                    pos = laserPosition;
                 }
             }
 
@@ -482,7 +484,7 @@ export class View<
                 }
 
                 const { outlineRenderers } = context;
-                const outlineRenderer = outlineRenderers.get(plane);
+                const outlineRenderer = outlineRenderers.get(planeIndex != undefined ? renderStateGL.clipping.planes[planeIndex].normalOffset : renderStateGL.outlines.plane);
                 if (outlineRenderer) {
                     const lines: [ReadonlyVec2, ReadonlyVec2][] = [];
                     for (const cluster of outlineRenderer.getLineClusters()) {
