@@ -445,7 +445,7 @@ export class View<
     outlineLaser(laserPosition: ReadonlyVec3, planeIndex?: number): OutlineIntersection | undefined {
         const context = this._renderContext;
         const { renderState } = this;
-        const plane = planeIndex ? renderState.clipping.planes[planeIndex].normalOffset : renderState.outlines.plane;
+        const plane = planeIndex != undefined ? renderState.clipping.planes[planeIndex].normalOffset : renderState.outlines.plane;
         if (context) {
             let pos: ReadonlyVec3 | undefined;
             const [nx, ny, nz] = plane;
