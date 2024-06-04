@@ -4,8 +4,8 @@ import { BufferReader, Float16Array } from "./util";
 import type { ComponentType, ShaderAttributeType, TextureParams } from "webgl2";
 import { parseKTX } from "core3d/ktx";
 import type { Mutex } from "../mutex";
-import * as Current from "./2_1";
-import * as Previous from "./2_0";
+import * as Current from "./2_2";
+import * as Previous from "./2_1";
 import type { WasmInstance } from "./wasm_loader";
 
 const { MaterialType, OptionalVertexAttribute, PrimitiveType, TextureSemantic } = Current;
@@ -159,28 +159,29 @@ function computePrimitiveCount(primitiveType: PrimitiveType, numIndices: number)
             return numIndices;
         case PrimitiveType.lines:
             return numIndices / 2;
-        case PrimitiveType.line_loops:
+        case PrimitiveType.lineLoop:
             return numIndices;
-        case PrimitiveType.line_strip:
+        case PrimitiveType.lineStrip:
             return numIndices - 1;
         case PrimitiveType.triangles:
             return numIndices / 3;
-        case PrimitiveType.triangle_strip:
+        case PrimitiveType.triangleStrip:
             return numIndices - 2;
-        case PrimitiveType.triangle_fan:
+        case PrimitiveType.triangleFan:
             return numIndices - 2;
         default:
             console.warn(`Unknown primitive type: ${primitiveType}!`);
     }
 }
 
-function getVertexAttribs(deviations: number) {
+function getVertexAttribs(posBPC: 16 | 32, deviations: number) {
+    const posType = posBPC == 16 ? Uint16Array : Uint32Array;
     return {
-        position: { type: Uint16Array, components: ["x", "y", "z"] },
+        position: { type: posType, components: ["x", "y", "z"] },
         normal: { type: Int8Array, components: ["x", "y", "z"] },
         texCoord: { type: Float16Array, components: ["x", "y"] },
         color: { type: Uint8Array, components: ["red", "green", "blue", "alpha"] },
-        projectedPos: { type: Uint16Array, components: ["x", "y", "z"] },
+        projectedPos: { type: posType, components: ["x", "y", "z"] },
         deviations: { type: Float16Array, components: ["a", "b", "c", "d"].slice(0, deviations) },
         materialIndex: { type: Uint8Array },
         objectId: { type: Uint32Array },
@@ -190,7 +191,7 @@ type VertexAttribs = ReturnType<typeof getVertexAttribs>;
 type VertexAttribNames = keyof VertexAttribs;
 type VertexAttrib = { readonly type: VertexAttribs[VertexAttribNames]["type"], readonly components?: readonly string[]; };
 
-function computeVertexOffsets(attribs: readonly VertexAttribNames[], deviations = 0) {
+function computeVertexOffsets(attribs: readonly VertexAttribNames[], posBPC: 16 | 32, deviations = 0) {
     let offset = 0;
     let offsets: any = {};
     function alignOffset(alignment: number) {
@@ -198,7 +199,7 @@ function computeVertexOffsets(attribs: readonly VertexAttribNames[], deviations 
         offset += padding; // pad offset to be memory aligned.
     }
     let maxAlign = 1;
-    const vertexAttribs = getVertexAttribs(deviations);
+    const vertexAttribs = getVertexAttribs(posBPC, deviations);
     for (const attrib of attribs) {
         const { type, components } = vertexAttribs[attrib] as VertexAttrib;
         const count = components?.length ?? 1;
@@ -229,7 +230,7 @@ function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, devia
 }
 
 /** @internal */
-export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection, range: Range, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean) {
+export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection, range: Range, separatePositionBuffer: boolean, posBPC: 16 | 32, predicate?: (objectId: number) => boolean) {
     let primitives = 0;
     let totalTextureBytes = 0;
     let totalNumIndices = 0;
@@ -252,8 +253,8 @@ export function aggregateSubMeshProjections(subMeshProjection: SubMeshProjection
             const hasObjectIds = true;
             const [pos, ...rest] = getVertexAttribNames(attributes, deviations, hasMaterials, hasObjectIds);
             const numBytesPerVertex = separatePositionBuffer ?
-                computeVertexOffsets([pos]).stride + computeVertexOffsets(rest, deviations).stride :
-                computeVertexOffsets([pos, ...rest], deviations).stride;
+                computeVertexOffsets([pos], posBPC).stride + computeVertexOffsets(rest, posBPC, deviations).stride :
+                computeVertexOffsets([pos, ...rest], posBPC, deviations).stride;
             primitives += computePrimitiveCount(primitiveType, indices ? indices : vertices) ?? 0;
             totalNumIndices += indices;
             totalNumVertices += vertices;
@@ -289,6 +290,8 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
         const id = toHex(hash); // parentId + childIndex.toString(32); // use radix 32 (0-9, a-v) encoding, which allows for max 32 children per node
         const tolerance = childInfo.tolerance[i];
         const byteSize = childInfo.totalByteSize[i];
+        // vertex position bits per channel (16/32)
+        const posBPC = "positionBPC" in childInfo ? childInfo.positionBPC[i] as 16 | 32 : 16;
         const offset = getVec3(childInfo.offset, i);
         const scale = childInfo.scale[i];
         const bounds: NodeBounds = {
@@ -309,10 +312,10 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
 
         const subMeshProjectionRange = getRange(childInfo.subMeshes, i);
         const parentPrimitives = parentPrimitiveCounts[childIndex];
-        const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshProjectionRange, separatePositionBuffer, predicate);
+        const { primitives, gpuBytes } = aggregateSubMeshProjections(schema.subMeshProjection, subMeshProjectionRange, separatePositionBuffer, posBPC, predicate);
         const primitivesDelta = primitives - (parentPrimitives ?? 0);
         let descendantObjectIds: number[] | undefined;
-        if (isCurrentSchema(schema)) {
+        if (schema.childInfo.descendantObjectIds) {
             const [idsBegin, idsEnd] = getRange(schema.childInfo.descendantObjectIds, i);
             if (idsBegin != idsEnd) {
                 descendantObjectIds = [...schema.descendantObjectIds.slice(idsBegin, idsEnd)];
@@ -335,7 +338,7 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
             const objectId = subMesh.objectId[i];
             const materialIndex = subMesh.materialIndex[i];
             const materialType = materialIndex ==
-                0xff && subMesh.textures.count[i] == 0 && (primitive == PrimitiveType.triangle_strip || primitive == PrimitiveType.triangles) ?
+                0xff && subMesh.textures.count[i] == 0 && (primitive == PrimitiveType.triangleStrip || primitive == PrimitiveType.triangles) ?
                 MaterialType.elevation :
                 subMesh.materialType[i];
             const primitiveType = subMesh.primitiveType[i];
@@ -403,6 +406,9 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
         group.subMeshIndices.push(i);
     }
 
+    // vertex position bits per channel (16/32)
+    const posBPC = "positionBPC" in schema ? schema.positionBPC[0] as 16 | 32 : 16;
+
     // we don't want highlights to change during parsing, so we hold the lock for the entire file
     highlights.mutex.lockSync();
 
@@ -417,9 +423,8 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
         const allAttribNames = getVertexAttribNames(attributes, deviations, hasMaterials, hasObjectIds);
         const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're potentially putting them in a separate buffer
         const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
-        const positionStride = computeVertexOffsets([posName], deviations).stride;
-        const trianglePosStride = positionStride * 3;
-        const attribOffsets = computeVertexOffsets(attribNames, deviations);
+        const positionStride = computeVertexOffsets([posName], posBPC, deviations).stride;
+        const attribOffsets = computeVertexOffsets(attribNames, posBPC, deviations);
         const vertexStride = attribOffsets.stride;
 
         const childIndices = [...new Set<number>(groupMeshes.map(sm => sm.childIndex))].sort();
@@ -488,7 +493,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
                 const [beginIdx, endIdx] = indexRange;
 
                 // initialize vertex buffer
-                const vertexAttribs = getVertexAttribs(deviations);
+                const vertexAttribs = getVertexAttribs(posBPC, deviations);
                 for (const attribName of attribNames) {
                     const { type, components } = vertexAttribs[attribName] as VertexAttrib;
                     const dst = new type(vertexBuffer, vertexOffset * vertexStride);
@@ -512,11 +517,19 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
                 const numTrianglesInSubMesh = vertexIndex && indexBuffer ? (endIdx - beginIdx) / 3 : (endVtx - beginVtx) / 3;
 
                 if (positionBuffer) {
+                    const srcPosBuf = "position" in vertex ? vertex.position : vertex[posBPC == 16 ? "position16" : "position32"]!;
                     // initialize separate positions buffer
-                    const i16 = new Int16Array(positionBuffer, vertexOffset * positionStride);
-                    copyToInterleavedArray(wasm, i16, vertex.position.x, 0, positionStride, beginVtx, endVtx);
-                    copyToInterleavedArray(wasm, i16, vertex.position.y, 2, positionStride, beginVtx, endVtx);
-                    copyToInterleavedArray(wasm, i16, vertex.position.z, 4, positionStride, beginVtx, endVtx);
+                    if (posBPC == 16) {
+                        const i16 = new Int16Array(positionBuffer, vertexOffset * positionStride);
+                        copyToInterleavedArray(wasm, i16, srcPosBuf.x, 0, positionStride, beginVtx, endVtx);
+                        copyToInterleavedArray(wasm, i16, srcPosBuf.y, 2, positionStride, beginVtx, endVtx);
+                        copyToInterleavedArray(wasm, i16, srcPosBuf.z, 4, positionStride, beginVtx, endVtx);
+                    } else {
+                        const i32 = new Int32Array(positionBuffer, vertexOffset * positionStride);
+                        copyToInterleavedArray(wasm, i32, srcPosBuf.x, 0, positionStride, beginVtx, endVtx);
+                        copyToInterleavedArray(wasm, i32, srcPosBuf.y, 4, positionStride, beginVtx, endVtx);
+                        copyToInterleavedArray(wasm, i32, srcPosBuf.z, 8, positionStride, beginVtx, endVtx);
+                    }
                 }
 
                 // initialize index buffer (if any)
@@ -569,14 +582,15 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
 
         const stride = vertexStride;
         const deviationsKind = deviations == 0 || deviations == 1 ? "FLOAT" as const : `FLOAT_VEC${deviations}` as const;
+        const posCT = posBPC == 16 ? "SHORT" : "INT";
         const vertexAttributes = {
-            position: { kind: "FLOAT_VEC4", buffer: bufIdx.pos, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: attribOffsets["position"], byteStride: separatePositionBuffer ? 0 : stride },
+            position: { kind: "FLOAT_VEC4", buffer: bufIdx.pos, componentCount: 3, componentType: posCT, normalized: true, byteOffset: attribOffsets["position"], byteStride: separatePositionBuffer ? 0 : stride },
             normal: (attributes & OptionalVertexAttribute.normal) != 0 ? { kind: "FLOAT_VEC3", buffer: bufIdx.primary, componentCount: 3, componentType: "BYTE", normalized: true, byteOffset: attribOffsets["normal"], byteStride: stride } : null,
             material: hasMaterials ? { kind: "UNSIGNED_INT", buffer: bufIdx.primary, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, byteOffset: attribOffsets["materialIndex"], byteStride: stride } : null,
             objectId: hasObjectIds ? { kind: "UNSIGNED_INT", buffer: bufIdx.primary, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, byteOffset: attribOffsets["objectId"], byteStride: stride } : null,
             texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer: bufIdx.primary, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["texCoord"], byteStride: stride } : null,
             color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["color"], byteStride: stride } : null,
-            projectedPos: (attributes & OptionalVertexAttribute.projectedPos) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 3, componentType: "SHORT", normalized: true, byteOffset: attribOffsets["projectedPos"], byteStride: stride } : null,
+            projectedPos: (attributes & OptionalVertexAttribute.projectedPos) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 3, componentType: posCT, normalized: true, byteOffset: attribOffsets["projectedPos"], byteStride: stride } : null,
             deviations: deviations != 0 ? { kind: deviationsKind, buffer: bufIdx.primary, componentCount: deviations, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["deviations"], byteStride: stride } : null,
             highlight: { kind: "UNSIGNED_INT", buffer: bufIdx.highlight, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, byteOffset: 0, byteStride: 0 },
         } as const satisfies VertexAttributes;
