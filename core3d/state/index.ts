@@ -429,6 +429,16 @@ export interface RenderStatePointCloud {
          */
         readonly colorGradient: RenderStateColorGradient<RGBA>;
 
+        /** Points with deviation below this value are hidden.
+         * @default Number.MIN_SAFE_INTEGER
+         */
+        readonly visibleRangeStart: number;
+
+        /** Points with deviation above this value are hidden.
+         * @default Number.MAX_SAFE_INTEGER
+         */
+        readonly visibleRangeEnd: number;
+
         /** 
          * The color of undefined points
          */
@@ -673,6 +683,9 @@ export interface RenderStateOutlines {
     * Will be overwritten every frame 
     */
     readonly on: boolean;
+
+    /** Hide outline on screen, it can still be used for measurement */
+    readonly hidden: boolean;
 
     /** Whether to do outline rendering. */
     readonly enabled: boolean;

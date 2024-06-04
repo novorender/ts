@@ -1039,10 +1039,26 @@ export class RenderContext {
             return [];
         this.renderPickBuffers();
         const pickBufferPromise = this.buffers.pickBuffers();
+        let updateCurrentPickLater = false;
         if (callAsync) {
-            this.currentPick = (await pickBufferPromise).pick;
-        } else {
-            pickBufferPromise.then(({ pick }) => { this.currentPick = pick });
+            try {
+                this.currentPick = (await pickBufferPromise).pick;
+            } catch (ex) {
+                if (ex !== "disposed") {
+                    console.warn("Error picking (async)", ex);
+                }
+                updateCurrentPickLater = true;
+            }
+        }
+
+        if (!callAsync || updateCurrentPickLater) {
+            pickBufferPromise
+                .then(({ pick }) => { this.currentPick = pick })
+                .catch(ex => {
+                    if (ex !== "disposed") {
+                        console.warn("Error picking (non async)", ex);
+                    }
+                });
         }
         const { currentPick, width, height } = this;
         if (currentPick === undefined || width * height * 4 != currentPick.length) {

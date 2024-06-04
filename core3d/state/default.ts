@@ -74,6 +74,7 @@ export function defaultRenderState(): RenderState {
             minPixelThickness: 3,
             maxPixelThickness: 5,
             relativePointSize: 2,
+            hidden: false,
             vertexObjectIdBase: 0x7000_0000, // TODO: Get from some global enum instead?
             lineColor: [4, 4, 4], // bright white (overexposed)
             vertexColor: [0, .5, 0], // green
@@ -103,7 +104,9 @@ export function defaultRenderState(): RenderState {
                         { position: 0.5, color: [1, 1, 0, 1] },
                         { position: 1, color: [0, 1, 0, 1] },
                     ],
-                }
+                },
+                visibleRangeStart: Number.MIN_SAFE_INTEGER,
+                visibleRangeEnd: Number.MAX_SAFE_INTEGER
             },
             useProjectedPosition: false
         },
