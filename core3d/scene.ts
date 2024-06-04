@@ -42,7 +42,7 @@ export async function downloadScene(baseUrl: URL, configPath: string, abortSigna
         };
     }
     if (!isSupportedVersion(config.version)) {
-        throw new Error(`Unsupported scene version: ${config.variants}!`);
+        throw new Error(`Unsupported scene version: ${config.version}!`);
     }
     return { url: baseUrl.toString(), config } as const;
 }
