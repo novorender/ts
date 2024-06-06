@@ -28,10 +28,10 @@ function flipFuncs(swapVecFunc: (v: number[]) => number[], swapQuatFunc: (q: qua
         },
 
         clipping: {
-            planes: flipArray(swapVecFunc),
+            planes: flipPlaneArray(swapVecFunc),
         },
         outlines: {
-            plane: swapVecFunc
+            planes: flipArray(swapVecFunc),
         },
         scene: {
             config: {
@@ -130,6 +130,16 @@ function flipDynamicObjects(swapVecFunc: (v: number[]) => number[], swapQuatFunc
 }
 
 function flipArray(swapFunc: (v: number[]) => number[]) {
+    return function (ar: ReadonlyVec4[]) {
+        const flippedPlanes: ReadonlyVec4[] = [];
+        for (const plane of ar) {
+            flippedPlanes.push(swapFunc(plane as any as number[]) as any as ReadonlyVec4);
+        }
+        return flippedPlanes;
+    }
+}
+
+function flipPlaneArray(swapFunc: (v: number[]) => number[]) {
     return function (ar: RenderStateClippingPlane[]) {
         const flippedPlanes: RenderStateClippingPlane[] = [];
         for (const plane of ar) {
