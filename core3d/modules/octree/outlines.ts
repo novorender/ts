@@ -137,10 +137,11 @@ export class OutlineRenderer {
         const modelLocalMatrix = node.getModelLocalMatrix(localSpaceTranslation);
         const modelPlaneMatrix = mat4.create();
         // modelPlaneMatrix = localPlaneMatrix * modelLocalMatrix * denormMatrix
-        const { posBPC } = node.data;
-        mat4.mul(modelPlaneMatrix, mat4.mul(modelPlaneMatrix, localPlaneMatrix, modelLocalMatrix), posBPC == 16 ? denormMatrix16 : denormMatrix32);
+        const posBPC = node.posBPC ?? 16;
+
         for (const mesh of node.meshes) {
             if (mesh.numTriangles && mesh.drawParams.mode == "TRIANGLES" && mesh.idxBuf) {
+                mat4.mul(modelPlaneMatrix, mat4.mul(modelPlaneMatrix, localPlaneMatrix, modelLocalMatrix), posBPC == 16 ? denormMatrix16 : denormMatrix32);
                 const doubleSided = mesh.materialType == MaterialType.opaqueDoubleSided || mesh.materialType == MaterialType.transparent;
                 const { drawRanges, objectRanges } = mesh;
                 const { idxBuf, posBuf } = getMeshBuffers(gl, mesh, posBPC);

@@ -67,6 +67,7 @@ export class OctreeNode {
     readonly meshes: Mesh[] = [];
     readonly uniformsData;
     readonly geometryKind: NodeGeometryKind;
+    posBPC: 16 | 32 | undefined;
     uniforms: WebGLBuffer | undefined;
     private readonly center4: ReadonlyVec4;
     private readonly corners: ReadonlyVec4[];
@@ -333,6 +334,7 @@ export class OctreeNode {
         const payload = await loader.loadNode(this, version); // do actual downloading and parsing in worker
         if (payload) {
             const { childInfos, geometry } = payload;
+            this.posBPC = geometry.positionBPC;
             for (const data of childInfos) {
                 const child = new OctreeNode(context, data, this);
                 children.push(child);

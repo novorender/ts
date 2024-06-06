@@ -80,7 +80,7 @@ export interface NodeData {
     readonly primitives: number;
     readonly primitivesDelta: number; // # new primitives introduced compared to parent
     readonly gpuBytes: number;
-    readonly posBPC: 16 | 32;
+    //readonly posBPC: 16 | 32;
 }
 
 /** @internal */
@@ -139,6 +139,7 @@ export interface NodeTexture {
 export interface NodeGeometry {
     readonly subMeshes: readonly NodeSubMesh[];
     readonly textures: readonly (NodeTexture | undefined)[];
+    readonly positionBPC: 16 | 32;
 }
 
 function getVec3(v: Float3 | Double3, i: number) {
@@ -323,7 +324,7 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
             }
         }
         // console.assert(parentId == "0" || primitivesDelta >= 0, "negative primitive delta");
-        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes, descendantObjectIds, posBPC });
+        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes, descendantObjectIds });
     }
     return children;
 }
@@ -636,7 +637,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
     }
 
 
-    return { subMeshes, textures } as const satisfies NodeGeometry;
+    return { subMeshes, textures, positionBPC: posBPC } as const satisfies NodeGeometry;
 }
 
 export function parseNode(wasm: WasmInstance, id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, highlights: Highlights, applyFilter: boolean) {
