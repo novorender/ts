@@ -61,7 +61,8 @@ How do we stay within GPU memory budget?
 // TODO: Fill in voids with texture/polys.
 
 export class OutlineRenderer {
-    static readonly denormMatrix = normInt16ToFloatMatrix();
+    static readonly denormMatrix16 = normIntToFloatMatrix(16);
+    static readonly denormMatrix32 = normIntToFloatMatrix(32);
     readonly planeLocalMatrix: ReadonlyMat4;
     readonly localPlaneMatrix: ReadonlyMat4;
     readonly nodeLinesCache = new WeakMap<OctreeNode, NodeLineClusters>();
@@ -131,17 +132,18 @@ export class OutlineRenderer {
         const childBuilders = new Map<ChildIndex, NodeIntersectionBuilder>();
         const { context, localSpaceTranslation, localPlaneMatrix, edgeAngleThreshold, minVertexSpacing } = this;
         const { gl } = context.renderContext;
-        const { denormMatrix } = OutlineRenderer;
+        const { denormMatrix16, denormMatrix32 } = OutlineRenderer;
         const edgeAngleThresholdCos = Math.cos(glMatrix.toRadian(edgeAngleThreshold));
         const modelLocalMatrix = node.getModelLocalMatrix(localSpaceTranslation);
         const modelPlaneMatrix = mat4.create();
         // modelPlaneMatrix = localPlaneMatrix * modelLocalMatrix * denormMatrix
-        mat4.mul(modelPlaneMatrix, mat4.mul(modelPlaneMatrix, localPlaneMatrix, modelLocalMatrix), denormMatrix);
+        const { posBPC } = node.data;
+        mat4.mul(modelPlaneMatrix, mat4.mul(modelPlaneMatrix, localPlaneMatrix, modelLocalMatrix), posBPC == 16 ? denormMatrix16 : denormMatrix32);
         for (const mesh of node.meshes) {
             if (mesh.numTriangles && mesh.drawParams.mode == "TRIANGLES" && mesh.idxBuf) {
                 const doubleSided = mesh.materialType == MaterialType.opaqueDoubleSided || mesh.materialType == MaterialType.transparent;
                 const { drawRanges, objectRanges } = mesh;
-                const { idxBuf, posBuf } = getMeshBuffers(gl, mesh);
+                const { idxBuf, posBuf } = getMeshBuffers(gl, mesh, posBPC);
                 // transform positions into clipping plane space, i.e. xy on plane, z above or below
                 const posPS = new Float32Array(posBuf.length);
                 const p = vec3.create();
@@ -377,7 +379,7 @@ function snorm16ToFloat(snorm16: number) {
     return snorm16 / 0x7fff; // we expect snorm16 to be within [-0x7fff, 0x7fff]
 }
 
-function getMeshBuffers(gl: WebGL2RenderingContext, mesh: Mesh) {
+function getMeshBuffers(gl: WebGL2RenderingContext, mesh: Mesh, posBPC: 16 | 32) {
     gl.bindVertexArray(null);
     const numIndices = mesh.numTriangles * 3;
     const { numVertices } = mesh;
@@ -388,18 +390,19 @@ function getMeshBuffers(gl: WebGL2RenderingContext, mesh: Mesh) {
     gl.getBufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, idxBuf, 0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     // get position buffer
-    const posBuf = new Int16Array(numVertices * 3);
+    const arrayType = posBPC == 16 ? Int16Array : Int32Array;
+    const posBuf = new arrayType(numVertices * 3);
     gl.bindBuffer(gl.ARRAY_BUFFER, mesh.posVB);
     gl.getBufferSubData(gl.ARRAY_BUFFER, 0, posBuf, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
     return { idxBuf, posBuf } as const;
 }
 
-function normInt16ToFloatMatrix() {
-    // Positions in model (node) space are given in 16 bit signed normalized ints.
+function normIntToFloatMatrix(bits: number) {
+    // Positions in model (node) space are given in 32 bit signed normalized ints.
     // Prior to opengl 4.2, this means mapping [-0x8000, 0x7fff] to [-1, 1] respectively: https://www.khronos.org/opengl/wiki/Normalized_Integer
     // This roughly equates to f = (v + 0.5) / 32767.5
-    const s = 1 / 32767.5;
+    const s = 1 / (Math.pow(2, bits - 1) - 0.5);
     const o = 0.5 * s;
     return mat4.fromValues(
         s, 0, 0, 0,

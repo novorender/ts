@@ -80,6 +80,7 @@ export interface NodeData {
     readonly primitives: number;
     readonly primitivesDelta: number; // # new primitives introduced compared to parent
     readonly gpuBytes: number;
+    readonly posBPC: 16 | 32;
 }
 
 /** @internal */
@@ -322,7 +323,7 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
             }
         }
         // console.assert(parentId == "0" || primitivesDelta >= 0, "negative primitive delta");
-        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes, descendantObjectIds });
+        children.push({ id, childIndex, childMask, tolerance, byteSize, offset, scale, bounds, primitives, primitivesDelta, gpuBytes, descendantObjectIds, posBPC });
     }
     return children;
 }
