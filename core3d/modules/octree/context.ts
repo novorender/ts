@@ -546,7 +546,9 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 this.renderNodeClippingOutline(plane, state, renderNodes, state.outlines.hidden);
             }
             if (state.outlines.enabled) {
-                renderOutlines(state.outlines.plane, state.outlines.lineColor);
+                for (const plane of state.outlines.planes) {
+                    renderOutlines(plane, state.outlines.lineColor);
+                }
             }
             if (state.clipping.enabled) {
                 for (let i = 0; i < state.clipping.planes.length; ++i) {
@@ -644,7 +646,9 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 this.renderNodeClippingOutline(plane, state, renderNodes, state.outlines.hidden);
             }
             if (state.outlines.enabled) {
-                renderOutlines(state.outlines.plane);
+                for (const plane of state.outlines.planes) {
+                    renderOutlines(plane);
+                }
             }
             if (state.clipping.enabled) {
                 for (let i = 0; i < state.clipping.planes.length; ++i) {

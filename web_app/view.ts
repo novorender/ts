@@ -437,15 +437,16 @@ export class View<
      * Create a list of intersections between the x and y axis through the tracer position
      * @public
      * @param laserPosition position where to calculate intersections,  
-     * @param planeIndex The index of the plane where tracer should be placed, based on the list in render state, if undefined the plane under outlines will be used  
+     * @param planeType choose if planes under clipping or outlines should be used
+     * @param planeIndex The index of the plane where tracer should be placed, based on the list in render state
      * @returns list of intersections (right, left, up ,down) 
      * results will be ordered from  closest to furthest from the tracer poitn
      */
 
-    outlineLaser(laserPosition: ReadonlyVec3, planeIndex?: number): OutlineIntersection | undefined {
+    outlineLaser(laserPosition: ReadonlyVec3, planeType: "clipping" | "outline", planeIndex: number): OutlineIntersection | undefined {
         const context = this._renderContext;
         const { renderState, renderStateGL } = this;
-        const plane = planeIndex != undefined ? renderState.clipping.planes[planeIndex].normalOffset : renderState.outlines.plane;
+        const plane = planeType == "clipping" ? renderState.clipping.planes[planeIndex].normalOffset : renderState.outlines.planes[planeIndex];
         if (context) {
             let pos: ReadonlyVec3 | undefined;
             const [nx, ny, nz] = plane;
@@ -484,7 +485,7 @@ export class View<
                 }
 
                 const { outlineRenderers } = context;
-                const outlineRenderer = outlineRenderers.get(planeIndex != undefined ? renderStateGL.clipping.planes[planeIndex].normalOffset : renderStateGL.outlines.plane);
+                const outlineRenderer = outlineRenderers.get(planeType == "clipping" ? renderStateGL.clipping.planes[planeIndex].normalOffset : renderStateGL.outlines.planes[planeIndex]);
                 if (outlineRenderer) {
                     const lines: [ReadonlyVec2, ReadonlyVec2][] = [];
                     for (const cluster of outlineRenderer.getLineClusters()) {

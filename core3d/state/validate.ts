@@ -151,8 +151,10 @@ class ValidationContext {
     }
 
     outlines(state: RenderStateOutlines) {
-        const { plane, linearThickness, minPixelThickness, maxPixelThickness, vertexObjectIdBase } = state;
-        this.plane(plane).valid().report("outline.plane.normalOffset");
+        const { planes, linearThickness, minPixelThickness, maxPixelThickness, vertexObjectIdBase } = state;
+        for (const plane of planes) {
+            this.plane(plane).valid().report("outline.plane.normalOffset");
+        }
         this.numeric(linearThickness).positive().report("outline.linearThickness");
         this.numeric(minPixelThickness).positive().report("outline.minPixelThickness");
         this.numeric(maxPixelThickness).greaterThanOrEqual(minPixelThickness, "outline.minPixelThickness").max(511).report("outline.maxPixelThickness");

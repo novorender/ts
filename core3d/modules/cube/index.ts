@@ -132,10 +132,6 @@ class CubeModuleContext implements RenderModuleContext {
             context.addRenderStatistics(stats);
 
             if (state.outlines.enabled && deviceProfile.features.outline) {
-                const planeIndex = state.clipping.planes.findIndex((cp) => vec4.exactEquals(cp.normalOffset, plane));
-                const [x, y, z, offset] = state.outlines.plane;
-                const plane = vec4.fromValues(x, y, z, -offset);
-                context.updateOutlinesUniforms(state.outlines, plane, planeIndex);
                 // transform vertex triplets into intersection lines
                 glState(gl, {
                     program: programs.intersect,

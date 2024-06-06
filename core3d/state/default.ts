@@ -78,7 +78,7 @@ export function defaultRenderState(): RenderState {
             vertexObjectIdBase: 0x7000_0000, // TODO: Get from some global enum instead?
             lineColor: [4, 4, 4], // bright white (overexposed)
             vertexColor: [0, .5, 0], // green
-            plane: [0, 0, 1, 0],
+            planes: [[0, 0, 1, 0]],
             breakingPointAngleThreshold: 30
         },
         tonemapping: {

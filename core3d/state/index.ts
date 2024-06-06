@@ -730,7 +730,7 @@ export interface RenderStateOutlines {
     readonly vertexColor: RGB;
 
     /** The outline intersection plane. */
-    readonly plane: ReadonlyVec4;
+    readonly planes: ReadonlyVec4[];
 
     /** Minimum angle to create breaking points from outlines in degrees */
     readonly breakingPointAngleThreshold: number;
