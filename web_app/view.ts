@@ -448,63 +448,44 @@ export class View<
         const { renderState, renderStateGL } = this;
         const plane = planeType == "clipping" ? renderState.clipping.planes[planeIndex].normalOffset : renderState.outlines.planes[planeIndex];
         if (context) {
-            let pos: ReadonlyVec3 | undefined;
             const [nx, ny, nz] = plane;
             const planeDir = vec3.fromValues(nx, ny, nz);
-            if (renderState.camera.kind === "orthographic") {
-                pos = laserPosition;
-            } else {
-                const rayDir = vec3.sub(vec3.create(), renderState.camera.position, laserPosition);
-                vec3.normalize(rayDir, rayDir);
-                const d = vec3.dot(planeDir, rayDir);
-                if (d != 0) {
-                    const t = (plane[3] - vec3.dot(planeDir, renderState.camera.position)) / d;
-                    pos = vec3.scaleAndAdd(vec3.create(), renderState.camera.position, rayDir, t);
+            const flipToGl = (v: ReadonlyVec3) => vec3.fromValues(v[0], v[2], -v[1]);
+            const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
+            let flipLaser = false;
+            const minI = Math.abs(nx) < Math.abs(ny) && Math.abs(nx) < Math.abs(nz) ? 0 : Math.abs(ny) < Math.abs(nz) ? 1 : 2;
+            let flipY = 1;
+            let flipX = 1;
+            if (minI != 2) {
+                flipLaser = true;
+                const maxI = Math.abs(nx) > Math.abs(ny) ? 0 : 1;
+                if (planeDir[maxI] < 0) {
+                    flipX = -1;
                 } else {
-                    pos = laserPosition;
+                    flipY = -1;
                 }
             }
 
-            if (pos) {
-                const flipToGl = (v: ReadonlyVec3) => vec3.fromValues(v[0], v[2], -v[1]);
-                const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
-                let flipLaser = false;
-                const minI = Math.abs(nx) < Math.abs(ny) && Math.abs(nx) < Math.abs(nz) ? 0 : Math.abs(ny) < Math.abs(nz) ? 1 : 2;
-                let flipY = 1;
-                let flipX = 1;
-                if (minI != 2) {
-                    flipLaser = true;
-                    const maxI = Math.abs(nx) > Math.abs(ny) ? 0 : 1;
-                    if (planeDir[maxI] < 0) {
-                        flipX = -1;
-                    } else {
-                        flipY = -1;
+            const { outlineRenderers } = context;
+            const outlineRenderer = outlineRenderers.get(planeType == "clipping" ? renderStateGL.clipping.planes[planeIndex].normalOffset : renderStateGL.outlines.planes[planeIndex]);
+            if (outlineRenderer) {
+                const lines: [ReadonlyVec2, ReadonlyVec2][] = [];
+                for (const cluster of outlineRenderer.getLineClusters()) {
+                    for (const l of outlineRenderer.get2dLines(cluster)) {
+                        lines.push(l);
                     }
-
-
                 }
 
-                const { outlineRenderers } = context;
-                const outlineRenderer = outlineRenderers.get(planeType == "clipping" ? renderStateGL.clipping.planes[planeIndex].normalOffset : renderStateGL.outlines.planes[planeIndex]);
-                if (outlineRenderer) {
-                    const lines: [ReadonlyVec2, ReadonlyVec2][] = [];
-                    for (const cluster of outlineRenderer.getLineClusters()) {
-                        for (const l of outlineRenderer.get2dLines(cluster)) {
-                            lines.push(l);
-                        }
-                    }
-
-                    const { up, down, right, left } = outlineLaser(
-                        lines,
-                        outlineRenderer.transformToPlane(flipToGl(pos)),
-                        flipLaser ? vec2.fromValues(0, 1 * flipY) : vec2.fromValues(1 * flipY, 0),
-                        flipLaser ? vec2.fromValues(1 * flipX, 0) : vec2.fromValues(0, 1 * flipX));
-                    return {
-                        up: up.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
-                        down: down.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
-                        right: right.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
-                        left: left.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
-                    }
+                const { up, down, right, left } = outlineLaser(
+                    lines,
+                    outlineRenderer.transformToPlane(flipToGl(laserPosition)),
+                    flipLaser ? vec2.fromValues(0, 1 * flipY) : vec2.fromValues(1 * flipY, 0),
+                    flipLaser ? vec2.fromValues(1 * flipX, 0) : vec2.fromValues(0, 1 * flipX));
+                return {
+                    up: up.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
+                    down: down.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
+                    right: right.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
+                    left: left.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
                 }
             }
         }
