@@ -443,29 +443,16 @@ export class View<
      * results will be ordered from  closest to furthest from the tracer poitn
      */
 
-    outlineLaser(laserPosition: ReadonlyVec3, planeType: "clipping" | "outline", planeIndex: number): OutlineIntersection | undefined {
+    outlineLaser(laserPosition: ReadonlyVec3, planeType: "clipping" | "outline", planeIndex: number, rotation?: number): OutlineIntersection | undefined {
         const context = this._renderContext;
         const { renderState, renderStateGL } = this;
         const plane = planeType == "clipping" ? renderState.clipping.planes[planeIndex].normalOffset : renderState.outlines.planes[planeIndex];
         if (context) {
+            const rotationAngle = rotation ?? 0;
             const [nx, ny, nz] = plane;
             const planeDir = vec3.fromValues(nx, ny, nz);
             const flipToGl = (v: ReadonlyVec3) => vec3.fromValues(v[0], v[2], -v[1]);
             const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
-            let flipLaser = false;
-            const minI = Math.abs(nx) < Math.abs(ny) && Math.abs(nx) < Math.abs(nz) ? 0 : Math.abs(ny) < Math.abs(nz) ? 1 : 2;
-            let flipY = 1;
-            let flipX = 1;
-            if (minI != 2) {
-                flipLaser = true;
-                const maxI = Math.abs(nx) > Math.abs(ny) ? 0 : 1;
-                if (planeDir[maxI] < 0) {
-                    flipX = -1;
-                } else {
-                    flipY = -1;
-                }
-            }
-
             const { outlineRenderers } = context;
             const outlineRenderer = outlineRenderers.get(planeType == "clipping" ? renderStateGL.clipping.planes[planeIndex].normalOffset : renderStateGL.outlines.planes[planeIndex]);
             if (outlineRenderer) {
@@ -479,8 +466,8 @@ export class View<
                 const { up, down, right, left } = outlineLaser(
                     lines,
                     outlineRenderer.transformToPlane(flipToGl(laserPosition)),
-                    flipLaser ? vec2.fromValues(0, 1 * flipY) : vec2.fromValues(1 * flipY, 0),
-                    flipLaser ? vec2.fromValues(1 * flipX, 0) : vec2.fromValues(0, 1 * flipX));
+                    vec2.fromValues(Math.cos(rotationAngle), Math.sin(rotationAngle)),
+                    vec2.fromValues(Math.cos(rotationAngle + (Math.PI / 2)), Math.sin(rotationAngle + (Math.PI / 2))));
                 return {
                     up: up.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
                     down: down.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
