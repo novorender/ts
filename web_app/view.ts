@@ -9,7 +9,6 @@ import { loadSceneDataOffline, type DataContext } from "data";
 import * as DataAPI from "data/api";
 import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
 import { outlineLaser, type OutlineIntersection } from "./outline_inspect";
-import type { AABB2 } from "measure/worker/brep";
 
 /**
  * A view base class for Novorender content.
