@@ -9,6 +9,7 @@ import { loadSceneDataOffline, type DataContext } from "data";
 import * as DataAPI from "data/api";
 import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
 import { outlineLaser, type OutlineIntersection } from "./outline_inspect";
+import { ScreenSpaceConversions } from "./screen_space_conversions";
 
 /**
  * A view base class for Novorender content.
@@ -54,6 +55,7 @@ export class View<
         height: number,
         camera: RenderStateCamera
     };
+    private _screenSpaceConversions: ScreenSpaceConversions;
     private readonly _resizeObserver: ResizeObserver;
 
     /** @internal */
@@ -106,6 +108,8 @@ export class View<
         this.controllers = controllersFactory(input, this);
         this._activeController = Object.values(this.controllers)[0];
         this._activeController.attach();
+        
+        this._screenSpaceConversions = new ScreenSpaceConversions(this._drawContext2d);
 
         const resizeObserver = this._resizeObserver = new ResizeObserver(() => {
             this.recalcBaseRenderResolution();
@@ -189,6 +193,13 @@ export class View<
     set deviceProfile(value: DeviceProfile) {
         this._deviceProfile = value;
         this._setDeviceProfile?.(value); // this will in turn trigger this.useDeviceProfile
+    }
+
+    /**
+     * Convert between different spaces like world, view and screen.
+     */
+    get convert() {
+        return this._screenSpaceConversions;
     }
 
     /**
