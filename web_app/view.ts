@@ -1,5 +1,5 @@
 import { type ReadonlyVec3, vec3, vec2, type ReadonlyQuat, mat3, type ReadonlyVec2, type ReadonlyVec4, glMatrix, vec4, mat4 } from "gl-matrix";
-import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports, type PBRMaterialInfo, type RGB, type RenderStateTextureReference, type ActiveTextureIndex, type MaxActiveTextures, emptyActiveTexturesArray } from "core3d";
+import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports, type PBRMaterialInfo, type RGB, type RenderStateTextureReference, type ActiveTextureIndex, type MaxActiveTextures, emptyActiveTexturesArray, type AABB } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipGLtoCadVec, flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
@@ -9,6 +9,7 @@ import { loadSceneDataOffline, type DataContext } from "data";
 import * as DataAPI from "data/api";
 import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
 import { outlineLaser, type OutlineIntersection } from "./outline_inspect";
+import type { AABB2 } from "measure/worker/brep";
 
 /**
  * A view base class for Novorender content.
@@ -473,6 +474,47 @@ export class View<
                     down: down.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
                     right: right.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
                     left: left.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
+                }
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Find bounding rectangle on the given plane for the selected objects, converted to world coordinates.
+     * 
+     * @param planeType choose if planes under clipping or outlines should be used
+     * @param planeIndex the index of the plane to look up
+     * @param objectIds set of object IDs to check
+     * @returns bounding rectangle of all the selected object ID vertices lying on the give plane.
+     *          Bounds are calculated in plane coordinates and returned in world coordinates
+     */
+    getObjectsOutlinePlaneBoundingRectInWorld(planeType: "clipping" | "outline", planeIndex: number, objectIds: Set<number>): AABB | undefined {
+        const context = this._renderContext;
+        const { renderStateGL } = this;
+        if (context) {
+            const { outlineRenderers } = context;
+            const outlineRenderer = outlineRenderers.get(planeType == "clipping" ? renderStateGL.clipping.planes[planeIndex].normalOffset : renderStateGL.outlines.planes[planeIndex]);
+            if (outlineRenderer) {
+                const min = vec2.fromValues(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
+                const max = vec2.fromValues(Number.MIN_SAFE_INTEGER, Number.MIN_SAFE_INTEGER);
+        
+                const v = vec2.create();
+                for (const cluster of outlineRenderer.getLineClusters()) {
+                    if (objectIds.has(cluster.objectId)) {
+                        for (let i = 0; i < cluster.vertices.length; i += 2) {
+                            vec2.set(v, cluster.vertices[i], cluster.vertices[i + 1]);
+                            vec2.min(min, min, v);
+                            vec2.max(max, max, v);
+                        }
+                    }
+                }
+
+                const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
+
+                return min[0] === Number.MAX_SAFE_INTEGER ? undefined : {
+                    min: flipToCad(outlineRenderer.transformFromPlane(min)),
+                    max: flipToCad(outlineRenderer.transformFromPlane(max))
                 }
             }
         }
