@@ -80,38 +80,10 @@ function getPathMatrices(width: number, height: number, camera: Camera): { camMa
     }
 }
 
-const toScreen = (() => {
-    const _toScreenVec1Buf = vec4.create();
-    const _toScreenVec2Buf = vec4.create();
-    return function toScreen(projMat: mat4, width: number, height: number, p: ReadonlyVec3, round: boolean): ReadonlyVec2 {
-        vec4.set(_toScreenVec2Buf, p[0], p[1], p[2], 1);
-        const _p = vec4.transformMat4(
-            _toScreenVec1Buf,
-            _toScreenVec2Buf,
-            projMat
-        );
-
-        const pt = vec2.fromValues(
-            ((_p[0] * 0.5) / _p[3] + 0.5) * width,
-            (0.5 - (_p[1] * 0.5) / _p[3]) * height
-        );
-
-        if (round) {
-            pt[0] = Math.round(pt[0]);
-            pt[1] = Math.round(pt[1]);
-        }
-
-        if (!Number.isFinite(pt[0]) || !Number.isFinite(pt[1])) {
-            vec2.set(pt, -100, -100);
-        }
-        return pt;
-    };
-})();
-
 const toView = (() => {
     const _toViewVec1Buf = vec4.create();
     const _toViewVec2Buf = vec4.create();
-    return function toView(projMat: mat4, p: ReadonlyVec3): ReadonlyVec2 {
+    return function toView(projMat: mat4, p: ReadonlyVec3): vec2 {
         vec4.set(_toViewVec2Buf, p[0], p[1], p[2], 1);
         const _p = vec4.transformMat4(
             _toViewVec1Buf,
@@ -127,3 +99,21 @@ const toView = (() => {
         return pt;
     };
 })();
+
+function toScreen(projMat: mat4, width: number, height: number, p: ReadonlyVec3, round: boolean): vec2 {
+    const pt = toView(projMat, p);
+    
+    pt[0] *= width;
+    pt[1] *= height;
+
+    if (round) {
+        pt[0] = Math.round(pt[0]);
+        pt[1] = Math.round(pt[1]);
+    }
+
+    if (!Number.isFinite(pt[0]) || !Number.isFinite(pt[1])) {
+        vec2.set(pt, -100, -100);
+    }
+
+    return pt;
+}
