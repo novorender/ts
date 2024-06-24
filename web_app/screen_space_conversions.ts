@@ -6,7 +6,7 @@ const SCREEN_SPACE_EPSILON = 0.001;
 export class ScreenSpaceConversions {
     constructor(readonly drawContext: DrawContext) {}
 
-    worldSpaceToScreenSpace(points: ReadonlyVec3[], round = true): (ReadonlyVec2 | undefined)[] {
+    worldSpaceToScreenSpace(points: ReadonlyVec3[]): (ReadonlyVec2 | undefined)[] {
         const { drawContext } = this;
         const { width, height, camera } = drawContext;
         const { camMat, projMat } = getPathMatrices(width, height, camera);
@@ -24,7 +24,7 @@ export class ScreenSpaceConversions {
                 return undefined;
             }
 
-            return toScreen(projMat, width, height, p, round);
+            return toScreen(projMat, width, height, p);
         });
     }
 
@@ -100,16 +100,11 @@ const toView = (() => {
     };
 })();
 
-function toScreen(projMat: mat4, width: number, height: number, p: ReadonlyVec3, round: boolean): vec2 {
+function toScreen(projMat: mat4, width: number, height: number, p: ReadonlyVec3): vec2 {
     const pt = toView(projMat, p);
     
-    pt[0] *= width;
-    pt[1] *= height;
-
-    if (round) {
-        pt[0] = Math.round(pt[0]);
-        pt[1] = Math.round(pt[1]);
-    }
+    pt[0] = Math.round(pt[0] * width);
+    pt[1] = Math.round(pt[1] * height);
 
     if (!Number.isFinite(pt[0]) || !Number.isFinite(pt[1])) {
         vec2.set(pt, -100, -100);
