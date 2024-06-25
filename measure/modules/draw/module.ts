@@ -99,6 +99,7 @@ export class DrawModule extends BaseModule {
     /** Converts world space points to on screen space points
      * @param points World space points that will be projected to screen space
      * @returns Screen space points regadless if they are within the current canvas size
+     * @deprecated use view.convert.screenSpaceToWorldSpace instead
      */
     toMarkerPoints(points: ReadonlyVec3[]): (ReadonlyVec2 | undefined)[] {
         const { drawContext } = this;
