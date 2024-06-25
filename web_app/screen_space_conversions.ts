@@ -6,6 +6,11 @@ const SCREEN_SPACE_EPSILON = 0.001;
 export class ScreenSpaceConversions {
     constructor(readonly drawContext: DrawContext) {}
 
+    /** Converts world space points to on screen space points.
+     * @param points World space points that will be projected to screen space.
+     * @returns Screen space points regadless if they are within the current canvas size
+     *          or undefined if point is outside screen space.
+     */
     worldSpaceToScreenSpace(points: ReadonlyVec3[]): (ReadonlyVec2 | undefined)[] {
         const { drawContext } = this;
         const { width, height, camera } = drawContext;
@@ -28,6 +33,11 @@ export class ScreenSpaceConversions {
         });
     }
 
+    /** Converts world space points to view space points.
+     * @param points World space points that will be projected to view space.
+     * @returns View space points regadless if they are within the current canvas size.
+     *          Coordinates are in [0, 1] range.
+     */
     worldSpaceToViewSpace(points: ReadonlyVec3[]): ReadonlyVec2[] {
         const { drawContext } = this;
         const { width, height, camera } = drawContext;
@@ -45,9 +55,32 @@ export class ScreenSpaceConversions {
             return toView(projMat, p);
         });
     }
+
+    /**
+     * Convert 2D pixel point to 3D positions.
+     * @param points Screen points in points that will be projected to world space.
+     * @returns Corresponding 3D positions at the view plane in world space.
+     */
+    screenSpaceToWorldSpace(points: ReadonlyVec2[]): ReadonlyVec3[] {
+        const { drawContext } = this;
+        const { width, height, camera } = drawContext;
+        const { camMat, projMat: viewClipMatrix } = getPathMatrices(width, height, camera);
+        const viewWorldMatrix = mat4.invert(mat4.create(), camMat);
+        return points.map((p0) => {
+            const [x, y] = p0;
+            const px = Math.min(Math.max(0, Math.round(x)), width);
+            const py = Math.min(Math.max(0, Math.round(height - y)), height);
+            const xCS = ((px + 0.5) / width) * 2 - 1;
+            const yCS = ((py + 0.5) / height) * 2 - 1;
+            const pos = vec3.fromValues((xCS / viewClipMatrix[0]), (yCS / viewClipMatrix[5]), 0);
+            vec3.transformMat4(pos, pos, viewWorldMatrix);
+            return pos;
+        });
+    }
 }
 
 function getPathMatrices(width: number, height: number, camera: Camera): { camMat: mat4; projMat: mat4 } {
+    // aka viewWorldMatrix
     const camMat = mat4.fromRotationTranslation(
         mat4.create(),
         camera.rotation,

@@ -223,6 +223,7 @@ export class View<
      * @param x Pixel x coordinate, in CSS pixels.
      * @param y Pixel y coordinate, in CSS pixels.
      * @returns Corresponding 3D position at the view plane in world space, or undefined if there is no active render context.
+     * @deprecated use view.convert.screenSpaceToWorldSpace instead
      */
     worldPositionFromPixelPosition(x: number, y: number) {
         const { _renderContext, canvas } = this;
