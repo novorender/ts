@@ -108,7 +108,7 @@ export class View<
         this.controllers = controllersFactory(input, this);
         this._activeController = Object.values(this.controllers)[0];
         this._activeController.attach();
-        
+
         this._screenSpaceConversions = new ScreenSpaceConversions(this._drawContext2d);
 
         const resizeObserver = this._resizeObserver = new ResizeObserver(() => {
@@ -451,11 +451,14 @@ export class View<
      * @param laserPosition position where to calculate intersections,  
      * @param planeType choose if planes under clipping or outlines should be used
      * @param planeIndex The index of the plane where tracer should be placed, based on the list in render state
+     * @param rotation rotation of the lasers in the plane, if undefined then x,y will be used
+     * @param autoAlign Auto align the lasers to the geometry, "model" will try to align to the highest number of lines it will intersect with 
+     *                  while "closest" will align to the closest line it intersects with
      * @returns list of intersections (right, left, up ,down) 
-     * results will be ordered from  closest to furthest from the tracer poitn
+     * results will be ordered from  closest to furthest from the tracer point
      */
 
-    outlineLaser(laserPosition: ReadonlyVec3, planeType: "clipping" | "outline", planeIndex: number, rotation?: number): OutlineIntersection | undefined {
+    outlineLaser(laserPosition: ReadonlyVec3, planeType: "clipping" | "outline", planeIndex: number, rotation?: number, autoAlign?: "model" | "closest"): OutlineIntersection | undefined {
         const context = this._renderContext;
         const { renderState, renderStateGL } = this;
         const plane = planeType == "clipping" ? renderState.clipping.planes[planeIndex].normalOffset : renderState.outlines.planes[planeIndex];
@@ -479,7 +482,8 @@ export class View<
                     lines,
                     outlineRenderer.transformToPlane(flipToGl(laserPosition)),
                     vec2.fromValues(Math.cos(rotationAngle), Math.sin(rotationAngle)),
-                    vec2.fromValues(Math.cos(rotationAngle + (Math.PI / 2)), Math.sin(rotationAngle + (Math.PI / 2))));
+                    vec2.fromValues(Math.cos(rotationAngle + (Math.PI / 2)), Math.sin(rotationAngle + (Math.PI / 2))),
+                    autoAlign);
                 return {
                     up: up.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
                     down: down.map(v => flipToCad(outlineRenderer.transformFromPlane(v))),
@@ -509,7 +513,7 @@ export class View<
             if (outlineRenderer) {
                 const min = vec2.fromValues(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
                 const max = vec2.fromValues(Number.MIN_SAFE_INTEGER, Number.MIN_SAFE_INTEGER);
-        
+
                 const v = vec2.create();
                 for (const cluster of outlineRenderer.getLineClusters()) {
                     if (objectIds.has(cluster.objectId)) {
