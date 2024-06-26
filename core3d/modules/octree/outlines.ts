@@ -4,7 +4,7 @@ import { orthoNormalBasisMatrixFromPlane } from "core3d/util";
 import { glCreateBuffer, glCreateVertexArray, glDelete, glDraw, glState } from "webgl2";
 import { OctreeNode } from "./node";
 import { MaterialType, type Mesh } from "./mesh";
-import type { DerivedRenderState } from "web_app";
+import type { DerivedRenderState, RGB } from "web_app";
 
 type ObjectId = number;
 type ChildIndex = number;
@@ -192,7 +192,7 @@ export class OutlineRenderer {
         return lineClusters;
     }
 
-    makeBuffers(clusters: readonly LineCluster[], state: DerivedRenderState) {
+    makeBuffers(clusters: readonly LineCluster[], state: DerivedRenderState, outlineColor: RGB) {
         if (clusters.length > 0) {
             const { context, highlightIndices } = this;
             const { gl } = context.renderContext;
@@ -223,7 +223,7 @@ export class OutlineRenderer {
                         colors[segmentOffset + i] = 0;
                     }
                 } else {
-                    const [r, g, b] = (highlightIndex && highlightIndex != 254 ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? state.outlines.lineColor;
+                    const [r, g, b] = (highlightIndex && highlightIndex != 254 ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? outlineColor;
                     const baseColor = packRGBA(r / 4, g / 4, b / 4); // allow some overB-exposure at the expense of lower bit resolution
                     linePos.set(vertices, segmentOffset * 4);
                     for (let i = 0; i < segments; i++) {

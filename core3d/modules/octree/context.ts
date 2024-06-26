@@ -152,7 +152,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
                 // delete existing scene
                 this.disposeRootNodes();
-                
                 // update material atlas if url has changed
                 const url = scene?.url;
                 if (url != this.url) {
@@ -540,7 +539,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail,
                     this.rootNodes[NodeGeometryKind.triangles], this.rootNodes[NodeGeometryKind.terrain]);
 
-                this.renderNodeClippingOutline(plane, state, renderNodes, state.outlines.hidden);
+                this.renderNodeClippingOutline(plane, state, renderNodes, state.outlines.hidden, color);
             }
             if (state.outlines.enabled) {
                 for (const plane of state.outlines.planes) {
@@ -705,7 +704,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
     }
 
-    renderNodeClippingOutline(plane: ReadonlyVec4, state: DerivedRenderState, renderNodes: readonly RenderNode[], hidden: boolean) {
+    renderNodeClippingOutline(plane: ReadonlyVec4, state: DerivedRenderState, renderNodes: readonly RenderNode[], hidden: boolean, outlineColor?: RGB) {
         const begin = performance.now();
         const { gl, outlineRenderers } = this.renderContext;
         const { highlights } = this;
@@ -723,7 +722,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         // TODO: offload to worker (mainly to avoid timeout and stuttering)?
         const [...lineClusters] = outlineRenderer.intersectTriangles(renderNodes);
         if (!hidden) {
-            const buffers = outlineRenderer.makeBuffers(lineClusters, state);
+            const buffers = outlineRenderer.makeBuffers(lineClusters, state, outlineColor ?? state.outlines.lineColor);
             if (buffers) {
                 const { linesCount, pointsCount, linesVAO, pointsVAO } = buffers;
                 lineCount = linesCount;
