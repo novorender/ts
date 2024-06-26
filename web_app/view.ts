@@ -460,12 +460,9 @@ export class View<
 
     outlineLaser(laserPosition: ReadonlyVec3, planeType: "clipping" | "outline", planeIndex: number, rotation?: number, autoAlign?: "model" | "closest"): OutlineIntersection | undefined {
         const context = this._renderContext;
-        const { renderState, renderStateGL } = this;
-        const plane = planeType == "clipping" ? renderState.clipping.planes[planeIndex].normalOffset : renderState.outlines.planes[planeIndex];
+        const { renderStateGL } = this;
         if (context) {
             const rotationAngle = rotation ?? 0;
-            const [nx, ny, nz] = plane;
-            const planeDir = vec3.fromValues(nx, ny, nz);
             const flipToGl = (v: ReadonlyVec3) => vec3.fromValues(v[0], v[2], -v[1]);
             const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
             const { outlineRenderers } = context;

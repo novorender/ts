@@ -99,7 +99,7 @@ export class DrawModule extends BaseModule {
     /** Converts world space points to on screen space points
      * @param points World space points that will be projected to screen space
      * @returns Screen space points regadless if they are within the current canvas size
-     * @deprecated use view.convert.screenSpaceToWorldSpace instead
+     * @deprecated use view.convert.worldSpaceToScreenSpace instead
      */
     toMarkerPoints(points: ReadonlyVec3[]): (ReadonlyVec2 | undefined)[] {
         const { drawContext } = this;
@@ -435,7 +435,7 @@ function toPathPointsFromMatrices(
     const prevHead = vec3.create();
     const head = vec3.create();
     const screenPoints = points.reduce((tail, point, i) => {
-        if (i !== 0) { 
+        if (i !== 0) {
             vec3.copy(prevHead, head);
         }
         vec3.transformMat4(head, point, camMat);
