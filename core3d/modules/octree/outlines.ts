@@ -147,11 +147,21 @@ export class OutlineRenderer {
                 const { idxBuf, posBuf } = getMeshBuffers(gl, mesh, posBPC);
                 // transform positions into clipping plane space, i.e. xy on plane, z above or below
                 const posPS = new Float32Array(posBuf.length);
-                const p = vec3.create();
-                for (let i = 0; i < posBuf.length; i += 3) {
-                    vec3.set(p, posBuf[i + 0], posBuf[i + 1], posBuf[i + 2]);
-                    vec3.transformMat4(posPS.subarray(i, i + 3), p, modelPlaneMatrix);
+                const m = modelPlaneMatrix;
+
+                const posBufLength = posBuf.length;
+                for (let i = 0; i < posBufLength; i += 3) {
+                    // Hot loop, so inline transformMat4
+                    // Tried special case without `w` when it's always=1, but no difference
+                    const x = posBuf[i + 0];
+                    const y = posBuf[i + 1];
+                    const z = posBuf[i + 2];
+                    const w = (m[3] * x + m[7] * y + m[11] * z + m[15]) || 1.0;
+                    posPS[i + 0] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
+                    posPS[i + 1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
+                    posPS[i + 2] = (m[2] * x + m[6] * y + m[10] * z + m[14]) / w;
                 }
+
                 // intersect triangles for all draw ranges
                 for (const drawRange of drawRanges) {
                     const { childIndex } = drawRange;
@@ -490,17 +500,17 @@ function intersectTriangles(segmentPos: Float32Array, segmentNormal: Int16Array,
         const i0 = idx[i + 0]; const i1 = idx[i + 1]; const i2 = idx[i + 2];
         if (i0 == i1 || i0 == i2 || i1 == i2)
             continue; // skip degenerate triangles
-        vec3.set(p0, pos[i0 * 3 + 0], pos[i0 * 3 + 1], pos[i0 * 3 + 2]);
-        vec3.set(p1, pos[i1 * 3 + 0], pos[i1 * 3 + 1], pos[i1 * 3 + 2]);
-        vec3.set(p2, pos[i2 * 3 + 0], pos[i2 * 3 + 1], pos[i2 * 3 + 2]);
         // check if z-coords are greater and less than 0
-        const z0 = p0[2]; const z1 = p1[2]; const z2 = p2[2];
+        const z0 = pos[i0 * 3 + 2]; const z1 = pos[i1 * 3 + 2]; const z2 = pos[i2 * 3 + 2];
         const gt0 = z0 > 0; const gt1 = z1 > 0; const gt2 = z2 > 0;
         const lt0 = z0 < 0; const lt1 = z1 < 0; const lt2 = z2 < 0;
         // does triangle intersect plane?
         // this test is not just a possible optimization, but also excludes problematic triangles that straddles the plane along an edge or vertex only
         if ((gt0 || gt1 || gt2) && (lt0 || lt1 || lt2)) { // SIMD: any()?
             // compute triangle normal
+            vec3.set(p0, pos[i0 * 3 + 0], pos[i0 * 3 + 1], z0);
+            vec3.set(p1, pos[i1 * 3 + 0], pos[i1 * 3 + 1], z1);
+            vec3.set(p2, pos[i2 * 3 + 0], pos[i2 * 3 + 1], z2);
             vec3.sub(ab, p1, p0);
             vec3.sub(ac, p2, p0);
             vec3.cross(normal, ab, ac);
