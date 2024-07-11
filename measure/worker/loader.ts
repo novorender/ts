@@ -59,7 +59,8 @@ export async function createGeometryFactory(wasmUrl: string | ArrayBuffer) {
 export function crawlInstance(
     product: ProductData,
     instanceData: InstanceData,
-    faceFunc: (faceIdx: number) => void
+    faceFunc: (faceIdx: number) => void,
+    snappingPointFunc: (snapIdx: number) => void,
 ) {
     const geometryData = product.geometries[instanceData.geometry as number];
     if (geometryData.shells) {
@@ -67,6 +68,11 @@ export function crawlInstance(
             const shell = product.shells[shellIdx];
             for (const faceIdx of shell.faces) {
                 faceFunc(faceIdx);
+            }
+            if (shell.snappingPoints) {
+                for (const snapIdx of shell.snappingPoints) {
+                    snappingPointFunc(snapIdx);
+                }
             }
         }
     }
@@ -76,11 +82,22 @@ export function crawlInstance(
             for (const faceIdx of product.shells[solid.outerShell].faces) {
                 faceFunc(faceIdx);
             }
+            const shellSnaps = product.shells[solid.outerShell].snappingPoints;
+            if (shellSnaps) {
+                for (const snapIdx of shellSnaps) {
+                    snappingPointFunc(snapIdx);
+                }
+            }
             if (solid.innerShells) {
                 for (const innerShellIdx of solid.innerShells) {
                     const shell = product.shells[innerShellIdx];
                     for (const faceIdx of shell.faces) {
                         faceFunc(faceIdx);
+                    }
+                    if (shell.snappingPoints) {
+                        for (const snapIdx of shell.snappingPoints) {
+                            snappingPointFunc(snapIdx);
+                        }
                     }
                 }
             }
@@ -415,7 +432,7 @@ export class GeometryFactory {
 
             if (typeof instance.geometry == "number") {
                 //check geom is number
-                crawlInstance(product, instance, faceFunc);
+                crawlInstance(product, instance, faceFunc, () => { });
             }
         }
 
@@ -460,7 +477,7 @@ export class GeometryFactory {
             const instance = product.instances[i];
             if (typeof instance.geometry == "number") {
                 //check geom is number
-                crawlInstance(product, instance, addFaceEdges);
+                crawlInstance(product, instance, addFaceEdges, () => { });
             }
         }
         return this.getCurvesFromEdges(product, edgeInstances);

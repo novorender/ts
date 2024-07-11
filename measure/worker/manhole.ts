@@ -85,7 +85,7 @@ export async function manholeMeasure(product: ProductData, prodId: ObjectId): Pr
 
         if (typeof instanceData.geometry == "number") {
             //check geom is number
-            crawlInstance(product, instanceData, faceFuncPlane);
+            crawlInstance(product, instanceData, faceFuncPlane, () => { });
             botInnerCandiates.forEach(plane => {
                 const { radius, elevation } = plane;
                 if (botInner && botOuter && radius) {
@@ -169,7 +169,7 @@ export async function manholeMeasure(product: ProductData, prodId: ObjectId): Pr
 
         if (typeof instanceData.geometry == "number") {
             //check geom is number
-            crawlInstance(product, instanceData, faceFuncCylinder);
+            crawlInstance(product, instanceData, faceFuncCylinder, () => { });
         }
     }
 

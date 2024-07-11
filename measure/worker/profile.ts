@@ -183,7 +183,7 @@ export async function addCenterLinesFromCylinders(
 
         if (typeof instanceData.geometry == "number") {
             //check geom is number
-            crawlInstance(product, instanceData, faceFunc);
+            crawlInstance(product, instanceData, faceFunc, () => { });
         }
         faceInstances[i] = faces;
     }

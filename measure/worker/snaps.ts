@@ -46,17 +46,32 @@ export interface PickFaces extends EntityPicker {
     faces: FacePickInfo[];
 }
 
+
+export interface PointsPickInfo {
+    vertexIndices: number[];
+    vertices: ReadonlyVec3[];
+    aabb: AABB3;
+}
+
+
+export interface PickPoints extends EntityPicker {
+    instanceMat: ReadonlyMat4;
+    points: PointsPickInfo[];
+}
+
 export interface PickInterface {
     objectId: number;
     unitScale: number;
     segments: PickSegments[];
     edges: PickEdges[];
     faces: PickFaces[];
+    snappingPoints: PickPoints[];
 }
 
 export async function getPickInterface(product: ProductData, objectId: number): Promise<PickInterface> {
     const edgeInstances = new Array<Array<number>>(product.instances.length);
     const faceInstances = new Array<Array<number>>(product.instances.length);
+    const pointsInstances = new Array<Array<number>>(product.instances.length);
     const curveSegmentInstances = new Array<readonly number[]>(
         product.instances.length
     );
@@ -66,6 +81,7 @@ export async function getPickInterface(product: ProductData, objectId: number): 
 
         const edges = new Array<number>();
         const faces = new Array<number>();
+        const snappingPoints = new Array<number>();
 
         function faceFunc(faceIdx: number) {
             faces.push(faceIdx);
@@ -82,9 +98,14 @@ export async function getPickInterface(product: ProductData, objectId: number): 
             }
         }
 
+
+        function snappingPointFunc(snapIdx: number) {
+            snappingPoints.push(snapIdx);
+        }
+
         if (typeof instanceData.geometry == "number") {
             //check geom is number
-            crawlInstance(product, instanceData, faceFunc);
+            crawlInstance(product, instanceData, faceFunc, snappingPointFunc);
         }
         const geometryData =
             product.geometries[instanceData.geometry as number];
@@ -96,6 +117,7 @@ export async function getPickInterface(product: ProductData, objectId: number): 
 
         edgeInstances[i] = edges;
         faceInstances[i] = faces;
+        pointsInstances[i] = snappingPoints;
     }
 
     const segments: PickSegments[] = [];
@@ -160,7 +182,20 @@ export async function getPickInterface(product: ProductData, objectId: number): 
         faces.push({ instanceIdx: i, worldToObject, faces: surfaces, instanceMat });
     }
 
-    return { objectId, edges, segments, faces, unitScale: unitToScale(product.units) };
+    const snappingPoints: PickPoints[] = [];
+    for (let i = 0; i < pointsInstances.length; ++i) {
+        const InstanceData = product.instances[i];
+        const instanceMat = matFromInstance(InstanceData);
+        const worldToObject = mat4.invert(mat4.create(), instanceMat);
+        const surfaces: PointsPickInfo[] = [];
+        for (const pointIdx of pointsInstances[i]) {
+            const pointsData = product.snappingPoints[pointIdx];
+            surfaces.push({ aabb: pointsData.aabb, vertexIndices: pointsData.points, vertices: pointsData.points.map(i => product.vertices[i].position) })
+        }
+        snappingPoints.push({ instanceIdx: i, worldToObject, points: surfaces, instanceMat });
+    }
+
+    return { objectId, edges, segments, faces, snappingPoints, unitScale: unitToScale(product.units) };
 }
 
 export function pick(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: SnapTolerance): { entity: MeasureEntity, connectionPoint: vec3 } | undefined {
@@ -330,5 +365,42 @@ export function pick(pickInterface: PickInterface, position: ReadonlyVec3, toler
             }
         }
     }
+
+    if (closestCandidate) {
+        return closestCandidate;
+    }
+
+    if (pointTolerance) {
+        for (const pointInstance of pickInterface.snappingPoints) {
+            const localPoint = vec3.transformMat4(
+                vec3.create(),
+                flippedPos,
+                pointInstance.worldToObject
+            );
+            for (const snapPoints of pointInstance.points) {
+                if (isInsideAABB(localPoint, snapPoints.aabb, faceTolerance)) {
+                    for (let i = 0; i < snapPoints.vertexIndices.length; ++i) {
+                        const point = snapPoints.vertices[i];
+                        const dist = vec3.dist(point, localPoint);
+                        if (dist < closestDistance && dist < pointTolerance) {
+                            closestCandidate = {
+                                entity: {
+                                    ObjectId: pickInterface.objectId,
+                                    drawKind: "vertex",
+                                    pathIndex: snapPoints.vertexIndices[i],
+                                    instanceIndex: pointInstance.instanceIdx,
+                                    parameter: vec3.clone(point),
+                                },
+                                connectionPoint: vec3.clone(point)
+                            }
+                        }
+                    }
+                }
+
+
+            }
+        }
+    }
+
     return closestCandidate;
 }

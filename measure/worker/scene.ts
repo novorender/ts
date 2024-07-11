@@ -323,10 +323,14 @@ export class MeasureTool {
     }
 
 
-    async pickEntity(id: ObjectId, position: vec3, tolerance?: SnapTolerance):
+    async pickEntity(id: ObjectId, position: vec3, tolerance?: SnapTolerance, allowGenerated?: boolean):
         Promise<{ entity: MeasureEntity, status: LoadStatus, connectionPoint?: vec3 }> {
         const product = await this.getProduct(id);
-        if (product) {
+        var valid = true;
+        if (product && allowGenerated !== true) {
+            valid = valid && !await this.isBrepGenerated(id);
+        }
+        if (product && valid) {
             const snapInterface = await this.getSnapInterface(id, product);
             if (snapInterface) {
                 const tol = tolerance ?? { edge: 0.032, segment: 0.12, face: 0.07, point: 0.032 };
@@ -341,10 +345,14 @@ export class MeasureTool {
         };
     }
 
-    async pickEntityOnCurrentObject(id: ObjectId, position: vec3, tolerance: SnapTolerance):
+    async pickEntityOnCurrentObject(id: ObjectId, position: vec3, tolerance: SnapTolerance, allowGenerated?: boolean):
         Promise<{ entity: MeasureEntity | undefined, status: LoadStatus, connectionPoint?: vec3 }> {
         const product = await this.data.get(id);
-        if (product === null) {
+        var valid = true;
+        if (allowGenerated !== true) {
+            valid = valid && !await this.isBrepGenerated(id);
+        }
+        if (product === null || !valid) {
             return {
                 entity: undefined, status: "missing"
             }

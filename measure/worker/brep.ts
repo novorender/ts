@@ -43,6 +43,7 @@ export interface ProductData {
     readonly curves3D: readonly Curve3DData[];
     readonly curves2D: readonly Curve2DData[];
     readonly curveSegments: readonly CurveSegmentData[];
+    readonly snappingPoints: readonly SnappingPoints[];
 }
 
 export interface VertexData {
@@ -75,6 +76,7 @@ export interface SolidData {
 
 export interface ShellData {
     readonly faces: readonly Index[]; // indices into faces array
+    readonly snappingPoints?: readonly Index[]; // indices into snapping point array
     readonly volume?: number;
 }
 
@@ -108,6 +110,12 @@ export interface CurveSegmentData {
     readonly parameterBounds: readonly [number, number];
     readonly tesselationParameters: readonly number[];
     readonly curve3D: Index;
+}
+
+//Used for generated parametric geometry if no face can be made to atleast preserve snapping points
+export interface SnappingPoints {
+    readonly points: number[];
+    readonly aabb: AABB3;
 }
 
 export interface HalfEdgeData {

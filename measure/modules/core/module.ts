@@ -44,11 +44,12 @@ export class CoreModule extends BaseModule {
     async pickMeasureEntity(
         id: ObjectId,
         selectionPosition: ReadonlyVec3,
-        tolerance?: SnapTolerance
+        tolerance?: SnapTolerance,
+        allowGenerated?: boolean
     ): Promise<{ entity: MeasureEntity, status: LoadStatus, connectionPoint?: vec3 }> {
         const workerScene = await this.worker;
         const pos = vec3.copy(vec3.create(), selectionPosition);
-        return await workerScene.pickEntity(id, pos, tolerance);
+        return await workerScene.pickEntity(id, pos, tolerance, allowGenerated);
     }
 
     /** 
@@ -70,11 +71,12 @@ export class CoreModule extends BaseModule {
     async pickMeasureEntityOnCurrentObject(
         id: ObjectId,
         selectionPosition: ReadonlyVec3,
-        tolerance: SnapTolerance
+        tolerance: SnapTolerance,
+        allowGenerated?: boolean
     ): Promise<{ entity: MeasureEntity | undefined, status: LoadStatus, connectionPoint?: vec3 }> {
         const workerScene = await this.worker;
         const pos = vec3.copy(vec3.create(), selectionPosition);
-        return await workerScene.pickEntityOnCurrentObject(id, pos, tolerance);
+        return await workerScene.pickEntityOnCurrentObject(id, pos, tolerance, allowGenerated);
     }
 
     /** Novorender attempts to generate parametric data from tesselated objects if it is not provided in the file.
