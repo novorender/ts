@@ -44,7 +44,7 @@ const emptyHash = "00000000000000000000000000000000";
 
 class BrepCache {
     data = new Map<ObjectId, ProductData | null | Promise<ProductData | undefined>>();
-    limit = 20000000;
+    limit = 20_000_000;
     currentSize: number = 0;
     cache: { id: ObjectId, size: number }[] = [];
     addPromise(id: ObjectId, product: Promise<ProductData | undefined>) {
@@ -217,9 +217,7 @@ export class MeasureTool {
                         this.cache.add(id, null, 0);
                         return undefined;
                     }
-                    if (product?.product) {
-                        this.cache.add(id, product?.product, product?.size);
-                    }
+                    this.cache.add(id, product?.product ?? null, product?.size ?? 0);
                     return product?.product ?? undefined;
                 });
             this.cache.addPromise(id, product);
