@@ -173,6 +173,21 @@ export class Downloader {
         }
     }
 
+    async downloadJsonWithSize(
+        filename: string,
+    ): Promise<{ product: any, size: number }> {
+        try {
+            this.activeDownloads++;
+            const response = await this.request(filename);
+            const text = await response.text();
+            return {
+                product: JSON.parse(text), size: text.length
+            };
+        } finally {
+            this.activeDownloads--;
+        }
+    }
+
     async downloadArrayBuffer(filename: string) {
         const response = await this.request(filename);
         return await response.arrayBuffer();

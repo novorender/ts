@@ -42,10 +42,43 @@ glMatrix.setMatrixArrayType(Array);
 export const epsilon = 0.0001;
 const emptyHash = "00000000000000000000000000000000";
 
+class BrepCache {
+    data = new Map<ObjectId, ProductData | null | Promise<ProductData | undefined>>();
+    limit = 20_000_000;
+    currentSize: number = 0;
+    cache: { id: ObjectId, size: number }[] = [];
+    addPromise(id: ObjectId, product: Promise<ProductData | undefined>) {
+        this.data.set(id, product);
+    }
+    add(id: ObjectId, product: ProductData | null, size: number) {
+        if (product != null) {
+            while (this.currentSize + size > this.limit && this.cache.length > 0) {
+                this.currentSize -= this.cache[0].size;
+                this.data.delete(this.cache[0].id);
+                this.cache.shift();
+            }
+            this.data.set(id, product);
+            this.currentSize += size;
+            this.cache.push({ id, size });
+        }
+        else {
+            this.data.set(id, product);
+        }
+    }
+    clear() {
+        this.cache = [];
+        this.currentSize = 0;
+        this.data.clear();
+    }
+    get(id: ObjectId) {
+        return this.data.get(id);
+    }
+}
+
 export class MeasureTool {
     downloader: Downloader = undefined!;
     crossSectionTool: RoadTool = undefined!;
-    data = new Map<ObjectId, ProductData | null | Promise<ProductData | undefined>>();
+    cache = new BrepCache;
     snapObjects = new Array<PickInterface>();
     nextSnapIdx = 0;
     static geometryFactory: GeometryFactory = undefined!;
@@ -136,7 +169,7 @@ export class MeasureTool {
         }
 
         this.crossSectionTool = new RoadTool(new URL(baseUrl));
-        this.data.clear();
+        this.cache.clear();
         this.snapObjects.length = 0;
     }
 
@@ -156,17 +189,17 @@ export class MeasureTool {
         }
     }
 
-    async downloadBrep(id: number): Promise<ProductData | null> {
+    async downloadBrep(id: number): Promise<{ product: ProductData, size: number } | null> {
         if (this.hasIdToHash) {
             const hash = this.idToHash ? this.lookupHash(id) : await this.lookupHashAsync(id);
             try {
-                return hash && hash !== emptyHash ? await this.downloader.downloadJson(hash) : null;
+                return hash && hash !== emptyHash ? await this.downloader.downloadJsonWithSize(hash) : null;
             } catch {
                 return null;
             }
         } else {
             try {
-                return await this.downloader.downloadJson(`${id}.json`);
+                return await this.downloader.downloadJsonWithSize(`${id}.json`);
             } catch {
                 return null;
             }
@@ -176,18 +209,18 @@ export class MeasureTool {
     private async getProduct(
         id: ObjectId
     ): Promise<ProductData | undefined> {
-        let product = this.data.get(id);
+        let product = this.cache.get(id);
         if (product === undefined) {
             product = this.downloadBrep(id)
                 .then(product => {
-                    if (product && product.instances === undefined) {
-                        this.data.set(id, null);
+                    if (product?.product && product.product.instances === undefined) {
+                        this.cache.add(id, null, 0);
                         return undefined;
                     }
-                    this.data.set(id, product);
-                    return product ?? undefined;
+                    this.cache.add(id, product?.product ?? null, product?.size ?? 0);
+                    return product?.product ?? undefined;
                 });
-            this.data.set(id, product);
+            this.cache.addPromise(id, product);
         }
         return await product ?? undefined;
     }
@@ -326,14 +359,10 @@ export class MeasureTool {
     async pickEntity(id: ObjectId, position: vec3, tolerance?: SnapTolerance, allowGenerated?: boolean):
         Promise<{ entity: MeasureEntity, status: LoadStatus, connectionPoint?: vec3 }> {
         const product = await this.getProduct(id);
-        var valid = true;
-        if (product && allowGenerated !== true) {
-            valid = valid && !await this.isBrepGenerated(id);
-        }
-        if (product && valid) {
+        if (product && (allowGenerated || product.version === undefined)) {
             const snapInterface = await this.getSnapInterface(id, product);
             if (snapInterface) {
-                const tol = tolerance ?? { edge: 0.032, segment: 0.12, face: 0.07, point: 0.032 };
+                const tol = tolerance ?? { edge: 0.032, segment: 0.12, face: 0.20, point: 0.032 };
                 const pickedEntity = pick(snapInterface, position, tol);
                 if (pickedEntity) {
                     return { entity: pickedEntity.entity, status: "loaded", connectionPoint: pickedEntity.connectionPoint };
@@ -347,12 +376,8 @@ export class MeasureTool {
 
     async pickEntityOnCurrentObject(id: ObjectId, position: vec3, tolerance: SnapTolerance, allowGenerated?: boolean):
         Promise<{ entity: MeasureEntity | undefined, status: LoadStatus, connectionPoint?: vec3 }> {
-        const product = await this.data.get(id);
-        var valid = true;
-        if (allowGenerated !== true) {
-            valid = valid && !await this.isBrepGenerated(id);
-        }
-        if (product === null || !valid) {
+        const product = await this.cache.get(id);
+        if (product === null || (!allowGenerated && product && product.version !== undefined)) {
             return {
                 entity: undefined, status: "missing"
             }
