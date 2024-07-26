@@ -181,7 +181,7 @@ export class Downloader {
             const response = await this.request(filename);
             const text = await response.text();
             return {
-                product: await JSON.parse(text), size: text.length
+                product: JSON.parse(text), size: text.length
             };
         } finally {
             this.activeDownloads--;
