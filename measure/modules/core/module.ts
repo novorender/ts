@@ -152,7 +152,6 @@ export class CoreModule extends BaseModule {
     areaFromPolygon(
         vertices: ReadonlyVec3[]
     ): { area: number | undefined; polygon: ReadonlyVec3[] } {
-        console.log(vertices);
         if (vertices.length === 0) {
             return { area: undefined, polygon: [] };
         }
