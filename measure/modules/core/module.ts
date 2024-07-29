@@ -1,7 +1,6 @@
 import type { ReadonlyVec2, ReadonlyVec3 } from "gl-matrix";
 import { vec2, vec3 } from "gl-matrix";
 import type { MeasureEntity, MeasureSettings, ObjectId, ParametricEntity } from "../../measure_view";
-import { MeasureError } from "../../measure_view";
 import type { LoadStatus, DuoMeasurementValues, MeasurementValues, SnapTolerance, LineStripMeasureValues } from ".";
 import type { ParametricProduct } from "../../worker/parametric_product";
 import { BaseModule } from "../base";
@@ -151,45 +150,29 @@ export class CoreModule extends BaseModule {
      * @returns The area of the selected polygon, do note this is 2d calulation and height is ignored
      */
     areaFromPolygon(
-        vertices: ReadonlyVec3[],
-        normals: ReadonlyVec3[]
+        vertices: ReadonlyVec3[]
     ): { area: number | undefined; polygon: ReadonlyVec3[] } {
-        if (vertices.length == 0) {
+        console.log(vertices);
+        if (vertices.length === 0) {
             return { area: undefined, polygon: [] };
         }
-        if (vertices.length != normals.length) {
-            throw new MeasureError(
-                "Area measurement",
-                "Number of normals and vertices needs to be equal"
-            );
-        }
-        let useXYPlane = false;
-        const epsilon = 0.001;
-        const normal = normals[0];
-        for (let i = 1; i < normals.length; ++i) {
-            if (1 - Math.abs(vec3.dot(normal, normals[i])) > epsilon) {
-                useXYPlane = true;
-                break;
-            }
-        }
 
-        if (useXYPlane) {
-            let total = 0;
+        if (vertices.length < 3) {
             const polygon: ReadonlyVec3[] = [];
-            for (let i = 0; i < vertices.length; i++) {
-                let addX = vertices[i][0];
-                let addY = vertices[i == vertices.length - 1 ? 0 : i + 1][1];
-                let subX = vertices[i == vertices.length - 1 ? 0 : i + 1][0];
-                let subY = vertices[i][1];
-
-                total += addX * addY * 0.5;
-                total -= subX * subY * 0.5;
-                polygon.push(
-                    vec3.fromValues(vertices[i][0], vertices[i][1], vertices[0][2])
-                );
+            for (let i = 0; i < vertices.length; ++i) {
+                const v = vertices[i];
+                polygon.push(vec3.clone(v));
             }
-            return { area: Math.abs(total), polygon };
+            return { area: 0, polygon };
         }
+
+        const [v0, v1, v2] = vertices;
+
+        const edge1 = vec3.subtract(vec3.create(), v1, v0);
+        const edge2 = vec3.subtract(vec3.create(), v2, v0);
+
+        const normal = vec3.cross(vec3.create(), edge1, edge2);
+        vec3.normalize(normal, normal);
 
         const polygon: ReadonlyVec3[] = [];
         polygon.push(vertices[0]);
@@ -201,9 +184,6 @@ export class CoreModule extends BaseModule {
             polygon.push(vec3.scaleAndAdd(vec3.create(), v, normal, dist));
         }
 
-        if (polygon.length == 1) {
-            return { area: 0, polygon };
-        }
         const xDir = vec3.subtract(vec3.create(), polygon[1], polygon[0]);
         vec3.normalize(xDir, xDir);
         const yDir = vec3.cross(vec3.create(), normal, xDir);
