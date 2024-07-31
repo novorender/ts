@@ -44,6 +44,7 @@ const emptyHash = "00000000000000000000000000000000";
 
 class BrepCache {
     data = new Map<ObjectId, ProductData | null | Promise<ProductData | undefined>>();
+    snapInterfaces = new Map<ObjectId, PickInterface>();
     limit = 20_000_000;
     currentSize: number = 0;
     cache: { id: ObjectId, size: number }[] = [];
@@ -55,6 +56,7 @@ class BrepCache {
             while (this.currentSize + size > this.limit && this.cache.length > 0) {
                 this.currentSize -= this.cache[0].size;
                 this.data.delete(this.cache[0].id);
+                this.snapInterfaces.delete(this.cache[0].id);
                 this.cache.shift();
             }
             this.data.set(id, product);
@@ -69,9 +71,24 @@ class BrepCache {
         this.cache = [];
         this.currentSize = 0;
         this.data.clear();
+        this.snapInterfaces.clear();
     }
+
     get(id: ObjectId) {
         return this.data.get(id);
+    }
+
+    async getSnapInterface(id: ObjectId): Promise<PickInterface | undefined> {
+        const snap = this.snapInterfaces.get(id);
+        if (snap) {
+            return snap;
+        }
+        const product = await this.get(id);
+        if (product) {
+            const snapInterface = await getPickInterface(product, id);
+            this.snapInterfaces.set(id, snapInterface);
+            return snapInterface;
+        }
     }
 }
 
@@ -79,7 +96,6 @@ export class MeasureTool {
     downloader: Downloader = undefined!;
     crossSectionTool: RoadTool = undefined!;
     cache = new BrepCache;
-    snapObjects = new Array<PickInterface>();
     nextSnapIdx = 0;
     static geometryFactory: GeometryFactory = undefined!;
     idToHash: Uint8Array | undefined;
@@ -170,23 +186,6 @@ export class MeasureTool {
 
         this.crossSectionTool = new RoadTool(new URL(baseUrl));
         this.cache.clear();
-        this.snapObjects.length = 0;
-    }
-
-    async getSnapInterface(id: number, product: ProductData | undefined): Promise<PickInterface | undefined> {
-        for (const pickInterface of this.snapObjects) {
-            if (pickInterface.objectId == id) {
-                return pickInterface;
-            }
-        }
-        if (product) {
-            if (this.nextSnapIdx == 6) {
-                this.nextSnapIdx = 0;
-            }
-            const snapInterface = await getPickInterface(product, id);
-            this.snapObjects[this.nextSnapIdx++] = snapInterface;
-            return snapInterface;
-        }
     }
 
     async downloadBrep(id: number): Promise<{ product: ProductData, size: number } | null> {
@@ -360,7 +359,7 @@ export class MeasureTool {
         Promise<{ entity: MeasureEntity, status: LoadStatus, connectionPoint?: vec3 }> {
         const product = await this.getProduct(id);
         if (product && (allowGenerated || product.version === undefined)) {
-            const snapInterface = await this.getSnapInterface(id, product);
+            const snapInterface = await this.cache.getSnapInterface(id);
             if (snapInterface) {
                 const tol = tolerance ?? { edge: 0.032, segment: 0.12, face: 0.20, point: 0.032 };
                 const pickedEntity = pick(snapInterface, position, tol);
@@ -382,7 +381,7 @@ export class MeasureTool {
                 entity: undefined, status: "missing"
             }
         }
-        const snapInterface = await this.getSnapInterface(id, undefined);
+        const snapInterface = await this.cache.getSnapInterface(id);
         if (snapInterface) {
             const p = pick(snapInterface, position, tolerance);
             return { entity: p?.entity, status: "loaded", connectionPoint: p?.connectionPoint };
