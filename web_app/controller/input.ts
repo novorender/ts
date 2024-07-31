@@ -252,8 +252,13 @@ export class ControllerInput {
         }
     };
 
+    private getTouchData = (touch: Touch) => {
+        const { x, y } = getLocalTouchCoords(touch);
+        return { id: touch.identifier, x: Math.round(x), y: Math.round(y) };
+    }
+
     private touchstart = async (event: TouchEvent) => {
-        this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
+        this.touchPoints = Array.from(event.touches).map(this.getTouchData);
         const { touchPoints, _prevTouchCenter } = this;
         this.callbacks?.touchChanged?.(event);
 
@@ -274,7 +279,7 @@ export class ControllerInput {
     };
 
     private touchend = async (event: TouchEvent) => {
-        this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
+        this.touchPoints = Array.from(event.touches).map(this.getTouchData);
         const { touchPoints, _prevTouchCenter } = this;
         this.callbacks?.touchChanged?.(event);
         switch (touchPoints.length) {
@@ -296,13 +301,13 @@ export class ControllerInput {
 
     private touchcancel = (event: TouchEvent) => {
         event.preventDefault();
-        this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: Math.round(touch.clientX), y: Math.round(touch.clientY) }));
+        this.touchPoints = Array.from(event.touches).map(this.getTouchData);
     };
 
     private touchmove = (event: TouchEvent) => {
         if (event.cancelable) event.preventDefault();
         const prevTouchPoints = this.touchPoints;
-        this.touchPoints = Array.from(event.touches).map(touch => ({ id: touch.identifier, x: touch.clientX, y: touch.clientY }));
+        this.touchPoints = Array.from(event.touches).map(this.getTouchData);
         const { touchPoints, _prevTouchCenter } = this;
         let { x, y } = touchPoints[0];
 
@@ -536,4 +541,26 @@ interface ModiferKeyEvent {
     altKey: boolean,
     shiftKey: boolean,
     ctrlKey: boolean
+}
+
+// Ported from https://github.com/playcanvas/engine/blob/e1d8263d62ac3e55f2a7d24b2919eca9a2bf83ea/src/platform/input/touch-event.js#L14 (MIT)
+function getLocalTouchCoords(touch: Touch) {
+    let totalOffsetX = 0;
+    let totalOffsetY = 0;
+    let target = touch.target;
+    while (!(target instanceof HTMLElement)) {
+        target = (target as Node).parentNode as Node;
+    }
+    let currentElement = target;
+
+    do {
+        totalOffsetX += currentElement.offsetLeft - currentElement.scrollLeft;
+        totalOffsetY += currentElement.offsetTop - currentElement.scrollTop;
+        currentElement = currentElement.offsetParent as HTMLElement;
+    } while (currentElement);
+
+    return {
+        x: touch.pageX - totalOffsetX,
+        y: touch.pageY - totalOffsetY
+    };
 }
