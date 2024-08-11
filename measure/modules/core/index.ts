@@ -70,6 +70,8 @@ export interface PlaneValues {
     readonly heightAboveXyPlane?: number;
     /** @ignore */
     readonly entity: ParametricEntity;
+    /** The maximum normal distance error, only applies for generated geometry*/
+    readonly errorMargin?: number;
 }
 
 /** CylinderValues is a collection of values for measuring a single cylinder */

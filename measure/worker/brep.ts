@@ -92,6 +92,7 @@ export interface FaceData {
 
 export interface LoopData {
     readonly halfEdges: readonly Index[];
+    readonly errorMargin?: number;
 }
 
 export interface EdgeData {

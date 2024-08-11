@@ -200,7 +200,8 @@ export async function extractPlaneValues(prodId: ObjectId, faceIdx: number, prod
         heightAboveXyPlane,
         entity: {
             ObjectId: prodId, drawKind: "face", pathIndex: faceIdx, instanceIndex: instanceIdx
-        }
+        },
+        errorMargin: product.loops[faceData.outerLoop].errorMargin
     };
 }
 
