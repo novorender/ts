@@ -83,7 +83,7 @@ class ClippingModuleContext implements RenderModuleContext {
     }
 
     pick(state: DerivedRenderState) {
-        return this.render(state);
+        // return this.render(state);
     }
 
     contextLost(): void {
