@@ -1,4 +1,4 @@
-import type { ReadonlyVec2, ReadonlyVec3 } from "gl-matrix";
+import type { ReadonlyVec2, ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
 
 export type FixedSizeArray<N extends number, T> = N extends 0
     ? never[]
@@ -81,7 +81,8 @@ export interface ShellData {
 }
 
 export interface FaceData {
-    readonly surface: Index;
+    readonly surface?: Index; //A generated face might not have an actual identifiable surface. 
+    readonly pickingSurfaces?: ReadonlyVec4[] //For generated geometry
     readonly facing: -1 | 1;
     readonly outerLoop: Index;
     readonly innerLoops?: readonly Index[];

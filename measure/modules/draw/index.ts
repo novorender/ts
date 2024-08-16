@@ -23,7 +23,7 @@ export interface DrawProduct {
 /** An object for 2d drawings, can contain multiple parts */
 export interface DrawObject {
     /** Type of draw object */
-    readonly kind: "cylinder" | "plane" | "edge" | "curveSegment" | "vertex" | "complex" | "text";
+    readonly kind: "cylinder" | "plane" | "edge" | "curveSegment" | "vertex" | "complex" | "text" | "unknown";
     /** Different parts of the object */
     readonly parts: DrawPart[];
 }

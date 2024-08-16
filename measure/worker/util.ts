@@ -4,10 +4,15 @@ import type { CylinderData, ProductData } from "./brep";
 import { cylinderCenterLine } from "./calculations";
 import { matFromInstance } from "./loader";
 import { requestOfflineFile } from "offline/file";
+import { MeasureTool } from "./scene";
+import { getEdgeStrip } from "./outline";
 glMatrix.setMatrixArrayType(Array);
 
 export async function swapCylinderImpl(product: ProductData, faceIdx: number, instanceIdx: number, to: "inner" | "outer"): Promise<number | undefined> {
     const faceData = product.faces[faceIdx];
+    if (!faceData.surface) {
+        return;
+    }
     const surfaceData = product.surfaces[faceData.surface];
 
     if (surfaceData.kind == "cylinder") {
@@ -27,6 +32,9 @@ export async function swapCylinderImpl(product: ProductData, faceIdx: number, in
             for (const currentFaceIdx of shell.faces) {
                 if (currentFaceIdx != faceIdx) {
                     const face = product.faces[currentFaceIdx];
+                    if (!face.surface) {
+                        continue;
+                    }
                     const surface = product.surfaces[face.surface];
                     if (surface.kind == "cylinder") {
                         if (
@@ -191,5 +199,22 @@ export class Downloader {
     async downloadArrayBuffer(filename: string) {
         const response = await this.request(filename);
         return await response.arrayBuffer();
+    }
+}
+
+export function getEdgeStripFromIdx(product: ProductData, edgeIdx: number, instanceIdx: number) {
+    const edgeCurve = MeasureTool.geometryFactory.getCurve3DFromEdge(
+        product,
+        edgeIdx
+    );
+    if (edgeCurve) {
+        const edge = {
+            curve: edgeCurve,
+            geometryTransformation: matFromInstance(
+                product.instances[instanceIdx]
+            ),
+            instanceIndex: instanceIdx,
+        };
+        return getEdgeStrip(edge, 1);
     }
 }

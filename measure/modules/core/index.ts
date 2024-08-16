@@ -43,7 +43,7 @@ export interface LineStripValues {
 }
 
 /** FaceValues is a collection of values for measurment on a single face */
-export type FaceValues = PlaneValues | CylinderValues;
+export type FaceValues = PlaneValues | CylinderValues | PolymeshValues;
 
 /** PlaneValues is a collection of values for measuring a single Plane */
 export interface PlaneValues {
@@ -83,6 +83,19 @@ export interface CylinderValues {
     readonly centerLineStart: vec3;
     /** End of the line going in the center of the cylinder */
     readonly centerLineEnd: vec3;
+    /** @ignore */
+    readonly entity: ParametricEntity;
+}
+
+/** PolymeshValues is a collection of values for measuring a face with no identifiable surface.
+ *  These are generated surfaces typically from tesselated data.
+*/
+export interface PolymeshValues {
+    readonly kind: "polymesh";
+    /** Perimiter of the polymesh surface */
+    readonly perimiter: number;
+    /** Start and end verticies for each curve in the face loop */
+    readonly vertices: vec3[];
     /** @ignore */
     readonly entity: ParametricEntity;
 }

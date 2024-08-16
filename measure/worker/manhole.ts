@@ -11,6 +11,9 @@ type PlaneEntity = { faceData: FaceData; instanceIdx: number, planeData: Surface
 type CylinderEntity = { faceData: FaceData; instanceIdx: number, cylinderData: CylinderData, faceIdx: number }
 
 export async function manholeMeasure(product: ProductData, prodId: ObjectId): Promise<ManholeMeasureValues | undefined> {
+    if (product.version) {
+        return undefined;
+    }
     let top: { elevation: number; entity: PlaneEntity } | undefined = undefined;
     let botInner: { elevation: number; radius: number | undefined, entity: PlaneEntity } | undefined = undefined;
     let botOuter: { elevation: number; radius: number | undefined, entity: PlaneEntity } | undefined = undefined;
@@ -38,7 +41,8 @@ export async function manholeMeasure(product: ProductData, prodId: ObjectId): Pr
                         }
                     }
                 }
-                const surf = product.surfaces[face.surface];
+                //We do not try to make manhole from generated brep so surface should exist
+                const surf = product.surfaces[face.surface as number];
                 if (surf.kind == "plane") {
                     const transform = mat4.fromValues(
                         ...(surf.transform as Parameters<typeof mat4.fromValues>)
@@ -131,7 +135,8 @@ export async function manholeMeasure(product: ProductData, prodId: ObjectId): Pr
         function faceFuncCylinder(faceIdx: number) {
             if (product) {
                 const face = product.faces[faceIdx];
-                const surf = product.surfaces[face.surface];
+                //We do not try to make manhole from generated brep so surface should exist
+                const surf = product.surfaces[face.surface as number];
                 if (surf.kind == "cylinder") {
                     const cylinderMtx = mat4.fromValues(
                         ...(surf.transform as Parameters<typeof mat4.fromValues>)

@@ -329,6 +329,9 @@ export class MeasureTool {
         if (product) {
             const faceData = product.faces[faceIdx];
             const scale = unitToScale(product.units);
+            if (!faceData.surface) {
+                return undefined;
+            }
             const surfaceData = product.surfaces[faceData.surface];
             const surface = MeasureTool.geometryFactory.getSurface(
                 surfaceData,
@@ -659,10 +662,11 @@ export class MeasureTool {
         const product = await this.getProduct(id);
         if (product) {
             const face = product.faces[faceIdx];
-            const surface = product.surfaces[face.surface];
+            const surface = face.surface ?
+                product.surfaces[face.surface] : undefined;;
             let drawParts: DrawPart[] = [];
-            const kind = surface.kind == "cylinder" ? "cylinder" : "plane";
-            if (surface.kind == "cylinder") {
+            const kind = surface ? surface.kind == "cylinder" ? "cylinder" : "plane" : "unknown";
+            if (kind == "cylinder") {
                 drawParts = await getCylinderDrawParts(product, instanceIdx, surface as CylinderData, face, setting);
             } else {
                 drawParts = await getSurfaceDrawParts(product, instanceIdx, face);

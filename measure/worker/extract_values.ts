@@ -5,7 +5,8 @@ import { cylinderCenterLine } from "./calculations";
 import { matFromInstance, unitToScale } from "./loader";
 import { MeasureTool, epsilon } from "./scene";
 import type { Surface } from "./surfaces";
-import type { CameraValues, CylinderValues, EdgeValues, FaceValues, MeasureSettings, ObjectId, PlaneValues } from "measure";
+import type { CameraValues, CylinderValues, EdgeValues, FaceValues, MeasureSettings, ObjectId, PlaneValues, PolymeshValues } from "measure";
+import { getEdgeStripFromIdx } from "./util";
 
 export async function extractCurveValues(
     product: ProductData,
@@ -68,7 +69,8 @@ export async function extractCurveValues(
     }
 }
 
-export async function extractPlaneValues(prodId: ObjectId, faceIdx: number, product: ProductData, instanceIdx: number, faceData: FaceData, surf: Surface, scale: number): Promise<PlaneValues> {
+export async function extractPlaneValues(prodId: ObjectId, faceIdx: number, product: ProductData, instanceIdx: number,
+    faceData: FaceData, surf: Surface, scale: number): Promise<PlaneValues> {
     type MutableAABB2 = { readonly min: vec2; readonly max: vec2 };
     function union(out: MutableAABB2, a: AABB2) {
         vec2.min(out.min, out.min, a.min);
@@ -118,7 +120,6 @@ export async function extractPlaneValues(prodId: ObjectId, faceIdx: number, prod
         vec3.transformMat4(v as vec3, v, mat);
         points.push(v);
     }
-    let hasWidthAndHeight = true;
     const loop = product.loops[faceData.outerLoop];
     const aabb = {
         min: vec2.fromValues(Number.MAX_VALUE, Number.MAX_VALUE),
@@ -205,6 +206,44 @@ export async function extractPlaneValues(prodId: ObjectId, faceIdx: number, prod
     };
 }
 
+
+
+export async function extractPolymeshValues(prodId: ObjectId, faceIdx: number, product: ProductData, instanceIdx: number,
+    setting?: MeasureSettings): Promise<PolymeshValues> {
+
+    const face = product.faces[faceIdx];
+    const loops = [face.outerLoop, ...(face.innerLoops ?? [])];
+    const points: ReadonlyVec3[] = [];
+    const vertices: vec3[] = [];
+    for (const loopIdx of loops) {
+        const loop = product.loops[loopIdx];
+        for (const halfEdgeIdx of loop.halfEdges) {
+            const halfEdge = product.halfEdges[halfEdgeIdx];
+            if (face.surface === undefined) {
+                const edgeStrip = getEdgeStripFromIdx(product, halfEdge.edge, instanceIdx);
+                if (edgeStrip) {
+                    edgeStrip.shift();
+                    points.push(...edgeStrip);
+                    vertices.push(vec3.clone(edgeStrip[edgeStrip.length - 1]))
+                }
+            }
+        }
+    }
+    let perimiter = 0;
+    for (let i = 1; i < points.length; ++i) {
+        perimiter += vec3.dist(points[i - 1], points[i]);
+    }
+    perimiter += vec3.dist(points[points.length - 1], points[0]);
+    return {
+        kind: "polymesh",
+        perimiter,
+        vertices,
+        entity: {
+            ObjectId: prodId, drawKind: "face", pathIndex: faceIdx, instanceIndex: instanceIdx
+        }
+    }
+}
+
 export async function extractCylinderValues(prodId: ObjectId, faceIdx: number, product: ProductData, instanceIdx: number,
     faceData: FaceData, cylinderData: CylinderData, scale: number, setting?: MeasureSettings): Promise<CylinderValues> {
 
@@ -227,7 +266,6 @@ export async function extractCylinderValues(prodId: ObjectId, faceIdx: number, p
     };
 }
 
-
 export async function extractFaceValues(
     prodId: ObjectId,
     product: ProductData,
@@ -235,8 +273,10 @@ export async function extractFaceValues(
     instanceIdx: number,
     setting?: MeasureSettings
 ): Promise<FaceValues | undefined> {
-
     const faceData = product.faces[faceIdx];
+    if (!faceData.surface) {
+        return extractPolymeshValues(prodId, faceIdx, product, instanceIdx, setting);
+    }
     const scale = unitToScale(product.units);
     const surfaceData = product.surfaces[faceData.surface];
     const surf = MeasureTool.geometryFactory.getSurface(
@@ -263,6 +303,9 @@ export async function extractCameraValuesFromFace(
     setting?: MeasureSettings
 ): Promise<CameraValues | undefined> {
     const faceData = product.faces[faceIdx];
+    if (!faceData.surface) {
+        return undefined;
+    }
     const surfaceData = product.surfaces[faceData.surface];
     switch (surfaceData.kind) {
         case "cylinder": {

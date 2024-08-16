@@ -163,12 +163,13 @@ export async function getManholeDrawObjects(product: ProductData, manhole: Manho
             kind: "plane", parts: await getSurfaceDrawParts(product, manhole.bottomInner.entity!.instanceIndex, manhole.internal.bottomInner)
         });
     }
-    const outerCylinder = product.surfaces[manhole.internal.outer.surface] as CylinderData;
+    //Manholes should always have surfaces
+    const outerCylinder = product.surfaces[manhole.internal.outer.surface as number] as CylinderData;
     drawObjects.push({
         kind: "plane", parts: await getCylinderDrawParts(product, manhole.outer.entity!.instanceIndex, outerCylinder, manhole.internal.outer)
     });
     if (manhole.internal.inner && manhole.inner) {
-        const innerCylinder = product.surfaces[manhole.internal.inner.surface] as CylinderData;
+        const innerCylinder = product.surfaces[manhole.internal.inner.surface as number] as CylinderData;
         drawObjects.push({
             kind: "plane", parts: await getCylinderDrawParts(product, manhole.inner.entity!.instanceIndex, innerCylinder, manhole.internal.inner)
         });

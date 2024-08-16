@@ -362,6 +362,9 @@ export class GeometryFactory {
         product: ProductData,
         curves2D: Curve2D[]
     ) {
+        if (!face.surface) {
+            return undefined;
+        }
         const loops = [face.outerLoop, ...(face.innerLoops ?? [])];
         const virtualEdges = new Set<number>();
         const faceCurves2D = loops.map((l) => {
@@ -425,9 +428,11 @@ export class GeometryFactory {
             const instance = product.instances[i];
 
             const faceFunc = (faceIdx: number) => {
-                faces.push(
-                    this.makeFace(product.faces[faceIdx], instance, i, product, curves2D)
-                );
+                const face = this.makeFace(product.faces[faceIdx], instance, i, product, curves2D);
+                if (face) {
+                    faces.push(face);
+                }
+
             };
 
             if (typeof instance.geometry == "number") {

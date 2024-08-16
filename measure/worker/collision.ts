@@ -15,6 +15,9 @@ export async function getFaceToFaceCollisionValues(
     setting?: MeasureSettings
 ): Promise<CollisionValues | undefined> {
     const faceDataA = productA.faces[faceIdxA];
+    if (!faceDataA.surface) {
+        return;
+    }
     const surfaceDataA = productA.surfaces[faceDataA.surface];
     let surfaceA = {
         surf: MeasureTool.geometryFactory.getSurface(surfaceDataA, 1),
@@ -25,6 +28,9 @@ export async function getFaceToFaceCollisionValues(
     };
 
     const faceDataB = productB.faces[faceIdxB];
+    if (!faceDataB.surface) {
+        return;
+    }
     const surfaceDataB = productB.surfaces[faceDataB.surface];
     let surfaceB = {
         surf: MeasureTool.geometryFactory.getSurface(surfaceDataB, 1),

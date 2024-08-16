@@ -1,13 +1,15 @@
-import type { ReadonlyMat4, ReadonlyVec3 } from "gl-matrix";
-import { mat4, vec2, vec3 } from "gl-matrix";
+import type { ReadonlyMat4, ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
+import { mat3, mat4, vec2, vec3, vec4 } from "gl-matrix";
 import type { AABB3, EdgeData, ProductData } from "./brep";
 import { isInsideAABB } from "./calculations";
-import type { Line3D, Arc3D, NurbsCurve3D, LineStrip3D, Curve3D } from "./curves";
+import type { Curve3D } from "./curves";
 import { crawlInstance, matFromInstance, unitToScale } from "./loader";
 import type { Surface } from "./surfaces";
 import type { SnapTolerance } from "measure/modules";
 import type { MeasureEntity } from "measure/measure_view";
 import { MeasureTool } from "./scene";
+import { getEdgeStripFromIdx } from "./util";
+
 
 export interface EntityPicker {
     instanceIdx: number;
@@ -35,10 +37,23 @@ export interface PickEdges extends EntityPicker {
     edges: EdgePickInfo[];
 }
 
-export interface FacePickInfo {
+export interface SurfacePickInfo {
     idx: number;
     aabb: AABB3;
     surface: Surface;
+}
+
+export interface PickSurfaces extends EntityPicker {
+    instanceMat: ReadonlyMat4;
+    surfaces: SurfacePickInfo[];
+}
+
+
+export interface FacePickInfo {
+    idx: number;
+    aabb: AABB3;
+    planes: ReadonlyVec4[];
+    loop: ReadonlyVec3[];
 }
 
 export interface PickFaces extends EntityPicker {
@@ -64,9 +79,90 @@ export interface PickInterface {
     unitScale: number;
     segments: PickSegments[];
     edges: PickEdges[];
+    surfaces: PickSurfaces[];
     faces: PickFaces[];
     snappingPoints: PickPoints[];
 }
+
+function projectPointOntoPlane(point: ReadonlyVec3, planeNormal: ReadonlyVec3, planePoint: ReadonlyVec3): vec3 {
+    const planeToPoint = vec3.subtract(vec3.create(), point, planePoint);
+    const d = vec3.dot(planeToPoint, planeNormal);
+    const projection = vec3.scaleAndAdd(vec3.create(), point, planeNormal, -d);
+    return projection;
+}
+
+function getPlaneToWorldRotation(planeNormal: vec3): mat3 {
+    const xAxis = vec3.create();
+    const yAxis = vec3.create();
+    const zAxis = vec3.normalize(vec3.create(), planeNormal);
+
+    if (Math.abs(zAxis[0]) < Math.abs(zAxis[1]) && Math.abs(zAxis[0]) < Math.abs(zAxis[2])) {
+        vec3.set(xAxis, 1, 0, 0);
+    } else if (Math.abs(zAxis[1]) < Math.abs(zAxis[2])) {
+        vec3.set(xAxis, 0, 1, 0);
+    } else {
+        vec3.set(xAxis, 0, 0, 1);
+    }
+
+    vec3.cross(xAxis, xAxis, zAxis);
+    vec3.normalize(xAxis, xAxis);
+    vec3.cross(yAxis, zAxis, xAxis);
+
+    return mat3.fromValues(
+        xAxis[0], yAxis[0], zAxis[0],
+        xAxis[1], yAxis[1], zAxis[1],
+        xAxis[2], yAxis[2], zAxis[2]
+    );
+}
+
+function isPointInPolygon(point: vec2, polygon: vec2[]): boolean {
+    let intersects = 0;
+    for (let i = 0; i < polygon.length; i++) {
+        const a = polygon[i];
+        const b = polygon[(i + 1) % polygon.length];
+
+        if (((a[1] > point[1]) !== (b[1] > point[1])) &&
+            (point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0])) {
+            intersects++;
+        }
+    }
+    return intersects % 2 === 1;
+}
+
+function pointOnFace(face: FacePickInfo, point: ReadonlyVec3, loop: ReadonlyVec3[], tolerance: number) {
+    let closestPlane: { planeIdx: number, d: number } | undefined;
+    const p = vec4.fromValues(point[0], point[1], point[2], 1);
+    for (let i = 0; i < face.planes.length; ++i) {
+        const plane = face.planes[i];
+        let d = vec4.dot(plane, p) - (plane[3] * 2);
+        if (!closestPlane || Math.abs(d) < Math.abs(closestPlane.d)) {
+            closestPlane = { planeIdx: i, d };
+        }
+    }
+
+    if (closestPlane && Math.abs(closestPlane.d) < tolerance) {
+        const plane = face.planes[closestPlane.planeIdx];
+        const normal = vec3.fromValues(plane[0], plane[1], plane[2]);
+        const planePoint = vec3.create();
+        const planeRotation = getPlaneToWorldRotation(normal);
+        vec3.scaleAndAdd(planePoint, planePoint, normal, closestPlane.d);
+        const planeToPoint = vec3.subtract(vec3.create(), point, planePoint);
+        const connectionPoint = vec3.scaleAndAdd(vec3.create(), planeToPoint, normal, -closestPlane.d);
+        const rotatedPickPoint = vec3.transformMat3(vec3.create(), connectionPoint, planeRotation);
+        const pickPointOnPlane = vec2.fromValues(rotatedPickPoint[0], rotatedPickPoint[1]);
+
+        const projectedLoop = loop.map(vertex => {
+            const projectedVertex = projectPointOntoPlane(vertex, normal, planePoint);
+            vec3.transformMat3(projectedVertex, projectedVertex, planeRotation);
+            return vec2.fromValues(projectedVertex[0], projectedVertex[1]);
+        });
+
+        if (isPointInPolygon(pickPointOnPlane, projectedLoop)) {
+            return { connectionPoint, dist: Math.abs(closestPlane.d) };
+        }
+    }
+}
+
 
 export async function getPickInterface(product: ProductData, objectId: number): Promise<PickInterface> {
     const edgeInstances = new Array<Array<number>>(product.instances.length);
@@ -75,6 +171,7 @@ export async function getPickInterface(product: ProductData, objectId: number): 
     const curveSegmentInstances = new Array<readonly number[]>(
         product.instances.length
     );
+    const surfaceLessLoops = new Map<number, ReadonlyVec3[]>();
 
     for (let i = 0; i < product.instances.length; ++i) {
         const instanceData = product.instances[i];
@@ -93,6 +190,18 @@ export async function getPickInterface(product: ProductData, objectId: number): 
                     for (const halfEdgeIdx of loop.halfEdges) {
                         const halfEdge = product.halfEdges[halfEdgeIdx];
                         edges.push(halfEdge.edge);
+                        if (face.surface === undefined) {
+                            const edgeStrip = getEdgeStripFromIdx(product, halfEdge.edge, i);
+                            if (edgeStrip) {
+                                const points = surfaceLessLoops.get(faceIdx);
+                                edgeStrip.shift();
+                                if (points) {
+                                    points.push(...edgeStrip);
+                                } else {
+                                    surfaceLessLoops.set(faceIdx, edgeStrip);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -167,19 +276,33 @@ export async function getPickInterface(product: ProductData, objectId: number): 
         }
     }
 
+    const surfaces: PickSurfaces[] = [];
     const faces: PickFaces[] = [];
     for (let i = 0; i < faceInstances.length; ++i) {
         const InstanceData = product.instances[i];
         const instanceMat = matFromInstance(InstanceData);
         const worldToObject = mat4.invert(mat4.create(), instanceMat);
-        const surfaces: FacePickInfo[] = [];
+        const instanceSurfaces: SurfacePickInfo[] = [];
+        const instanceFaces: FacePickInfo[] = [];
         for (const faceIdx of faceInstances[i]) {
             const faceData = product.faces[faceIdx];
-            const surfaceData = product.surfaces[faceData.surface];
-            const surface = MeasureTool.geometryFactory.getSurface(surfaceData, 1);
-            surfaces.push({ aabb: faceData.aabb, idx: faceIdx, surface: surface as Surface })
+            if (faceData.surface !== undefined) {
+                const surfaceData = product.surfaces[faceData.surface];
+                const surface = MeasureTool.geometryFactory.getSurface(surfaceData, 1);
+                instanceSurfaces.push({ aabb: faceData.aabb, idx: faceIdx, surface: surface as Surface })
+            } else if (faceData.pickingSurfaces) {
+                const loop = surfaceLessLoops.get(faceIdx);
+                if (loop) {
+                    instanceFaces.push({ aabb: faceData.aabb, idx: faceIdx, planes: faceData.pickingSurfaces, loop })
+                }
+            }
         }
-        faces.push({ instanceIdx: i, worldToObject, faces: surfaces, instanceMat });
+        if (instanceSurfaces.length > 0) {
+            surfaces.push({ instanceIdx: i, worldToObject, surfaces: instanceSurfaces, instanceMat });
+        }
+        if (instanceFaces.length > 0) {
+            faces.push({ instanceIdx: i, worldToObject, faces: instanceFaces, instanceMat });
+        }
     }
 
     const snappingPoints: PickPoints[] = [];
@@ -195,7 +318,7 @@ export async function getPickInterface(product: ProductData, objectId: number): 
         snappingPoints.push({ instanceIdx: i, worldToObject, points: surfaces, instanceMat });
     }
 
-    return { objectId, edges, segments, faces, snappingPoints, unitScale: unitToScale(product.units) };
+    return { objectId, edges, segments, surfaces, faces, snappingPoints, unitScale: unitToScale(product.units) };
 }
 
 export function pick(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: SnapTolerance): { entity: MeasureEntity, connectionPoint: vec3 } | undefined {
@@ -333,13 +456,13 @@ export function pick(pickInterface: PickInterface, position: ReadonlyVec3, toler
     }
 
     if (faceTolerance) {
-        for (const faceInstance of pickInterface.faces) {
+        for (const faceInstance of pickInterface.surfaces) {
             const localPoint = vec3.transformMat4(
                 vec3.create(),
                 flippedPos,
                 faceInstance.worldToObject
             );
-            for (const face of faceInstance.faces) {
+            for (const face of faceInstance.surfaces) {
                 if (isInsideAABB(localPoint, face.aabb, faceTolerance)) {
                     const uv = vec2.create();
                     face.surface.invert(uv, localPoint);
@@ -368,6 +491,34 @@ export function pick(pickInterface: PickInterface, position: ReadonlyVec3, toler
 
     if (closestCandidate) {
         return closestCandidate;
+    }
+
+    if (faceTolerance) { //Generated faces without surface
+        for (const faceInstance of pickInterface.faces) {
+            const localPoint = vec3.transformMat4(
+                vec3.create(),
+                flippedPos,
+                faceInstance.worldToObject
+            );
+            for (const face of faceInstance.faces) {
+                if (isInsideAABB(localPoint, face.aabb, faceTolerance)) {
+                    const p = pointOnFace(face, localPoint, face.loop, faceTolerance);
+                    if (p && p.dist < closestDistance) {
+                        vec3.transformMat4(p.connectionPoint, p.connectionPoint, faceInstance.instanceMat);
+                        closestCandidate = {
+                            entity: {
+                                ObjectId: pickInterface.objectId,
+                                drawKind: "face",
+                                pathIndex: face.idx,
+                                instanceIndex: faceInstance.instanceIdx,
+                            },
+                            connectionPoint: p.connectionPoint
+                        };
+                        closestDistance = p.dist;
+                    }
+                }
+            }
+        }
     }
 
     if (pointTolerance) {
