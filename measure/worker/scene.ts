@@ -329,7 +329,7 @@ export class MeasureTool {
         if (product) {
             const faceData = product.faces[faceIdx];
             const scale = unitToScale(product.units);
-            if (!faceData.surface) {
+            if (faceData.surface === undefined) {
                 return undefined;
             }
             const surfaceData = product.surfaces[faceData.surface];

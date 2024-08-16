@@ -274,7 +274,7 @@ export async function extractFaceValues(
     setting?: MeasureSettings
 ): Promise<FaceValues | undefined> {
     const faceData = product.faces[faceIdx];
-    if (!faceData.surface) {
+    if (faceData.surface === undefined) {
         return extractPolymeshValues(prodId, faceIdx, product, instanceIdx, setting);
     }
     const scale = unitToScale(product.units);
@@ -303,7 +303,7 @@ export async function extractCameraValuesFromFace(
     setting?: MeasureSettings
 ): Promise<CameraValues | undefined> {
     const faceData = product.faces[faceIdx];
-    if (!faceData.surface) {
+    if (faceData.surface === undefined) {
         return undefined;
     }
     const surfaceData = product.surfaces[faceData.surface];

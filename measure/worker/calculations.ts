@@ -534,7 +534,7 @@ export async function faceToPointMeasureValues(
   setting?: MeasureSettings
 ): Promise<DuoMeasurementValues | undefined> {
   const faceData = product.faces[faceIdx];
-  if (!faceData.surface) {
+  if (faceData.surface === undefined) {
     return undefined;
   }
   const surfaceData = product.surfaces[faceData.surface];
@@ -815,7 +815,7 @@ async function getCurveToSurfaceMeasureValues(
   setting?: MeasureSettings
 ) {
   const faceData = productB.faces[faceIdx];
-  if (!faceData.surface) {
+  if (faceData.surface === undefined) {
     return undefined;
   }
   const surfaceData = productB.surfaces[faceData.surface];
@@ -1278,7 +1278,7 @@ export async function getFaceToFaceMeasureValues(
   settingB?: MeasureSettings
 ): Promise<DuoMeasurementValues | undefined> {
   const faceDataA = productA.faces[faceIdxA];
-  if (!faceDataA.surface) {
+  if (faceDataA.surface === undefined) {
     return undefined;
   }
   const surfaceDataA = productA.surfaces[faceDataA.surface];
@@ -1292,7 +1292,7 @@ export async function getFaceToFaceMeasureValues(
   };
 
   const faceDataB = productB.faces[faceIdxB];
-  if (!faceDataB.surface) {
+  if (faceDataB.surface === undefined) {
     return undefined;
   }
   const surfaceDataB = productB.surfaces[faceDataB.surface];

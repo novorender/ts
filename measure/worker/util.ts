@@ -10,7 +10,7 @@ glMatrix.setMatrixArrayType(Array);
 
 export async function swapCylinderImpl(product: ProductData, faceIdx: number, instanceIdx: number, to: "inner" | "outer"): Promise<number | undefined> {
     const faceData = product.faces[faceIdx];
-    if (!faceData.surface) {
+    if (faceData.surface === undefined) {
         return;
     }
     const surfaceData = product.surfaces[faceData.surface];
@@ -32,7 +32,7 @@ export async function swapCylinderImpl(product: ProductData, faceIdx: number, in
             for (const currentFaceIdx of shell.faces) {
                 if (currentFaceIdx != faceIdx) {
                     const face = product.faces[currentFaceIdx];
-                    if (!face.surface) {
+                    if (face.surface === undefined) {
                         continue;
                     }
                     const surface = product.surfaces[face.surface];

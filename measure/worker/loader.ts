@@ -362,7 +362,7 @@ export class GeometryFactory {
         product: ProductData,
         curves2D: Curve2D[]
     ) {
-        if (!face.surface) {
+        if (face.surface === undefined) {
             return undefined;
         }
         const loops = [face.outerLoop, ...(face.innerLoops ?? [])];

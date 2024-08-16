@@ -120,7 +120,7 @@ export async function getCylinderProfile(
     setting?: MeasureSettings
 ): Promise<Profile | undefined> {
     const face = product.faces[faceIdx];
-    if (!face.surface) {
+    if (face.surface === undefined) {
         return;
     }
     const surfaceData = product.surfaces[face.surface];
@@ -196,7 +196,7 @@ export async function addCenterLinesFromCylinders(
         const mat = matFromInstance(product.instances[i]);
         for (const faceIdx of faceInstances[i]) {
             const face = product.faces[faceIdx];
-            if (!face.surface) {
+            if (face.surface === undefined) {
                 continue;
             }
             const surfaceData = product.surfaces[face.surface];

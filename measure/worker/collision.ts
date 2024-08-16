@@ -15,7 +15,7 @@ export async function getFaceToFaceCollisionValues(
     setting?: MeasureSettings
 ): Promise<CollisionValues | undefined> {
     const faceDataA = productA.faces[faceIdxA];
-    if (!faceDataA.surface) {
+    if (faceDataA.surface === undefined) {
         return;
     }
     const surfaceDataA = productA.surfaces[faceDataA.surface];
@@ -28,7 +28,7 @@ export async function getFaceToFaceCollisionValues(
     };
 
     const faceDataB = productB.faces[faceIdxB];
-    if (!faceDataB.surface) {
+    if (faceDataB.surface === undefined) {
         return;
     }
     const surfaceDataB = productB.surfaces[faceDataB.surface];
