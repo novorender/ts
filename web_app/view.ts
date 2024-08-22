@@ -191,6 +191,8 @@ export class View<
      */
     get deviceProfile() { return this._deviceProfile; }
     set deviceProfile(value: DeviceProfile) {
+        this._renderContext?.dispose();
+        this._renderContext = undefined;
         this._deviceProfile = value;
         this._setDeviceProfile?.(value); // this will in turn trigger this.useDeviceProfile
     }
