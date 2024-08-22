@@ -96,6 +96,8 @@ export interface PolymeshValues {
     readonly perimiter: number;
     /** Start and end verticies for each curve in the face loop */
     readonly vertices: vec3[];
+    /** Calculated area of the original triangles */
+    readonly area?: number;
     /** @ignore */
     readonly entity: ParametricEntity;
 }

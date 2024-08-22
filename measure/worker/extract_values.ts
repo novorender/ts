@@ -238,6 +238,7 @@ export async function extractPolymeshValues(prodId: ObjectId, faceIdx: number, p
         kind: "polymesh",
         perimiter,
         vertices,
+        area: face.area ? face.area : undefined,
         entity: {
             ObjectId: prodId, drawKind: "face", pathIndex: faceIdx, instanceIndex: instanceIdx
         }
