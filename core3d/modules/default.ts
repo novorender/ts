@@ -15,11 +15,11 @@ export function createDefaultModules() {
     return [
         new BackgroundModule(),
         new CubeModule(),
+        new ClippingModule(),
         new OctreeModule(),
         new DynamicModule(),
         new ToonModule(),
         new GridModule(),
-        new ClippingModule(),
         new WatermarkModule(),
         new TonemapModule(),
     ];
