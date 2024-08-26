@@ -161,8 +161,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     if (highlight.buffer.byteLength != numBytes) {
                         highlight.mutex.lockSpin();
                         if (numBytes > highlight.buffer.byteLength) {
-                            //@ts-ignore
-                            highlight.buffer.grow(numBytes);
+                            console.error(`Number or objects in scene (${numBytes}) exceeds our current max limit ${highlight.buffer.byteLength}`);
                         }
                         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
                         (highlight as Mutable<typeof highlight>).indices = new Uint8Array(highlight.buffer, 4, numObjects);
