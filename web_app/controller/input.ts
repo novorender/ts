@@ -40,6 +40,9 @@ export class ControllerInput {
 
     /** Consider mouse started moving after mouse passed this distance. Default is 0 */
     mouseMoveSensitivity = 0;
+    
+    /** Ignore wheel events when shift is pressed. Default is false */
+    disableWheelOnShift = false;
 
     /**
      * @param domElement The HTMLElement to subscribe to input events from.
@@ -215,9 +218,10 @@ export class ControllerInput {
 
     private wheel = async (e: WheelEvent) => {
         const { axes } = this;
+        this.updateModifierKeys(e);
+        if (this.disableWheelOnShift && this.hasShift) return;
         this._zoomX = e.offsetX;
         this._zoomY = e.offsetY;
-        this.updateModifierKeys(e);
         await this.callbacks?.moveBegin?.(e);
         this._mouseWheelLastActive = performance.now();
         axes.mouse_wheel += e.deltaY;
