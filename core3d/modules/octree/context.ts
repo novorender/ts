@@ -425,7 +425,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         gl.vertexAttribI4ui(VertexAttributeIds.objectId, 0xffffffff, 0, 0, 0);
         gl.vertexAttrib4f(VertexAttributeIds.color0, 0, 0, 0, 0); // we don't really use vertex color for anything else than point clouds. We set this to 0 differentiate between textured and elevation-gradient terrain, since the latter will override color in vertex shader.
         gl.vertexAttrib4f(VertexAttributeIds.projectedPos, 0, 0, 0, 0);
-        gl.vertexAttrib4f(VertexAttributeIds.deviations, 0, 0, 0, 0);
+        gl.vertexAttrib4f(VertexAttributeIds.pointFactors0, 0, 0, 0, 0);
+        gl.vertexAttrib4f(VertexAttributeIds.pointFactors1, 0, 0, 0, 0);
         gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0);
     }
 
@@ -998,7 +999,8 @@ const enum VertexAttributeIds {
     texCoord0,
     color0,
     projectedPos,
-    deviations,
+    pointFactors0,
+    pointFactors1,
     highlight,
 };
 

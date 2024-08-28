@@ -110,6 +110,9 @@ export interface SceneConfig {
     readonly subtrees?: ("" | "terrain" | "triangles" | "lines" | "points" | "documents")[];
     /** Optional point cloud attributes. */
     readonly variants?: ("deviation" | "intensity")[];
+    readonly intensityIndex?: number;
+    readonly classificationIndex?: number;
+    readonly deviationIndexBase?: number;
     /** Binary root node meta information */
     readonly root: Base64String;
 }

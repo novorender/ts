@@ -574,6 +574,8 @@ export interface RenderStateHighlightGroup {
     readonly objectIds: Iterable<number>;
     /** Texture information. */
     readonly texture?: RenderStateHighlightGroupTexture;
+    /** Point visualization method */
+    readonly pointVisualization?: PointVisualization;
 }
 
 /**
@@ -592,6 +594,38 @@ export interface RenderStateHighlightGroupTexture {
     /** Ambient light factor [0,1], default = 0. */
     readonly ambient?: number;
 }
+
+export interface PointVisualizationCommon {
+    // Similar to deviations
+    colorGradient: RenderStateColorGradientKnot<RGBA>[];
+    // Hide points below visible range start if set
+    visibleRangeStart?: number;
+    // Hide points above visible range end if set
+    visibleRangeEnd?: number;
+}
+export interface PointVisualizationRGB {
+    kind: 'rgb'; // or "color"?
+}
+
+export interface PointVisualizationClassification extends PointVisualizationCommon {
+    kind: 'classification'
+}
+
+export interface PointVisualizationIntensity {
+    kind: 'intensity'
+}
+
+export interface PointVisualizationHeightMap extends PointVisualizationCommon {
+    kind: 'heightMap'
+}
+
+export interface PointVisualizationDeviation extends PointVisualizationCommon {
+    kind: 'deviation'
+    // For deviations, but probably can be used for other stuff, e.g. we have multiple classifications?
+    index?: number;
+}
+
+export type PointVisualization = PointVisualizationRGB | PointVisualizationIntensity | PointVisualizationHeightMap | PointVisualizationDeviation
 
 /**
  * Highlight related render state.
