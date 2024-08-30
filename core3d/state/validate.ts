@@ -184,9 +184,11 @@ class ValidationContext {
         if (size.metric) {
             this.numeric(size.metric).positive().report("points.size.metric");
         }
-        this.numeric(deviation.index).rangeInclusive(0, 4).report("points.deviation.index");
-        this.numeric(deviation.mixFactor).rangeInclusive(0, 1).report("points.deviation.mixFactor");
-        this.gradient(deviation.colorGradient).valid().report("points.deviation.colorGradient");
+        this.numeric(deviation.colorGradients.length).rangeInclusive(0, 6).report("points.colorGradients.length");
+        for (const gradient of deviation.colorGradients) {
+            this.gradient(gradient).valid().report("points.deviation.colorGradient");
+        }
+        this.gradient(state.classificationColorGradient).valid().report("points.classificationColorGradient");
     }
 
     quality(state: RenderStateQuality) {

@@ -65,6 +65,7 @@ export function defaultRenderState(): RenderState {
         },
         highlights: {
             defaultAction: undefined,
+            defaultPoinVisualization: undefined,
             groups: [],
         },
         outlines: {
@@ -92,21 +93,20 @@ export function defaultRenderState(): RenderState {
                 metric: 0,
                 toleranceFactor: 0,
             },
+            classificationColorGradient: {
+                knots: [
+                    { position: 0, color: [1, 0, 0, 1] },
+                    { position: 1, color: [0, 1, 0, 1] },
+                    { position: 2, color: [0, 0, 1, 1] },
+                    { position: 3, color: [0, 1, 1, 1] },
+                    { position: 4, color: [1, 0, 1, 1] },
+                    { position: 5, color: [1, 1, 0, 1] },
+                    { position: 6, color: [1, 1, 1, 1] },
+                    { position: 7, color: [0.5, 0.5, 0.5, 1] },
+                ],
+            },
             deviation: {
-                index: 0,
-                mixFactor: 0,
-                colorGradient: {
-                    knots: [
-                        { position: -1, color: [1, 0, 0, 1] },
-                        { position: -0.5, color: [1, 1, 0, 1] },
-                        { position: -0.25, color: [0, 1, 0, 1] },
-                        { position: 0.25, color: [0, 1, 0, 1] },
-                        { position: 0.5, color: [1, 1, 0, 1] },
-                        { position: 1, color: [0, 1, 0, 1] },
-                    ],
-                },
-                visibleRangeStart: Number.MIN_SAFE_INTEGER,
-                visibleRangeEnd: Number.MAX_SAFE_INTEGER
+                colorGradients: []
             },
             useProjectedPosition: false
         },

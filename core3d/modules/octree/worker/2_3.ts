@@ -168,8 +168,8 @@ export interface Vertex {
     readonly texCoord?: Half2;
     readonly projectedPos16?: Int16_3;
     readonly projectedPos32?: Int32_3;
+    readonly pointFactors0: PointFactors;
     readonly pointFactors1: PointFactors;
-    readonly pointFactors2: PointFactors;
 };
 
 export interface Int16_3 {
@@ -362,14 +362,14 @@ export function readSchema(r: BufferReader) {
                 y: r.i32(sizes[7]),
                 z: r.i32(sizes[7]),
             } as Int32_3,
-            pointFactors1: {
+            pointFactors0: {
                 length: sizes[7],
                 a: !flags[7] ? undefined : r.f16(sizes[7]),
                 b: !flags[8] ? undefined : r.f16(sizes[7]),
                 c: !flags[9] ? undefined : r.f16(sizes[7]),
                 d: !flags[10] ? undefined : r.f16(sizes[7]),
             } as PointFactors,
-            pointFactors2: {
+            pointFactors1: {
                 length: sizes[7],
                 a: !flags[11] ? undefined : r.f16(sizes[7]),
                 b: !flags[12] ? undefined : r.f16(sizes[7]),

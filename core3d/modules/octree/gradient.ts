@@ -1,5 +1,6 @@
 import type { RenderStateColorGradient, RGB, RGBA } from "core3d";
 import { vec4 } from "gl-matrix";
+import { Gradient } from ".";
 
 /** @internal */
 export function gradientRange(gradient: RenderStateColorGradient<RGB | RGBA>) {
@@ -12,7 +13,7 @@ export function gradientRange(gradient: RenderStateColorGradient<RGB | RGBA>) {
 export function computeGradientColors(size: number, gradient: RenderStateColorGradient<RGB | RGBA>): Uint8ClampedArray {
     const { knots } = gradient;
     const n = knots.length;
-    const pixels = new Uint8ClampedArray(size * 4);
+    const pixels = new Uint8ClampedArray(size * Gradient.bytesPerPixel);
     if (n > 0) {
         const minValue = knots[0].position;
         const maxValue = knots[n - 1].position;

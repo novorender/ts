@@ -57,8 +57,8 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
         const ib = typeof indices != "number" ? resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
-        const { position, normal, material, objectId, texCoord, color, projectedPos, factors0, factors1, highlight } = convertAttributes(vertexAttributes, buffers);
-        const renderAttributes = [position, normal, material, objectId, texCoord, color, projectedPos, factors0, factors1, highlight];
+        const { position, normal, material, objectId, texCoord, color, projectedPos, pointFactors0, pointFactors1, highlight } = convertAttributes(vertexAttributes, buffers);
+        const renderAttributes = [position, normal, material, objectId, texCoord, color, projectedPos, pointFactors0, pointFactors1, highlight];
         // // add extra highlight vertex buffer and attribute
         // const highlightVB = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: subMesh.numVertices });
         // attributes.push({ kind: "UNSIGNED_INT", buffer: highlightVB, componentType: "UNSIGNED_BYTE" });

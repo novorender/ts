@@ -103,8 +103,8 @@ export interface VertexAttributes {
     readonly texCoord: VertexAttributeData | null;
     readonly color: VertexAttributeData | null;
     readonly projectedPos: VertexAttributeData | null;
-    readonly factors0: VertexAttributeData | null;
-    readonly factors1: VertexAttributeData | null;
+    readonly pointFactors0: VertexAttributeData | null;
+    readonly pointFactors1: VertexAttributeData | null;
     readonly highlight: VertexAttributeData | null;
 }
 
@@ -177,7 +177,7 @@ function computePrimitiveCount(primitiveType: PrimitiveType, numIndices: number)
     }
 }
 
-function getVertexAttribs(posBPC: 16 | 32, deviations: number) {
+function getVertexAttribs(posBPC: 16 | 32, factorCount: number) {
     const posType = posBPC == 16 ? Uint16Array : Uint32Array;
     return {
         position: { type: posType, components: ["x", "y", "z"] },
@@ -185,7 +185,8 @@ function getVertexAttribs(posBPC: 16 | 32, deviations: number) {
         texCoord: { type: Float16Array, components: ["x", "y"] },
         color: { type: Uint8Array, components: ["red", "green", "blue", "alpha"] },
         projectedPos: { type: posType, components: ["x", "y", "z"] },
-        deviations: { type: Float16Array, components: ["a", "b", "c", "d"].slice(0, deviations) },
+        pointFactors0: { type: Float16Array, components: ["a", "b", "c", "d"].slice(0, Math.min(factorCount, 4)) },
+        pointFactors1: { type: Float16Array, components: ["a", "b", "c", "d"].slice(0, Math.max(0, factorCount - 4)) },
         materialIndex: { type: Uint8Array },
         objectId: { type: Uint32Array },
     } as const;
@@ -194,7 +195,7 @@ type VertexAttribs = ReturnType<typeof getVertexAttribs>;
 type VertexAttribNames = keyof VertexAttribs;
 type VertexAttrib = { readonly type: VertexAttribs[VertexAttribNames]["type"], readonly components?: readonly string[]; };
 
-function computeVertexOffsets(attribs: readonly VertexAttribNames[], posBPC: 16 | 32, deviations = 0) {
+function computeVertexOffsets(attribs: readonly VertexAttribNames[], posBPC: 16 | 32, factorCount = 0) {
     let offset = 0;
     let offsets: any = {};
     function alignOffset(alignment: number) {
@@ -202,7 +203,7 @@ function computeVertexOffsets(attribs: readonly VertexAttribNames[], posBPC: 16 
         offset += padding; // pad offset to be memory aligned.
     }
     let maxAlign = 1;
-    const vertexAttribs = getVertexAttribs(posBPC, deviations);
+    const vertexAttribs = getVertexAttribs(posBPC, factorCount);
     for (const attrib of attribs) {
         const { type, components } = vertexAttribs[attrib] as VertexAttrib;
         const count = components?.length ?? 1;
@@ -216,13 +217,14 @@ function computeVertexOffsets(attribs: readonly VertexAttribNames[], posBPC: 16 
     return offsets as { readonly [P in VertexAttribNames]?: number; } & { readonly stride: number; };
 }
 
-function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, deviations: FactorCount, hasMaterials: boolean, hasObjectIds: boolean) {
+function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, factorCount: FactorCount, hasMaterials: boolean, hasObjectIds: boolean) {
     const attribNames: VertexAttribNames[] = ["position"];
     if (optionalAttributes & OptionalVertexAttribute.normal) attribNames.push("normal");
     if (optionalAttributes & OptionalVertexAttribute.texCoord) attribNames.push("texCoord");
     if (optionalAttributes & OptionalVertexAttribute.color) attribNames.push("color");
     if (optionalAttributes & OptionalVertexAttribute.projectedPos) attribNames.push("projectedPos");
-    if (deviations > 0) attribNames.push("deviations");
+    if (factorCount > 0) attribNames.push("pointFactors0");
+    if (factorCount > 4) attribNames.push("pointFactors1");
     if (hasMaterials) {
         attribNames.push("materialIndex");
     }
@@ -588,10 +590,10 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
         }
 
         const stride = vertexStride;
-        const factors0Components = Math.max(4, pointFactors) as 1 | 2 | 3 | 4;
-        const factors1Components = pointFactors - 4 as 1 | 2 | 3 | 4;
-        const factors0Kind = pointFactors == 1 ? "FLOAT" as const : `FLOAT_VEC${factors0Components as 2 | 3 | 4}` as const;
-        const factors1Kind = pointFactors == 5 ? "FLOAT" as const : `FLOAT_VEC${factors1Components as 2 | 3 | 4}` as const;
+        const pointFactors0Components = Math.min(4, pointFactors) as 1 | 2 | 3 | 4;
+        const pointFactors1Components = pointFactors - 4 as 1 | 2 | 3 | 4;
+        const pointFactors0Kind = pointFactors == 1 ? "FLOAT" as const : `FLOAT_VEC${pointFactors0Components as 2 | 3 | 4}` as const;
+        const pointFactors1Kind = pointFactors == 5 ? "FLOAT" as const : `FLOAT_VEC${pointFactors1Components as 2 | 3 | 4}` as const;
 
         const posCT = posBPC == 16 ? "SHORT" : "INT";
         const vertexAttributes = {
@@ -602,8 +604,8 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
             texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer: bufIdx.primary, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["texCoord"], byteStride: stride } : null,
             color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["color"], byteStride: stride } : null,
             projectedPos: (attributes & OptionalVertexAttribute.projectedPos) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 3, componentType: posCT, normalized: true, byteOffset: attribOffsets["projectedPos"], byteStride: stride } : null,
-            factors0: factors0Components >= 1 ? { kind: factors0Kind, buffer: bufIdx.primary, componentCount: factors0Components, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["deviations"], byteStride: stride } : null,
-            factors1: factors1Components >= 1 ? { kind: factors1Kind, buffer: bufIdx.primary, componentCount: factors1Components, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["deviations"], byteStride: stride } : null,
+            pointFactors0: pointFactors0Components >= 1 ? { kind: pointFactors0Kind, buffer: bufIdx.primary, componentCount: pointFactors0Components, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["pointFactors0"], byteStride: stride } : null,
+            pointFactors1: pointFactors1Components >= 1 ? { kind: pointFactors1Kind, buffer: bufIdx.primary, componentCount: pointFactors1Components, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["pointFactors1"], byteStride: stride } : null,
             highlight: { kind: "UNSIGNED_INT", buffer: bufIdx.highlight, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, byteOffset: 0, byteStride: 0 },
         } as const satisfies VertexAttributes;
 

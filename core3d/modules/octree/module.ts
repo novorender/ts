@@ -1,39 +1,60 @@
 import { type DeviceProfile, type MaxActiveTextures, type PBRMaterialCommon, type PBRMaterialTextures, type RenderContext } from "core3d";
 import type { RenderModule } from "..";
-import { glUBOProxy, type TextureParams2DArrayUncompressedMipMapped, type TextureParams2DUncompressed, type UncompressedTextureFormatType, type UniformTypes } from "webgl2";
+import { glGetUniformsInfo, glUBOProxy, glUniformLocations, type TextureParams2DArrayUncompressedMipMapped, type TextureParams2DUncompressed, type UncompressedTextureFormatType, type UniformTypes } from "webgl2";
 import type { ResourceBin } from "core3d/resource";
 import { OctreeModuleContext } from "./context";
 import { NodeLoader } from "./loader";
+
+
+/** @internal */
+export const enum GradientKind {
+    color = -1,
+    elevation,
+    classification,
+    deviations0,
+    deviations1,
+    deviations2,
+    deviations3,
+    deviations4,
+    deviations5,
+    intensity,
+    max = intensity
+}
 
 /** @internal */
 export const enum ShaderPass { color, pick, pre };
 /** @internal */
 export const enum ShaderMode { triangles, points, terrain };
 /** @internal */
-export const enum Gradient { size = 1024 };
+export const enum Gradient { width = 1024, height = GradientKind.max, bytesPerPixel = 4 };
+
+
 
 /** @internal */
 export class OctreeModule implements RenderModule {
     readonly kind = "octree";
     readonly sceneUniforms = {
         applyDefaultHighlight: "bool",
+        defaultPointGradientKind: "int",
         iblMipCount: "float",
         pixelSize: "float",
         maxPixelSize: "float",
         metricSize: "float",
         toleranceFactor: "float",
-        deviationIndex: "int",
-        deviationFactor: "float",
-        deviationRange: "vec2",
-        deviationVisibleRangeStart: "float",
-        deviationVisibleRangeEnd: "float",
-        deviationUndefinedColor: "vec4",
         useProjectedPosition: "bool",
-        elevationRange: "vec2",
         pickOpacityThreshold: "float",
+        "factorRange.0": "vec2",
+        "factorRange.1": "vec2",
+        "factorRange.2": "vec2",
+        "factorRange.3": "vec2",
+        "factorRange.4": "vec2",
+        "factorRange.5": "vec2",
+        "factorRange.6": "vec2",
+        "factorRange.7": "vec2",
+        undefinedPointColor: "vec4",
     } as const satisfies Record<string, UniformTypes>;
 
-    readonly gradientImageParams: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: Gradient.size, height: 2, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null };
+    readonly gradientImageParams: TextureParams2DUncompressed = { kind: "TEXTURE_2D", width: Gradient.width, height: Gradient.height, internalFormat: "RGBA8", type: "UNSIGNED_BYTE", image: null };
     readonly maxHighlights = 8;
 
     static readonly textureNames = ["unlit_color", "ibl.diffuse", "ibl.specular", "materials", "highlights", "gradients", "lut_ggx", "base_color", "nor"] as const;

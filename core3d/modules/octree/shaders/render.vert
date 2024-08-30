@@ -44,8 +44,8 @@ const uint vertexHighlight = 0U;
 
 void main() {
     vec4 vertPos = vertexPosition;
-    bool isDefined = dot(vertexProjectedPos.xyz, vertexProjectedPos.xyz) != 0.f;
-    if(scene.useProjectedPosition && vertexProjectedPos.w != 0.f && isDefined) {
+    bool isDefined = dot(vertexProjectedPos.xyz, vertexProjectedPos.xyz) != 0.;
+    if(scene.useProjectedPosition && vertexProjectedPos.w != 0. && isDefined) {
         vertPos = vertexProjectedPos;
     }
     vec4 posLS = node.modelLocalMatrix * vertPos;
@@ -55,35 +55,49 @@ void main() {
     vec3 cameraPosLS = camera.viewLocalMatrix[3].xyz;
     varyings.toCamera = cameraPosLS - posLS.xyz;
 
-    vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5f) / 256.f, .5f));
-    float deviation = 0.f;
+    vec4 color = vertexMaterial == 0xffU ? vertexColor0 : texture(textures.materials, vec2((float(vertexMaterial) + .5) / 256., .5));
+    mediump float pointFactor = 0.;
 
-#if (MODE == MODE_POINTS)
-    deviation = vertexPointFactors0[scene.deviationIndex];
-    if(scene.deviationFactor > 0.f) {
-        if(deviation == 0.f) { //undefined
-            if(dot(scene.deviationUndefinedColor, scene.deviationUndefinedColor) != 0.f) {
-                color = scene.deviationUndefinedColor;
-            }
-        } else if(deviation < scene.deviationVisibleRangeStart || deviation > scene.deviationVisibleRangeEnd) {
-            color = vec4(0, 0, 0, 0);
+ #if (MODE == MODE_POINTS)
+
+    int gradientKind = gradientKindNone;
+    if(gradientKind == gradientKindNone || vertexHighlight != 0U) {
+         mediump float u = (float(vertexHighlight) + 0.5) / float(maxHighlights);
+         gradientKind = int(texture(textures.highlights, vec2(u, 6.5 / highLightsTextureRows)).r);
+    }
+
+    if(gradientKind != gradientKindNone) {
+        if(gradientKind == gradientKindElevation) {
+            pointFactor = posLS.y;
         } else {
-            vec4 gradientColor = getGradientColor(textures.gradients, deviation, deviationV, scene.deviationRange);
-            color = mix(vertexColor0, gradientColor, scene.deviationFactor);
+            int factorIndex = gradientKind == gradientKindIntensity ? 0 :gradientKind;
+            pointFactor = factorIndex < 4 ? vertexPointFactors0[factorIndex] : vertexPointFactors1[factorIndex - 4];
+        }
+
+        if(gradientKind != gradientKindElevation && pointFactor == 0.) {
+            if(dot(scene.undefinedPointColor, scene.undefinedPointColor) != 0.) {
+                color = scene.undefinedPointColor;
+            }
+        } else if(gradientKind == gradientKindIntensity) {//intensity
+            color = vec4(pointFactor, pointFactor, pointFactor, 1);
+        } else if(pointFactor < scene.factorRange[gradientKind].x || pointFactor > scene.factorRange[gradientKind].y) {
+            color = vec4(0., 0., 0., 0.);
+        } else {
+            color = getGradientColor(textures.gradients, pointFactor, gradientKind, scene.factorRange[gradientKind]);
         }
     }
 
     // compute point size
     mediump float linearSize = scene.metricSize + node.tolerance * scene.toleranceFactor;
-    mediump float projectedSize = max(0.f, camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 0.5f / gl_Position.w);
-    gl_PointSize = min(scene.maxPixelSize, max(1.0f, scene.pixelSize + projectedSize));
+    mediump float projectedSize = max(0., camera.viewClipMatrix[1][1] * linearSize * float(camera.viewSize.y) * 0.5 / gl_Position.w);
+    gl_PointSize = min(scene.maxPixelSize, max(1.0, scene.pixelSize + projectedSize));
 
     // Convert position to window coordinates
-    vec2 halfsize = camera.viewSize * 0.5f;
+    vec2 halfsize = camera.viewSize * 0.5;
     varyings.screenPos = halfsize + ((gl_Position.xy / gl_Position.w) * halfsize);
 
     // Convert radius to window coordinates
-    varyings.radius = max(1.0f, gl_PointSize * 0.5f);
+    varyings.radius = max(1.0, gl_PointSize * 0.5);
 
 #elif defined (HIGHLIGHT)
     if(vertexHighlight >= 0xFEU) {
@@ -96,7 +110,7 @@ void main() {
     varyings.positionVS = posVS.xyz;
     varyings.normalVS = normalize(camera.localViewMatrixNormal * vertexNormal);
     varyings.texCoord0 = vertexTexCoord0;
-    varyings.deviation = deviation;
+    varyings.pointFactor = pointFactor;
     varyings.elevation = posLS.y;
     varyingsFlat.color = color;
 #if defined (ADRENO600)

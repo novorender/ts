@@ -65,7 +65,11 @@ export function glUBOProxy<const T extends Record<string, UniformTypes>>(values:
     const offsetsMap: Record<string, readonly number[]> = {};
     let offset = 0;
     for (const [key, value] of Object.entries(values)) {
-        const { alignment, components, rows } = uniformTypes[value];
+        const isArray = !Number.isNaN(Number.parseInt(key.split(".")[1]));
+        let { alignment, components, rows } = uniformTypes[value];
+        if (isArray) {
+            alignment = 4;
+        }
         const padding = (alignment - 1) - ((offset + alignment - 1) % alignment);
         offset += padding;
         const offsets: number[] = [];

@@ -1,14 +1,14 @@
-import { createPBRMaterial, type ActiveTexturesArray, type DerivedRenderState, type MaxActiveTextures, type RenderContext, type RenderStateGroupAction, type RenderStateHighlightGroups, type RenderStateHighlightGroupTexture, type RenderStateScene, type RGB, type RGBATransform, type ActiveTextureIndex, type PBRMaterialTextures } from "core3d";
+import { createPBRMaterial, type ActiveTexturesArray, type DerivedRenderState, type MaxActiveTextures, type RenderContext, type RenderStateGroupAction, type RenderStateHighlightGroups, type RenderStateHighlightGroupTexture, type RenderStateScene, type RGB, type RGBATransform, type ActiveTextureIndex, type PBRMaterialTextures, type RenderStateColorGradient, type PointVisualization } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
-import { glClear, glDelete, glDraw, glState, glUpdateTexture, type TextureUpdateParams2DArrayUncompressed, type UncompressedTextureFormatType } from "webgl2";
+import { glClear, glDelete, glDraw, glState, glUpdateTexture, type RGBA, type TextureUpdateParams2DArrayUncompressed, type UncompressedTextureFormatType } from "webgl2";
 import { getMultiDrawParams, MaterialType } from "./mesh";
 import { type ReadonlyVec3, vec3, vec4, type ReadonlyVec4, glMatrix } from "gl-matrix";
 import type { NodeLoader } from "./loader";
 import { computeGradientColors, gradientRange } from "./gradient";
 // import { BufferFlags } from "@novorender/core3d/buffers";
-import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass, type MaterialTextures } from "./module";
+import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, ShaderPass, type MaterialTextures, GradientKind } from "./module";
 import { Mutex } from "./mutex";
 import { decodeBase64 } from "core3d/util";
 import { OutlineRenderer } from "./outlines";
@@ -29,9 +29,10 @@ export interface RootNodes {
     readonly [NodeGeometryKind.documents]?: OctreeNode;
 }
 
+
 /** @internal */
 export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
-    readonly gradientsImage = new Uint8ClampedArray(Gradient.size * 2 * 4);
+    readonly gradientsImage = new Uint8ClampedArray(Gradient.width * Gradient.height * Gradient.bytesPerPixel);
     currentProgramFlags = OctreeModule.defaultProgramFlags;
     nextProgramFlags = OctreeModule.defaultProgramFlags;
     debug = false;
@@ -91,30 +92,37 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         let updateGradients = false;
         if (renderContext.hasStateChanged({ points })) {
-            const { size, deviation } = points;
+            const { size, undefinedColor, classificationColorGradient, deviation } = points;
             const { values } = uniforms.scene;
+            const { prevState } = renderContext;
             values.pixelSize = size.pixel ?? 0;
             values.maxPixelSize = size.maxPixel ?? 20;
             values.metricSize = size.metric ?? 0;
             values.toleranceFactor = size.toleranceFactor ?? 0;
-            values.deviationIndex = deviation.index;
-            values.deviationFactor = deviation.mixFactor;
-            values.deviationUndefinedColor = deviation.undefinedColor ?? vec4.fromValues(0, 0, 0, 0);
-            values.deviationRange = gradientRange(deviation.colorGradient);
-            values.deviationVisibleRangeStart = deviation.visibleRangeStart ?? Number.MIN_SAFE_INTEGER;
-            values.deviationVisibleRangeEnd = deviation.visibleRangeEnd ?? Number.MAX_SAFE_INTEGER;
             values.useProjectedPosition = points.useProjectedPosition;
-            const deviationColors = computeGradientColors(Gradient.size, deviation.colorGradient);
-            this.gradientsImage.set(deviationColors, 0 * Gradient.size * 4);
-            updateGradients = true;
+            if (prevState?.points.classificationColorGradient != classificationColorGradient) {
+                values["factorRange.1"] = this.updateGradientImage(GradientKind.classification, classificationColorGradient);;
+                updateGradients = true;
+            }
+            if (prevState?.points.deviation != deviation) {
+                const prevColorGradients = prevState?.points.deviation.colorGradients;
+
+                for (let i = 0; i < deviation.colorGradients.length; ++i) {
+                    const colorGradient = deviation.colorGradients[i];
+                    if (prevColorGradients?.[i] != colorGradient) {
+                        const factorIndex = (i + 2) as 2 | 3 | 4 | 5 | 6 | 7;
+                        values[`factorRange.${factorIndex}`] = this.updateGradientImage(GradientKind.deviations0 + i, colorGradient);
+                        updateGradients = true;
+                    }
+                }
+            }
+            values.undefinedPointColor = undefinedColor ?? vec4.fromValues(0, 0, 0, 0);
         }
 
 
         if (renderContext.hasStateChanged({ terrain })) {
             const { values } = uniforms.scene;
-            values.elevationRange = gradientRange(terrain.elevationGradient);
-            const elevationColors = computeGradientColors(Gradient.size, terrain.elevationGradient);
-            this.gradientsImage.set(elevationColors, 1 * Gradient.size * 4);
+            values["factorRange.0"] = this.updateGradientImage(GradientKind.elevation, terrain.elevationGradient);
             updateGradients = true;
         }
 
@@ -195,7 +203,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
 
         if (renderContext.hasStateChanged({ highlights })) {
-            const { groups } = highlights;
+            const { groups, defaultPoinVisualization } = highlights;
             const { highlight } = this;
             const { prevState } = renderContext;
             const prevGroups = prevState?.highlights.groups ?? [];
@@ -203,6 +211,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             updateShaderCompileConstants({ highlight: groups.length > 0 || highlights.defaultAction != undefined });
 
             const { values } = uniforms.scene;
+            values.defaultPointGradientKind = defaultPoinVisualization ? getGradientIndex(defaultPoinVisualization) : GradientKind.color;
             values.applyDefaultHighlight = highlights.defaultAction != undefined;
 
             const objectIds = groups.map(g => g.objectIds);
@@ -272,10 +281,11 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
 
-            const transforms = [highlights.defaultAction, ...groups.map(g => g.action)];
+            const transforms = [highlights.defaultAction, highlights.defaultPoinVisualization, ...groups.map(g => g.action)];
             const prevTransforms = prevState ?
                 [
                     prevState.highlights.defaultAction,
+                    prevState.highlights.defaultPoinVisualization,
                     ...prevState.highlights.groups.map(g => g.action)
                 ] : [];
             if (!sequenceEqual(transforms, prevTransforms)) {
@@ -849,6 +859,12 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
         renderContext.changed = true;
     }
+
+    updateGradientImage(kind: GradientKind, gradient: RenderStateColorGradient<RGB | RGBA>) {
+        const colors = computeGradientColors(Gradient.width, gradient);
+        this.gradientsImage.set(colors, kind * Gradient.width * Gradient.bytesPerPixel);
+        return gradientRange(gradient);
+    }
 }
 
 function makeMaterialAtlas(state: DerivedRenderState) {
@@ -918,7 +934,7 @@ function createColorTransforms(highlights: RenderStateHighlightGroups, textureVa
         }
     }
 
-    function copyMatrix(index: number, rgbaTransform: RGBATransform, texture?: RenderStateHighlightGroupTexture) {
+    function copyMatrix(index: number, rgbaTransform: RGBATransform, texture?: RenderStateHighlightGroupTexture, pointVisualization?: PointVisualization) {
         // set color transform matrix
         for (let col = 0; col < 5; col++) {
             for (let row = 0; row < numColorMatrixRows; row++) {
@@ -939,17 +955,18 @@ function createColorTransforms(highlights: RenderStateHighlightGroups, textureVa
         const m = texture?.metalness ?? 0;
         const ambient = texture?.ambient ?? 0;
         const textureInfo0 = [i, x, y, m];
-        const textureInfo1 = [0, 0, 0, ambient];
+        const pointGradientKind = pointVisualization ? getGradientIndex(pointVisualization) : -1;
+        const textureInfo1 = [pointGradientKind, 0, 0, ambient];
         for (let row = 0; row < numColorMatrixRows; row++) {
             colorMatrices[(numColorMatrices * textureInfoCol0 + index) * 4 + row] = textureInfo0[row];
             colorMatrices[(numColorMatrices * textureInfoCol1 + index) * 4 + row] = textureInfo1[row];
         }
     }
     // Copy transformation matrices
-    const { defaultAction, groups } = highlights;
-    copyMatrix(0, getRGBATransform(defaultAction));
+    const { defaultAction, defaultPoinVisualization, groups } = highlights;
+    copyMatrix(0, getRGBATransform(defaultAction), undefined, defaultPoinVisualization);
     for (let i = 0; i < groups.length; i++) {
-        copyMatrix(i + 1, getRGBATransform(groups[i].action), groups[i].texture);
+        copyMatrix(i + 1, getRGBATransform(groups[i].action), groups[i].texture, groups[i].pointVisualization);
     }
     return colorMatrices;
 }
@@ -989,6 +1006,21 @@ const defaultRGBATransform: RGBATransform = [
 
 function getRGBATransform(action: RenderStateGroupAction | undefined): RGBATransform {
     return (typeof action != "string" && Array.isArray(action)) ? action : defaultRGBATransform;
+}
+
+function getGradientIndex(pointVisualization: PointVisualization): GradientKind {
+    switch (pointVisualization.kind) {
+        case "color":
+            return GradientKind.color;
+        case "classification":
+            return GradientKind.classification;
+        case "intensity":
+            return GradientKind.intensity;
+        case "elevation":
+            return GradientKind.elevation;
+        case "deviation":
+            return GradientKind.deviations0 + pointVisualization.index;
+    }
 }
 
 const enum VertexAttributeIds {

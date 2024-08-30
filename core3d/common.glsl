@@ -41,6 +41,8 @@ const lowp uint undefinedIndex = 7U;
 const highp uint clippingId = 0xfffffff0U;
 const lowp uint clippingModeIntersection = 0U;
 const lowp uint clippingModeUnion = 1U;
+const lowp float highLightsTextureRows = 8.;
+
 struct ClippingVaryings {
     mediump vec3 dirVS;
 };
@@ -188,7 +190,7 @@ struct OctreeVaryings {
     highp vec2 texCoord0;
     highp vec2 screenPos;
     mediump float radius;
-    mediump float deviation;
+    mediump float pointFactor;
     mediump float elevation;
 };
 struct OctreeVaryingsFlat {
@@ -203,22 +205,17 @@ struct OctreeVaryingsFlat {
 };
 struct SceneUniforms {
     bool applyDefaultHighlight;
+    lowp int defaultPointGradientKind;
     lowp float iblMipCount;
     // point cloud
     mediump float pixelSize;
     mediump float maxPixelSize;
     mediump float metricSize;
     mediump float toleranceFactor;
-    lowp int deviationIndex;
-    mediump float deviationFactor;
-    mediump vec2 deviationRange;
-    mediump float deviationVisibleRangeStart;
-    mediump float deviationVisibleRangeEnd;
-    mediump vec4 deviationUndefinedColor;
     bool useProjectedPosition;
-    // terrain elevation
-    highp vec2 elevationRange;
     lowp float pickOpacityThreshold;
+    mediump vec2 factorRange[8];
+    lowp vec4 undefinedPointColor;
 };
 struct NodeUniforms {
     highp mat4 modelLocalMatrix;
@@ -317,14 +314,19 @@ vec3 linearTosRGBComplex(vec3 color) {
 }
 
 // gradients
-const mediump float numGradients = 2.;
-const mediump float deviationV = 0. / numGradients + .5 / numGradients;
-const mediump float elevationV = 1. / numGradients + .5 / numGradients;
+const lowp float numGradients = 8.;
+const lowp int gradientKindNone = -1;
+const lowp int gradientKindElevation = 0;
+const lowp int gradientKindClassification = 1;
+const lowp int gradientKindDeviations0 = 2;
+const lowp int gradientKindIntensity = 8; //Intensity does not use gradient, uses grayscale
 
-mediump vec4 getGradientColor(mediump sampler2D gradientTexture, highp float position, mediump float v, highp vec2 range) {
-    mediump float u = (range[0] >= range[1]) ? 0. : (position - range[0]) / (range[1] - range[0]);
+mediump vec4 getGradientColor(mediump sampler2D gradientTexture, highp float position, lowp int gradientKind, highp vec2 range) {
+     mediump float v = float(gradientKind) / numGradients + .5 / numGradients;
+     mediump float u = (range[0] >= range[1]) ? 0. : (position - range[0]) / (range[1] - range[0]);
     return texture(gradientTexture, vec2(u, v));
 }
+
 
 // packing
 

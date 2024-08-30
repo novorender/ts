@@ -406,43 +406,32 @@ export interface RenderStatePointCloud {
         readonly toleranceFactor: number;
     };
 
-    /** Point deviation state.
-     * @remarks
-     * Deviation is pre-computed for some point clouds as a signed, linear distance from the point to some reference/baseline geometry.
-     * This is useful to visualize as-built deviances, e.g. in tunnel projects, and whether they are within tolerance and not.
-     * Several channels of deviation may be computed.
-     * 
-     * This state will not have any effect on geometry that does not have pre-computed deviance data baked into it.
+
+    /** Color gradient to use for visualizing deviation and tolerances.
+     * @remarks May define different gradients for negative and positive numbers. classification values between gradent color stops will be interpolated.
      */
+    readonly classificationColorGradient: RenderStateColorGradient<RGBA>;
+
+
+    /** 
+     * The color of undefined points
+     */
+    readonly undefinedColor?: RGBA;
+
+    // /** Point deviation state.
+    //  * @remarks
+    //  * Deviation is pre-computed for some point clouds as a signed, linear distance from the point to some reference/baseline geometry.
+    //  * This is useful to visualize as-built deviances, e.g. in tunnel projects, and whether they are within tolerance and not.
+    //  * Several channels of deviation may be computed.
+    //  * 
+    //  * This state will not have any effect on geometry that does not have pre-computed deviance data baked into it.
+    //  */
     readonly deviation: {
-        /** Index of deviation channel (0-3).
-         * @remarks
-         * This index specifies which deviation channel to currently render on screen and into pick buffers.
-         */
-        readonly index: number;
-
-        /** Mix factor [0.0, 1.0], where 0 is 100% original vertex color and 1 is 100% color gradient color */
-        readonly mixFactor: number;
-
         /** Color gradient to use for visualizing deviation and tolerances.
          * @remarks May define different gradients for negative and positive numbers.
+         * devaition index will be mapped to the gradent array
          */
-        readonly colorGradient: RenderStateColorGradient<RGBA>;
-
-        /** Points with deviation below this value are hidden.
-         * @default Number.MIN_SAFE_INTEGER
-         */
-        readonly visibleRangeStart: number;
-
-        /** Points with deviation above this value are hidden.
-         * @default Number.MAX_SAFE_INTEGER
-         */
-        readonly visibleRangeEnd: number;
-
-        /** 
-         * The color of undefined points
-         */
-        readonly undefinedColor?: RGBA;
+        readonly colorGradients: readonly RenderStateColorGradient<RGBA>[];
     };
 
     /** Use pre-computed projected point cloud positions instead of original.
@@ -595,37 +584,46 @@ export interface RenderStateHighlightGroupTexture {
     readonly ambient?: number;
 }
 
-export interface PointVisualizationCommon {
-    // Similar to deviations
-    colorGradient: RenderStateColorGradientKnot<RGBA>[];
-    // Hide points below visible range start if set
-    visibleRangeStart?: number;
-    // Hide points above visible range end if set
-    visibleRangeEnd?: number;
-}
+
+/**
+ * Color visualization, will use the RGBA values in each vertex
+ */
 export interface PointVisualizationRGB {
-    kind: 'rgb'; // or "color"?
+    readonly kind: "color"
 }
 
-export interface PointVisualizationClassification extends PointVisualizationCommon {
-    kind: 'classification'
+/**
+ * Classification visualization, will use the classification values and the color gradient described in {@link RenderStatePointCloud}
+ */
+export interface PointVisualizationClassification {
+    readonly kind: 'classification'
 }
 
+/**
+ * Intensity visualization, will use grayscale 
+ */
 export interface PointVisualizationIntensity {
-    kind: 'intensity'
+    readonly kind: 'intensity'
 }
 
-export interface PointVisualizationHeightMap extends PointVisualizationCommon {
-    kind: 'heightMap'
+/**
+ * Elevation visualization, will use the global elevation and the color gradient described in {@link RenderStateTerrain}
+ */
+export interface PointVisualizationElevation {
+    readonly kind: 'elevation'
 }
 
-export interface PointVisualizationDeviation extends PointVisualizationCommon {
-    kind: 'deviation'
-    // For deviations, but probably can be used for other stuff, e.g. we have multiple classifications?
-    index?: number;
+/**
+ * Deviation visualization, will use the classification values and the color gradient described in {@link RenderStatePointCloud}
+ * The gradients will follow the deviation index
+ */
+export interface PointVisualizationDeviation {
+    readonly kind: 'deviation'
+    /** Deviation index */
+    readonly index: number;
 }
 
-export type PointVisualization = PointVisualizationRGB | PointVisualizationIntensity | PointVisualizationHeightMap | PointVisualizationDeviation
+export type PointVisualization = PointVisualizationRGB | PointVisualizationIntensity | PointVisualizationElevation | PointVisualizationDeviation | PointVisualizationClassification
 
 /**
  * Highlight related render state.
@@ -652,6 +650,13 @@ export interface RenderStateHighlightGroups {
      * @defaultValue `undefined`
      */
     readonly defaultAction: RenderStateGroupAction | undefined;
+
+    /** 
+     * Point visualization for all points current not in a highlight group with point visualization.
+     * Undefined will fall back to defualtAction then to color RGBA valuse.
+     * @defaultValue `undefined`
+     */
+    readonly defaultPoinVisualization: PointVisualization | undefined;
 
     /** Highlight groups, max 250. */
     readonly groups: readonly RenderStateHighlightGroup[];

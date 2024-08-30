@@ -61,7 +61,6 @@ struct NormalInfo {
     vec3 b;    // Pertubed bitangent
 };
 
-const float highLightsTextureRows = 8.;
 
 // Get normal, tangent and bitangent vectors.
 // params: (all in local/world space)
@@ -237,7 +236,7 @@ void main() {
 #if (MODE == MODE_POINTS)
     rgba = baseColor;
 #elif (MODE == MODE_TERRAIN) //This mode is for rendering terrain height map as colors
-    rgba = baseColor = getGradientColor(textures.gradients, varyings.elevation, elevationV, scene.elevationRange); //Modify base color to get 
+    rgba = baseColor = getGradientColor(textures.gradients, varyings.elevation, gradientKindElevation, scene.factorRange[gradientKindElevation]); //Modify base color to get 
 #elif (MODE == MODE_TRIANGLES)
     if(baseColor == vec4(0)) {
         rgba = texture(node_textures.unlit_color, varyings.texCoord0);
@@ -359,7 +358,7 @@ void main() {
 #if defined (ADRENO600)
     fragPick = uvec4(objectId, 0u, 0u, floatBitsToUint(linearDepth));
 #else
-    fragPick = uvec4(objectId, packNormalAndDeviation(geometricNormalWS, varyings.deviation), floatBitsToUint(linearDepth));
+    fragPick = uvec4(objectId, packNormalAndDeviation(geometricNormalWS, varyings.pointFactor), floatBitsToUint(linearDepth));
 #endif
 #endif
 }
