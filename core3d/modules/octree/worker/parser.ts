@@ -4,6 +4,7 @@ import { BufferReader, Float16Array } from "./util";
 import type { ComponentType, ShaderAttributeType, TextureParams } from "webgl2";
 import { parseKTX } from "core3d/ktx";
 import type { Mutex } from "../mutex";
+import * as LTS from "./2_1";
 import * as Current from "./2_3";
 import * as Previous from "./2_2";
 import type { WasmInstance } from "./wasm_loader";
@@ -12,14 +13,14 @@ const { MaterialType, OptionalVertexAttribute, PrimitiveType, TextureSemantic } 
 type Current = typeof Current;
 type Previous = typeof Previous;
 // extract common types and ensure that current and previous binary format versions of them are 100% overlapping
-type Float3 = Current.Float3 | Previous.Float3;
-type Double3 = Current.Double3 | Previous.Double3;
-type Schema = Current.Schema | Previous.Schema;
-type SubMeshProjection = Current.SubMeshProjection | Previous.SubMeshProjection;
-type MaterialType = Current.MaterialType | Previous.MaterialType;
-type TextureSemantic = Current.TextureSemantic | Previous.TextureSemantic;
-type PrimitiveType = Current.PrimitiveType | Previous.PrimitiveType;
-type OptionalVertexAttribute = Current.OptionalVertexAttribute | Previous.OptionalVertexAttribute;
+type Float3 = Current.Float3 | Previous.Float3 | LTS.Float3;
+type Double3 = Current.Double3 | Previous.Double3 | LTS.Float3;
+type Schema = Current.Schema | Previous.Schema | LTS.Schema;
+type SubMeshProjection = Current.SubMeshProjection | Previous.SubMeshProjection | LTS.SubMeshProjection;
+type MaterialType = Current.MaterialType | Previous.MaterialType | LTS.MaterialType;
+type TextureSemantic = Current.TextureSemantic | Previous.TextureSemantic | LTS.TextureSemantic;
+type PrimitiveType = Current.PrimitiveType | Previous.PrimitiveType | LTS.PrimitiveType;
+type OptionalVertexAttribute = Current.OptionalVertexAttribute | Previous.OptionalVertexAttribute | LTS.OptionalVertexAttribute;
 
 function isCurrentSchema(schema: Schema): schema is Current.Schema {
     return schema.version == Current.version;
@@ -526,7 +527,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
                 const numTrianglesInSubMesh = vertexIndex && indexBuffer ? (endIdx - beginIdx) / 3 : (endVtx - beginVtx) / 3;
 
                 if (positionBuffer) {
-                    const srcPosBuf = vertex[posBPC == 16 ? "position16" : "position32"]!;
+                    const srcPosBuf = "position" in vertex ? vertex.position : vertex[posBPC == 16 ? "position16" : "position32"]!;
                     // initialize separate positions buffer
                     if (posBPC == 16) {
                         const i16 = new Int16Array(positionBuffer, vertexOffset * positionStride);
