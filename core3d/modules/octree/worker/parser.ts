@@ -656,7 +656,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
 export function parseNode(wasm: WasmInstance, id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, highlights: Highlights, applyFilter: boolean) {
     console.assert(isSupportedVersion(version));
     const r = new BufferReader(buffer);
-    var schema = version == Current.version ? Current.readSchema(r) : Previous.readSchema(r);
+    var schema = version == Current.version ? Current.readSchema(r) : version == Previous.version ? Previous.readSchema(r) : LTS.readSchema(r);
     let predicate: ((objectId: number) => boolean) | undefined;
     predicate = applyFilter ? (objectId =>
         highlights.indices[objectId] != 0xff
