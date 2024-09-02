@@ -27,7 +27,7 @@ function isCurrentSchema(schema: Schema): schema is Current.Schema {
 }
 
 export function isSupportedVersion(version: string) {
-    return version == Current.version || version == Previous.version;
+    return version == Current.version || version == Previous.version || version == LTS.version;
 }
 
 /** @internal */
