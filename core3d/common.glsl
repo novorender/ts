@@ -215,6 +215,7 @@ struct SceneUniforms {
     bool useProjectedPosition;
     lowp float pickOpacityThreshold;
     mediump vec2 factorRange[8];
+    lowp int startDeviationFactor;
     lowp vec4 undefinedPointColor;
 };
 struct NodeUniforms {
@@ -326,7 +327,6 @@ mediump vec4 getGradientColor(mediump sampler2D gradientTexture, highp float pos
      mediump float u = (range[0] >= range[1]) ? 0. : (position - range[0]) / (range[1] - range[0]);
     return texture(gradientTexture, vec2(u, v));
 }
-
 
 // packing
 

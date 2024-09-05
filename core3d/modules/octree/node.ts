@@ -1,6 +1,6 @@
 import { mat4, type ReadonlyVec3, type ReadonlyVec4, vec3, vec4 } from "gl-matrix";
 import { glUBOProxy, glUpdateBuffer } from "webgl2";
-import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup } from "core3d";
+import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup, type SceneConfig } from "core3d";
 import { createMeshes, deleteMesh, type Mesh, meshPrimitiveCount, updateMeshHighlights } from "./mesh";
 import type { NodeData } from "./worker";
 import { NodeLoader } from "./loader";
@@ -47,7 +47,7 @@ export interface OctreeContext {
     readonly renderContext: RenderContext;
     readonly loader: NodeLoader;
     readonly url: string | undefined;
-    readonly version: string;
+    readonly config: SceneConfig | undefined;
     readonly debug: boolean;
     readonly localSpaceChanged: boolean;
     readonly hidden: readonly boolean[]; // corresponds to NodeGeometryKind
@@ -329,9 +329,9 @@ export class OctreeNode {
 
     async downloadNode() {
         const { context, children, meshes, resourceBin } = this;
-        const { renderContext, loader, version, highlightGeneration } = context;
+        const { renderContext, loader, config, highlightGeneration } = context;
         this.state = NodeState.downloading;
-        const payload = await loader.loadNode(this, version); // do actual downloading and parsing in worker
+        const payload = await loader.loadNode(this, config!); // do actual downloading and parsing in worker
         if (payload) {
             const { childInfos, geometry } = payload;
             this.posBPC = geometry.positionBPC;

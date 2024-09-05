@@ -56,7 +56,7 @@ function flipCADToGLVec(v: ReadonlyVec3): ReadonlyVec3 {
 export async function createSceneRootNodes(context: OctreeContext, config: SceneConfig, deviceProfile: DeviceProfile): Promise<RootNodes | undefined> {
     const { buffer } = decodeBase64(config.root);
     const { loader } = context;
-    const result = await loader.parseNode(buffer, "", deviceProfile, config.version);
+    const result = await loader.parseNode(buffer, "", deviceProfile, config);
     if (!result)
         return;
     const { childInfos } = result;

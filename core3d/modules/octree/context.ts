@@ -1,4 +1,4 @@
-import { createPBRMaterial, type ActiveTexturesArray, type DerivedRenderState, type MaxActiveTextures, type RenderContext, type RenderStateGroupAction, type RenderStateHighlightGroups, type RenderStateHighlightGroupTexture, type RenderStateScene, type RGB, type RGBATransform, type ActiveTextureIndex, type PBRMaterialTextures, type RenderStateColorGradient, type PointVisualization } from "core3d";
+import { createPBRMaterial, type ActiveTexturesArray, type DerivedRenderState, type MaxActiveTextures, type RenderContext, type RenderStateGroupAction, type RenderStateHighlightGroups, type RenderStateHighlightGroupTexture, type RenderStateScene, type RGB, type RGBATransform, type ActiveTextureIndex, type PBRMaterialTextures, type RenderStateColorGradient, type PointVisualization, type SceneConfig } from "core3d";
 import type { RenderModuleContext } from "..";
 import { createSceneRootNodes } from "core3d/scene";
 import { NodeState, type OctreeContext, OctreeNode, Visibility, NodeGeometryKind } from "./node";
@@ -12,6 +12,7 @@ import { OctreeModule, Gradient, type Resources, type Uniforms, ShaderMode, Shad
 import { Mutex } from "./mutex";
 import { decodeBase64 } from "core3d/util";
 import { OutlineRenderer } from "./outlines";
+import { VertexAttributesEnum } from "./worker/attribs";
 
 const enum UBO { camera, clipping, scene, node };
 
@@ -47,7 +48,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     url: string | undefined;
     // rootNode: OctreeNode | undefined;
     rootNodes: RootNodes = {};
-    version: string = "";
+    config: SceneConfig | undefined;
     projectedSizeSplitThreshold = 1; // baseline node size split threshold = 50% of view height
     hidden = [false, false, false, false, false] as readonly [boolean, boolean, boolean, boolean, boolean];
     readonly highlight;
@@ -188,7 +189,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
                 // initiate loading of scene
                 if (scene) {
-                    this.version = scene.config.version;
+                    values.startDeviationFactor = (scene.config.hasPointIntensity ? 1 : 0) + (scene.config.hasPointClassification ? 1 : 0);
+                    this.config = scene.config;
                     this.reloadScene(scene);
                 }
             }
@@ -431,13 +433,13 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     applyDefaultAttributeValues() {
         const { gl } = this.renderContext;
         // we need to provide default values for non-float vertex attributes in case they are not included in vertex buffer to avoid getting a type binding error.
-        gl.vertexAttribI4ui(VertexAttributeIds.material, 0xff, 0, 0, 0);
-        gl.vertexAttribI4ui(VertexAttributeIds.objectId, 0xffffffff, 0, 0, 0);
-        gl.vertexAttrib4f(VertexAttributeIds.color0, 0, 0, 0, 0); // we don't really use vertex color for anything else than point clouds. We set this to 0 differentiate between textured and elevation-gradient terrain, since the latter will override color in vertex shader.
-        gl.vertexAttrib4f(VertexAttributeIds.projectedPos, 0, 0, 0, 0);
-        gl.vertexAttrib4f(VertexAttributeIds.pointFactors0, 0, 0, 0, 0);
-        gl.vertexAttrib4f(VertexAttributeIds.pointFactors1, 0, 0, 0, 0);
-        gl.vertexAttribI4ui(VertexAttributeIds.highlight, 0, 0, 0, 0);
+        gl.vertexAttribI4ui(VertexAttributesEnum.material, 0xff, 0, 0, 0);
+        gl.vertexAttribI4ui(VertexAttributesEnum.objectId, 0xffffffff, 0, 0, 0);
+        gl.vertexAttrib4f(VertexAttributesEnum.color0, 0, 0, 0, 0); // we don't really use vertex color for anything else than point clouds. We set this to 0 differentiate between textured and elevation-gradient terrain, since the latter will override color in vertex shader.
+        gl.vertexAttrib4f(VertexAttributesEnum.projectedPos, 0, 0, 0, 0);
+        gl.vertexAttrib4f(VertexAttributesEnum.pointFactors0, 0, 0, 0, 0);
+        gl.vertexAttrib4f(VertexAttributesEnum.pointFactors1, 0, 0, 0, 0);
+        gl.vertexAttribI4ui(VertexAttributesEnum.highlight, 0, 0, 0, 0);
     }
 
     getRenderNodes(projectedSizeSplitThreshold: number, ...rootNodes: readonly (OctreeNode | undefined)[]): readonly RenderNode[] {
@@ -1022,19 +1024,6 @@ function getGradientIndex(pointVisualization: PointVisualization): GradientKind 
             return GradientKind.deviations0 + pointVisualization.index;
     }
 }
-
-const enum VertexAttributeIds {
-    position,
-    normal,
-    material,
-    objectId,
-    texCoord0,
-    color0,
-    projectedPos,
-    pointFactors0,
-    pointFactors1,
-    highlight,
-};
 
 interface MeshState {
     mode?: ShaderMode;

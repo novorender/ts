@@ -59,9 +59,8 @@ void main() {
     mediump float pointFactor = 0.;
 
  #if (MODE == MODE_POINTS)
-
-    int gradientKind = gradientKindNone;
-    if(gradientKind == gradientKindNone || vertexHighlight != 0U) {
+    int gradientKind = scene.defaultPointGradientKind;
+    if(vertexHighlight != 0U) {
          mediump float u = (float(vertexHighlight) + 0.5) / float(maxHighlights);
          gradientKind = int(texture(textures.highlights, vec2(u, 6.5 / highLightsTextureRows)).r);
     }
@@ -70,7 +69,8 @@ void main() {
         if(gradientKind == gradientKindElevation) {
             pointFactor = posLS.y;
         } else {
-            int factorIndex = gradientKind == gradientKindIntensity ? 0 :gradientKind;
+            int offset = gradientKindDeviations0 - scene.startDeviationFactor;
+            int factorIndex = gradientKind == gradientKindIntensity ? 0 : gradientKind - offset;
             pointFactor = factorIndex < 4 ? vertexPointFactors0[factorIndex] : vertexPointFactors1[factorIndex - 4];
         }
 
@@ -80,12 +80,34 @@ void main() {
             }
         } else if(gradientKind == gradientKindIntensity) {//intensity
             color = vec4(pointFactor, pointFactor, pointFactor, 1);
-        } else if(pointFactor < scene.factorRange[gradientKind].x || pointFactor > scene.factorRange[gradientKind].y) {
-            color = vec4(0., 0., 0., 0.);
         } else {
+            //color = vec4(pointFactor, pointFactor, pointFactor, 1);
             color = getGradientColor(textures.gradients, pointFactor, gradientKind, scene.factorRange[gradientKind]);
         }
     }
+
+
+    // if(gradientKind != gradientKindNone) {
+    //     if(gradientKind == gradientKindElevation) {
+    //         pointFactor = posLS.y;
+    //     } else {
+    //         int offset = gradientKindDeviations0 - scene.startDeviationFactor;
+    //         int factorIndex = gradientKind == gradientKindIntensity ? 0 : gradientKind - offset;
+    //         pointFactor = factorIndex < 4 ? vertexPointFactors0[factorIndex] : vertexPointFactors1[factorIndex - 4];
+    //     }
+
+    //     if(gradientKind != gradientKindElevation && pointFactor == 0.) {
+    //         if(dot(scene.undefinedPointColor, scene.undefinedPointColor) != 0.) {
+    //             color = scene.undefinedPointColor;
+    //         }
+    //     } else if(gradientKind == gradientKindIntensity) {//intensity
+    //         color = vec4(pointFactor, pointFactor, pointFactor, 1);
+    //     } else if(pointFactor < scene.factorRange[gradientKind].x || pointFactor > scene.factorRange[gradientKind].y) {
+    //         color = vec4(0., 0., 0., 0.);
+    //     } else {
+    //         color = getGradientColor(textures.gradients, pointFactor, gradientKind, scene.factorRange[gradientKind]);
+    //     }
+    // }
 
     // compute point size
     mediump float linearSize = scene.metricSize + node.tolerance * scene.toleranceFactor;

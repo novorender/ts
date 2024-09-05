@@ -51,6 +51,7 @@ export class OctreeModule implements RenderModule {
         "factorRange.5": "vec2",
         "factorRange.6": "vec2",
         "factorRange.7": "vec2",
+        startDeviationFactor: "int",
         undefinedPointColor: "vec4",
     } as const satisfies Record<string, UniformTypes>;
 

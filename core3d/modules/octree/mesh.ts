@@ -14,7 +14,7 @@ export const enum MaterialType {
 export interface Mesh {
     readonly materialType: MaterialType;
     readonly vao: WebGLVertexArrayObject;
-    readonly vaoPosOnly: WebGLVertexArrayObject | null;
+    readonly vaoPosOnly: WebGLVertexArrayObject;
     readonly posVB: WebGLBuffer;
     readonly idxBuf: WebGLBuffer | null;
     readonly highlightVB: WebGLBuffer | null;
@@ -57,8 +57,14 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
         const ib = typeof indices != "number" ? resourceBin.createBuffer({ kind: "ELEMENT_ARRAY_BUFFER", srcData: indices }) : undefined;
         const count = typeof indices == "number" ? indices : indices.length;
         const indexType = indices instanceof Uint16Array ? "UNSIGNED_SHORT" : "UNSIGNED_INT";
-        const { position, normal, material, objectId, texCoord, color, projectedPos, pointFactors0, pointFactors1, highlight } = convertAttributes(vertexAttributes, buffers);
-        const renderAttributes = [position, normal, material, objectId, texCoord, color, projectedPos, pointFactors0, pointFactors1, highlight];
+        const { position, normal, material, objectId, texCoord0, color0, projectedPos, pointFactors0, pointFactors1, highlight } = convertAttributes(vertexAttributes, buffers);
+        function assertIsNotNull(obj: Object | null): asserts obj is Object {
+            if (obj == null) {
+                throw new Error("Invalid vertex attribute layout, position missing");
+            }
+        }
+        assertIsNotNull(position);
+        const renderAttributes = [position, normal, material, objectId, texCoord0, color0, projectedPos, pointFactors0, pointFactors1, highlight];
         // // add extra highlight vertex buffer and attribute
         // const highlightVB = resourceBin.createBuffer({ kind: "ARRAY_BUFFER", byteSize: subMesh.numVertices });
         // attributes.push({ kind: "UNSIGNED_INT", buffer: highlightVB, componentType: "UNSIGNED_BYTE" });
@@ -66,7 +72,7 @@ export function* createMeshes(resourceBin: ResourceBin, geometry: NodeGeometry) 
         const highlightVB = highlight!.buffer;
 
         const vao = resourceBin.createVertexArray({ attributes: renderAttributes, indices: ib });
-        const vaoPosOnly = position.buffer != 0 ? resourceBin.createVertexArray({ attributes: [position], indices: ib }) : null;
+        const vaoPosOnly = resourceBin.createVertexArray({ attributes: [position], indices: ib });
         resourceBin.subordinate(vao, ...buffers.filter(buf => buf != posVB && buf != highlightVB));
         // if (ib) {
         //     resourceBin.subordinate(vao, ib);

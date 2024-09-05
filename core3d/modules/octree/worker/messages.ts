@@ -17,10 +17,16 @@ export interface BufferSet {
 /** @internal */
 export interface ParseParams {
     readonly id: string;
-    readonly version: string;
-    readonly separatePositionsBuffer: boolean;
+    readonly config: ParseConfig;
     readonly enableOutlines: boolean;
     readonly applyFilter: boolean;
+}
+
+export interface ParseConfig {
+    readonly version: string;
+    readonly hasPointIntensity?: boolean;
+    readonly hasPointClassification?: boolean;
+    readonly numPointDeviations?: number;
 }
 
 /** @internal */

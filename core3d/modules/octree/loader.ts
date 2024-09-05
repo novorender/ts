@@ -1,4 +1,4 @@
-import type { AbortAllMessage, AbortMessage, InitMessage, CloseMessage, LoadMessage, MessageRequest, MessageResponse, NodePayload, ParseMessage } from "./worker";
+import type { AbortAllMessage, AbortMessage, InitMessage, CloseMessage, LoadMessage, MessageRequest, MessageResponse, NodePayload, ParseMessage, ParseConfig } from "./worker";
 import { OctreeNode } from "./node.js";
 import type { DeviceProfile } from "core3d/device.js";
 
@@ -83,11 +83,11 @@ export class NodeLoader {
         this.send(msg);
     }
 
-    parseNode(buffer: ArrayBuffer, id: string, deviceProfile: DeviceProfile, version: string): Promise<NodePayload | undefined> {
+    parseNode(buffer: ArrayBuffer, id: string, deviceProfile: DeviceProfile, config: ParseConfig): Promise<NodePayload | undefined> {
         const { payloadPromises } = this;
         const enableOutlines = deviceProfile.features.outline;
         const applyFilter = true;
-        const parseMsg: ParseMessage = { kind: "parse", buffer, id, version, separatePositionsBuffer: true, enableOutlines, applyFilter };
+        const parseMsg: ParseMessage = { kind: "parse", buffer, id, config, enableOutlines, applyFilter };
         const promise = new Promise<NodePayload | undefined>((resolve, reject) => {
             payloadPromises.set(id, { resolve, reject });
         });
@@ -95,7 +95,7 @@ export class NodeLoader {
         return promise;
     }
 
-    loadNode(node: OctreeNode, version: string): Promise<NodePayload | undefined> {
+    loadNode(node: OctreeNode, config: ParseConfig): Promise<NodePayload | undefined> {
         const { payloadPromises } = this;
         const { deviceProfile } = node.context.renderContext;
         const { id, data } = node;
@@ -107,7 +107,7 @@ export class NodeLoader {
         const { byteSize } = data;
         const enableOutlines = deviceProfile.features.outline;
         const applyFilter = true;
-        const loadMsg: LoadMessage = { kind: "load", id, version, url: url.toString(), byteSize, separatePositionsBuffer: true, enableOutlines, applyFilter };
+        const loadMsg: LoadMessage = { kind: "load", id, config, url: url.toString(), byteSize, enableOutlines, applyFilter };
         console.assert(byteSize != 0);
         const abortMsg: AbortMessage = { kind: "abort", id };
         const abort = () => { this.send(abortMsg); }

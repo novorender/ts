@@ -60,7 +60,7 @@ export function glUniformLocations<const T extends readonly string[]>(gl: WebGL2
 }
 
 // apply std140 layout rules (https://registry.khronos.org/OpenGL/specs/gl/glspec45.core.pdf#page=159)
-export function glUBOProxy<const T extends Record<string, UniformTypes>>(values: T) {
+export function glUBOProxy<const T extends Record<string, UniformTypes>>(values: T, print?: boolean) {
     type Keys = Extract<keyof T, string>;
     const offsetsMap: Record<string, readonly number[]> = {};
     let offset = 0;
@@ -70,18 +70,25 @@ export function glUBOProxy<const T extends Record<string, UniformTypes>>(values:
         if (isArray) {
             alignment = 4;
         }
+
         const padding = (alignment - 1) - ((offset + alignment - 1) % alignment);
         offset += padding;
+        if (print) {
+            console.log(`${key} : ${offset * 4}`)
+        }
         const offsets: number[] = [];
         for (let row = 0; row < rows; row++) {
             for (let component = 0; component < components; component++) {
                 offsets.push(offset++);
             }
-            if (rows > 1) {
+            if (rows > 1 || isArray) {
                 offset = (offset + 3) & ~3; // align to the next vec4, regardless of component size
             }
         }
         offsetsMap[key] = offsets;
+    }
+    if (print) {
+        console.log(`total : ${offset * 4}`)
     }
     const byteSize = ((offset + 3) & ~3) * 4;
 

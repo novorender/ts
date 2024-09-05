@@ -1,13 +1,15 @@
 import { type ReadonlyVec3, vec3 } from "gl-matrix";
 import type { AABB, BoundingSphere } from "core3d/state";
 import { BufferReader, Float16Array } from "./util";
-import type { ComponentType, ShaderAttributeType, TextureParams } from "webgl2";
+import type { TextureParams } from "webgl2";
 import { parseKTX } from "core3d/ktx";
 import type { Mutex } from "../mutex";
 import * as LTS from "./2_1";
 import * as Current from "./2_3";
 import * as Previous from "./2_2";
 import type { WasmInstance } from "./wasm_loader";
+import type { ParseConfig, VertexAttributeSource } from ".";
+import { initVertexBufferRange, layoutAttributes, vertexAttributeFloat, vertexAttributeInt, vertexAttributeUint, type VertexAttributes, vertexAttributeData } from "./attribs";
 
 const { MaterialType, OptionalVertexAttribute, PrimitiveType, TextureSemantic } = Current;
 type Current = typeof Current;
@@ -21,6 +23,13 @@ type MaterialType = Current.MaterialType | Previous.MaterialType | LTS.MaterialT
 type TextureSemantic = Current.TextureSemantic | Previous.TextureSemantic | LTS.TextureSemantic;
 type PrimitiveType = Current.PrimitiveType | Previous.PrimitiveType | LTS.PrimitiveType;
 type OptionalVertexAttribute = Current.OptionalVertexAttribute | Previous.OptionalVertexAttribute | LTS.OptionalVertexAttribute;
+
+
+export interface PointFactors {
+    readonly hasIntensity: boolean;
+    readonly hasClassification: boolean;
+    readonly numDeviations: number;
+}
 
 function isCurrentSchema(schema: Schema): schema is Current.Schema {
     return schema.version == Current.version;
@@ -84,35 +93,12 @@ export interface NodeData {
     //readonly posBPC: 16 | 32;
 }
 
-/** @internal */
-export interface VertexAttributeData {
-    readonly kind: ShaderAttributeType;
-    readonly componentType: ComponentType;
-    readonly buffer: number; // index into buffer array
-    readonly componentCount: 1 | 2 | 3 | 4;
-    readonly normalized: boolean;
-    readonly byteStride: number;
-    readonly byteOffset?: number;
-};
-
-/** @internal */
-export interface VertexAttributes {
-    readonly position: VertexAttributeData;
-    readonly normal: VertexAttributeData | null;
-    readonly material: VertexAttributeData | null;
-    readonly objectId: VertexAttributeData | null;
-    readonly texCoord: VertexAttributeData | null;
-    readonly color: VertexAttributeData | null;
-    readonly projectedPos: VertexAttributeData | null;
-    readonly pointFactors0: VertexAttributeData | null;
-    readonly pointFactors1: VertexAttributeData | null;
-    readonly highlight: VertexAttributeData | null;
+export const enum VertexBufferIndex {
+    primary,
+    highlight,
+    pos
 }
 
-/** @internal */
-export const enum VertexAttribIndex {
-    triangles, position, normal, material, objectId, texCoord, color, projectedPos, deviations, highlight, highlightTri
-};
 
 /** @internal */
 export interface NodeSubMesh {
@@ -178,65 +164,39 @@ function computePrimitiveCount(primitiveType: PrimitiveType, numIndices: number)
     }
 }
 
-function getVertexAttribs(posBPC: 16 | 32, factorCount: number) {
-    const posType = posBPC == 16 ? Uint16Array : Uint32Array;
-    return {
-        position: { type: posType, components: ["x", "y", "z"] },
-        normal: { type: Int8Array, components: ["x", "y", "z"] },
-        texCoord: { type: Float16Array, components: ["x", "y"] },
-        color: { type: Uint8Array, components: ["red", "green", "blue", "alpha"] },
-        projectedPos: { type: posType, components: ["x", "y", "z"] },
-        pointFactors0: { type: Float16Array, components: ["a", "b", "c", "d"].slice(0, Math.min(factorCount, 4)) },
-        pointFactors1: { type: Float16Array, components: ["a", "b", "c", "d"].slice(0, Math.max(0, factorCount - 4)) },
-        materialIndex: { type: Uint8Array },
-        objectId: { type: Uint32Array },
-    } as const;
-}
-type VertexAttribs = ReturnType<typeof getVertexAttribs>;
-type VertexAttribNames = keyof VertexAttribs;
-type VertexAttrib = { readonly type: VertexAttribs[VertexAttribNames]["type"], readonly components?: readonly string[]; };
+function getVertexAttributes(pointFactors: PointFactors, posBPC: 16 | 32, optionalAttributes: OptionalVertexAttribute, hasMaterials: boolean, hasObjectIds: boolean) {
+    const factorsLength = pointFactors.numDeviations + (pointFactors.hasIntensity ? 1 : 0) + (pointFactors.hasClassification ? 1 : 0);
 
-function computeVertexOffsets(attribs: readonly VertexAttribNames[], posBPC: 16 | 32, factorCount = 0) {
-    let offset = 0;
-    let offsets: any = {};
-    function alignOffset(alignment: number) {
-        const padding = alignment - 1 - (offset + alignment - 1) % alignment;
-        offset += padding; // pad offset to be memory aligned.
-    }
-    let maxAlign = 1;
-    const vertexAttribs = getVertexAttribs(posBPC, factorCount);
-    for (const attrib of attribs) {
-        const { type, components } = vertexAttribs[attrib] as VertexAttrib;
-        const count = components?.length ?? 1;
-        maxAlign = Math.max(maxAlign, type.BYTES_PER_ELEMENT);
-        alignOffset(type.BYTES_PER_ELEMENT);
-        offsets[attrib] = offset;
-        offset += type.BYTES_PER_ELEMENT * count;
-    }
-    alignOffset(maxAlign); // align stride to largest typed array
-    offsets.stride = offset;
-    return offsets as { readonly [P in VertexAttribNames]?: number; } & { readonly stride: number; };
-}
+    const u8 = new Uint8Array;
+    const i8 = new Int8Array;
+    const u32 = new Uint32Array;
+    const i16 = new Int16Array;
+    const i32 = new Int32Array;
+    const f16 = new Float16Array;
 
-function getVertexAttribNames(optionalAttributes: OptionalVertexAttribute, factorCount: FactorCount, hasMaterials: boolean, hasObjectIds: boolean) {
-    const attribNames: VertexAttribNames[] = ["position"];
-    if (optionalAttributes & OptionalVertexAttribute.normal) attribNames.push("normal");
-    if (optionalAttributes & OptionalVertexAttribute.texCoord) attribNames.push("texCoord");
-    if (optionalAttributes & OptionalVertexAttribute.color) attribNames.push("color");
-    if (optionalAttributes & OptionalVertexAttribute.projectedPos) attribNames.push("projectedPos");
-    if (factorCount > 0) attribNames.push("pointFactors0");
-    if (factorCount > 4) attribNames.push("pointFactors1");
-    if (hasMaterials) {
-        attribNames.push("materialIndex");
-    }
-    if (hasObjectIds) {
-        attribNames.push("objectId");
-    }
-    return attribNames;
+    const posType = posBPC == 16 ? i16 : i32;
+    const factorsSrc = new Array<Float16Array>(factorsLength);
+    factorsSrc.fill(f16, 0, factorsLength);
+    const factorsSrc0 = factorsSrc.slice(0, 4);
+    const factorSrc1 = factorsSrc.slice(4, 8);
+
+    const vertexAttributesSrc = {
+        position: vertexAttributeFloat([posType, posType, posType], VertexBufferIndex.pos),
+        normal: (optionalAttributes & OptionalVertexAttribute.normal) != 0 ? vertexAttributeFloat([i8, i8, i8], VertexBufferIndex.primary) : null,
+        material: hasMaterials ? vertexAttributeUint([u8], VertexBufferIndex.primary) : null,
+        objectId: hasObjectIds ? vertexAttributeUint([u32], VertexBufferIndex.primary) : null,
+        texCoord0: (optionalAttributes & OptionalVertexAttribute.texCoord) != 0 ? vertexAttributeFloat([f16, f16], VertexBufferIndex.primary, true) : null,
+        color0: (optionalAttributes & OptionalVertexAttribute.color) != 0 ? vertexAttributeFloat([u8, u8, u8, u8], VertexBufferIndex.primary) : null,
+        projectedPos: (optionalAttributes & OptionalVertexAttribute.projectedPos) != 0 ? vertexAttributeFloat([posType, posType, posType], VertexBufferIndex.primary) : null,
+        pointFactors0: factorsSrc0.length > 0 ? vertexAttributeFloat(factorsSrc0, VertexBufferIndex.primary, true) : null,
+        pointFactors1: factorSrc1.length > 0 ? vertexAttributeFloat(factorSrc1, VertexBufferIndex.primary, true) : null,
+        highlight: vertexAttributeUint([new Uint8Array], VertexBufferIndex.highlight),
+    } as const satisfies VertexAttributes<VertexAttributeSource>;
+    return vertexAttributesSrc;
 }
 
 /** @internal */
-export function aggregateSubMeshProjections(schema: Schema, range: Range, separatePositionBuffer: boolean, posBPC: 16 | 32, predicate?: (objectId: number) => boolean) {
+export function aggregateSubMeshProjections(schema: Schema, range: Range, posBPC: 16 | 32, pointFactors: PointFactors, predicate?: (objectId: number) => boolean) {
     let primitives = 0;
     let totalTextureBytes = 0;
     let totalNumIndices = 0;
@@ -252,19 +212,16 @@ export function aggregateSubMeshProjections(schema: Schema, range: Range, separa
             const vertices = subMeshProjection.numVertices[i];
             const textureBytes = subMeshProjection.numTextureBytes[i]; // TODO: adjust by device profile/resolution
             const attributes = subMeshProjection.attributes[i];
-            const pointFactors = (isCurrentSchema(schema) ?
-                schema.subMeshProjection.numPointFactors[i] :
-                schema.subMeshProjection.numDeviations[i]) as FactorCount;
-
             const primitiveType = subMeshProjection.primitiveType[i];
             // we assume that textured nodes are terrain with no material index (but object_id?).
             // TODO: state these values explicitly in binary format instead
             const hasMaterials = textureBytes == 0;
             const hasObjectIds = true;
-            const [pos, ...rest] = getVertexAttribNames(attributes, pointFactors, hasMaterials, hasObjectIds);
-            const numBytesPerVertex = separatePositionBuffer ?
-                computeVertexOffsets([pos], posBPC).stride + computeVertexOffsets(rest, posBPC, pointFactors).stride :
-                computeVertexOffsets([pos, ...rest], posBPC, pointFactors).stride;
+            const vertexAttributesSrc = getVertexAttributes(pointFactors, posBPC, attributes, hasMaterials, hasObjectIds);
+            const { attributes: vertexAttributes, byteStrides } = layoutAttributes(vertexAttributesSrc);
+
+            const numBytesPerVertex = byteStrides.reduce((a, b) => a + b);
+
             primitives += computePrimitiveCount(primitiveType, indices ? indices : vertices) ?? 0;
             totalNumIndices += indices;
             totalNumVertices += vertices;
@@ -284,7 +241,7 @@ function toHex(bytes: Uint8Array) {
 }
 
 /** @internal */
-export function getChildren(parentId: string, schema: Schema, separatePositionBuffer: boolean, predicate?: (objectId: number) => boolean): NodeData[] {
+export function getChildren(schema: Schema, pointFactors: PointFactors, predicate?: (objectId: number) => boolean): NodeData[] {
     const { childInfo, hashBytes } = schema;
     const children: NodeData[] = [];
 
@@ -322,7 +279,7 @@ export function getChildren(parentId: string, schema: Schema, separatePositionBu
 
         const subMeshProjectionRange = getRange(childInfo.subMeshes, i);
         const parentPrimitives = parentPrimitiveCounts[childIndex];
-        const { primitives, gpuBytes } = aggregateSubMeshProjections(schema, subMeshProjectionRange, separatePositionBuffer, posBPC, predicate);
+        const { primitives, gpuBytes } = aggregateSubMeshProjections(schema, subMeshProjectionRange, posBPC, pointFactors, predicate);
         const primitivesDelta = primitives - (parentPrimitives ?? 0);
         let descendantObjectIds: number[] | undefined;
         if (schema.childInfo.descendantObjectIds) {
@@ -353,42 +310,16 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
                 subMesh.materialType[i];
             const primitiveType = subMesh.primitiveType[i];
             const attributes = subMesh.attributes[i];
-            const pointFactors = (isCurrentSchema(schema) ? schema.subMesh.numPointFactors[i] : schema.subMesh.numDeviations[i]) as FactorCount;
+            const numDeviations = schema.subMesh.numDeviations[i];
             const vertexRange = getRange(subMesh.vertices, i);
             const indexRange = getRange(subMesh.primitiveVertexIndices, i);
             const textureRange = getRange(subMesh.textures, i);
-            yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, pointFactors, vertexRange, indexRange, textureRange };
+            yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, numDeviations, vertexRange, indexRange, textureRange };
         }
     }
 }
-type TypedArray = Uint8Array | Uint16Array | Uint32Array | Int8Array | Int16Array | Int32Array | Float32Array | Float64Array;
 
-// Candidates for wasm implementation?
-function copyToInterleavedArray<T extends TypedArray>(wasm: WasmInstance, dst: T, src: T, byteOffset: number, byteStride: number, begin: number, end: number) {
-    const offset = byteOffset / dst.BYTES_PER_ELEMENT;
-    const stride = byteStride / dst.BYTES_PER_ELEMENT;
-    console.assert(Math.round(offset) == offset);
-    console.assert(Math.round(stride) == stride);
-    let j = offset;
-    for (let i = begin; i < end; i++) {
-        dst[j] = src[i];
-        j += stride;
-    }
-}
-
-function fillToInterleavedArray<T extends TypedArray>(wasm: WasmInstance, dst: T, src: number, byteOffset: number, byteStride: number, begin: number, end: number) {
-    const offset = byteOffset / dst.BYTES_PER_ELEMENT;
-    const stride = byteStride / dst.BYTES_PER_ELEMENT;
-    console.assert(Math.round(offset) == offset);
-    console.assert(Math.round(stride) == stride);
-    let j = offset;
-    for (let i = begin; i < end; i++) {
-        dst[j] = src;
-        j += stride;
-    }
-}
-
-function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer: boolean, enableOutlines: boolean, highlights: Highlights, predicate?: (objectId: number) => boolean): NodeGeometry {
+function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean, highlights: Highlights, pointFactors: PointFactors, predicate?: (objectId: number) => boolean): NodeGeometry {
     const { vertex, vertexIndex } = schema;
 
     const filteredSubMeshes = [...getSubMeshes(schema, predicate)];
@@ -396,21 +327,23 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
     let subMeshes: NodeSubMesh[] = [];
     const referencedTextures = new Set<number>();
 
+    const pointFactorsCount = (pointFactors.numDeviations + (pointFactors.hasClassification ? 1 : 0) + (pointFactors.hasIntensity ? 1 : 0)) as FactorCount;
+
     // group submeshes into drawable meshes (with common attributes)
     type Group = {
         readonly materialType: number;
         readonly primitiveType: number;
         readonly attributes: number;
-        readonly pointFactors: FactorCount;
+        readonly pointFactorsCount: FactorCount;
         readonly subMeshIndices: number[];
     };
     const groups = new Map<string, Group>();
     for (let i = 0; i < filteredSubMeshes.length; i++) {
-        const { materialType, primitiveType, attributes, pointFactors, childIndex } = filteredSubMeshes[i];
-        const key = `${materialType}_${primitiveType}_${attributes}_${pointFactors}_${childIndex}`;
+        const { materialType, primitiveType, attributes, numDeviations, childIndex } = filteredSubMeshes[i];
+        const key = `${materialType}_${primitiveType}_${attributes}_${numDeviations}_${childIndex}`;
         let group = groups.get(key);
         if (!group) {
-            group = { materialType, primitiveType, attributes, pointFactors, subMeshIndices: [] };
+            group = { materialType, primitiveType, attributes, pointFactorsCount, subMeshIndices: [] };
             groups.set(key, group);
         }
         group.subMeshIndices.push(i);
@@ -423,19 +356,64 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
     highlights.mutex.lockSync();
 
     // create drawable meshes
-    for (const { materialType, primitiveType, attributes, pointFactors, subMeshIndices } of groups.values()) {
+    for (const { materialType, primitiveType, attributes, pointFactorsCount, subMeshIndices } of groups.values()) {
         if (subMeshIndices.length == 0)
             continue;
         const groupMeshes = subMeshIndices.map(i => filteredSubMeshes[i]);
         const hasMaterials = groupMeshes.some(m => m.materialIndex != 0xff);
         const hasObjectIds = groupMeshes.some(m => m.objectId != 0xffffffff);
+        const maxNumDeviations = Math.max(...groupMeshes.map(m => m.numDeviations))
 
-        const allAttribNames = getVertexAttribNames(attributes, pointFactors, hasMaterials, hasObjectIds);
-        const [posName, ...extraAttribNames] = allAttribNames; // pop off positions since we're potentially putting them in a separate buffer
-        const attribNames = separatePositionBuffer ? extraAttribNames : allAttribNames;
-        const positionStride = computeVertexOffsets([posName], posBPC, pointFactors).stride;
-        const attribOffsets = computeVertexOffsets(attribNames, posBPC, pointFactors);
-        const vertexStride = attribOffsets.stride;
+        const pos = "position" in vertex ? vertex.position : vertex[posBPC == 16 ? "position16" : "position32"]!;
+        const projectedPos = (attributes & OptionalVertexAttribute.projectedPos) != 0 ?
+            "position" in vertex ? vertex.projectedPos : vertex[posBPC == 16 ? "projectedPos16" : "projectedPos32"]!
+            : undefined;
+        const { normal, texCoord, color } = vertex;
+
+        const factorSources: Float16Array[] = [];
+        if (isCurrentSchema(schema)) {
+            if (pointFactors.hasIntensity) {
+                factorSources.push(schema.vertex.pointIntensity ?? new Float16Array)
+            }
+            if (pointFactors.hasClassification) {
+                factorSources.push(schema.vertex.pointClassification ?? new Float16Array)
+            }
+            for (let i = 0; i < pointFactors.numDeviations; ++i) {
+                factorSources.push(schema.vertex[`pointDeviation${i as 0 | 1 | 2 | 3 | 4 | 5}`] ?? new Float16Array)
+            }
+        } else {
+            const deviations = [schema.vertex.deviations.a, schema.vertex.deviations.b, schema.vertex.deviations.c, schema.vertex.deviations.d]
+            for (let i = 0; i < maxNumDeviations; ++i) {
+                const deviation = deviations[i];
+                if (deviation) {
+                    factorSources.push(deviation);
+                } else {
+                    factorSources.push(new Float16Array);
+                }
+            }
+        }
+
+        const factorsSrc0 = factorSources.slice(0, 4);
+        const factorSrc1 = factorSources.slice(4, 8);
+
+        const vertexAttributesSrc = isCurrentSchema(schema) ?
+            getVertexAttributes(pointFactors, posBPC, attributes, hasMaterials, hasObjectIds) :
+            getVertexAttributes({ ...pointFactors, numDeviations: maxNumDeviations }, posBPC, attributes, hasMaterials, hasObjectIds);
+        vertexAttributesSrc.position.components = [pos.x, pos.y, pos.z];
+        if (normal)
+            vertexAttributesSrc.normal!.components = [normal.x, normal.y, normal.z];
+        if (texCoord)
+            vertexAttributesSrc.texCoord0!.components = [texCoord.x, texCoord.y];
+        if (color)
+            vertexAttributesSrc.color0!.components = [color.red, color.green, color.blue, color.alpha];
+        if (projectedPos)
+            vertexAttributesSrc.projectedPos!.components = [projectedPos.x, projectedPos.y, projectedPos.z];
+        if (factorsSrc0.length > 0)
+            vertexAttributesSrc.pointFactors0!.components = factorsSrc0;
+        if (factorSrc1.length > 0)
+            vertexAttributesSrc.pointFactors1!.components = factorSrc1;
+
+        const { attributes: vertexAttributes, byteStrides } = layoutAttributes(vertexAttributesSrc);
 
         const childIndices = [...new Set<number>(groupMeshes.map(sm => sm.childIndex))].sort();
         let numVertices = 0;
@@ -451,13 +429,12 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
                 numTriangles += Math.round((idxCnt > 0 ? idxCnt : vtxCnt) / 3);
             }
         }
-        const vertexBuffer = new ArrayBuffer(numVertices * vertexStride);
-        const positionBuffer = separatePositionBuffer ? new ArrayBuffer(numVertices * positionStride) : undefined;
+
         let indexBuffer: Uint32Array | Uint16Array | undefined;
         if (vertexIndex) {
             indexBuffer = new (numVertices < 0xffff ? Uint16Array : Uint32Array)(numIndices);
         }
-        const highlightBuffer = new Uint8Array(numVertices);
+        // const highlightBuffer = new Uint8Array(numVertices);
         let indexOffset = 0;
         let vertexOffset = 0;
         let triangleOffset = 0;
@@ -465,29 +442,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
         const objectRanges: Mutable<MeshObjectRange>[] = [];
 
-        function enumerateBuffers<K extends string>(possibleBuffers: { readonly [P in K]: ArrayBuffer | undefined }) {
-            const buffers: ArrayBuffer[] = [];
-            const indices = {} as { readonly [P in K]: number };
-            for (const [key, value] of Object.entries(possibleBuffers)) {
-                const buffer = value as ArrayBuffer | undefined;
-                let index = -1;
-                if (buffer) {
-                    index = buffers.indexOf(buffer);
-                    if (index < 0) {
-                        index = buffers.length;
-                        buffers.push(buffer);
-                    }
-                }
-                Reflect.set(indices, key, index);
-            }
-            return [buffers, indices] as const;
-        }
-
-        const [vertexBuffers, bufIdx] = enumerateBuffers({
-            primary: vertexBuffer,
-            highlight: highlightBuffer?.buffer,
-            pos: positionBuffer
-        });
+        const vertexBuffers = byteStrides.map(bs => new ArrayBuffer(bs * numVertices));
 
         for (const childIndex of childIndices) {
             const meshes = groupMeshes.filter(sm => sm.childIndex == childIndex);
@@ -497,50 +452,17 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
             const drawRangeBegin = indexBuffer ? indexOffset : vertexOffset;
 
             for (const subMesh of meshes) {
-                const { vertexRange, indexRange, materialIndex, pointFactors, objectId } = subMesh;
-                const context = { materialIndex, objectId };
+                const { vertexRange, indexRange, materialIndex, objectId } = subMesh;
+
+                const fillValues = { material: materialIndex, objectId, highlights: highlights.indices[objectId] ?? 0 };
                 const [beginVtx, endVtx] = vertexRange;
                 const [beginIdx, endIdx] = indexRange;
 
-                // initialize vertex buffer
-                const vertexAttribs = getVertexAttribs(posBPC, pointFactors);
-                for (const attribName of attribNames) {
-                    const { type, components } = vertexAttribs[attribName] as VertexAttrib;
-                    const dst = new type(vertexBuffer, vertexOffset * vertexStride);
-                    const count = components?.length ?? 1;
-                    for (var c = 0; c < count; c++) {
-                        const offs = attribOffsets[attribName]! + c * type.BYTES_PER_ELEMENT;
-                        if (attribName in vertex) {
-                            let src = Reflect.get(vertex, attribName) as typeof dst;
-                            if (components) {
-                                src = Reflect.get(src, components[c]);
-                            }
-                            copyToInterleavedArray(wasm, dst, src, offs, vertexStride, beginVtx, endVtx);
-                        } else {
-                            const src = Reflect.get(context, attribName) as number;
-                            fillToInterleavedArray(wasm, dst, src, offs, vertexStride, beginVtx, endVtx);
-                        }
-                    }
-                }
+                initVertexBufferRange(vertexBuffers, beginVtx, endVtx, vertexOffset, fillValues, vertexAttributes);
 
                 // initialize triangle vertex buffer for clipping intersection
                 const numTrianglesInSubMesh = vertexIndex && indexBuffer ? (endIdx - beginIdx) / 3 : (endVtx - beginVtx) / 3;
 
-                if (positionBuffer) {
-                    const srcPosBuf = "position" in vertex ? vertex.position : vertex[posBPC == 16 ? "position16" : "position32"]!;
-                    // initialize separate positions buffer
-                    if (posBPC == 16) {
-                        const i16 = new Int16Array(positionBuffer, vertexOffset * positionStride);
-                        copyToInterleavedArray(wasm, i16, srcPosBuf.x, 0, positionStride, beginVtx, endVtx);
-                        copyToInterleavedArray(wasm, i16, srcPosBuf.y, 2, positionStride, beginVtx, endVtx);
-                        copyToInterleavedArray(wasm, i16, srcPosBuf.z, 4, positionStride, beginVtx, endVtx);
-                    } else {
-                        const i32 = new Int32Array(positionBuffer, vertexOffset * positionStride);
-                        copyToInterleavedArray(wasm, i32, srcPosBuf.x, 0, positionStride, beginVtx, endVtx);
-                        copyToInterleavedArray(wasm, i32, srcPosBuf.y, 4, positionStride, beginVtx, endVtx);
-                        copyToInterleavedArray(wasm, i32, srcPosBuf.z, 8, positionStride, beginVtx, endVtx);
-                    }
-                }
 
                 // initialize index buffer (if any)
                 if (vertexIndex && indexBuffer) {
@@ -551,11 +473,6 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
 
                 const endVertex = vertexOffset + (endVtx - beginVtx);
                 const endTriangle = triangleOffset + (endIdx - beginIdx) / 3;
-                // initialize highlight buffer
-                const highlightIndex = highlights.indices[objectId] ?? 0;
-                if (highlightIndex) {
-                    highlightBuffer.fill(highlightIndex, vertexOffset, endVertex);
-                }
 
                 // update object ranges
                 const prev = objectRanges.length - 1;
@@ -571,7 +488,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
             }
 
             const drawRangeEnd = indexBuffer ? indexOffset : vertexOffset;
-            const byteOffset = drawRangeBegin * (indexBuffer ? indexBuffer.BYTES_PER_ELEMENT : vertexStride);
+            const byteOffset = drawRangeBegin * (indexBuffer ? indexBuffer.BYTES_PER_ELEMENT : byteStrides[VertexBufferIndex.primary]);
             const count = drawRangeEnd - drawRangeBegin;
             drawRanges.push({ childIndex, byteOffset, first: drawRangeBegin, count });
         }
@@ -590,26 +507,6 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
             referencedTextures.add(baseColorTexture);
         }
 
-        const stride = vertexStride;
-        const pointFactors0Components = Math.min(4, pointFactors) as 1 | 2 | 3 | 4;
-        const pointFactors1Components = pointFactors - 4 as 1 | 2 | 3 | 4;
-        const pointFactors0Kind = pointFactors == 1 ? "FLOAT" as const : `FLOAT_VEC${pointFactors0Components as 2 | 3 | 4}` as const;
-        const pointFactors1Kind = pointFactors == 5 ? "FLOAT" as const : `FLOAT_VEC${pointFactors1Components as 2 | 3 | 4}` as const;
-
-        const posCT = posBPC == 16 ? "SHORT" : "INT";
-        const vertexAttributes = {
-            position: { kind: "FLOAT_VEC4", buffer: bufIdx.pos, componentCount: 3, componentType: posCT, normalized: true, byteOffset: attribOffsets["position"], byteStride: separatePositionBuffer ? 0 : stride },
-            normal: (attributes & OptionalVertexAttribute.normal) != 0 ? { kind: "FLOAT_VEC3", buffer: bufIdx.primary, componentCount: 3, componentType: "BYTE", normalized: true, byteOffset: attribOffsets["normal"], byteStride: stride } : null,
-            material: hasMaterials ? { kind: "UNSIGNED_INT", buffer: bufIdx.primary, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, byteOffset: attribOffsets["materialIndex"], byteStride: stride } : null,
-            objectId: hasObjectIds ? { kind: "UNSIGNED_INT", buffer: bufIdx.primary, componentCount: 1, componentType: "UNSIGNED_INT", normalized: false, byteOffset: attribOffsets["objectId"], byteStride: stride } : null,
-            texCoord: (attributes & OptionalVertexAttribute.texCoord) != 0 ? { kind: "FLOAT_VEC2", buffer: bufIdx.primary, componentCount: 2, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["texCoord"], byteStride: stride } : null,
-            color: (attributes & OptionalVertexAttribute.color) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 4, componentType: "UNSIGNED_BYTE", normalized: true, byteOffset: attribOffsets["color"], byteStride: stride } : null,
-            projectedPos: (attributes & OptionalVertexAttribute.projectedPos) != 0 ? { kind: "FLOAT_VEC4", buffer: bufIdx.primary, componentCount: 3, componentType: posCT, normalized: true, byteOffset: attribOffsets["projectedPos"], byteStride: stride } : null,
-            pointFactors0: pointFactors0Components >= 1 ? { kind: pointFactors0Kind, buffer: bufIdx.primary, componentCount: pointFactors0Components, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["pointFactors0"], byteStride: stride } : null,
-            pointFactors1: pointFactors1Components >= 1 ? { kind: pointFactors1Kind, buffer: bufIdx.primary, componentCount: pointFactors1Components, componentType: "HALF_FLOAT", normalized: false, byteOffset: attribOffsets["pointFactors1"], byteStride: stride } : null,
-            highlight: { kind: "UNSIGNED_INT", buffer: bufIdx.highlight, componentCount: 1, componentType: "UNSIGNED_BYTE", normalized: false, byteOffset: 0, byteStride: 0 },
-        } as const satisfies VertexAttributes;
-
         objectRanges.sort((a, b) => (a.objectId - b.objectId));
 
         subMeshes.push({
@@ -618,7 +515,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
             numVertices,
             numTriangles,
             objectRanges,
-            vertexAttributes,
+            vertexAttributes: vertexAttributeData(vertexAttributes),
             vertexBuffers,
             indices,
             baseColorTexture,
@@ -653,15 +550,17 @@ function getGeometry(wasm: WasmInstance, schema: Schema, separatePositionBuffer:
     return { subMeshes, textures, positionBPC: posBPC } as const satisfies NodeGeometry;
 }
 
-export function parseNode(wasm: WasmInstance, id: string, separatePositionBuffer: boolean, enableOutlines: boolean, version: string, buffer: ArrayBuffer, highlights: Highlights, applyFilter: boolean) {
+export function parseNode(wasm: WasmInstance, config: ParseConfig, enableOutlines: boolean, buffer: ArrayBuffer, highlights: Highlights, applyFilter: boolean) {
+    const { version } = config;
     console.assert(isSupportedVersion(version));
+    const pointFactors: PointFactors = { hasIntensity: config.hasPointIntensity ?? false, hasClassification: config.hasPointClassification ?? false, numDeviations: config.numPointDeviations ?? 0 };
     const r = new BufferReader(buffer);
     var schema = version == Current.version ? Current.readSchema(r) : version == Previous.version ? Previous.readSchema(r) : LTS.readSchema(r);
     let predicate: ((objectId: number) => boolean) | undefined;
     predicate = applyFilter ? (objectId =>
         highlights.indices[objectId] != 0xff
     ) : undefined;
-    const childInfos = getChildren(id, schema, separatePositionBuffer, predicate);
-    const geometry = getGeometry(wasm, schema, separatePositionBuffer, enableOutlines, highlights, predicate);
+    const childInfos = getChildren(schema, pointFactors, predicate);
+    const geometry = getGeometry(wasm, schema, enableOutlines, highlights, pointFactors, predicate);
     return { childInfos, geometry } as const;
 }

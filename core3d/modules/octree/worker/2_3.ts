@@ -2,6 +2,7 @@
 import { BufferReader } from "./util.js";
 import type { EnumArray, U8, U16, U32, I8, I16, I32, F16, F32, F64 } from "./util.js";
 
+
 export const version = "2.3";
 
 // Type of GL render primitive.
@@ -129,7 +130,7 @@ export interface SubMesh {
     readonly primitiveType: EnumArray<PrimitiveType>;
     readonly materialType: EnumArray<MaterialType>;
     readonly attributes: EnumArray<OptionalVertexAttribute>;
-    readonly numPointFactors: U8; // # of point factor vertex attributes (0-8)
+    readonly numDeviations: U8; // # of point deviations vertex attributes (0-6)
     readonly vertices: VertexRange; // Vertices are local to each sub-mesh.
     readonly primitiveVertexIndices: VertexIndexRange; // Triangle vertex index triplets, or line index pairs, if any, are 16-bit and relative to the local vertex range.
     readonly edgeVertexIndices: VertexIndexRange; // "Hard" edge vertex index pairs, if any, are 16-bit and relative to the local vertex range.
@@ -168,8 +169,14 @@ export interface Vertex {
     readonly texCoord?: Half2;
     readonly projectedPos16?: Int16_3;
     readonly projectedPos32?: Int32_3;
-    readonly pointFactors0: PointFactors;
-    readonly pointFactors1: PointFactors;
+    readonly pointIntensity?: F16;
+    readonly pointClassification?: F16;
+    readonly pointDeviation0?: F16;
+    readonly pointDeviation1?: F16;
+    readonly pointDeviation2?: F16;
+    readonly pointDeviation3?: F16;
+    readonly pointDeviation4?: F16;
+    readonly pointDeviation5?: F16;
 };
 
 export interface Int16_3 {
@@ -205,15 +212,6 @@ export interface Half2 {
     readonly length: number;
     readonly x: F16;
     readonly y: F16;
-};
-
-// Mesh point factor vertex attributes
-export interface PointFactors {
-    readonly length: number;
-    readonly a?: F16;
-    readonly b?: F16;
-    readonly c?: F16;
-    readonly d?: F16;
 };
 
 // Mesh triangles
@@ -293,7 +291,7 @@ export function readSchema(r: BufferReader) {
             primitiveType: r.u8(sizes[4]) as EnumArray<PrimitiveType>,
             materialType: r.u8(sizes[4]) as EnumArray<MaterialType>,
             attributes: r.u8(sizes[4]) as EnumArray<OptionalVertexAttribute>,
-            numPointFactors: r.u8(sizes[4]),
+            numDeviations: r.u8(sizes[4]),
             vertices: { start: r.u32(sizes[4]), count: r.u32(sizes[4]) } as VertexRange,
             primitiveVertexIndices: { start: r.u32(sizes[4]), count: r.u32(sizes[4]) } as VertexIndexRange,
             edgeVertexIndices: { start: r.u32(sizes[4]), count: r.u32(sizes[4]) } as VertexIndexRange,
@@ -362,20 +360,14 @@ export function readSchema(r: BufferReader) {
                 y: r.i32(sizes[7]),
                 z: r.i32(sizes[7]),
             } as Int32_3,
-            pointFactors0: {
-                length: sizes[7],
-                a: !flags[7] ? undefined : r.f16(sizes[7]),
-                b: !flags[8] ? undefined : r.f16(sizes[7]),
-                c: !flags[9] ? undefined : r.f16(sizes[7]),
-                d: !flags[10] ? undefined : r.f16(sizes[7]),
-            } as PointFactors,
-            pointFactors1: {
-                length: sizes[7],
-                a: !flags[11] ? undefined : r.f16(sizes[7]),
-                b: !flags[12] ? undefined : r.f16(sizes[7]),
-                c: !flags[13] ? undefined : r.f16(sizes[7]),
-                d: !flags[14] ? undefined : r.f16(sizes[7]),
-            } as PointFactors,
+            pointIntensity: !flags[7] ? undefined : r.f16(sizes[7]),
+            pointClassification: !flags[8] ? undefined : r.f16(sizes[7]),
+            pointDeviation0: !flags[9] ? undefined : r.f16(sizes[7]),
+            pointDeviation1: !flags[10] ? undefined : r.f16(sizes[7]),
+            pointDeviation2: !flags[11] ? undefined : r.f16(sizes[7]),
+            pointDeviation3: !flags[12] ? undefined : r.f16(sizes[7]),
+            pointDeviation4: !flags[13] ? undefined : r.f16(sizes[7]),
+            pointDeviation5: !flags[14] ? undefined : r.f16(sizes[7]),
         } as Vertex,
         triangle: {
             length: sizes[8],
