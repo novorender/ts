@@ -2,7 +2,7 @@ import { mat4, type ReadonlyVec3, type ReadonlyVec4, vec3, vec4 } from "gl-matri
 import { glUBOProxy, glUpdateBuffer } from "webgl2";
 import { CoordSpace, type DerivedRenderState, RenderContext, type RenderStateHighlightGroup, type SceneConfig } from "core3d";
 import { createMeshes, deleteMesh, type Mesh, meshPrimitiveCount, updateMeshHighlights } from "./mesh";
-import type { NodeData } from "./worker";
+import type { NodeData, NodeGeometry } from "./worker";
 import { NodeLoader } from "./loader";
 import { ResourceBin } from "core3d/resource";
 
@@ -344,6 +344,10 @@ export class OctreeNode {
             if (context.highlightGeneration != highlightGeneration) {
                 OctreeNode.updateHighlights(context, meshes);
             }
+            const pointSize = getPointSize(geometry);
+            if (pointSize) {
+                this.uniformsData.values.tolerance = pointSize;
+            }
             this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
             glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
             renderContext.changed = true;
@@ -380,5 +384,20 @@ export class OctreeNode {
         for (const mesh of meshes) {
             updateMeshHighlights(gl, mesh, highlights);
         }
+    }
+}
+
+
+function getPointSize(geometry: NodeGeometry): number | undefined {
+    let pointSize: number | undefined;
+    let numPointSizes = 0;
+    for (const mesh of geometry.subMeshes) {
+        if (mesh.pointSize) {
+            pointSize = (pointSize ?? 0) + mesh.pointSize;
+            ++numPointSizes;
+        }
+    }
+    if (pointSize) {
+        return pointSize / numPointSizes;
     }
 }

@@ -113,6 +113,7 @@ export interface NodeSubMesh {
     readonly vertexBuffers: readonly ArrayBuffer[];
     readonly indices: Uint16Array | Uint32Array | number; // Index buffer, or # vertices of none
     readonly baseColorTexture: number | undefined; // texture index
+    readonly pointSize?: number; // Point meters
 }
 
 /** @internal */
@@ -314,7 +315,9 @@ export function* getSubMeshes(schema: Schema, predicate?: (objectId: number) => 
             const vertexRange = getRange(subMesh.vertices, i);
             const indexRange = getRange(subMesh.primitiveVertexIndices, i);
             const textureRange = getRange(subMesh.textures, i);
-            yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, numDeviations, vertexRange, indexRange, textureRange };
+            const pointSize = isCurrentSchema(schema) && schema.subMesh.pointSizeExp ?
+                Math.pow(2, schema.subMesh.pointSizeExp[i]) : undefined;
+            yield { childIndex, objectId, materialIndex, materialType, primitiveType, attributes, numDeviations, vertexRange, indexRange, textureRange, pointSize };
         }
     }
 }
@@ -336,14 +339,15 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
         readonly attributes: number;
         readonly pointFactorsCount: FactorCount;
         readonly subMeshIndices: number[];
+        readonly pointSize?: number;
     };
     const groups = new Map<string, Group>();
     for (let i = 0; i < filteredSubMeshes.length; i++) {
-        const { materialType, primitiveType, attributes, numDeviations, childIndex } = filteredSubMeshes[i];
+        const { materialType, primitiveType, attributes, numDeviations, childIndex, pointSize } = filteredSubMeshes[i];
         const key = `${materialType}_${primitiveType}_${attributes}_${numDeviations}_${childIndex}`;
         let group = groups.get(key);
         if (!group) {
-            group = { materialType, primitiveType, attributes, pointFactorsCount, subMeshIndices: [] };
+            group = { materialType, primitiveType, attributes, pointFactorsCount, subMeshIndices: [], pointSize };
             groups.set(key, group);
         }
         group.subMeshIndices.push(i);
@@ -356,7 +360,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
     highlights.mutex.lockSync();
 
     // create drawable meshes
-    for (const { materialType, primitiveType, attributes, pointFactorsCount, subMeshIndices } of groups.values()) {
+    for (const { materialType, primitiveType, attributes, pointFactorsCount, subMeshIndices, pointSize } of groups.values()) {
         if (subMeshIndices.length == 0)
             continue;
         const groupMeshes = subMeshIndices.map(i => filteredSubMeshes[i]);
@@ -400,7 +404,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
             getVertexAttributes(pointFactors, posBPC, attributes, hasMaterials, hasObjectIds) :
             getVertexAttributes({ ...pointFactors, numDeviations: maxNumDeviations }, posBPC, attributes, hasMaterials, hasObjectIds);
         vertexAttributesSrc.position.components = [pos.x, pos.y, pos.z];
-        if (normal)
+        if (vertexAttributesSrc.normal != undefined && normal)
             vertexAttributesSrc.normal!.components = [normal.x, normal.y, normal.z];
         if (texCoord)
             vertexAttributesSrc.texCoord0!.components = [texCoord.x, texCoord.y];
@@ -508,7 +512,6 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
         }
 
         objectRanges.sort((a, b) => (a.objectId - b.objectId));
-
         subMeshes.push({
             materialType,
             primitiveType: primitiveTypeStrings[primitiveType],
@@ -519,7 +522,8 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
             vertexBuffers,
             indices,
             baseColorTexture,
-            drawRanges
+            drawRanges,
+            pointSize
         });
     }
 
