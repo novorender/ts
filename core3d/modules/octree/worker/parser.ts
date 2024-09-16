@@ -458,7 +458,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
             for (const subMesh of meshes) {
                 const { vertexRange, indexRange, materialIndex, objectId } = subMesh;
 
-                const fillValues = { material: materialIndex, objectId, highlights: highlights.indices[objectId] ?? 0 };
+                const fillValues = { material: materialIndex, objectId, highlight: highlights.indices[objectId] ?? 0 };
                 const [beginVtx, endVtx] = vertexRange;
                 const [beginIdx, endIdx] = indexRange;
 
