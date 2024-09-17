@@ -65,7 +65,7 @@ export function defaultRenderState(): RenderState {
         },
         highlights: {
             defaultAction: undefined,
-            defaultPoinVisualization: undefined,
+            defaultPointVisualization: undefined,
             groups: [],
         },
         outlines: {

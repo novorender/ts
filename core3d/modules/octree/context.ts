@@ -205,7 +205,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
 
         if (renderContext.hasStateChanged({ highlights })) {
-            const { groups, defaultPoinVisualization } = highlights;
+            const { groups, defaultPointVisualization } = highlights;
             const { highlight } = this;
             const { prevState } = renderContext;
             const prevGroups = prevState?.highlights.groups ?? [];
@@ -213,7 +213,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             updateShaderCompileConstants({ highlight: groups.length > 0 || highlights.defaultAction != undefined });
 
             const { values } = uniforms.scene;
-            values.defaultPointGradientKind = defaultPoinVisualization ? getGradientIndex(defaultPoinVisualization) : GradientKind.color;
+            values.defaultPointGradientKind = defaultPointVisualization ? getGradientIndex(defaultPointVisualization) : GradientKind.color;
             values.applyDefaultHighlight = highlights.defaultAction != undefined;
 
             const objectIds = groups.map(g => g.objectIds);
@@ -283,11 +283,11 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
 
-            const transforms = [highlights.defaultAction, highlights.defaultPoinVisualization, ...groups.map(g => g.action)];
+            const transforms = [highlights.defaultAction, highlights.defaultPointVisualization, ...groups.map(g => g.action)];
             const prevTransforms = prevState ?
                 [
                     prevState.highlights.defaultAction,
-                    prevState.highlights.defaultPoinVisualization,
+                    prevState.highlights.defaultPointVisualization,
                     ...prevState.highlights.groups.map(g => g.action)
                 ] : [];
             if (!sequenceEqual(transforms, prevTransforms)) {
@@ -965,8 +965,8 @@ function createColorTransforms(highlights: RenderStateHighlightGroups, textureVa
         }
     }
     // Copy transformation matrices
-    const { defaultAction, defaultPoinVisualization, groups } = highlights;
-    copyMatrix(0, getRGBATransform(defaultAction), undefined, defaultPoinVisualization);
+    const { defaultAction, defaultPointVisualization, groups } = highlights;
+    copyMatrix(0, getRGBATransform(defaultAction), undefined, defaultPointVisualization);
     for (let i = 0; i < groups.length; i++) {
         copyMatrix(i + 1, getRGBATransform(groups[i].action), groups[i].texture, groups[i].pointVisualization);
     }

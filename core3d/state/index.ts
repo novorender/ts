@@ -429,7 +429,7 @@ export interface RenderStatePointCloud {
     readonly deviation: {
         /** Color gradient to use for visualizing deviation and tolerances.
          * @remarks May define different gradients for negative and positive numbers.
-         * devaition index will be mapped to the gradent array
+         * deviation index will be mapped to the gradient array
          */
         readonly colorGradients: readonly RenderStateColorGradient<RGBA>[];
     };
@@ -656,7 +656,7 @@ export interface RenderStateHighlightGroups {
      * Undefined will fall back to defualtAction then to color RGBA valuse.
      * @defaultValue `undefined`
      */
-    readonly defaultPoinVisualization: PointVisualization | undefined;
+    readonly defaultPointVisualization: PointVisualization | undefined;
 
     /** Highlight groups, max 250. */
     readonly groups: readonly RenderStateHighlightGroup[];
