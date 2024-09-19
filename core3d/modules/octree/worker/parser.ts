@@ -8,7 +8,7 @@ import * as LTS from "./2_1";
 import * as Current from "./2_3";
 import * as Previous from "./2_2";
 import type { WasmInstance } from "./wasm_loader";
-import type { ParseConfig, VertexAttributeSource } from ".";
+import type { FillValues, ParseConfig, VertexAttributeSource } from ".";
 import { initVertexBufferRange, layoutAttributes, vertexAttributeFloat, vertexAttributeInt, vertexAttributeUint, type VertexAttributes, vertexAttributeData } from "./attribs";
 
 const { MaterialType, OptionalVertexAttribute, PrimitiveType, TextureSemantic } = Current;
@@ -458,7 +458,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
             for (const subMesh of meshes) {
                 const { vertexRange, indexRange, materialIndex, objectId } = subMesh;
 
-                const fillValues = { material: materialIndex, objectId, highlight: highlights.indices[objectId] ?? 0 };
+                const fillValues: FillValues = { material: materialIndex, objectId, highlight: highlights.indices[objectId] ?? 0 };
                 const [beginVtx, endVtx] = vertexRange;
                 const [beginIdx, endIdx] = indexRange;
 

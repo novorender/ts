@@ -11,6 +11,7 @@ type Dictionary<T> = { [key: string]: T };
 export const enum VertexAttributesEnum { position, normal, material, objectId, texCoord0, color0, projectedPos, pointFactors0, pointFactors1, highlight };
 export type VertexAttribNames = keyof typeof VertexAttributesEnum;
 export type VertexAttributes<T = VertexAttributeData> = { readonly [P in VertexAttribNames]: T | null };
+export type FillValues = { readonly [P in VertexAttribNames]?: number | null };
 
 /** @internal */
 export interface VertexAttributeData {
@@ -167,11 +168,13 @@ export function layoutAttributes(sourceAttributes: VertexAttributes<VertexAttrib
     return { attributes: attributes as VertexAttributes<VertexAttributeSourceLayout>, byteStrides } as const;
 }
 
-export function initVertexBufferRange(buffers: ArrayBuffer[], beginVertex: number, endVertex: number, dstOffset: number, fillValues: Readonly<Dictionary<number>>, attributes: VertexAttributes<VertexAttributeSourceLayout>) {
+
+export function initVertexBufferRange(buffers: ArrayBuffer[], beginVertex: number, endVertex: number, dstOffset: number, fillValues: FillValues, attributes: VertexAttributes<VertexAttributeSourceLayout>) {
     // const buffers = byteStrides.map(bs => new ArrayBuffer(bs * numVertices));
     const numVertices = endVertex - beginVertex;
     for (const key in attributes) {
-        const value = attributes[key as keyof typeof attributes];
+        const name = key as VertexAttribNames;
+        const value = attributes[name];
         if (value) {
             const { buffer, componentViewType, components, byteOffset, byteStride } = value;
             const dst = new componentViewType(buffers[buffer], dstOffset * byteStride, numVertices * byteStride / componentViewType.BYTES_PER_ELEMENT);
@@ -179,7 +182,7 @@ export function initVertexBufferRange(buffers: ArrayBuffer[], beginVertex: numbe
                 const offs = byteOffset + i * componentViewType.BYTES_PER_ELEMENT;
                 if (components[0].length == 0) {
                     //const src = Reflect.get(fillValues, key) as number;
-                    const src = fillValues[key];
+                    const src = fillValues[name];
                     if (src != undefined) {
                         fillToInterleavedArray(dst, src, offs, byteStride, beginVertex, endVertex);
                     }
