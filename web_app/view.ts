@@ -664,7 +664,7 @@ export class View<
                     normal: vec3.fromValues(centerSample.normal[0], -centerSample.normal[2], centerSample.normal[1]),
                     sampleType,
                     normalVS: vec3.transformMat3(vec3.create(), centerSample.normal, worldViewMatrixNormal),
-                    deviation: this.deviceProfile.quirks.adreno600 ? undefined : centerSample.deviation
+                    pointFactor: this.deviceProfile.quirks.adreno600 ? undefined : centerSample.pointFactor
                 }
                 return flippedSample;
             }

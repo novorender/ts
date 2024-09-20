@@ -992,12 +992,12 @@ export class RenderContext {
                 if (objectId != 0xffffffff) {
                     const isReservedId = objectId >= 0xf000_0000
                     const depth = pickCameraPlane ? 0 : floats[buffOffs * 4 + 3];
-                    const [nx16, ny16, nz16, deviation16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
+                    const [nx16, ny16, nz16, pointFactor16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
                     const nx = wasm.float32(nx16);
                     const ny = wasm.float32(ny16);
                     const nz = wasm.float32(nz16);
-                    const dev32 = wasm.float32(deviation16);
-                    const deviation = deviation16 !== 0 ? dev32 : undefined;
+                    const pf32 = wasm.float32(pointFactor16);
+                    const pointFactor = pointFactor16 !== 0 ? pf32 : undefined;
 
                     // compute normal
                     // compute clip space x,y coords
@@ -1016,7 +1016,7 @@ export class RenderContext {
                     const clippingOutline = isReservedId ? false : (objectId & (1 << 31)) != 0;
                     objectId = isReservedId ? objectId : objectId & ~(1 << 31);
 
-                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, deviation, depth, clippingOutline } as const;
+                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, pointFactor, depth, clippingOutline } as const;
                     samples.push(sample);
                 }
             }
@@ -1126,10 +1126,8 @@ export interface PickSample {
     readonly normal: ReadonlyVec3;
     /** The object id/index of underlying pixel. */
     readonly objectId: number;
-    /** The spatial deviation of underlying pixel, if any.
-     * @remarks This only applies to point clouds with precomputed deviation data.
-     */
-    readonly deviation?: number;
+    /**  The value of the currently selected point visualization of the underlying pixel, if any. */
+    readonly pointFactor?: number;
     /** The depth/distance from the view plane. */
     readonly depth: number;
     /** The picked pixel is part of clipping outline */
