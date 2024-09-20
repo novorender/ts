@@ -406,8 +406,8 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
         vertexAttributesSrc.position.components = [pos.x, pos.y, pos.z];
         if (vertexAttributesSrc.normal != undefined && normal)
             vertexAttributesSrc.normal!.components = [normal.x, normal.y, normal.z];
-        if (texCoord)
-            vertexAttributesSrc.texCoord0!.components = [texCoord.x, texCoord.y];
+        if (texCoord && vertexAttributesSrc.texCoord0)
+            vertexAttributesSrc.texCoord0.components = [texCoord.x, texCoord.y];
         if (color)
             vertexAttributesSrc.color0!.components = [color.red, color.green, color.blue, color.alpha];
         if (projectedPos)
