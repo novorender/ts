@@ -74,7 +74,7 @@ void main() {
             pointFactor = factorIndex < 4 ? vertexPointFactors0[factorIndex] : vertexPointFactors1[factorIndex - 4];
         }
 
-        if(gradientKind != gradientKindElevation && pointFactor == 0.) {
+        if(gradientKind != gradientKindElevation && pointFactor == 0. || isinf(pointFactor)) {
             if(dot(scene.undefinedPointColor, scene.undefinedPointColor) != 0.) {
                 color = scene.undefinedPointColor;
             }
