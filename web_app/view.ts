@@ -105,11 +105,11 @@ export class View<
         }
 
         const input = new ControllerInput(canvas);
-        this.controllers = controllersFactory(input, this);
+        this._screenSpaceConversions = new ScreenSpaceConversions(this._drawContext2d);
+        this.controllers = controllersFactory(input, this, this._screenSpaceConversions);
         this._activeController = Object.values(this.controllers)[0];
         this._activeController.attach();
 
-        this._screenSpaceConversions = new ScreenSpaceConversions(this._drawContext2d);
 
         const resizeObserver = this._resizeObserver = new ResizeObserver(() => {
             this.recalcBaseRenderResolution();
@@ -1119,7 +1119,7 @@ export type CameraControllers<T extends string = string> = {
 /** Camera controller factory function signature type.
  * @template T dude
  */
-export type CameraControllersFactory<T extends CameraControllers> = (input: ControllerInput, pick: PickContext) => T;
+export type CameraControllersFactory<T extends CameraControllers> = (input: ControllerInput, pick: PickContext, conversions: ScreenSpaceConversions) => T;
 
 /** Optional values to initialize camera controller. */
 export interface CameraControllerInitialValues {

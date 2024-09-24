@@ -1,3 +1,4 @@
+import type { ScreenSpaceConversions } from "web_app/screen_space_conversions";
 import type { PickContext } from "./base";
 import { FlightController, CadMiddlePanController, CadRightPanController, SpecialFlightController } from "./flight";
 import type { ControllerInput } from "./input";
@@ -11,15 +12,15 @@ import { PanoramaController } from "./panorama";
  * @param input The control input.
  * @param pick The control pick context, typically the view in where
  */
-export function builtinControllers(input: ControllerInput, pick: PickContext) {
+export function builtinControllers(input: ControllerInput, pick: PickContext, conversions: ScreenSpaceConversions) {
     return {
         orbit: new OrbitController(input),
-        flight: new FlightController(input, pick),
+        flight: new FlightController(input, pick, conversions),
         ortho: new OrthoController(input),
         panorama: new PanoramaController(input),
-        cadMiddlePan: new CadMiddlePanController(input, pick),
-        cadRightPan: new CadRightPanController(input, pick),
-        special: new SpecialFlightController(input, pick),
+        cadMiddlePan: new CadMiddlePanController(input, pick, conversions),
+        cadRightPan: new CadRightPanController(input, pick, conversions),
+        special: new SpecialFlightController(input, pick, conversions),
         null: new NullController(input),
     } as const;
 }
