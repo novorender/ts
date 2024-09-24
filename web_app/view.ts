@@ -1,7 +1,7 @@
-import { type ReadonlyVec3, vec3, vec2, type ReadonlyQuat, mat3, type ReadonlyVec2, type ReadonlyVec4, glMatrix, vec4, mat4 } from "gl-matrix";
+import { type ReadonlyVec3, vec3, vec2, type ReadonlyQuat, mat3, type ReadonlyVec2, type ReadonlyVec4, glMatrix, vec4, mat4, quat } from "gl-matrix";
 import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports, type PBRMaterialInfo, type RGB, type RenderStateTextureReference, type ActiveTextureIndex, type MaxActiveTextures, emptyActiveTexturesArray, type AABB } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
-import { flipGLtoCadVec, flipState } from "./flip";
+import { flipGLtoCadQuat, flipGLtoCadVec, flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
 import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections } from "./buffer_inspect";
 import { downloadOfflineImports, manageOfflineStorage, type OfflineImportMap, type OfflineImports, type OfflineViewState, type SceneIndex } from "offline"
@@ -735,7 +735,7 @@ export class View<
         let possibleChanges = false;
         while (this._run && !(abortSignal?.aborted ?? false)) {
             const { _renderContext, _activeController, deviceProfile } = this;
-            const renderTime = await RenderContext.nextFrame(_renderContext);
+            const {time: renderTime, views} = await RenderContext.nextFrame(_renderContext);
             const frameTime = renderTime - prevRenderTime;
             const cameraChanges = _activeController.renderStateChanges(this.renderStateCad.camera, renderTime - prevRenderTime);
             if (cameraChanges) {
@@ -758,7 +758,7 @@ export class View<
                     }
                     if (!wasIdle) {
                         // set max quality and resolution when the camera stops moving
-                        this.resolutionModifier = Math.min(1, this.baseRenderResolution * 2);
+                        // this.resolutionModifier = Math.min(1, this.baseRenderResolution * 2);
                         this.resize();
                         this.modifyRenderState({ quality: { detail: 1 } });
                         this.currentDetailBias = 1;
@@ -793,12 +793,18 @@ export class View<
                 }
 
                 const { renderStateGL } = this;
-                if (prevState !== renderStateGL || _renderContext.changed) {
+                if (prevState !== renderStateGL || _renderContext.changed || _renderContext.xrSession) {
+                    const currentXrSession = _renderContext.xrSession;
                     prevState = renderStateGL;
-                    const statsPromise = _renderContext.render(renderStateGL);
+                    const statsPromise = _renderContext.render(renderStateGL, views!);
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
                         this.render?.({ isIdleFrame, cameraMoved: moving });
+                        if (!currentXrSession && _renderContext.xrSession) {
+                            // _renderContext.xrSession.addEventListener('end', () => {
+                            //     this.modifyRenderState({ output: { xr: false } });
+                            // });
+                        }
                         possibleChanges = true;
                     });
                 } else if (possibleChanges) {
@@ -836,7 +842,21 @@ export class View<
      * These changes will be applied and a single call to the {@link modifyRenderState} function just prior to rendering each frame.
      */
     modifyRenderState(changes: RenderStateChanges): void {
-        this._stateChanges = mergeRecursive(this._stateChanges, changes);
+        if (changes.output?.xr && !this.renderState.output.xr) {
+            this.renderContext?.initXr().then(() => {
+                Object.values(this.controllers).forEach(c => c.input.connectXr({
+                    session: this.renderContext!.xrSession!,
+                    onSelectStart: this.renderContext!.xrOnSelectStart!,
+                    onSelectEnd: this.renderContext!.xrOnSelectEnd!
+                }));
+                this._stateChanges = mergeRecursive(this._stateChanges, changes);
+            });
+        } else if (changes.output?.xr === false && this.renderState.output.xr) {
+            Object.values(this.controllers).forEach(c => c.input.disconnectXr());
+            this._stateChanges = mergeRecursive(this._stateChanges, changes);
+        } else {
+            this._stateChanges = mergeRecursive(this._stateChanges, changes);
+        }
     }
 
     /**
@@ -934,6 +954,14 @@ export class View<
      */
     protected readonly setRenderContext = (context: RenderContext) => {
         this._renderContext = context;
+        this._renderContext.setCamera = async (p: vec3, rotation: quat) => {
+            this.activeController.moveTo(flipGLtoCadVec(p as number[]) as vec3, 0, flipGLtoCadQuat(rotation));
+        };
+        this._renderContext.onExitXr = () => {
+            this.modifyRenderState({output: {xr: false}});
+            this._renderContext?.dispose();
+            this._renderContext = undefined;
+        }
         this.useDeviceProfile(this._deviceProfile);
     }
 
@@ -1008,7 +1036,7 @@ export class View<
             const now = performance.now();
             //To handle dynamic on and off clipping outline based on framerate.
             if (now > this.lastDrsAdjustTime + cooldown) { // add a cooldown period before changing anything
-                this.dynamicResolutionScaling(medianInterval, now);
+                // this.dynamicResolutionScaling(medianInterval, now);
             }
         }
     }

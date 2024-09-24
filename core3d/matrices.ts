@@ -1,4 +1,4 @@
-import { mat3, mat4, type ReadonlyMat3, type ReadonlyMat4 } from "gl-matrix";
+import { mat3, mat4, quat, vec3, type ReadonlyMat3, type ReadonlyMat4, type ReadonlyVec3 } from "gl-matrix";
 import { CoordSpace, type Matrices, type RenderStateCamera, type RenderStateOutput } from "./state";
 
 function index(from: CoordSpace, to: CoordSpace): number {
@@ -6,20 +6,30 @@ function index(from: CoordSpace, to: CoordSpace): number {
 }
 
 /** @internal */
-export function matricesFromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }): Matrices {
+export function matricesFromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }, transformMatrix?: ReadonlyMat4, projectionMatrix?: ReadonlyMat4): Matrices {
     const { camera, output } = state;
     const { width, height } = output;
     const aspectRatio = width / height;
     const fovY = camera.fov * Math.PI / 180;
-    const viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
-    const viewClip = mat4.create();
+    let viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
+    let viewClip = mat4.create();
+    if (transformMatrix && projectionMatrix) {
+        viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
+        const tm = mat4.clone(transformMatrix);
+        mat4.fromRotationTranslation(tm, quat.invert(quat.create(), mat4.getRotation(quat.create(), tm)), mat4.getTranslation(vec3.create(), tm));
+        mat4.invert(tm, tm);
+        mat4.multiply(viewWorld, viewWorld, tm);
+        viewClip = mat4.clone(projectionMatrix);
+    } else {
+        mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
+    }
     if (camera.kind == "orthographic") {
         const aspect = output.width / output.height;
         const halfHeight = camera.fov / 2;
         const halfWidth = halfHeight * aspect;
         mat4.ortho(viewClip, -halfWidth, halfWidth, -halfHeight, halfHeight, camera.near, camera.far);
     }
-    else {
+    else if (!transformMatrix || !projectionMatrix) {
         mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
     }
     return new MatricesImpl(viewWorld, viewClip);

@@ -1,18 +1,22 @@
 import { CoordSpace, TonemappingMode, type RGB, getMaterialCommon } from "./";
-import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports, RenderStateOutlines, PBRMaterialInfo, PBRMaterialCommon } from "./";
+import type { RenderModuleContext, RenderModule, DerivedRenderState, RenderState, Core3DImports, RenderStateOutlines, PBRMaterialInfo, PBRMaterialCommon, RecursivePartial, RenderStateCamera } from "./";
 import { glCreateBuffer, glExtensions, glState, glUpdateBuffer, glUBOProxy, glCheckProgram, glCreateTimer, glClear, type StateParams, glLimits } from "webgl2";
 import type { UniformsProxy, TextureParamsCubeUncompressedMipMapped, TextureParamsCubeUncompressed, ColorAttachment, ShaderHeaderParams, Timer, DrawStatistics } from "webgl2";
 import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
 import type { WasmInstance } from "./wasm";
-import type { ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
-import { glMatrix, mat3, mat4, quat, vec3, vec4 } from "gl-matrix";
+import type { ReadonlyMat4, ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
+import { glMatrix, mat3, mat4, quat, quat2, vec3, vec4 } from "gl-matrix";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
 import { orthoNormalBasisMatrixFromPlane } from "./util";
 import { createDefaultModules } from "./modules/default";
 import type { OutlineRenderer } from "./modules/octree/outlines";
+import { rotationFromDirection } from "web_app";
+import { clamp, computeRotation, decomposeRotation } from "web_app/controller/orientation";
+import { flipCADToGLQuat, flipGLtoCadQuat, flipGLtoCadVec } from "web_app/flip";
+import { projectPointOntoPlane } from "measure/worker/snaps";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 
@@ -143,6 +147,193 @@ export class RenderContext {
         /** # True if these are the default IBL textures. */
         readonly default: boolean;
     };
+    xrSession: XRSession | undefined = undefined;
+    xrReferenceSpace: XRReferenceSpace | undefined = undefined;
+    xrViewerSpace: XRReferenceSpace | undefined = undefined;
+    xrHitTestSource: XRHitTestSource | undefined = undefined;
+    xrScale = 100;
+    xrGesture?: 'zoom' | 'adjust';
+    private _xrFingerPressCount = 0;
+
+    private _lastXrView: XRView | undefined;
+    private _lastXrSelectTimestamp: Date | undefined;
+    private _xrTapStartViewTransform: XRRigidTransform | undefined;
+    private _startXrTapCamera: RenderStateCamera | undefined;
+    private _startXrScale: number | undefined;
+    private _cameraOffset: ReadonlyVec3 | undefined;
+    private _cameraBasePos: ReadonlyVec3 | undefined;
+    private _cameraRotation: quat | undefined;
+    private _initialCameraRotation: quat | undefined;
+    private _lastXrRelativePoseTransform: mat4 | undefined;
+    private _xrPoi: ReadonlyVec3 | undefined;
+
+    xrOnSelectStart = async (e: XRInputSourceEvent) => {
+        this._xrFingerPressCount += 1;
+        this._lastXrSelectTimestamp = new Date();
+
+        this._xrTapStartViewTransform = undefined;
+        if (this.xrViewerSpace) {
+            this._xrTapStartViewTransform = this._lastXrView?.transform;
+            if (this._xrFingerPressCount === 1) {
+                this._startXrScale = this.xrScale;
+            } else {
+                this._startXrTapCamera = this.currentState!.camera;
+            }
+        } else {
+            this._xrTapStartViewTransform = undefined;
+            this._startXrTapCamera = undefined;
+        }
+    }
+
+    xrOnSelectEnd = async (e: XRInputSourceEvent) => {
+        this._xrFingerPressCount -= 1;
+        if (this._lastXrSelectTimestamp && new Date().getTime() - this._lastXrSelectTimestamp.getTime() < 500) {
+            this.xrPlaceAtScreenCenter(e);
+        }
+        if (this._xrFingerPressCount === 0) {
+            this._xrTapStartViewTransform = undefined;
+            this.xrGesture = undefined;
+        }
+    }
+
+    private xrOnFrame(frame: XRFrame, nextView: XRRigidTransform) { 
+        if (this._lastXrSelectTimestamp && new Date().getTime() - this._lastXrSelectTimestamp.getTime() >= 300) {
+            if (this._xrFingerPressCount === 1 && (!this.xrGesture || this.xrGesture === 'zoom')) {
+                this.xrGesture = 'zoom';
+                this.xrUpdateScale(nextView);
+            } else if (this._xrFingerPressCount >= 2 && (!this.xrGesture || this.xrGesture === 'adjust')) {
+                this.xrGesture = 'adjust';
+                this.xrAdjust(frame, nextView);
+            }
+        }
+    }
+
+    private xrUpdateScale(nextView: XRRigidTransform) {
+        if (!this.xrReferenceSpace || !this.xrSession || !this._xrTapStartViewTransform || !this._cameraBasePos || !this._cameraOffset || !this._startXrScale || this.xrGesture !== 'zoom') return;
+
+        const dz = nextView.position.z - this._xrTapStartViewTransform.position.z;
+        
+        const dScale = dz * 100;
+        this.xrScale = this._startXrScale - dScale;
+        this.xrScale = clamp(this.xrScale, 1, 500);
+
+        const newPosition = vec3.clone(this._cameraBasePos);
+        const cameraOffset = this._cameraOffset;
+
+        vec3.scaleAndAdd(newPosition, newPosition, cameraOffset, -(this.xrScale - 1));
+
+        this.setCamera?.(newPosition, this._cameraRotation!);
+    }
+
+    private xrAdjust(frame: XRFrame, nextView: XRRigidTransform) {
+        if (!this.xrReferenceSpace || !this.xrSession || !this._xrTapStartViewTransform || !this._startXrTapCamera || !this._xrPoi) return;
+
+        // const base = this._xrTapStartViewTransform.matrix;
+        // const delta = mat4.multiply(mat4.create(), nextView.matrix, mat4.invert(mat4.create(), base));
+        // mat4.invert(delta, delta);
+
+        const base = this._xrTapStartViewTransform;
+        const delta = mat4.multiply(mat4.create(), nextView.matrix, base.inverse.matrix);
+        mat4.invert(delta, delta);
+        
+        // project rotation to starting view plane to discard pinch
+        const rot1 = orientationToQuat(this._xrTapStartViewTransform.orientation);
+        const v1 = vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, 1), rot1);
+        const up1 = vec3.transformQuat(vec3.create(), vec3.fromValues(0, 1, 0), rot1);
+
+        const rot2 = orientationToQuat(nextView.orientation);
+        const v2 = vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, 1), rot2);
+        const up2 = vec3.transformQuat(vec3.create(), vec3.fromValues(0, 1, 0), rot2);
+
+        const projectedV2 = projectPointOntoPlane(v2, up1, v1);
+        vec3.normalize(projectedV2, projectedV2);
+
+        const projectedRot2 = rotationFromDirection(projectedV2, undefined, up2);
+        const rotDelta = quat.multiply(quat.create(), projectedRot2, quat.invert(quat.create(), rot1));
+        quat.invert(rotDelta, rotDelta);
+        
+        // multiple translation by xrScale
+        const posDelta = mat4.getTranslation(vec3.create(), delta);
+        vec3.scale(posDelta, posDelta, this.xrScale);
+
+        mat4.fromRotationTranslation(delta, rotDelta, posDelta);
+
+        // add transform to starting camera transform
+        const cameraMatBase = mat4.fromRotationTranslation(mat4.create(), this._startXrTapCamera.rotation, this._startXrTapCamera.position);
+        const newCameraMat = mat4.multiply(mat4.create(), cameraMatBase, delta);
+
+        const newPosition = mat4.getTranslation(vec3.create(), newCameraMat);
+        const newRotation = mat4.getRotation(quat.create(), newCameraMat);
+        const cameraBasePos = vec3.create();
+        // vec3.sub(cameraBasePos, newPosition, this._xrPoi);
+        // vec3.scaleAndAdd(cameraBasePos, this._xrPoi, cameraBasePos, vec3.length(cameraBasePos) / this.xrScale);
+        vec3.lerp(cameraBasePos, this._xrPoi, newPosition, 1 / this.xrScale);
+        this._cameraBasePos = cameraBasePos;
+        this._cameraRotation = quat.clone(newRotation);
+        this._cameraOffset = vec3.sub(vec3.create(), this._xrPoi, this._cameraBasePos);
+        this.setCamera?.(newPosition, newRotation);
+    }
+
+    private xrPlaceAtScreenCenter(e: XRInputSourceEvent) {
+        if (!this.xrReferenceSpace || !this.xrSession || !this.xrHitTestSource) return;
+        const view = this._lastXrView;
+        if (!view) return;
+        
+        // hitTestResult is intersection of ray, coming from viewer screen center, with real world
+        // tap position is not used
+        const hitTestResults = e.frame.getHitTestResults(this.xrHitTestSource);
+        let pose: XRPose | undefined;
+        if (hitTestResults.length > 0) {
+            // transform pos to same ref space as the view
+            pose = hitTestResults[0].getPose(this.xrReferenceSpace);
+        }
+
+        if (!pose) {
+            return;
+        }
+
+        // floor center of the model - point that's going to be put at the screen center
+        const poi = {
+            "463a052a6d2f41b3abf77d1ce41b207e": vec3.fromValues(106166.421, 32.373, -1212161.490),
+            "463a052a6d2f41b3abf77d1ce41b207f": vec3.fromValues(106166.421, 32.373, -1212161.490),
+            '3e1da53a7c4d4343902488587d0d9bd6': vec3.fromValues(21.012, 0, -31.914),
+        }[this.currentState?.scene?.config.id ?? ''] ?? vec3.fromValues(730.005, 0.000, -229.706);
+        this._xrPoi = poi;
+
+        this.xrReferenceSpace = this.xrReferenceSpace.getOffsetReferenceSpace(view.transform);
+        
+        if (!this._initialCameraRotation) {
+            this._initialCameraRotation = quat.clone(this.currentState?.camera.rotation! as quat);
+        }
+        const baseRotation = rotationFromDirection(vec3.fromValues(0, 0, -1));
+
+        const relativePoseTransform = mat4.multiply(mat4.create(), pose.transform.inverse.matrix, view.transform.matrix);
+        this._lastXrRelativePoseTransform = relativePoseTransform;
+        const cameraMat = mat4.fromRotationTranslation(mat4.create(), baseRotation, poi);
+        mat4.multiply(cameraMat, cameraMat, relativePoseTransform);
+
+        let newRotation = mat4.getRotation(quat.create(), cameraMat);
+
+        const newPosition = mat4.getTranslation(vec3.create(), cameraMat);
+
+        // rotate to initial camera pos
+        const zAngle = quat.getAxisAngle(vec3.fromValues(0, 0, -1), this._initialCameraRotation);
+        vec3.rotateY(newPosition, newPosition, poi, zAngle);
+        // quat.rotateY(newRotation, newRotation, -zAngle);
+        newRotation = rotationFromDirection(vec3.normalize(vec3.create(), vec3.sub(vec3.create(), newPosition, poi)));
+
+        const cameraOffset = vec3.sub(vec3.create(), poi, newPosition);
+        this._cameraOffset = vec3.clone(cameraOffset);
+        this._cameraBasePos = vec3.clone(newPosition);
+        this._cameraRotation = quat.clone(newRotation);
+
+        vec3.scaleAndAdd(newPosition, newPosition, cameraOffset, -(this.xrScale - 1));
+
+        this.setCamera?.(newPosition, newRotation);
+    }
+
+    setCamera?: (position: vec3, rotation: quat) => void;
+    onExitXr?: () => void;
 
     /** @internal */
     constructor(
@@ -262,6 +453,48 @@ export class RenderContext {
         });
         this.linkAsyncPrograms();
         this.modules = await Promise.all(modulePromises);
+    }
+
+    async initXr() {
+        if (this.xrSession) {
+            return;
+        }
+
+        try {
+            const xrSession = await navigator.xr!.requestSession('immersive-ar', {requiredFeatures: ['hit-test', 'viewer', 'local']});
+            xrSession.updateRenderState({
+                depthFar: this.currentState!.camera.far,
+                depthNear: this.currentState!.camera.near,
+            })
+            xrSession.addEventListener('end', () => {
+                this.uninitXr(true);
+                this.onExitXr?.();
+            });
+            // await this.gl.makeXRCompatible();
+            await xrSession.updateRenderState({
+                baseLayer: new XRWebGLLayer(xrSession, this.gl)
+            });
+            this.xrViewerSpace = await xrSession.requestReferenceSpace('viewer');
+            this.xrReferenceSpace = await xrSession.requestReferenceSpace('local');
+            
+            this.xrSession = xrSession;
+            this.xrHitTestSource = await xrSession.requestHitTestSource?.({space: this.xrViewerSpace, offsetRay: new XRRay(undefined, {})});
+        } catch(ex) {
+            alert(ex);
+        }
+    }
+
+    async uninitXr(ended = false) {
+        if (this.xrSession) {
+            if (!ended) {
+                this.xrSession.end();
+            }
+            this.xrSession = undefined;
+            this.xrReferenceSpace = undefined;
+            this.xrViewerSpace = undefined;
+            this.xrHitTestSource?.cancel();
+            this.xrHitTestSource = undefined;
+        }
     }
 
     private linkAsyncPrograms() {
@@ -515,6 +748,7 @@ export class RenderContext {
                 module?.contextLost();
             }
         }
+        this.uninitXr(false);
     }
 
     /** @internal */
@@ -553,24 +787,55 @@ export class RenderContext {
             }
         }
     }
-
+    
     /** Wait for the next frame to be ready for rendering.
      * @param context render context to wait for, if any.
      * @remarks Use this function instead of requestAnimationFrame()!
      */
-    public static nextFrame(context: RenderContext | undefined): Promise<number> {
-        return new Promise<number>((resolve) => {
-            requestAnimationFrame((time) => {
-                if (context) {
-                    const { prevFrame } = context;
-                    if (prevFrame) {
-                        prevFrame.resolve(time - prevFrame.time);
-                        context.prevFrame = undefined;
+    public static nextFrame(context: RenderContext | undefined): Promise<{time: number, views?: {viewport: XRViewport, projectionMatrix?: ReadonlyMat4, transformMatrix?: ReadonlyMat4}[]}> {
+        return new Promise((resolve) => {
+            if (context?.xrSession) {
+                context.xrSession.requestAnimationFrame((time, frame) => {
+                    if (context?.xrSession && context.xrReferenceSpace && context.xrViewerSpace) {
+                        const { prevFrame } = context;
+                        if (prevFrame) {
+                            prevFrame.resolve(time - prevFrame.time);
+                            context.prevFrame = undefined;
+                        }
+                        context.currentFrameTime = time;
+                        const baseLayer = context.xrSession.renderState.baseLayer!;
+                        const viewerPose = frame.getViewerPose(context.xrReferenceSpace);
+                        if (viewerPose) {
+                            const views = viewerPose.views.map(view => ({
+                                viewport: baseLayer.getViewport(view)!,
+                                projectionMatrix: view.projectionMatrix,
+                                transformMatrix: view.transform.matrix,
+                                position: view.transform.position,
+                                orientation: view.transform.orientation,
+                            }));
+                            context.xrOnFrame(frame, viewerPose.views[0].transform);
+                            context._lastXrView = viewerPose.views[0];
+                            resolve({time, views});
+                        } else {
+                            resolve({time});
+                        }
+                        return;
                     }
-                    context.currentFrameTime = time;
-                }
-                resolve(time);
-            });
+                    resolve({time});
+                });
+            } else {
+                requestAnimationFrame((time) => {
+                    if (context) {
+                        const { prevFrame } = context;
+                        if (prevFrame) {
+                            prevFrame.resolve(time - prevFrame.time);
+                            context.prevFrame = undefined;
+                        }
+                        context.currentFrameTime = time;
+                    }
+                    resolve({time});
+                });
+            }
         });
     }
 
@@ -579,7 +844,7 @@ export class RenderContext {
      * @param state An object describing what the frame should look like.
      * @returns A promise to the performance related statistics involved in rendering this frame.
      */
-    public async render(state: RenderState): Promise<RenderStatistics> {
+    public async render(state: RenderState, views: undefined | {viewport: XRViewport, projectionMatrix?: ReadonlyMat4, transformMatrix?: ReadonlyMat4, position?: DOMPointReadOnly, orientation?: DOMPointReadOnly}[]): Promise<RenderStatistics> {
         if (!this.modules) {
             throw new Error("Context has not been initialized!");
         }
@@ -597,6 +862,24 @@ export class RenderContext {
         // handle resizes
         let resized = false;
         const { output } = state;
+
+        if (!views) {
+            views = [{viewport: {x: 0, y: 0, width: canvas.width, height: canvas.height}}];
+        }
+        views = views.map(view => {
+            const kx = 1;//output.width / canvas.width;
+            const ky = 1;//output.height / canvas.height;
+            return {
+                ...view,
+                viewport: {
+                    x: Math.round(view.viewport.x * kx),
+                    y: Math.round(view.viewport.y * ky),
+                    width: Math.round(view.viewport.width * kx),
+                    height: Math.round(view.viewport.height * ky),
+                }
+            }
+        });
+        
         if (this.hasStateChanged({ output })) {
             const { width, height } = output;
             console.assert(Number.isInteger(width) && Number.isInteger(height));
@@ -604,101 +887,159 @@ export class RenderContext {
             canvas.height = height;
             resized = true;
             this.changed = true;
-            this.buffers?.dispose();
-            this.buffers = new RenderBuffers(gl, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
+            if (output.xr !== this.prevState?.output.xr) {
+                if (output.xr) {
+                    await this.initXr();
+                } else {
+                    await this.uninitXr();
+                }
+            }
+            // this.buffers?.dispose();
+            // this.buffers = new RenderBuffers(gl, width / 2, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
         }
 
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
-        const derivedState = state as Mutable<DerivedRenderState>;
-        derivedState.effectiveSamplesMSAA = effectiveSamplesMSAA;
-        if (resized || state.camera !== prevState?.camera) {
-            const snapDist = 1024; // make local space roughly within 1KM of camera
-            const dir = vec3.sub(vec3.create(), state.camera.position, this.localSpaceTranslation).map(c => Math.abs(c));
-            const dist = Math.max(dir[0], dir[2]) //Skip Y as we will not get an issue with large Y offset and we elevations internally in shader.
-            // don't change localspace unless camera is far enough away. we want to avoid flipping back and forth across snap boundaries.
-            if (dist >= snapDist) {
-                function snap(v: number) {
-                    return Math.round(v / snapDist) * snapDist;
+        const baseDerivedState = state as Mutable<DerivedRenderState>;
+        baseDerivedState.effectiveSamplesMSAA = effectiveSamplesMSAA;
+
+        const shouldRenderModule = (m: RenderModule) => {
+            if (this.xrSession) {
+                return !['background', 'tonemap', 'toon_outline'].includes(m.kind);
+            } else {
+                return m.kind !== 'ar_hud';
+            }
+        }
+
+        for (const view of views ?? []) {
+            const { viewport } = view;
+            // const viewport = {width: canvas.width, height: canvas.height};
+
+            let viewCamera = state.camera;
+            if (view.transformMatrix && view.position && view.orientation) {
+                // const rot = mat4.getRotation(quat.create(), view.transformMatrix);
+                // const tr = mat4.getTranslation(vec3.create(), view.transformMatrix);
+                const tr = domPointToVec3(view.position);
+                const trScale = this.xrScale;
+                vec3.scale(tr, tr, trScale);
+                // vec3.negate(tr, tr);
+                const m = mat4.create();
+                mat4.fromRotationTranslation(m, state.camera.rotation, state.camera.position);
+                // mat4.multiply(m, m, mat4.fromQuat(mat4.create(), rot));
+                mat4.translate(m, m, tr);
+                // mat4.translate(m, m, flipGLtoCadVec(tr as number[]) as vec3);
+                // mat4.mul(m, mat4.fromRotationTranslation(mat4.create(), rot, flipGLtoCadVec(tr as number[]) as vec3), m);
+                viewCamera = {
+                    ...viewCamera,
+                    position: mat4.getTranslation(vec3.create(), m),
+                    // rotation: mat4.getRotation(quat.create(), m),
+                };
+            }
+            
+            const derivedState = {
+                ...baseDerivedState,
+                output: {...baseDerivedState.output, width: viewport.width, height: viewport.height},
+                camera: viewCamera
+            };
+
+            if (!this.buffers || viewport.width !== this.buffers.width || viewport.height !== this.buffers.height || effectiveSamplesMSAA !== this.buffers.samples) {
+                const width = viewport.width;
+                const height = viewport.height;
+                console.assert(Number.isInteger(width) && Number.isInteger(height));
+                this.buffers?.dispose();
+                this.buffers = new RenderBuffers(gl, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
+            }
+
+            if (resized || derivedState.camera !== prevState?.camera) {
+                const snapDist = 1024; // make local space roughly within 1KM of camera
+                const dir = vec3.sub(vec3.create(), derivedState.camera.position, this.localSpaceTranslation).map(c => Math.abs(c));
+                const dist = Math.max(dir[0], dir[2]) //Skip Y as we will not get an issue with large Y offset and we elevations internally in shader.
+                // don't change localspace unless camera is far enough away. we want to avoid flipping back and forth across snap boundaries.
+                if (dist >= snapDist) {
+                    function snap(v: number) {
+                        return Math.round(v / snapDist) * snapDist;
+                    }
+                    this.localSpaceTranslation = vec3.fromValues(snap(derivedState.camera.position[0]), 0, snap(derivedState.camera.position[2]));
                 }
-                this.localSpaceTranslation = vec3.fromValues(snap(state.camera.position[0]), 0, snap(state.camera.position[2]));
+
+                baseDerivedState.localSpaceTranslation = derivedState.localSpaceTranslation = this.localSpaceTranslation; // update the object reference to indicate that values have changed
+                baseDerivedState.matrices = derivedState.matrices = matricesFromRenderState(derivedState, view.transformMatrix, view.projectionMatrix);
+                baseDerivedState.viewFrustum = derivedState.viewFrustum = createViewFrustum(derivedState, derivedState.matrices);
+            }
+            this.currentState = derivedState;
+            this.pickBuffersValid = false;
+            const { buffers } = this;
+            buffers.readBuffersNeedUpdate = true;
+
+            this.updateCameraUniforms(derivedState);
+            this.updateClippingUniforms(derivedState);
+
+            // update internal state
+            this.isOrtho = derivedState.camera.kind == "orthographic";
+            mat4.copy(this.viewClipMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.Clip));
+            mat4.copy(this.viewWorldMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.World));
+            mat3.copy(this.viewWorldMatrixNormal, derivedState.matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World));
+
+            // update modules from state
+            if (!this.pause) {
+                for (const module of this.modules) {
+                    if (shouldRenderModule(module.module)) {
+                        module?.update(derivedState);
+                    }
+                }
             }
 
-            derivedState.localSpaceTranslation = this.localSpaceTranslation; // update the object reference to indicate that values have changed
-            derivedState.matrices = matricesFromRenderState(state);
-            derivedState.viewFrustum = createViewFrustum(state, derivedState.matrices);
-        }
-        this.currentState = derivedState;
-        this.pickBuffersValid = false;
-        const { buffers } = this;
-        buffers.readBuffersNeedUpdate = true;
+            // link any updates programs asynchronously here
+            this.linkAsyncPrograms();
 
-        this.updateCameraUniforms(derivedState);
-        this.updateClippingUniforms(derivedState);
+            this.setPolygonFillMode("FILL");
 
-        // update internal state
-        this.isOrtho = derivedState.camera.kind == "orthographic";
-        mat4.copy(this.viewClipMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.Clip));
-        mat4.copy(this.viewWorldMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.World));
-        mat3.copy(this.viewWorldMatrixNormal, derivedState.matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World));
+            const frameBufferName = effectiveSamplesMSAA > 1 ? "colorMSAA" : "color";
+            const frameBuffer = this.xrSession?.renderState.baseLayer?.framebuffer ?? buffers.frameBuffers[frameBufferName];
+            buffers.invalidate(frameBufferName, BufferFlags.all);
+            const viewportWithoutOffset = {width: viewport.width, height: viewport.height};
+            glState(gl, { viewport: viewportWithoutOffset, frameBuffer });
+            glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
 
-        // update modules from state
-        if (!this.pause) {
-            for (const module of this.modules) {
-                module?.update(derivedState);
+
+            // apply module render z-buffer pre-pass
+            if (this.usePrepass) {
+                for (const module of this.modules) {
+                    if (module && module.prepass && shouldRenderModule(module.module)) {
+                        glState(gl, {
+                            viewport: viewportWithoutOffset,
+                            frameBuffer,
+                            drawBuffers: [],
+                            // colorMask: [false, false, false, false],
+                        });
+                        module.prepass(derivedState);
+                        this.resetGLState();
+                    }
+                }
             }
-        }
 
-        // link any updates programs asynchronously here
-        this.linkAsyncPrograms();
-
-        // pick frame buffer and clear z-buffer
-        const { width, height } = canvas;
-
-        this.setPolygonFillMode("FILL");
-
-        const frameBufferName = effectiveSamplesMSAA > 1 ? "colorMSAA" : "color";
-        const frameBuffer = buffers.frameBuffers[frameBufferName];
-        buffers.invalidate(frameBufferName, BufferFlags.all);
-        glState(gl, { viewport: { width, height }, frameBuffer });
-        glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
-
-
-        // apply module render z-buffer pre-pass
-        if (this.usePrepass) {
+            // render modules
             for (const module of this.modules) {
-                if (module && module.prepass) {
+                if (module && shouldRenderModule(module.module)) {
                     glState(gl, {
-                        viewport: { width, height },
+                        viewport: module === this.modules.at(-1) ? viewport : viewportWithoutOffset,
                         frameBuffer,
-                        drawBuffers: [],
-                        // colorMask: [false, false, false, false],
+                        drawBuffers: this.xrSession ? undefined : this.drawBuffers(BufferFlags.color),
+                        sample: { alphaToCoverage: effectiveSamplesMSAA > 1 },
                     });
-                    module.prepass(derivedState);
+                    module.render(derivedState);
                     this.resetGLState();
                 }
             }
+
+            drawTimer.end();
+
+            // invalidate color and depth buffers only (we may need pick buffers for picking)
+            this.buffers.invalidate("colorMSAA", BufferFlags.color | BufferFlags.depth);
+            this.buffers.invalidate("color", BufferFlags.color | BufferFlags.depth);
+
+            this.prevState = baseDerivedState;
         }
 
-        // render modules
-        for (const module of this.modules) {
-            if (module) {
-                glState(gl, {
-                    viewport: { width, height },
-                    frameBuffer,
-                    drawBuffers: this.drawBuffers(BufferFlags.color),
-                    sample: { alphaToCoverage: effectiveSamplesMSAA > 1 },
-                });
-                module.render(derivedState);
-                this.resetGLState();
-            }
-        }
-
-        drawTimer.end();
-
-        // invalidate color and depth buffers only (we may need pick buffers for picking)
-        this.buffers.invalidate("colorMSAA", BufferFlags.color | BufferFlags.depth);
-        this.buffers.invalidate("color", BufferFlags.color | BufferFlags.depth);
-        this.prevState = derivedState;
         const endTime = performance.now();
 
         const intervalPromise = new Promise<number>((resolve) => {
@@ -1212,3 +1553,11 @@ export interface RenderStatistics {
     /** Effective interval in milliseconds since last frame was drawn. */
     readonly frameInterval: number;
 };
+
+function domPointToVec3(p: DOMPointReadOnly) {
+    return vec3.fromValues(p.x, p.y, p.z);
+}
+
+function orientationToQuat(p: DOMPointReadOnly) {
+    return quat.fromValues(p.x, p.y, p.z, p.w);
+}

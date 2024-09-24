@@ -99,6 +99,26 @@ export class ControllerInput {
         return [-(_zoomX - width / 2) / height * 2, (_zoomY - height / 2) / height * 2];
     }
 
+    private _xrSession: XRSession | undefined;
+    private _xrOnSelectStart: ((e: XRInputSourceEvent) => void) | undefined;
+    private _xrOnSelectEnd: ((e: XRInputSourceEvent) => void) | undefined;
+
+    connectXr({session, onSelectStart, onSelectEnd}: {session: XRSession, onSelectStart: (e: XRInputSourceEvent) => void, onSelectEnd: (e: XRInputSourceEvent) => void}) {
+        if (this._xrSession) return;
+        this._xrSession = session;
+        this._xrOnSelectStart = onSelectStart;
+        this._xrOnSelectEnd = onSelectEnd;
+        session.addEventListener('selectstart', this.xrSelectStart);
+        session.addEventListener('selectend', this.xrSelectEnd);
+    }
+
+    disconnectXr() {
+        this._xrSession?.removeEventListener('selectstart', this.xrSelectStart);
+        this._xrSession?.removeEventListener('selectend', this.xrSelectEnd);
+        this._xrSession = undefined;
+        this._xrOnSelectStart = undefined;
+    }
+
     /** Subscribe to input events from {@link domElement}. */
     protected connect() {
         const { domElement } = this;
@@ -163,6 +183,14 @@ export class ControllerInput {
         e.altKey ? _keys.add("Alt") : _keys.delete("Alt");
         e.shiftKey ? _keys.add("Shift") : _keys.delete("Shift");
         e.ctrlKey ? _keys.add("Control") : _keys.delete("Control");
+    }
+
+    private xrSelectStart = async (e: XRInputSourceEvent) => {
+        this._xrOnSelectStart?.(e);
+    }
+
+    private xrSelectEnd = async (e: XRInputSourceEvent) => {
+        this._xrOnSelectEnd?.(e);
     }
 
     private keydown = (e: KeyboardEvent) => {
@@ -517,7 +545,7 @@ export interface ContollerInputContext {
     /** Touch "click" events. */
     touchChanged(event: TouchEvent): Promise<void> | void;
     /** Mouse or touch move events. */
-    moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void
+    moveBegin(event: TouchEvent | MouseEvent | XRInputSourceEvent): Promise<void> | void
 }
 
 /** A single touch input contact point.

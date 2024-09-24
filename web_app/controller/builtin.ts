@@ -1,3 +1,4 @@
+import { ArController } from "./ar";
 import type { PickContext } from "./base";
 import { FlightController, CadMiddlePanController, CadRightPanController, SpecialFlightController } from "./flight";
 import type { ControllerInput } from "./input";
@@ -20,6 +21,7 @@ export function builtinControllers(input: ControllerInput, pick: PickContext) {
         cadMiddlePan: new CadMiddlePanController(input, pick),
         cadRightPan: new CadRightPanController(input, pick),
         special: new SpecialFlightController(input, pick),
+        ar: new ArController(input),
         null: new NullController(input),
     } as const;
 }

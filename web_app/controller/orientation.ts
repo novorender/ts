@@ -180,10 +180,10 @@ export function clamp(value: number, min: number, max: number) {
   * @returns Rotation computed for the given direction and snap axis.
   * @category Camera Controllers
   */
-export function rotationFromDirection(dir: ReadonlyVec3, snapToAxis?: quat) {
-    const up = glMatrix.equals(Math.abs(vec3.dot(vec3.fromValues(0, 0, 1), dir)), 1)
+export function rotationFromDirection(dir: ReadonlyVec3, snapToAxis?: quat, customUp?: vec3) {
+    const up = customUp ?? (glMatrix.equals(Math.abs(vec3.dot(vec3.fromValues(0, 0, 1), dir)), 1)
         ? vec3.fromValues(0, 1, 0)
-        : vec3.fromValues(0, 0, 1);
+        : vec3.fromValues(0, 0, 1));
     if (snapToAxis) {
         vec3.transformQuat(up, up, snapToAxis);
     }

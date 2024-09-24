@@ -84,7 +84,7 @@ export interface PickInterface {
     snappingPoints: PickPoints[];
 }
 
-function projectPointOntoPlane(point: ReadonlyVec3, planeNormal: ReadonlyVec3, planePoint: ReadonlyVec3): vec3 {
+export function projectPointOntoPlane(point: ReadonlyVec3, planeNormal: ReadonlyVec3, planePoint: ReadonlyVec3): vec3 {
     const planeToPoint = vec3.subtract(vec3.create(), point, planePoint);
     const d = vec3.dot(planeToPoint, planeNormal);
     const projection = vec3.scaleAndAdd(vec3.create(), point, planeNormal, -d);
