@@ -16,7 +16,6 @@ export class FlightController extends BaseController {
     protected pivotButton: MouseButtons = MouseButtons.right;
     /** @internal */
     protected pivotFingers: number = 3;
-    /** @internal */
 
     override kind = "flight";
     override projection = "pinhole" as const;
@@ -33,7 +32,7 @@ export class FlightController extends BaseController {
     private _pivot: Pivot | undefined;
     private _fov = 60;
     private _angularVelocity: { pitch: number, yaw: number } = { pitch: 0, yaw: 0 }
-    private _flytoFromDeacceleration = false;
+    private _flyToFromDeacceleration = false;
 
     private readonly resetPickDelay = 3000;
     private lastUpdatedMoveBegin: number = 0;
@@ -149,7 +148,7 @@ export class FlightController extends BaseController {
 
     override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat, easeFunction?: (t: number) => number): void {
         const { _orientation, _position } = this;
-        this._flytoFromDeacceleration = false;
+        this._flyToFromDeacceleration = false;
         if (flyTime) {
             let targetPitch = _orientation.pitch;
             let targetYaw = _orientation.yaw;
@@ -177,7 +176,7 @@ export class FlightController extends BaseController {
 
     override zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void {
         const { _orientation, _position, _fov } = this;
-        this._flytoFromDeacceleration = false;
+        this._flyToFromDeacceleration = false;
         if (flyTime) {
             const dist = Math.max(boundingSphere.radius / Math.tan(glMatrix.toRadian(_fov) / 2), boundingSphere.radius);
             const targetPosition = vec3.create();
@@ -196,8 +195,8 @@ export class FlightController extends BaseController {
     }
 
     override update(): void {
-        const { multiplier, _orientation, params, height, _pivot, zoomPos, currentFlyTo, _flytoFromDeacceleration, input } = this;
-        if (_flytoFromDeacceleration && Object.values(input.axes).some(v => v != 0)) { //Break flyto if theres controller changes and flyto is from deacceleration
+        const { multiplier, _orientation, params, height, _pivot, zoomPos, currentFlyTo, _flyToFromDeacceleration, input } = this;
+        if (_flyToFromDeacceleration && Object.values(input.axes).some(v => v != 0)) { //Break flyto if theres controller changes and flyto is from deacceleration
             this.resetFlyTo();
             this.resetVelocity();
         }
@@ -208,7 +207,7 @@ export class FlightController extends BaseController {
             this.changed();
             return;
         }
-        this._flytoFromDeacceleration = false;
+        this._flyToFromDeacceleration = false;
         this.lastUpdate = performance.now();
         let { tx, ty, tz, rx, ry, shouldPivot } = this.getTransformations();
         _orientation.roll = 0;
@@ -258,7 +257,7 @@ export class FlightController extends BaseController {
             begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw },
             easeFunction: easeOut
         });
-        this._flytoFromDeacceleration = true;
+        this._flyToFromDeacceleration = true;
         this.resetVelocity()
     }
 

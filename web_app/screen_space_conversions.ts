@@ -7,7 +7,7 @@ export class ScreenSpaceConversions {
     constructor(readonly drawContext: DrawContext) { }
 
     /** Check if world space point is inside the current view.
-     * @param points World space points that will be checked.
+     * @param point World space point that will be checked.
      * @returns True if the point is inside the view false otherwise.
      */
     isInView(point: ReadonlyVec3) {
@@ -154,7 +154,7 @@ const toView = (() => {
 
 function toScreen(projMat: mat4, width: number, height: number, p: ReadonlyVec3): vec2 {
     const pt = toView(projMat, p);
-    
+
     pt[0] = Math.round(pt[0] * width);
     pt[1] = Math.round(pt[1] * height);
 
