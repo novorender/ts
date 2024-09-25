@@ -110,6 +110,10 @@ export abstract class BaseController {
         return this._flyTo?.current;
     }
 
+    protected resetFlyTo() {
+        this._flyTo = undefined;
+    }
+
     /** Initialize a fly-to transition.
      * @param flyTo The transition parameters
      */

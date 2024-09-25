@@ -1,9 +1,10 @@
 
 import { type ReadonlyVec3, vec3, quat, glMatrix, type ReadonlyQuat } from "gl-matrix";
-import { BaseController, easeInOut, type ControllerInitParams, type MutableCameraState, type PickContext } from "./base";
+import { BaseController, easeInOut, easeOut, type ControllerInitParams, type MutableCameraState, type PickContext } from "./base";
 import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type BoundingSphere } from "core3d";
 import { PitchRollYawOrientation, clamp, decomposeRotation } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
+import type { ScreenSpaceConversions } from "web_app/screen_space_conversions";
 
 /** The flight controller mimics the behaviour of an etheral, hovering drone, allowing unconstrained movements through walls and obstacles.
  * @category Camera Controllers
@@ -30,6 +31,8 @@ export class FlightController extends BaseController {
     private readonly _orientation = new PitchRollYawOrientation(-30, 30);
     private _pivot: Pivot | undefined;
     private _fov = 60;
+    private _angularVelocity: { pitch: number, yaw: number } = { pitch: 0, yaw: 0 }
+    private _flyToFromDeacceleration = false;
 
     private readonly resetPickDelay = 3000;
     private lastUpdatedMoveBegin: number = 0;
@@ -46,6 +49,7 @@ export class FlightController extends BaseController {
         input: ControllerInput,
         /** The context used for pick queries. */
         readonly pick: PickContext,
+        readonly conversions: ScreenSpaceConversions
     ) {
         super(input);
     }
@@ -99,6 +103,10 @@ export class FlightController extends BaseController {
         return this._pivot;
     }
 
+    resetVelocity() {
+        this._angularVelocity = { pitch: 0, yaw: 0 };
+    }
+
     /** Update controller parameters.
      * @param params Set of parameters to change.
      */
@@ -138,8 +146,9 @@ export class FlightController extends BaseController {
         this._position = vec3.add(vec3.create(), center, dir)
     }
 
-    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat): void {
+    override moveTo(targetPosition: ReadonlyVec3, flyTime: number = 1000, rotation?: ReadonlyQuat, easeFunction?: (t: number) => number): void {
         const { _orientation, _position } = this;
+        this._flyToFromDeacceleration = false;
         if (flyTime) {
             let targetPitch = _orientation.pitch;
             let targetYaw = _orientation.yaw;
@@ -153,7 +162,7 @@ export class FlightController extends BaseController {
                 totalFlightTime: flyTime,
                 end: { pos: vec3.clone(targetPosition), pitch: targetPitch, yaw: targetYaw },
                 begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw },
-                easeFunction: easeInOut
+                easeFunction: easeFunction ?? easeInOut
             });
         }
         else {
@@ -167,6 +176,7 @@ export class FlightController extends BaseController {
 
     override zoomTo(boundingSphere: BoundingSphere, flyTime: number = 1000): void {
         const { _orientation, _position, _fov } = this;
+        this._flyToFromDeacceleration = false;
         if (flyTime) {
             const dist = Math.max(boundingSphere.radius / Math.tan(glMatrix.toRadian(_fov) / 2), boundingSphere.radius);
             const targetPosition = vec3.create();
@@ -185,7 +195,11 @@ export class FlightController extends BaseController {
     }
 
     override update(): void {
-        const { multiplier, _orientation, params, height, _pivot, zoomPos, currentFlyTo } = this;
+        const { multiplier, _orientation, params, height, _pivot, zoomPos, currentFlyTo, _flyToFromDeacceleration, input } = this;
+        if (_flyToFromDeacceleration && Object.values(input.axes).some(v => v != 0)) { //Break flyto if theres controller changes and flyto is from deacceleration
+            this.resetFlyTo();
+            this.resetVelocity();
+        }
         if (currentFlyTo) {
             this._position = vec3.clone(currentFlyTo.pos);
             _orientation.pitch = currentFlyTo.pitch;
@@ -193,6 +207,7 @@ export class FlightController extends BaseController {
             this.changed();
             return;
         }
+        this._flyToFromDeacceleration = false;
         this.lastUpdate = performance.now();
         let { tx, ty, tz, rx, ry, shouldPivot } = this.getTransformations();
         _orientation.roll = 0;
@@ -200,8 +215,15 @@ export class FlightController extends BaseController {
 
         if (rx || ry) {
             const rotationalVelocity = (shouldPivot ? 180 : this._fov) * params.rotationalVelocity / height;
-            _orientation.pitch += rx * rotationalVelocity;
-            _orientation.yaw += ry * rotationalVelocity;
+            const pitch = rx * rotationalVelocity;
+            const yaw = ry * rotationalVelocity;
+            _orientation.pitch += pitch;
+            _orientation.yaw += yaw;
+            if (!shouldPivot) {
+                this._angularVelocity = { pitch, yaw }
+            } else {
+                this.resetVelocity()
+            }
             if (_pivot && shouldPivot && _pivot.active) {
                 const { center, offset, distance } = _pivot;
                 const pos = vec3.fromValues(0, 0, distance);
@@ -226,6 +248,19 @@ export class FlightController extends BaseController {
             this.changed();
         }
     }
+
+    private deAccelerateRotation() {
+        const { _angularVelocity, _position, _orientation } = this;
+        this.setFlyTo({
+            totalFlightTime: 500,
+            end: { pos: vec3.clone(_position), pitch: _orientation.pitch + (_angularVelocity.pitch * 5), yaw: _orientation.yaw + (_angularVelocity.yaw * 5) },
+            begin: { pos: vec3.clone(_position), pitch: _orientation.pitch, yaw: _orientation.yaw },
+            easeFunction: easeOut
+        });
+        this._flyToFromDeacceleration = true;
+        this.resetVelocity()
+    }
+
 
     override stateChanges(state?: RenderStateCamera): Partial<RenderStateCamera> {
         const changes: MutableCameraState = {};
@@ -266,7 +301,7 @@ export class FlightController extends BaseController {
     }
 
     override async touchChanged(event: TouchEvent): Promise<void> {
-        const { pointerTable, pick, pivotFingers } = this;
+        const { pointerTable, pick, pivotFingers, _angularVelocity } = this;
         if (pointerTable.length == pivotFingers && pick) {
             const x = pointerTable.length > 1 ? Math.round((pointerTable[0].x + pointerTable[1].x) / 2) : pointerTable[0].x;
             const y = pointerTable.length > 1 ? Math.round((pointerTable[0].y + pointerTable[1].y) / 2) : pointerTable[0].y;
@@ -277,6 +312,9 @@ export class FlightController extends BaseController {
                 this.resetPivot(true);
             }
         } else {
+            if (event.touches.length == 0 && _angularVelocity.pitch != 0 && _angularVelocity.yaw != 0) {
+                this.deAccelerateRotation();
+            }
             this.resetPivot(false);
         }
     }
@@ -316,7 +354,7 @@ export class FlightController extends BaseController {
 
     private resetPivot(active: boolean) {
         const { _pivot } = this;
-        if (_pivot) {
+        if (_pivot && this.conversions.isInView(_pivot.center)) {
             this.setPivot(_pivot.center, active);
         }
     }
@@ -403,8 +441,8 @@ function isTouchEvent(event: MouseEvent | TouchEvent): event is TouchEvent {
 export class CadMiddlePanController extends FlightController {
     override kind = "cadMiddlePan" as const;
 
-    constructor(input: ControllerInput, readonly pick: PickContext, params?: FlightControllerParams) {
-        super(input, pick);
+    constructor(input: ControllerInput, readonly pick: PickContext, conversions: ScreenSpaceConversions, params?: FlightControllerParams) {
+        super(input, pick, conversions);
         this.pivotButton = MouseButtons.left;
         this.pivotFingers = 1;
     }
@@ -434,8 +472,8 @@ export class CadMiddlePanController extends FlightController {
 export class CadRightPanController extends FlightController {
     override kind = "cadRightPan" as const;
 
-    constructor(input: ControllerInput, readonly pick: PickContext, params?: FlightControllerParams) {
-        super(input, pick);
+    constructor(input: ControllerInput, readonly pick: PickContext, conversions: ScreenSpaceConversions, params?: FlightControllerParams) {
+        super(input, pick, conversions);
         this.pivotButton = MouseButtons.left;
         this.pivotFingers = 1;
     }
@@ -465,8 +503,8 @@ export class CadRightPanController extends FlightController {
 export class SpecialFlightController extends FlightController {
     override kind = "special" as const;
 
-    constructor(input: ControllerInput, readonly pick: PickContext, params?: FlightControllerParams) {
-        super(input, pick);
+    constructor(input: ControllerInput, readonly pick: PickContext, conversions: ScreenSpaceConversions, params?: FlightControllerParams) {
+        super(input, pick, conversions);
         this.pivotButton = MouseButtons.middle;
         this.pivotFingers = 1;
     }

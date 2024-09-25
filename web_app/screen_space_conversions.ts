@@ -4,7 +4,26 @@ import type { Camera, DrawContext } from "measure";
 const SCREEN_SPACE_EPSILON = 0.001;
 
 export class ScreenSpaceConversions {
-    constructor(readonly drawContext: DrawContext) {}
+    constructor(readonly drawContext: DrawContext) { }
+
+    /** Check if world space point is inside the current view.
+     * @param point World space point that will be checked.
+     * @returns True if the point is inside the view false otherwise.
+     */
+    isInView(point: ReadonlyVec3) {
+        const { drawContext } = this;
+        const { width, height } = drawContext;
+        const vsPoint = this.worldSpaceToScreenSpace([point]);
+        if (vsPoint[0] == undefined) { // behind the camera 
+            return false;
+        }
+        if (vsPoint[0][0] < 0 || vsPoint[0][0] > width ||
+            vsPoint[0][1] < 0 || vsPoint[0][1] > height
+        ) {
+            return false;
+        }
+        return true;
+    }
 
     /** Converts world space points to on screen space points.
      * @param points World space points that will be projected to screen space.
@@ -135,7 +154,7 @@ const toView = (() => {
 
 function toScreen(projMat: mat4, width: number, height: number, p: ReadonlyVec3): vec2 {
     const pt = toView(projMat, p);
-    
+
     pt[0] = Math.round(pt[0] * width);
     pt[1] = Math.round(pt[1] * height);
 
