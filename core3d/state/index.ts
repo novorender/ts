@@ -414,7 +414,7 @@ export interface RenderStatePointCloud {
 
 
     /** 
-     * The color of undefined points
+     * The color of points with undefined point visualization value
      */
     readonly undefinedColor?: RGBA;
 
@@ -653,7 +653,7 @@ export interface RenderStateHighlightGroups {
 
     /** 
      * Point visualization for all points current not in a highlight group with point visualization.
-     * Undefined will fall back to defualtAction then to color RGBA valuse.
+     * Undefined will fall back to defualtAction then to color RGBA values.
      * @defaultValue `undefined`
      */
     readonly defaultPointVisualization: PointVisualization | undefined;
