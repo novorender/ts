@@ -103,15 +103,19 @@ export interface SceneConfig {
     readonly numMaterials: number;
     /** Scene material properties. */
     readonly materialProperties: MaterialProperties;
-
     /** Model to world space transformation matrix. */
     readonly modelWorldMatrix?: ReadonlyMat4; //
     /** List of geometry type subtrees within this scene. */
     readonly subtrees?: ("" | "terrain" | "triangles" | "lines" | "points" | "documents")[];
-    /** Optional point cloud attributes. */
+    /**
+     * Optional point cloud attributes. 
+     * @deprecated This is no longer in use. For binary format 2.3 and above use numPointDeviations and hasPointIntensity  */
     readonly variants?: ("deviation" | "intensity")[];
+    /** Number of deviations in scene, undefined if none. */
     readonly numPointDeviations?: number;
+    /** True if scene has classifaction, false/undefiene if not. */
     readonly hasPointClassification?: boolean;
+    /** True if scene has Intensity, false/undefiene if not. */
     readonly hasPointIntensity?: boolean;
     /** Binary root node meta information */
     readonly root: Base64String;
