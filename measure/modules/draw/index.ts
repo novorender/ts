@@ -45,6 +45,26 @@ export interface DrawObject {
     readonly parts: DrawPart[];
 }
 
+/**
+ * Laser interseciton values collected from a single brep face
+ */
+export interface LaserIntersections {
+    kind: "plane" | "cylinder",
+    /** Intersection in x direction negative direction first then negative*/
+    x: ReadonlyVec3[][],
+    /** Intersection in y direction negative direction first then negative*/
+    y: ReadonlyVec3[][],
+    /** Intersection in z direction negative direction first then negative*/
+    z: ReadonlyVec3[][],
+    /** X direction of the face*/
+    xDirection?: ReadonlyVec3,
+    /** Y direction of the face*/
+    yDirection?: ReadonlyVec3,
+    /** Z direction of the face*/
+    zDirection?: ReadonlyVec3,
+}
+
+
 /** Hole in a filled  polygon */
 export interface DrawVoid {
     /** View space coordinates, in pixel values, empty if the entire part is out of view*/
