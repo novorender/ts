@@ -1,7 +1,7 @@
 import type { ReadonlyMat4, ReadonlyVec3 } from "gl-matrix";
 import { glMatrix, mat3, mat4, vec2, vec3 } from "gl-matrix";
 import type { AABB3, CylinderData, EdgeData, FaceData, ProductData } from "./brep";
-import type { Curve3D, LineSegment3D } from "./curves";
+import type { Curve3D, LineSegment3D, Ray } from "./curves";
 import { Arc3D, Line3D, LineStrip3D, lineToSegment, pointAtAngle } from "./curves";
 import { matFromInstance } from "./loader";
 import type { Plane } from "./surfaces";
@@ -15,7 +15,7 @@ glMatrix.setMatrixArrayType(Array);
 
 const epsilon = 0.0001;
 
-export function isInsideAABB(point: vec3, aabb: AABB3, epsilon = 0): boolean {
+export function isInsideAABB(point: ReadonlyVec3, aabb: AABB3, epsilon = 0): boolean {
   for (let i = 0; i < 3; ++i) {
     if (
       point[i] - aabb.min[i] + epsilon < 0 ||
@@ -152,6 +152,26 @@ export async function cylinderCenterLine(
   return [cylinderOrigo, cylinderEnd];
 }
 
+export function intersectionParameter(rayA: Ray, rayB: Ray) {
+  const dp = vec3.dot(rayA.dir, rayB.dir);
+  const cp = vec3.len(vec3.cross(vec3.create(), rayA.dir, rayB.dir));
+
+  function intersectionParameter(
+    a: ReadonlyVec3,
+    da: ReadonlyVec3,
+    p: ReadonlyVec3
+  ): number {
+    const ab = vec3.sub(vec3.create(), p, a);
+    const ta = vec3.dot(ab, da);
+    const pa = vec3.scaleAndAdd(vec3.create(), a, da, ta);
+    const d = vec3.dist(pa, p);
+    const tb = (d * dp) / cp;
+    const t = ta + tb;
+    return t;
+  }
+  return intersectionParameter(rayA.start, rayA.dir, rayB.start);
+}
+
 export function closestPointsToIntersection(
   startA: ReadonlyVec3,
   endA: ReadonlyVec3,
@@ -163,25 +183,10 @@ export function closestPointsToIntersection(
   vec3.normalize(dirA, dirA);
   const dirB = vec3.sub(vec3.create(), endB, startB);
   vec3.normalize(dirB, dirB);
-  const dp = vec3.dot(dirA, dirB);
-  const cp = vec3.len(vec3.cross(vec3.create(), dirA, dirB));
 
-  function intersectionPoint(
-    a: ReadonlyVec3,
-    da: ReadonlyVec3,
-    p: ReadonlyVec3,
-    l: number
-  ): vec3 {
-    const ab = vec3.sub(vec3.create(), p, a);
-    const ta = vec3.dot(ab, da);
-    const pa = vec3.scaleAndAdd(vec3.create(), a, da, ta);
-    const d = vec3.dist(pa, p);
-    const tb = (d * dp) / cp;
-    const t = Math.min(l, Math.max(ta + tb, 0));
-    return vec3.scaleAndAdd(vec3.create(), a, da, t);
-  }
-
-  return intersectionPoint(startA, dirA, startB, lenA);
+  const t = intersectionParameter({ dir: dirA, start: startA }, { dir: dirB, start: startB });
+  const boundedT = Math.min(lenA, Math.max(t, 0));
+  return vec3.scaleAndAdd(vec3.create(), startA, dirA, boundedT);
 }
 
 export function closestProjectedPoints(
@@ -272,7 +277,7 @@ export function decomposePlane(
 function lineToLineMeasure(segA: LineSegment3D, segB: LineSegment3D): DuoMeasurementValues {
   const parallel =
     vec3.equals(segA.dir, segB.dir) ||
-    vec3.equals(segA.dir, vec3.negate(segB.dir, segB.dir));
+    vec3.equals(segA.dir, vec3.negate(vec3.create(), segB.dir));
 
   let [distance, pointA, pointB] = closestProjectedPoints(
     segA.start,

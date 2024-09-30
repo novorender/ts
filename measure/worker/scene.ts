@@ -1,6 +1,6 @@
 import type { ReadonlyMat4, ReadonlyVec3 } from "gl-matrix";
 import { glMatrix, mat4, vec3 } from "gl-matrix";
-import type { CylinderData, ProductData } from "./brep";
+import type { CylinderData, PlaneData, ProductData } from "./brep";
 import {
     cylinderCenterLine,
     edgeToPointMeasureValues,
@@ -33,10 +33,11 @@ import {
 import { manholeMeasure } from "./manhole";
 import { getCylinderDrawParts, getManholeDrawObjects, getSurfaceDrawParts } from "./draw_objects";
 import { getFaceToFaceCollisionValues } from "./collision";
-import { getPickInterface, pick, type PickInterface } from "./snaps";
+import { getPickInterface, pick, pickFace, type PickInterface } from "./snaps";
 import { RoadTool } from "./roads/scene";
-import type { CameraValues, CollisionValues, CrossSlope, DrawObject, DrawPart, DuoMeasurementValues, EdgeValues, FaceValues, LoadStatus, ManholeMeasureValues, MeasureEntity, MeasureSettings, ObjectId, ParameterBounds, Profile, RoadCrossSection, RoadProfiles, SnapTolerance } from "measure";
+import type { CameraValues, CollisionValues, CrossSlope, DrawObject, DrawPart, DuoMeasurementValues, EdgeValues, FaceValues, LaserIntersections, LoadStatus, ManholeMeasureValues, MeasureEntity, MeasureSettings, ObjectId, ParameterBounds, ParametricEntity, Profile, RoadCrossSection, RoadProfiles, SnapTolerance } from "measure";
 import type { Curve3D } from "./curves";
+import { getLaserCylinderValues, getLaserPlaneValues } from "./laser";
 
 glMatrix.setMatrixArrayType(Array);
 export const epsilon = 0.0001;
@@ -357,6 +358,20 @@ export class MeasureTool {
         return undefined;
     }
 
+    async pickFaceEntity(id: ObjectId, position: vec3, tolerance?: number, allowGenerated?: boolean):
+        Promise<{ entity: MeasureEntity, status: LoadStatus, faceType: "surface" | "polymesh" | "points", connectionPoint?: vec3 } | undefined> {
+        const product = await this.getProduct(id);
+        if (product && (allowGenerated || product.version === undefined)) {
+            const snapInterface = await this.cache.getSnapInterface(id);
+            if (snapInterface) {
+                const tol = tolerance ?? 0.20;
+                const pickedEntity = pickFace(snapInterface, position, tol);
+                if (pickedEntity) {
+                    return { ...pickedEntity, status: "loaded" };
+                }
+            }
+        }
+    }
 
     async pickEntity(id: ObjectId, position: vec3, tolerance?: SnapTolerance, allowGenerated?: boolean):
         Promise<{ entity: MeasureEntity, status: LoadStatus, connectionPoint?: vec3 }> {
@@ -504,6 +519,32 @@ export class MeasureTool {
             );
             return curveSeg;
         }
+    }
+
+    async getLaserObject(id: ObjectId,
+        faceIdx: number,
+        instanceIdx: number,
+        position: ReadonlyVec3): Promise<{ drawObject: DrawObject, laserValues: LaserIntersections } | undefined> {
+        const product = await this.getProduct(id);
+        if (product) {
+            const face = product.faces[faceIdx];
+            const surface = face.surface ?
+                product.surfaces[face.surface] : undefined;;
+            let drawParts: DrawPart[] = [];
+            let laserValues: LaserIntersections | undefined;
+            const kind = surface ? surface.kind == "cylinder" ? "cylinder" : "plane" : "unknown";
+            if (kind == "cylinder") {
+                drawParts = await getCylinderDrawParts(product, instanceIdx, surface as CylinderData, face);
+                laserValues = await getLaserCylinderValues(product, instanceIdx, surface as CylinderData, face, position);
+            } else if (kind == "plane") {
+                drawParts = await getSurfaceDrawParts(product, instanceIdx, face);
+                laserValues = await getLaserPlaneValues(product, instanceIdx, surface as PlaneData, face, position);
+            }
+            if (laserValues) {
+                return { drawObject: { kind, parts: drawParts }, laserValues };
+            }
+        }
+        return undefined;
     }
 
     async getCurveSegmentDrawObject(id: ObjectId,

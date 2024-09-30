@@ -63,6 +63,7 @@ export interface PickFaces extends EntityPicker {
 
 
 export interface PointsPickInfo {
+    idx: number,
     vertexIndices: number[];
     vertices: ReadonlyVec3[];
     aabb: AABB3;
@@ -82,6 +83,120 @@ export interface PickInterface {
     surfaces: PickSurfaces[];
     faces: PickFaces[];
     snappingPoints: PickPoints[];
+}
+
+function closestCandiateOnSurfaces(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: number) {
+    let closestCandidate: { entity: MeasureEntity, connectionPoint: vec3, distance: number } | undefined = undefined;
+    for (const faceInstance of pickInterface.surfaces) {
+        const localPoint = vec3.transformMat4(
+            vec3.create(),
+            position,
+            faceInstance.worldToObject
+        );
+        for (const face of faceInstance.surfaces) {
+            if (isInsideAABB(localPoint, face.aabb, tolerance)) {
+                const uv = vec2.create();
+                face.surface.invert(uv, localPoint);
+                const surfacePoint = vec3.create();
+                face.surface.evalPosition(surfacePoint, uv);
+
+                const distance = vec3.dist(surfacePoint, localPoint);
+                if (distance < tolerance && (!closestCandidate || distance < closestCandidate.distance)) {
+                    vec3.transformMat4(surfacePoint, surfacePoint, faceInstance.instanceMat);
+                    closestCandidate = {
+                        entity: {
+                            ObjectId: pickInterface.objectId,
+                            drawKind: "face",
+                            pathIndex: face.idx,
+                            instanceIndex: faceInstance.instanceIdx,
+                            parameter: uv,
+                        },
+                        connectionPoint: surfacePoint,
+                        distance
+                    };
+                }
+            }
+        }
+        return closestCandidate;
+    }
+}
+
+function closestCandiateOnPolyMeshSurface(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: number) {
+    let closestCandidate: { entity: MeasureEntity, connectionPoint: vec3, distance: number } | undefined = undefined;
+    for (const faceInstance of pickInterface.faces) {
+        const localPoint = vec3.transformMat4(
+            vec3.create(),
+            position,
+            faceInstance.worldToObject
+        );
+        for (const face of faceInstance.faces) {
+            if (isInsideAABB(localPoint, face.aabb, tolerance)) {
+                const point = pointOnFace(face, localPoint, face.loop, tolerance);
+                if (point && (!closestCandidate || point.dist < closestCandidate.distance)) {
+                    vec3.transformMat4(point.connectionPoint, point.connectionPoint, faceInstance.instanceMat);
+                    closestCandidate = {
+                        entity: {
+                            ObjectId: pickInterface.objectId,
+                            drawKind: "face",
+                            pathIndex: face.idx,
+                            instanceIndex: faceInstance.instanceIdx,
+                        },
+                        connectionPoint: point.connectionPoint,
+                        distance: point.dist
+                    };
+                }
+            }
+        }
+    }
+    return closestCandidate;
+}
+
+function closestSnappingPoints(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: number | undefined, getAll: boolean) {
+    let closestCandidate: { entity: MeasureEntity, connectionPoint: vec3, distance: number } | undefined = undefined;
+    for (const pointInstance of pickInterface.snappingPoints) {
+        const localPoint = vec3.transformMat4(
+            vec3.create(),
+            position,
+            pointInstance.worldToObject
+        );
+        for (const snapPoints of pointInstance.points) {
+            if (isInsideAABB(localPoint, snapPoints.aabb, tolerance ? tolerance : 0.1)) {
+                for (let i = 0; i < snapPoints.vertexIndices.length; ++i) {
+                    const point = snapPoints.vertices[i];
+                    const distance = vec3.dist(point, localPoint);
+                    if ((!closestCandidate || distance < closestCandidate.distance) &&
+                        (tolerance == undefined || distance < tolerance)) {
+                        if (getAll) {
+                            closestCandidate = {
+                                entity: {
+                                    ObjectId: pickInterface.objectId,
+                                    drawKind: "points",
+                                    pathIndex: snapPoints.idx,
+                                    instanceIndex: pointInstance.instanceIdx,
+                                },
+                                connectionPoint: vec3.clone(point),
+                                distance
+                            }
+                        } else {
+                            closestCandidate = {
+                                entity: {
+                                    ObjectId: pickInterface.objectId,
+                                    drawKind: "vertex",
+                                    pathIndex: snapPoints.vertexIndices[i],
+                                    instanceIndex: pointInstance.instanceIdx,
+                                    parameter: vec3.clone(point)
+                                },
+                                connectionPoint: vec3.clone(point),
+                                distance
+                            }
+                        }
+
+                    }
+                }
+            }
+        }
+    }
+    return closestCandidate;
 }
 
 function projectPointOntoPlane(point: ReadonlyVec3, planeNormal: ReadonlyVec3, planePoint: ReadonlyVec3): vec3 {
@@ -162,7 +277,6 @@ function pointOnFace(face: FacePickInfo, point: ReadonlyVec3, loop: ReadonlyVec3
         }
     }
 }
-
 
 export async function getPickInterface(product: ProductData, objectId: number): Promise<PickInterface> {
     const edgeInstances = new Array<Array<number>>(product.instances.length);
@@ -313,7 +427,7 @@ export async function getPickInterface(product: ProductData, objectId: number): 
         const surfaces: PointsPickInfo[] = [];
         for (const pointIdx of pointsInstances[i]) {
             const pointsData = product.snappingPoints[pointIdx];
-            surfaces.push({ aabb: pointsData.aabb, vertexIndices: pointsData.points, vertices: pointsData.points.map(i => product.vertices[i].position) })
+            surfaces.push({ idx: pointIdx, aabb: pointsData.aabb, vertexIndices: pointsData.points, vertices: pointsData.points.map(i => product.vertices[i].position) })
         }
         snappingPoints.push({ instanceIdx: i, worldToObject, points: surfaces, instanceMat });
     }
@@ -321,8 +435,23 @@ export async function getPickInterface(product: ProductData, objectId: number): 
     return { objectId, edges, segments, surfaces, faces, snappingPoints, unitScale: unitToScale(product.units) };
 }
 
+
+export function pickFace(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: number): { entity: MeasureEntity, connectionPoint: vec3, faceType: "surface" | "polymesh" | "points" } | undefined {
+    const closestSurface = closestCandiateOnSurfaces(pickInterface, position, tolerance);
+    if (closestSurface) {
+        return { ...closestSurface, faceType: "surface" };
+    }
+    const closestFace = closestCandiateOnPolyMeshSurface(pickInterface, position, tolerance);
+    if (closestFace) {
+        return { ...closestFace, faceType: "polymesh" };
+    }
+    const closestPointSet = closestSnappingPoints(pickInterface, position, undefined, true);
+    if (closestPointSet) {
+        return { ...closestPointSet, faceType: "points" };
+    }
+}
+
 export function pick(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: SnapTolerance): { entity: MeasureEntity, connectionPoint: vec3 } | undefined {
-    const flippedPos = vec3.copy(vec3.create(), position);
     const edgeTolerance = tolerance.edge ? tolerance.edge / pickInterface.unitScale : undefined;
     const segmentTolerance = tolerance.segment ? tolerance.segment / pickInterface.unitScale : undefined;
     const faceTolerance = tolerance.face ? tolerance.face / pickInterface.unitScale : undefined;
@@ -332,7 +461,7 @@ export function pick(pickInterface: PickInterface, position: ReadonlyVec3, toler
         for (const instanceSeg of pickInterface.segments) {
             const localPoint = vec3.transformMat4(
                 vec3.create(),
-                flippedPos,
+                position,
                 instanceSeg.worldToObject
             );
             for (const seg of instanceSeg.segments) {
@@ -370,7 +499,7 @@ export function pick(pickInterface: PickInterface, position: ReadonlyVec3, toler
         for (const instanceEdge of pickInterface.edges) {
             const localPoint = vec3.transformMat4(
                 vec3.create(),
-                flippedPos,
+                position,
                 instanceEdge.worldToObject
             );
             for (const edge of instanceEdge.edges) {
@@ -456,102 +585,18 @@ export function pick(pickInterface: PickInterface, position: ReadonlyVec3, toler
     }
 
     if (faceTolerance) {
-        for (const faceInstance of pickInterface.surfaces) {
-            const localPoint = vec3.transformMat4(
-                vec3.create(),
-                flippedPos,
-                faceInstance.worldToObject
-            );
-            for (const face of faceInstance.surfaces) {
-                if (isInsideAABB(localPoint, face.aabb, faceTolerance)) {
-                    const uv = vec2.create();
-                    face.surface.invert(uv, localPoint);
-                    const surfacePoint = vec3.create();
-                    face.surface.evalPosition(surfacePoint, uv);
-
-                    const dist = vec3.dist(surfacePoint, localPoint);
-                    if (dist < closestDistance && dist < faceTolerance) {
-                        vec3.transformMat4(surfacePoint, surfacePoint, faceInstance.instanceMat);
-                        closestCandidate = {
-                            entity: {
-                                ObjectId: pickInterface.objectId,
-                                drawKind: "face",
-                                pathIndex: face.idx,
-                                instanceIndex: faceInstance.instanceIdx,
-                                parameter: uv,
-                            },
-                            connectionPoint: surfacePoint
-                        };
-                        closestDistance = dist;
-                    }
-                }
-            }
+        const closestSurface = closestCandiateOnSurfaces(pickInterface, position, faceTolerance);
+        if (closestSurface) {
+            return closestSurface;
+        }
+        const closestFace = closestCandiateOnPolyMeshSurface(pickInterface, position, faceTolerance);
+        if (closestFace) {
+            return closestFace;
         }
     }
-
-    if (closestCandidate) {
-        return closestCandidate;
-    }
-
-    if (faceTolerance) { //Generated faces without surface
-        for (const faceInstance of pickInterface.faces) {
-            const localPoint = vec3.transformMat4(
-                vec3.create(),
-                flippedPos,
-                faceInstance.worldToObject
-            );
-            for (const face of faceInstance.faces) {
-                if (isInsideAABB(localPoint, face.aabb, faceTolerance)) {
-                    const p = pointOnFace(face, localPoint, face.loop, faceTolerance);
-                    if (p && p.dist < closestDistance) {
-                        vec3.transformMat4(p.connectionPoint, p.connectionPoint, faceInstance.instanceMat);
-                        closestCandidate = {
-                            entity: {
-                                ObjectId: pickInterface.objectId,
-                                drawKind: "face",
-                                pathIndex: face.idx,
-                                instanceIndex: faceInstance.instanceIdx,
-                            },
-                            connectionPoint: p.connectionPoint
-                        };
-                        closestDistance = p.dist;
-                    }
-                }
-            }
-        }
-    }
-
     if (pointTolerance) {
-        for (const pointInstance of pickInterface.snappingPoints) {
-            const localPoint = vec3.transformMat4(
-                vec3.create(),
-                flippedPos,
-                pointInstance.worldToObject
-            );
-            for (const snapPoints of pointInstance.points) {
-                if (isInsideAABB(localPoint, snapPoints.aabb, faceTolerance)) {
-                    for (let i = 0; i < snapPoints.vertexIndices.length; ++i) {
-                        const point = snapPoints.vertices[i];
-                        const dist = vec3.dist(point, localPoint);
-                        if (dist < closestDistance && dist < pointTolerance) {
-                            closestCandidate = {
-                                entity: {
-                                    ObjectId: pickInterface.objectId,
-                                    drawKind: "vertex",
-                                    pathIndex: snapPoints.vertexIndices[i],
-                                    instanceIndex: pointInstance.instanceIdx,
-                                    parameter: vec3.clone(point),
-                                },
-                                connectionPoint: vec3.clone(point)
-                            }
-                        }
-                    }
-                }
-
-
-            }
-        }
+        return closestSnappingPoints(pickInterface, position, pointTolerance, false);
     }
 
-    return closestCandidate;
+    return undefined;
 }
