@@ -3,10 +3,11 @@ import { glMatrix, mat4, vec2, vec3, vec4 } from "gl-matrix";
 import type { Camera, MeasureEntity, MeasureSettings, MeasureWorker } from "../../measure_view";
 import { MeasureView } from "../../measure_view";
 import { BaseModule } from "../base";
-import type { DrawContext, DrawObject, DrawPart, DrawProduct, DrawableEntity } from ".";
+import type { DrawContext, DrawObject, DrawPart, DrawProduct, DrawableEntity, LinesDrawSetting } from ".";
 import type { DuoMeasurementValues } from "../core";
 import type { ManholeMeasureValues } from "../manhole";
 import { lineSegmentIntersection, type Intersection2d } from "../../calculations_2d";
+import type { ObjectId } from "data";
 
 const SCREEN_SPACE_EPSILON = 0.001;
 
@@ -157,15 +158,21 @@ export class DrawModule extends BaseModule {
         };
     }
 
-    /** Converts a list of points to a drawable polygon or linestrip
+
+
+    /** Converts a list of points to draw parts, these can be added to a DrawObjects.
      * @param points Set of points describing a polygon or linestrip
      * @param setting settings on how the entity is supposed to be displayed
      * @returns  hierarcical structure of the element, describing how it should be drawn in 2d, including labels and angles
      */
-    getDrawObjectFromPoints(points: ReadonlyVec3[], closed = true, angles = true, generateLineLabels = false, decimals = 3): DrawProduct | undefined {
+    getDrawPartsFromPoints(points: ReadonlyVec3[], settings?: LinesDrawSetting): DrawPart[] {
         if (points.length === 0) {
-            return undefined;
+            return [];
         }
+        var closed = settings?.closed ?? true;
+        var angles = settings?.angles ?? true;
+        var generateLineLabels = settings?.generateLineLabels ?? false;
+        var decimals = settings?.decimals ?? 3;
 
         const parts: DrawPart[] = [];
         if (points.length === 1) {
@@ -182,8 +189,6 @@ export class DrawModule extends BaseModule {
             parts.push({ drawType: closed ? "filled" : "lines", vertices3D: points, text });
         }
 
-        const drawObjects: DrawObject[] = [];
-        drawObjects.push({ kind: "complex", parts });
         if (angles) {
             const endIdx = closed ? points.length : points.length - 1;
             for (let i = closed ? 0 : 1; i < endIdx; ++i) {
@@ -200,18 +205,56 @@ export class DrawModule extends BaseModule {
                 }
             }
         }
+        return parts;
+    }
 
-        FillDrawInfo2D(this.drawContext, drawObjects);
+
+    /** Converts a list of points to a drawable polygon or linestrip
+     * @param points Set of points describing a polygon or linestrip
+     * @param setting settings on how the entity is supposed to be displayed
+     * @param context Optional to display the drawn object in another context
+     * @returns  hierarcical structure of the element, describing how it should be drawn in 2d, including labels and angles
+     */
+    getDrawObjectFromPoints(points: ReadonlyVec3[], settings?: LinesDrawSetting, context?: DrawContext): DrawProduct | undefined {
+        var parts = this.getDrawPartsFromPoints(points, settings);
+
+        if (parts.length === 0) {
+            return undefined;
+        }
+        const drawObjects: DrawObject[] = [];
+        drawObjects.push({ kind: "complex", parts });
+        FillDrawInfo2D(context ?? this.drawContext, drawObjects);
         return { kind: "basic", objects: drawObjects };
+    }
+
+    /** Combines multiple segments to a single drawable object. 
+     * @param segments Line segments to be added to the list, These can de of any lenght 
+     * @param setting settings on how the entity is supposed to be displayed
+     * @param context Optional to display the drawn object in another context
+     * @returns  hierarcical structure of the element, describing how it should be drawn in 2d, including labels and angles
+     */
+    getDrawObjectFromLineSegments(segments: ReadonlyVec3[][], id: ObjectId, settings?: LinesDrawSetting, context?: DrawContext): DrawProduct | undefined {
+        const parts: DrawPart[] = [];
+        for (var seg of segments) {
+            parts.push(...this.getDrawPartsFromPoints(seg, settings));
+        }
+        if (parts.length === 0) {
+            return undefined;
+        }
+        const drawObjects: DrawObject[] = [];
+        drawObjects.push({ kind: "complex", parts });
+        FillDrawInfo2D(context ?? this.drawContext, drawObjects);
+        return { kind: "basic", objects: drawObjects, ObjectId: id };
     }
 
 
     /** Returns a draw object that places a text based on input points.
      * @param points Set of points for where the text should be placed.
      * @param text Text
+     * @param context Optional to display the drawn object in another context
      * @returns  Draw product for displaying the text at chosen locations
      */
-    getDrawText(points: ReadonlyVec3[], text: string): DrawProduct | undefined {
+    getDrawText(points: ReadonlyVec3[], text: string, context?: DrawContext): DrawProduct | undefined {
         if (points.length === 0) {
             return undefined;
         }
@@ -221,13 +264,14 @@ export class DrawModule extends BaseModule {
         const drawObjects: DrawObject[] = [];
         drawObjects.push({ kind: "complex", parts });
 
-        FillDrawInfo2D(this.drawContext, drawObjects);
+        FillDrawInfo2D(context ?? this.drawContext, drawObjects);
         return { kind: "basic", objects: drawObjects };
     }
 
     /** Returns a draw object that traces intersection between the 2d paths and displays the 3d distance as a label
      * @param objects Products that are being traced.
      * @param line Line that traces over objects.
+     * @param context Optional to display the drawn object in another context
      * @returns  Draw product for displaying lines between intersections and distance lables.
      */
     getTraceDrawOject(objects: DrawProduct[], line: { start: ReadonlyVec2, end: ReadonlyVec2 }): DrawProduct {

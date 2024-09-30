@@ -3,6 +3,15 @@ import type { Camera, ObjectId } from "../../measure_view";
 
 export { DrawModule } from "./module";
 
+
+export interface LinesDrawSetting {
+    closed?: boolean,
+    angles?: boolean,
+    generateLineLabels?: boolean,
+    decimals?: number
+}
+
+
 /** An entity that can be used in measureView.draw.getDrawMeasureEntity, Objects returned from the api with draw kind parameter can be used*/
 export interface DrawableEntity {
     /** Object id corresponding to he object ids gotten from picking from the core3d api*/
@@ -17,7 +26,10 @@ export interface DrawProduct {
     readonly kind: "basic" | "manhole" | "measureResult";
     /** Objects to draw */
     readonly objects: DrawObject[];
+    /** Object id of the drawn product*/
+    readonly ObjectId?: ObjectId;
 }
+
 
 
 /** An object for 2d drawings, can contain multiple parts */
@@ -63,7 +75,6 @@ export interface DrawPart {
 
     /** Indices reffering to vertices3D and text if it is a list, -1 means an added empty text*/
     indicesOnScreen?: number[];
-
 }
 
 /** Draw context for keeping updated canvas widht height and camera properties */
