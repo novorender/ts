@@ -382,7 +382,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
             if (pointFactors.hasClassification) {
                 factorSources.push(schema.vertex.pointClassification ?? new Float16Array)
             }
-            for (let i = 0; i < pointFactors.numDeviations; ++i) {
+            for (let i = 0; i < maxNumDeviations; ++i) {
                 factorSources.push(schema.vertex[`pointDeviation${i as 0 | 1 | 2 | 3 | 4 | 5}`] ?? new Float16Array)
             }
         } else {
@@ -400,9 +400,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
         const factorsSrc0 = factorSources.slice(0, 4);
         const factorSrc1 = factorSources.slice(4, 8);
 
-        const vertexAttributesSrc = isCurrentSchema(schema) ?
-            getVertexAttributes(pointFactors, posBPC, attributes, hasMaterials, hasObjectIds) :
-            getVertexAttributes({ ...pointFactors, numDeviations: maxNumDeviations }, posBPC, attributes, hasMaterials, hasObjectIds);
+        const vertexAttributesSrc = getVertexAttributes({ ...pointFactors, numDeviations: maxNumDeviations }, posBPC, attributes, hasMaterials, hasObjectIds);
         vertexAttributesSrc.position.components = [pos.x, pos.y, pos.z];
         if (vertexAttributesSrc.normal != undefined && normal)
             vertexAttributesSrc.normal!.components = [normal.x, normal.y, normal.z];
