@@ -10,7 +10,6 @@ import * as DataAPI from "data/api";
 import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
 import { outlineLaser, type OutlineIntersection } from "./outline_inspect";
 import { ScreenSpaceConversions } from "./screen_space_conversions";
-import cluster from "cluster";
 
 /**
  * A view base class for Novorender content.
@@ -504,14 +503,14 @@ export class View<
      * @returns Outlines as drawable objects for the 2d egnine.
      */
 
-    getOutlineDrawObjects(planeType: "clipping" | "outline", planeIndex: number, drawContext?: DrawContext) {
+    getOutlineDrawObjects(planeType: "clipping" | "outline", planeIndex: number, drawContext?: DrawContext,
+        settings: LinesDrawSetting = { closed: true, angles: true, generateLineLabels: true }) {
         const context = this._renderContext;
         const { renderStateGL } = this;
         const drawProducts: DrawProduct[] = [];
         if (!this._measureView) {
             return drawProducts;
         }
-        const settings: LinesDrawSetting = { closed: false, angles: false, generateLineLabels: false };
         if (context) {
             const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
             const { outlineRenderers } = context;

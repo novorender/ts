@@ -350,6 +350,8 @@ export class OutlineRenderer {
             const end = vec3.fromValues(x2, y2, 0);
             vec3.transformMat4(start, start, planeLocalMatrix);
             vec3.transformMat4(end, end, planeLocalMatrix);
+            vec3.add(start, start, this.localSpaceTranslation);
+            vec3.add(end, end, this.localSpaceTranslation);
             yield [start, end];
         }
     }
