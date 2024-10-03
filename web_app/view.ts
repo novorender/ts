@@ -504,7 +504,7 @@ export class View<
      */
 
     getOutlineDrawObjects(planeType: "clipping" | "outline", planeIndex: number, drawContext?: DrawContext,
-        settings: LinesDrawSetting = { closed: true, angles: true, generateLineLabels: true }) {
+        settings: LinesDrawSetting = { closed: false, angles: true, generateLineLabels: true }) {
         const context = this._renderContext;
         const { renderStateGL } = this;
         const drawProducts: DrawProduct[] = [];
@@ -516,12 +516,64 @@ export class View<
             const { outlineRenderers } = context;
             const outlineRenderer = outlineRenderers.get(planeType == "clipping" ? renderStateGL.clipping.planes[planeIndex].normalOffset : renderStateGL.outlines.planes[planeIndex]);
             if (outlineRenderer) {
+                const objToLines = new Map<ObjectId, ReadonlyVec3[][]>();
                 for (const cluster of outlineRenderer.getLineClusters()) {
-                    const lines: [ReadonlyVec3, ReadonlyVec3][] = [];
-                    for (const l of outlineRenderer.getLines(cluster)) {
-                        lines.push(l.map(p => flipToCad(p)) as [ReadonlyVec3, ReadonlyVec3]);
+                    //const lines: [ReadonlyVec3, ReadonlyVec3][] = [];
+                    let lines = objToLines.get(cluster.objectId);
+                    if (!lines) {
+                        objToLines.set(cluster.objectId, []);
+                        lines = objToLines.get(cluster.objectId);
                     }
-                    const product = this._measureView?.draw.getDrawObjectFromLineSegments(lines, cluster.objectId, settings, drawContext);
+                    for (const l of outlineRenderer.getLines(cluster)) {
+                        lines!.push(l.map(p => flipToCad(p)) as [ReadonlyVec3, ReadonlyVec3]);
+                    }
+                }
+                for (const lines of objToLines) {
+                    for (let i = 0; i < lines[1].length; ++i) {
+                        const lineA = lines[1][i];
+                        for (let j = i + 1; j < lines[1].length; ++j) {
+                            const lineB = lines[1][j];
+                            const remove = () => {
+                                lines[1].splice(j, 1);
+                                j = i;
+                            }
+                            if (vec3.equals(lineA[0], lineB[0])) {
+                                lineA.unshift(lineB[1]);
+                                remove();
+                            } else if (vec3.equals(lineA[0], lineB[1])) {
+                                lineA.unshift(lineB[0]);
+                                remove();
+                            } else if (vec3.equals(lineA[lineA.length - 1], lineB[0])) {
+                                lineA.push(lineB[1]);
+                                remove();
+                            } else if (vec3.equals(lineA[lineA.length - 1], lineB[1])) {
+                                lineA.push(lineB[0]);
+                                remove();
+                            }
+                        }
+                    }
+                }
+                for (const lines of objToLines) {
+                    const dirA = vec3.create();
+                    const dirB = vec3.create();
+                    for (const seg of lines[1]) {
+                        for (let i = 1; i < seg.length - 1; ++i) {
+                            const curr = seg[i];
+                            const next = seg[i + 1];
+                            const prev = seg[i - 1];
+                            vec3.sub(dirA, curr, prev);
+                            vec3.sub(dirB, next, curr);
+                            const angle = vec3.angle(dirA, dirB);
+                            if (angle < 0.01745329) { //1 degree
+                                seg.splice(i, 1);
+                                --i;
+                            }
+                        }
+                    }
+
+                }
+                for (const lines of objToLines) {
+                    const product = this._measureView?.draw.getDrawObjectFromLineSegments(lines[1], lines[0], settings, drawContext);
                     if (product) {
                         drawProducts.push(product);
                     }
