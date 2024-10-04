@@ -95,7 +95,7 @@ export class OutlineRenderer {
                 const nodeClusters = this.nodeLinesCache.get(node) ?? this.createNodeLineClusters(node);
                 // convert clusters into a map by objectId by merging the vertices of actively rendered child indices
                 for (const [childIndex, clusters] of nodeClusters) {
-                    if ((1 << childIndex) & mask) {
+                    if (((1 << childIndex) & mask) || node.isRoot) {
                         for (const cluster of clusters) {
                             cluster.active = true;
                             let arr = lineClusterArrays.get(cluster.objectId);
