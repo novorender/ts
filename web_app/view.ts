@@ -2,7 +2,7 @@ import { type ReadonlyVec3, vec3, vec2, type ReadonlyQuat, mat3, type ReadonlyVe
 import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports, type PBRMaterialInfo, type RGB, type RenderStateTextureReference, type ActiveTextureIndex, type MaxActiveTextures, emptyActiveTexturesArray, type AABB } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipGLtoCadVec, flipState } from "./flip";
-import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports } from "measure";
+import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports, type ObjectId, type DrawProduct, type LinesDrawSetting, type DrawContext } from "measure";
 import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections } from "./buffer_inspect";
 import { downloadOfflineImports, manageOfflineStorage, type OfflineImportMap, type OfflineImports, type OfflineViewState, type SceneIndex } from "offline"
 import { loadSceneDataOffline, type DataContext } from "data";
@@ -492,6 +492,95 @@ export class View<
             }
         }
         return undefined;
+    }
+
+    /**
+     * Get current oultine drawable objects. 
+     * 
+     * @param planeType choose if planes under clipping or outlines should be used
+     * @param planeIndex the index of the plane to look up
+     * @param drawContext Option to convert the 2d positions to another draw context
+     * @returns Outlines as drawable objects for the 2d egnine.
+     */
+
+    getOutlineDrawObjects(planeType: "clipping" | "outline", planeIndex: number, drawContext?: DrawContext,
+        settings: LinesDrawSetting = { closed: false, angles: true, generateLineLabels: true }) {
+        const context = this._renderContext;
+        const { renderStateGL } = this;
+        const drawProducts: DrawProduct[] = [];
+        if (!this._measureView) {
+            return drawProducts;
+        }
+        if (context) {
+            const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
+            const { outlineRenderers } = context;
+            const outlineRenderer = outlineRenderers.get(planeType == "clipping" ? renderStateGL.clipping.planes[planeIndex].normalOffset : renderStateGL.outlines.planes[planeIndex]);
+            if (outlineRenderer) {
+                const objToLines = new Map<ObjectId, ReadonlyVec3[][]>();
+                for (const cluster of outlineRenderer.getLineClusters()) {
+                    //const lines: [ReadonlyVec3, ReadonlyVec3][] = [];
+                    let lines = objToLines.get(cluster.objectId);
+                    if (!lines) {
+                        lines = [];
+                        objToLines.set(cluster.objectId, lines);
+                    }
+                    for (const l of outlineRenderer.getLines(cluster)) {
+                        lines.push(l.map(p => flipToCad(p)) as [ReadonlyVec3, ReadonlyVec3]);
+                    }
+                }
+                for (const lines of objToLines) {
+                    for (let i = 0; i < lines[1].length; ++i) {
+                        const lineA = lines[1][i];
+                        for (let j = i + 1; j < lines[1].length; ++j) {
+                            const lineB = lines[1][j];
+                            const remove = () => {
+                                lines[1].splice(j, 1);
+                                j = i;
+                            }
+                            if (vec3.equals(lineA[0], lineB[0])) {
+                                lineA.unshift(lineB[1]);
+                                remove();
+                            } else if (vec3.equals(lineA[0], lineB[1])) {
+                                lineA.unshift(lineB[0]);
+                                remove();
+                            } else if (vec3.equals(lineA[lineA.length - 1], lineB[0])) {
+                                lineA.push(lineB[1]);
+                                remove();
+                            } else if (vec3.equals(lineA[lineA.length - 1], lineB[1])) {
+                                lineA.push(lineB[0]);
+                                remove();
+                            }
+                        }
+                    }
+                }
+                for (const lines of objToLines) {
+                    const dirA = vec3.create();
+                    const dirB = vec3.create();
+                    for (const seg of lines[1]) {
+                        for (let i = 1; i < seg.length - 1; ++i) {
+                            const curr = seg[i];
+                            const next = seg[i + 1];
+                            const prev = seg[i - 1];
+                            vec3.sub(dirA, curr, prev);
+                            vec3.sub(dirB, next, curr);
+                            const angle = vec3.angle(dirA, dirB);
+                            if (angle < 0.01745329) { //1 degree
+                                seg.splice(i, 1);
+                                --i;
+                            }
+                        }
+                    }
+
+                }
+                for (const lines of objToLines) {
+                    const product = this._measureView?.draw.getDrawObjectFromLineSegments(lines[1], lines[0], settings, drawContext);
+                    if (product) {
+                        drawProducts.push(product);
+                    }
+                }
+            }
+        }
+        return drawProducts;
     }
 
     /**
