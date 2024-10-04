@@ -662,10 +662,10 @@ export class MeasureTool {
         const product = await this.getProduct(id);
         if (product) {
             const face = product.faces[faceIdx];
-            const surface = face.surface ?
+            const surface = face.surface != undefined  ?
                 product.surfaces[face.surface] : undefined;;
             let drawParts: DrawPart[] = [];
-            const kind = surface ? surface.kind == "cylinder" ? "cylinder" : "plane" : "unknown";
+            const kind = surface != undefined ? surface.kind == "cylinder" ? "cylinder" : "plane" : "unknown";
             if (kind == "cylinder") {
                 drawParts = await getCylinderDrawParts(product, instanceIdx, surface as CylinderData, face, setting);
             } else {
