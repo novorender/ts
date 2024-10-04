@@ -12,7 +12,8 @@ export * from "./buffer_inspect";
 export * from "./controller";
 export * from "./highlight";
 export * from "./geometry";
-export * from "./calculations/3d/plane"
+export * from "./calculations/3d/plane";
+export * from "./screen_space_conversions";
 
 declare const NPM_PACKAGE_VERSION: string | undefined;
 
