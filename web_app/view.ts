@@ -521,11 +521,11 @@ export class View<
                     //const lines: [ReadonlyVec3, ReadonlyVec3][] = [];
                     let lines = objToLines.get(cluster.objectId);
                     if (!lines) {
-                        objToLines.set(cluster.objectId, []);
-                        lines = objToLines.get(cluster.objectId);
+                        lines = [];
+                        objToLines.set(cluster.objectId, lines);
                     }
                     for (const l of outlineRenderer.getLines(cluster)) {
-                        lines!.push(l.map(p => flipToCad(p)) as [ReadonlyVec3, ReadonlyVec3]);
+                        lines.push(l.map(p => flipToCad(p)) as [ReadonlyVec3, ReadonlyVec3]);
                     }
                 }
                 for (const lines of objToLines) {

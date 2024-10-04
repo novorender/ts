@@ -227,8 +227,8 @@ export class DrawModule extends BaseModule {
         return { kind: "basic", objects: drawObjects };
     }
 
-    /** Combines multiple segments to a single drawable object. 
-     * @param segments Line segments to be added to the list, These can de of any lenght 
+    /** Combines multiple segments into a single drawable object. 
+     * @param segments Line segments to be added to the list, These can be of any lenght 
      * @param setting settings on how the entity is supposed to be displayed
      * @param context Optional to display the drawn object in another context
      * @returns  hierarcical structure of the element, describing how it should be drawn in 2d, including labels and angles
@@ -271,8 +271,7 @@ export class DrawModule extends BaseModule {
     /** Returns a draw object that traces intersection between the 2d paths and displays the 3d distance as a label
      * @param objects Products that are being traced.
      * @param line Line that traces over objects.
-     * @param context Optional to display the drawn object in another context
-     * @returns  Draw product for displaying lines between intersections and distance lables.
+     * @returns  Draw product for displaying lines between intersections and distance labels.
      */
     getTraceDrawOject(objects: DrawProduct[], line: { start: ReadonlyVec2, end: ReadonlyVec2 }): DrawProduct {
         if (objects.length > 1) {
