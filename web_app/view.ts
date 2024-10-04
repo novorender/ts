@@ -537,16 +537,16 @@ export class View<
                                 lines[1].splice(j, 1);
                                 j = i;
                             }
-                            if (vec3.equals(lineA[0], lineB[0])) {
+                            if (vec3.exactEquals(lineA[0], lineB[0])) {
                                 lineA.unshift(lineB[1]);
                                 remove();
-                            } else if (vec3.equals(lineA[0], lineB[1])) {
+                            } else if (vec3.exactEquals(lineA[0], lineB[1])) {
                                 lineA.unshift(lineB[0]);
                                 remove();
-                            } else if (vec3.equals(lineA[lineA.length - 1], lineB[0])) {
+                            } else if (vec3.exactEquals(lineA[lineA.length - 1], lineB[0])) {
                                 lineA.push(lineB[1]);
                                 remove();
-                            } else if (vec3.equals(lineA[lineA.length - 1], lineB[1])) {
+                            } else if (vec3.exactEquals(lineA[lineA.length - 1], lineB[1])) {
                                 lineA.push(lineB[0]);
                                 remove();
                             }
@@ -570,7 +570,6 @@ export class View<
                             }
                         }
                     }
-
                 }
                 for (const lines of objToLines) {
                     const product = this._measureView?.draw.getDrawObjectFromLineSegments(lines[1], lines[0], settings, drawContext);
