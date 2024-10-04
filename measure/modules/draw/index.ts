@@ -4,10 +4,15 @@ import type { Camera, ObjectId } from "../../measure_view";
 export { DrawModule } from "./module";
 
 
+/** Setting for drawing lines */
 export interface LinesDrawSetting {
+    /** If closed is set to true the line enpoints will be joined and the polygon filled */
     closed?: boolean,
+    /** Generate angles between each line segment */
     angles?: boolean,
+    /** Generate labels on each line segment */
     generateLineLabels?: boolean,
+    /** Number of decimals on labels */
     decimals?: number
 }
 
