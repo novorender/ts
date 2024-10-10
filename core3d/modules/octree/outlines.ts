@@ -318,7 +318,7 @@ export class OutlineRenderer {
             const clusterRef = lineClusters[i];
             const cluster = clusterRef.deref();
             if (cluster) {
-                if (cluster.active && highlightIndices[cluster.objectId] != 254) {
+                if (cluster.active && highlightIndices[cluster.objectId] != 254 && highlightIndices[cluster.objectId] != 255) {
                     yield cluster;
                 }
             } else {
