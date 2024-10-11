@@ -220,20 +220,21 @@ export class OutlineRenderer {
                 // add vertex indices for vertex/edge rendering.
                 const vtxOffset = segmentOffset * 2;
                 const highlightIndex = highlightIndices[objectId];
+                const isHiddenOrFiltered = highlightIndex === 254 || highlightIndex === 255;
                 for (let i = 0; i < points.length; i++) {
                     const idx = points[i]; // + vtxOffset;
-                    pointsHidden[pointOffset / 2] = highlightIndex == 254 ? 1 : 0;
+                    pointsHidden[pointOffset / 2] = isHiddenOrFiltered ? 1 : 0;
                     pointPos[pointOffset++] = vertices[idx * 2 + 0];
                     pointPos[pointOffset++] = vertices[idx * 2 + 1];
                 }
                 // use normal to change alpha in color
-                if (highlightIndex == 254) {
+                if (isHiddenOrFiltered) {
                     linePos.set(vertices, segmentOffset * 4);
                     for (let i = 0; i < segments; i++) {
                         colors[segmentOffset + i] = 0;
                     }
                 } else {
-                    const [r, g, b] = (highlightIndex && highlightIndex != 254 ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? outlineColor;
+                    const [r, g, b] = (highlightIndex ? state.highlights.groups[highlightIndex - 1].outlineColor : undefined) ?? outlineColor;
                     const baseColor = packRGBA(r / 4, g / 4, b / 4); // allow some overB-exposure at the expense of lower bit resolution
                     linePos.set(vertices, segmentOffset * 4);
                     for (let i = 0; i < segments; i++) {
@@ -317,7 +318,7 @@ export class OutlineRenderer {
             const clusterRef = lineClusters[i];
             const cluster = clusterRef.deref();
             if (cluster) {
-                if (cluster.active && highlightIndices[cluster.objectId] != 254) {
+                if (cluster.active && highlightIndices[cluster.objectId] != 254 && highlightIndices[cluster.objectId] != 255) {
                     yield cluster;
                 }
             } else {
