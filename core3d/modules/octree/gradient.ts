@@ -24,19 +24,24 @@ export function computeGradientColors(size: number, gradient: RenderStateColorGr
         }
         const color = getColor(0);
         for (let i = 0; i < size; i++) {
-            const texel = (i + 0.5) / size * (maxValue - minValue) + minValue;
-            for (let j = prevIndex; j < n - 1; j++) {
-                prevIndex = j;
-                const e0 = knots[j].position;
-                const e1 = knots[j + 1].position;
-                const c0 = getColor(j);
-                const c1 = getColor(j + 1);
-                if (texel >= e0 && texel < e1) {
-                    const t = (texel - e0) / (e1 - e0);
-                    vec4.lerp(color, c0, c1, t);
-                    break;
+            if (i === size - 1) {
+                vec4.copy(color, getColor(n - 1));
+            } else if (i !== 0) {
+                const texel = (i + 0.5) / size * (maxValue - minValue) + minValue;
+                for (let j = prevIndex; j < n - 1; j++) {
+                    prevIndex = j;
+                    const e0 = knots[j].position;
+                    const e1 = knots[j + 1].position;
+                    const c0 = getColor(j);
+                    const c1 = getColor(j + 1);
+                    if (texel >= e0 && texel < e1) {
+                        const t = (texel - e0) / (e1 - e0);
+                        vec4.lerp(color, c0, c1, t);
+                        break;
+                    }
                 }
             }
+
             const [r, g, b, a] = color;
             pixels[i * 4 + 0] = r * 255;
             pixels[i * 4 + 1] = g * 255;
