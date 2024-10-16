@@ -53,6 +53,7 @@ export interface OctreeContext {
     readonly hidden: readonly boolean[]; // corresponds to NodeGeometryKind
     readonly highlights: Uint8Array;
     readonly highlightGeneration: number;
+    readonly projectedSizeSplitThreshold: number;
 }
 
 /** @internal */
@@ -77,6 +78,7 @@ export class OctreeNode {
     visibility = Visibility.undefined;
     viewDistance = 0;
     projectedSize = 0;
+    pointSize: number | undefined;
     static readonly errorModifiersPinhole = {
         [NodeGeometryKind.terrain]: .05,
         [NodeGeometryKind.triangles]: 1,
@@ -182,6 +184,40 @@ export class OctreeNode {
         const { visibility, projectedSize, context, geometryKind } = this;
         const hidden = context.hidden[geometryKind ?? -1] ?? false;
         return !hidden && (this.isRoot || (visibility != Visibility.none && projectedSize > projectedSizeSplitThreshold)) && !this.areAllDescendantsHidden;
+    }
+
+    computeAverageChildPointSize(projectedSizeSplitThreshold: number): number | undefined {
+        const { geometryKind, children } = this;
+        if (geometryKind != NodeGeometryKind.points) {
+            return undefined;
+        }
+        if (this.shouldSplit(projectedSizeSplitThreshold)) {
+            let pointSize = 0;
+            let numNodes = 0;
+            for (const child of children) {
+                if (child.pointSize != undefined) {
+                    pointSize += child.pointSize;
+                    ++numNodes;
+                }
+            }
+            if (numNodes > 0) {
+                return pointSize / numNodes;
+            }
+        }
+        return this.pointSize;
+    }
+
+    updatePointSize() {
+        const { uniformsData, context, pointSize } = this;
+        if (pointSize == undefined) {
+            return false;
+        }
+        const size = this.computeAverageChildPointSize(context.projectedSizeSplitThreshold);
+        if (size != undefined && size != uniformsData.values.tolerance) {
+            uniformsData.values.tolerance = size;
+            return true;
+        }
+        return false;
     }
 
     get areAllDescendantsHidden() {
@@ -291,14 +327,14 @@ export class OctreeNode {
             this.projectedSize = this.size * OctreeNode.errorModifiersOrtho[this.geometryKind] * projection[5];
         }
 
+        let updateUniformBuffer = this.updatePointSize();
         if (context.localSpaceChanged || !this.hasValidModelLocalMatrix) {
             const { values } = this.uniformsData;
             values.modelLocalMatrix = this.getModelLocalMatrix(state.localSpaceTranslation);
-            if (uniforms) {
-                glUpdateBuffer(context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniforms });
-            }
+            updateUniformBuffer = true;
             this.hasValidModelLocalMatrix = true;
         }
+
 
         if (context.debug) {
             let r = 0, g = 0, b = 0;
@@ -316,9 +352,11 @@ export class OctreeNode {
             values.debugColor = vec4.fromValues(r, g, b, 1);
             values.min = vec3.transformMat4(vec3.create(), min, worldLocalMatrix);
             values.max = vec3.transformMat4(vec3.create(), max, worldLocalMatrix);
-            if (uniforms) {
-                glUpdateBuffer(context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniforms });
-            }
+            updateUniformBuffer = true;
+        }
+
+        if (updateUniformBuffer && uniforms) {
+            glUpdateBuffer(context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: uniformsData.buffer, targetBuffer: uniforms });
         }
 
         // recurse down the tree
@@ -348,6 +386,7 @@ export class OctreeNode {
             if (pointSize) {
                 this.uniformsData.values.tolerance = pointSize;
             }
+            this.pointSize = this.uniformsData.values.tolerance;
             this.uniforms = resourceBin.createBuffer({ kind: "UNIFORM_BUFFER", byteSize: this.uniformsData.buffer.byteLength });
             glUpdateBuffer(this.context.renderContext.gl, { kind: "UNIFORM_BUFFER", srcData: this.uniformsData.buffer, targetBuffer: this.uniforms });
             renderContext.changed = true;
