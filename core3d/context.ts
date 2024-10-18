@@ -6,8 +6,8 @@ import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
 import type { WasmInstance } from "./wasm";
-import type { ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
-import { glMatrix, mat3, mat4, quat, vec3, vec4 } from "gl-matrix";
+import type { ReadonlyVec2, ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
+import { glMatrix, mat3, mat4, quat, vec2, vec3, vec4 } from "gl-matrix";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
 import { orthoNormalBasisMatrixFromPlane } from "./util";
@@ -955,42 +955,145 @@ export class RenderContext {
         this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
     }
 
-    private extractPick(pickBuffer: Uint32Array, pickOptions: { x: number, y: number, sampleDiscRadius: number, pickCameraPlane: boolean } | "fullScreen") {
+
+
+    /** @internal */
+    screenSpaceLaser(laserPoint: ReadonlyVec2, xDir?: ReadonlyVec2, yDir?: ReadonlyVec2, zDir?: ReadonlyVec2) {
+        const { currentPick, wasm, width, height, viewClipMatrixLastPoll, viewWorldMatrixLastPoll, isOrtho } = this;
+        if (currentPick == undefined) {
+            return undefined;
+        }
+        const makeSample = (x: number, y: number) => {
+            const offset = x + (y * width);
+            const objectId = currentPick[offset * 4];
+            if (objectId != 0xffffffff) {
+                const [depth] = new Float32Array(currentPick.buffer, offset * 16 + 12, 1);
+                const [nx16, ny16, nz16] = new Uint16Array(currentPick.buffer, offset * 16 + 4, 4);
+                const nx = wasm.float32(nx16);
+                const ny = wasm.float32(ny16);
+                const nz = wasm.float32(nz16);
+
+                // compute normal
+                // compute clip space x,y coords
+                const xCS = ((x + 0.5) / width) * 2 - 1;
+                const yCS = ((y + 0.5) / height) * 2 - 1;
+
+                // compute view space position and normal
+                const scale = isOrtho ? 1 : depth;
+                const posVS = vec3.fromValues((xCS / viewClipMatrixLastPoll[0]) * scale, (yCS / viewClipMatrixLastPoll[5]) * scale, -depth);
+
+                // convert into world space.
+                const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrixLastPoll);
+                const normal = vec3.fromValues(nx, ny, nz);
+                vec3.normalize(normal, normal);
+                return { objectId, normal, position, depth };
+            }
+            return { objectId };
+        };
+
+        const laserSample = makeSample(laserPoint[0], laserPoint[1]);
+        if (laserSample.position == undefined) {
+            return undefined;
+        }
+
+        const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
+
+        const getLaserIntersection = (dir?: ReadonlyVec2, out?: boolean) => {
+            if (dir == undefined) {
+                return [];
+            }
+            const currentPos = vec2.clone(laserPoint);
+            let prevDepth = laserSample.depth;
+            const updateToNext = () => {
+                const updatePos = vec2.add(vec2.create(), currentPos, dir);
+                let numSamples = 0;
+                while (
+                    Math.floor(updatePos[0]) == Math.floor(currentPos[0]) &&
+                    Math.floor(updatePos[1]) == Math.floor(currentPos[1])) {
+                    vec2.add(updatePos, updatePos, dir);
+                    ++numSamples;
+                    if (numSamples > 2000) {
+                        //console.log("FUBAR2", dir, updatePos, currentPos);
+                    }
+                }
+                if (updatePos[0] >= width || updatePos[1] >= height ||
+                    updatePos[0] < 0 || updatePos[1] < 0
+                ) {
+                    return false;
+                }
+                vec2.copy(currentPos, updatePos);
+                return true;
+            }
+
+            let numSamples = 0;
+            let prevSample: { objectId: number, normal?: ReadonlyVec3, position?: ReadonlyVec3, depth?: number } = laserSample;
+            while (updateToNext()) {
+                ++numSamples;
+                const currentSample = makeSample(Math.floor(currentPos[0]), Math.floor(currentPos[1]));
+
+                if (numSamples > 2000) {
+                    //console.log("FUBAR1")
+                }
+                if (out) {
+                    if (currentSample.position == undefined) {
+                        return [];
+                    }
+                    if (areVectorsSameOrOppositeDirection(laserSample.normal, vec3.sub(vec3.create(), currentSample.position, laserSample.position))) {
+                        return [flipToCad(currentSample.position)];
+                    }
+                } else {
+                    if (currentSample.position == undefined) {
+                        return prevSample.position;
+                    }
+                    if (currentSample.objectId != laserSample.objectId ||
+                        Math.abs(vec3.dot(laserSample.normal, currentSample.normal)) < 0.9) {
+                        return [flipToCad(prevSample.position!)];
+                    }
+                    prevSample = currentSample;
+                    if (currentSample.depth) {
+                        prevDepth = currentSample.depth;
+                    }
+                }
+            }
+            return [];
+        };
+        const inverse = (dir?: ReadonlyVec2) => {
+            if (dir) {
+                return vec2.fromValues(-dir[0], -dir[1]);
+            }
+            return dir;
+        }
+
+        return {
+            right: getLaserIntersection(xDir) as ReadonlyVec3[],
+            left: getLaserIntersection(inverse(xDir)) as ReadonlyVec3[],
+            up: getLaserIntersection(yDir) as ReadonlyVec3[],
+            down: getLaserIntersection(inverse(yDir)) as ReadonlyVec3[],
+            zUp: getLaserIntersection(zDir, true) as ReadonlyVec3[]
+        }
+    }
+
+    private extractPick(pickBuffer: Uint32Array, x: number, y: number, sampleDiscRadius: number, pickCameraPlane: boolean) {
         const { canvas, wasm, width, height } = this;
         const rect = canvas.getBoundingClientRect(); // dim in css pixels
         const cssWidth = rect.width;
         const cssHeight = rect.height;
         // convert to pixel coords
-        let px = 0;
-        let py = 0;
+        const px = Math.min(Math.max(0, Math.round(x / cssWidth * width)), width);
+        const py = Math.min(Math.max(0, Math.round((1 - (y + 0.5) / cssHeight) * height)), height);
 
-        const floats = new Float32Array(pickBuffer.buffer);
-
-        let x0 = 0;
-        let x1 = width;
-        let y0 = 0;
-        let y1 = height;
-
-        let r2: number | undefined;
 
         // fetch sample rectangle from read buffers
-        if (pickOptions != "fullScreen") {
-            const { sampleDiscRadius, x, y } = pickOptions;
-            px = Math.min(Math.max(0, Math.round(x / cssWidth * width)), width);
-            py = Math.min(Math.max(0, Math.round((1 - (y + 0.5) / cssHeight) * height)), height);
-
-            const r = Math.ceil(sampleDiscRadius);
-            r2 = sampleDiscRadius * sampleDiscRadius;
-            x0 = px - r;
-            x1 = px + r + 1;
-            y0 = py - r;
-            y1 = py + r + 1;
-            if (x0 < 0) x0 = 0;
-            if (x1 > width) x1 = width;
-            if (y0 < 0) y0 = 0;
-            if (y1 > height) y1 = height;
-        }
-
+        const r = Math.ceil(sampleDiscRadius);
+        const r2 = sampleDiscRadius * sampleDiscRadius;
+        let x0 = px - r;
+        let x1 = px + r + 1;
+        let y0 = py - r;
+        let y1 = py + r + 1;
+        if (x0 < 0) x0 = 0;
+        if (x1 > width) x1 = width;
+        if (y0 < 0) y0 = 0;
+        if (y1 > height) y1 = height;
         const samples: PickSample[] = [];
         const { isOrtho, viewClipMatrixLastPoll, viewWorldMatrixLastPoll } = this;
         const f16Max = 65504;
@@ -999,13 +1102,13 @@ export class RenderContext {
             const dy = iy - py;
             for (let ix = x0; ix < x1; ix++) {
                 const dx = ix - px;
-                if (r2 && (dx * dx + dy * dy > r2))
+                if (dx * dx + dy * dy > r2)
                     continue; // filter out samples that lie outside sample disc radius
                 const buffOffs = ix + iy * width;
                 let objectId = pickBuffer[buffOffs * 4];
                 if (objectId != 0xffffffff) {
                     const isReservedId = objectId >= 0xf000_0000
-                    const depth = pickOptions != "fullScreen" && pickOptions.pickCameraPlane ? 0 : floats[buffOffs * 4 + 3];
+                    const depth = pickCameraPlane ? 0 : new Float32Array(pickBuffer.buffer, buffOffs * 16 + 12, 1)[0];
                     const [nx16, ny16, nz16, pointFactor16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
                     const nx = wasm.float32(nx16);
                     const ny = wasm.float32(ny16);
@@ -1032,23 +1135,10 @@ export class RenderContext {
 
                     const sample = { x: ix - px, y: iy - py, position, normal, objectId, pointFactor, depth, clippingOutline } as const;
                     samples.push(sample);
-                } else if (pickOptions == "fullScreen") {
-                    const sample = { x: ix - px, y: iy - py, position: vec3.create(), normal: vec3.create(), objectId, undefined, depth: 0, clippingOutline: false } as const;
-                    samples.push(sample);
                 }
             }
         }
         return samples;
-    }
-
-    /**
-     * @returns Pick samples over the entire screen
-     */
-    getFullScreenPickSamples(): PickSample[] {
-        if (this.currentPick) {
-            return this.extractPick(this.currentPick, "fullScreen");
-        }
-        return [];
     }
 
     /**
@@ -1091,7 +1181,7 @@ export class RenderContext {
         if (currentPick === undefined || width * height * 4 != currentPick.length) {
             return [];
         }
-        return this.extractPick(currentPick, { x, y, sampleDiscRadius, pickCameraPlane });
+        return this.extractPick(currentPick, x, y, sampleDiscRadius, pickCameraPlane);
     }
 
     setPolygonFillMode(mode: "FILL" | "LINE") {
@@ -1106,6 +1196,24 @@ export class RenderContext {
 
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
+}
+
+function areVectorsSameOrOppositeDirection(vec1: ReadonlyVec3, vec2: ReadonlyVec3) {
+    // Check ratios of each component
+    const ratioX = (vec1[0] !== 0) ? (vec2[0] / vec1[0]) : (vec2[0] === 0 ? 1 : null);
+    const ratioY = (vec1[1] !== 0) ? (vec2[1] / vec1[1]) : (vec2[1] === 0 ? 1 : null);
+    const ratioZ = (vec1[2] !== 0) ? (vec2[2] / vec1[2]) : (vec2[2] === 0 ? 1 : null);
+
+    // Check if the ratios are consistent (equal or null), either all positive or all negative
+    const allPositive = (ratioX === null || ratioX >= 0) &&
+        (ratioY === null || ratioY >= 0) &&
+        (ratioZ === null || ratioZ >= 0);
+
+    const allNegative = (ratioX === null || ratioX <= 0) &&
+        (ratioY === null || ratioY <= 0) &&
+        (ratioZ === null || ratioZ <= 0);
+
+    return allPositive || allNegative;
 }
 
 

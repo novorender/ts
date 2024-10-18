@@ -27,12 +27,16 @@ export class ScreenSpaceConversions {
 
     /** Converts world space points to on screen space points.
      * @param points World space points that will be projected to screen space.
+     * @param inWidth optional pixel width, use canvas width if not given.
+     * @param inHeight optional pixel height, use canvas heigth if not given.
      * @returns Screen space points regadless if they are within the current canvas size
      *          or undefined if point is outside screen space.
      */
-    worldSpaceToScreenSpace(points: ReadonlyVec3[]): (ReadonlyVec2 | undefined)[] {
+    worldSpaceToScreenSpace(points: ReadonlyVec3[], inWidth?: number, inHeight?: number): (ReadonlyVec2 | undefined)[] {
         const { drawContext } = this;
-        const { width, height, camera } = drawContext;
+        const width = inWidth ?? drawContext.width;
+        const height = inHeight ?? drawContext.width;
+        const { camera } = drawContext;
         const { camMat, projMat } = getPathMatrices(width, height, camera);
         const p = vec3.create();
         return points.map((p0) => {

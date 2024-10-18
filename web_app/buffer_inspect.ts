@@ -1,6 +1,6 @@
 import { updateMeshHighlights } from "core3d/modules/octree/mesh";
 import { vec2, type ReadonlyVec2, vec3, type ReadonlyVec3 } from "gl-matrix";
-import type { DeviationSample, OutlineSample, PickSample } from "web_app";
+import type { DeviationSample, OutlineSample, PickSample, WasmInstance } from "web_app";
 import type { Intersection } from "./outline_inspect";
 
 /** Deviation lable with pixel position and deviation value as string. */
@@ -35,71 +35,6 @@ export type DeviationInspections = {
     labels: DeviationLabel[],
     /** Line strip of pixel values to draw a line through the deviations on screen */
     line?: vec2[]
-}
-
-/** @internal */
-export function screenSpaceLaser(samples: PickSample[], width: number, height: number,
-    laserPoint: ReadonlyVec2, xDir?: ReadonlyVec2, yDir?: ReadonlyVec2, zDir?: ReadonlyVec2): Intersection {
-    const xyToIndex = (x: number, y: number) => x + y * width;
-    const laserSample = samples[xyToIndex(laserPoint[0], laserPoint[1])];
-    const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
-
-    const getLaserIntersection = (dir?: ReadonlyVec2, log?: boolean) => {
-        if (dir == undefined) {
-            return [];
-        }
-        const currentPos = vec2.clone(laserPoint);
-        let prevDepth = laserSample.depth;
-        const updateToNext = () => {
-            const updatePos = vec2.add(vec2.create(), currentPos, dir);
-            while (
-                Math.floor(updatePos[0]) == Math.floor(currentPos[0]) &&
-                Math.floor(updatePos[1]) == Math.floor(currentPos[1])) {
-                vec2.add(updatePos, updatePos, dir);
-            }
-            if (updatePos[0] >= width || updatePos[1] >= height ||
-                updatePos[0] < 0 || updatePos[1] < 0
-            ) {
-                return false;
-            }
-            vec2.copy(currentPos, updatePos);
-            return true;
-        }
-
-        let numSamples = 0;
-        let prevSample = laserSample;
-        while (updateToNext()) {
-            ++numSamples;
-            const currentSample = samples[xyToIndex(Math.floor(currentPos[0]), Math.floor(currentPos[1]))];
-            // if (Math.abs(prevDepth - currentSample.depth) > 1) { //This one is difficult but should really be an edge case
-            //     console.log("depth", numSamples);
-            //     return [currentSample.position];
-            // }
-            if (currentSample.objectId != laserSample.objectId ||
-                Math.abs(vec3.dot(laserSample.normal, currentSample.normal)) < 0.9) {
-                if (log)
-                    console.log(numSamples, laserSample, currentSample)
-                return [flipToCad(prevSample.position)];
-            }
-            prevSample = currentSample;
-            prevDepth = currentSample.depth;
-        }
-        console.log("non", numSamples);
-        return [];
-    };
-    const inverse = (dir?: ReadonlyVec2) => {
-        if (dir) {
-            return vec2.inverse(vec2.create(), dir);
-        }
-        return dir;
-    }
-    return {
-        right: getLaserIntersection(xDir, true),
-        left: getLaserIntersection(inverse(xDir), true),
-        up: getLaserIntersection(yDir),
-        down: getLaserIntersection(inverse(yDir)),
-        out: getLaserIntersection(zDir)
-    }
 }
 
 /** @internal */
@@ -150,6 +85,7 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
                         break;
                     }
                 }
+
                 if (addLinePoint) {
                     linePoints.push({ position, position3d: currentSample.position, depth: currentSample.depth });
                 }

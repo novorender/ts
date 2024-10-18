@@ -6,8 +6,8 @@ export type Intersection = {
     right: ReadonlyVec3[],
     up: ReadonlyVec3[],
     down: ReadonlyVec3[],
-    out?: ReadonlyVec3[],
-    in?: ReadonlyVec3[]
+    zUp?: ReadonlyVec3[],
+    zDown?: ReadonlyVec3[]
 }
 
 function intersection(line: [ReadonlyVec2, ReadonlyVec2], dir: [ReadonlyVec2, ReadonlyVec2]) {
