@@ -1006,15 +1006,10 @@ export class RenderContext {
             let prevDepth = laserSample.depth;
             const updateToNext = () => {
                 const updatePos = vec2.add(vec2.create(), currentPos, dir);
-                let numSamples = 0;
                 while (
                     Math.floor(updatePos[0]) == Math.floor(currentPos[0]) &&
                     Math.floor(updatePos[1]) == Math.floor(currentPos[1])) {
                     vec2.add(updatePos, updatePos, dir);
-                    ++numSamples;
-                    if (numSamples > 2000) {
-                        //console.log("FUBAR2", dir, updatePos, currentPos);
-                    }
                 }
                 if (updatePos[0] >= width || updatePos[1] >= height ||
                     updatePos[0] < 0 || updatePos[1] < 0
@@ -1025,15 +1020,9 @@ export class RenderContext {
                 return true;
             }
 
-            let numSamples = 0;
             let prevSample: { objectId: number, normal?: ReadonlyVec3, position?: ReadonlyVec3, depth?: number } = laserSample;
             while (updateToNext()) {
-                ++numSamples;
                 const currentSample = makeSample(Math.floor(currentPos[0]), Math.floor(currentPos[1]));
-
-                if (numSamples > 2000) {
-                    //console.log("FUBAR1")
-                }
                 if (out) {
                     if (currentSample.position == undefined) {
                         return [];
