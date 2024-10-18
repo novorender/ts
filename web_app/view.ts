@@ -384,7 +384,7 @@ export class View<
             const scene = await downloadScene(baseSceneUrl, render.webgl2, abortSignal);
             const stateChanges = { scene };
             flipState(stateChanges, "GLToCAD");
-            this.applyChanges(stateChanges);
+            this.applyChanges(mergeRecursive({}, stateChanges));
 
             const measureView = await createMeasureView(this._drawContext2d, this.imports);
             await measureView.loadScene(baseSceneUrl, measure ? measure.brepLut : ""); // TODO: include abort signal!
