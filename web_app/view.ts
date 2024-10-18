@@ -3,12 +3,12 @@ import { downloadScene, type RenderState, type RenderStateChanges, defaultRender
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
 import { flipGLtoCadVec, flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports, type ObjectId, type DrawProduct, type LinesDrawSetting, type DrawContext } from "measure";
-import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections } from "./buffer_inspect";
+import { inspectDeviations, screenSpaceLaser, type DeviationInspectionSettings, type DeviationInspections } from "./buffer_inspect";
 import { downloadOfflineImports, manageOfflineStorage, type OfflineImportMap, type OfflineImports, type OfflineViewState, type SceneIndex } from "offline"
 import { loadSceneDataOffline, type DataContext } from "data";
 import * as DataAPI from "data/api";
 import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
-import { outlineLaser, type OutlineIntersection } from "./outline_inspect";
+import { outlineLaser, type Intersection } from "./outline_inspect";
 import { ScreenSpaceConversions } from "./screen_space_conversions";
 
 /**
@@ -447,6 +447,34 @@ export class View<
         }
     }
 
+    screenSpaceLaser(laserPosition: ReadonlyVec3, xDir: ReadonlyVec3, yDir: ReadonlyVec3, zDir: ReadonlyVec3): Intersection | undefined {
+        const context = this._renderContext;
+        if (context) {
+            const samples = context.getFullScreenPickSamples();
+            const { width, height } = this.canvas.getBoundingClientRect();
+            const { convert } = this;
+            const xDirPos = vec3.add(vec3.create(), laserPosition, xDir);
+            const yDirPos = vec3.add(vec3.create(), laserPosition, yDir);
+            const zDirPos = vec3.add(vec3.create(), laserPosition, zDir);
+            const points2d = convert.worldSpaceToScreenSpace([laserPosition, xDirPos, yDirPos, zDirPos]);
+            if (points2d[0] === undefined) {
+                return;
+            }
+            const normalize = (dir?: vec2) => {
+                if (dir) {
+                    vec2.normalize(dir, dir);
+                }
+                return dir;
+            }
+
+            const xDir2d = normalize(points2d[1] ? vec2.sub(vec2.create(), points2d[1], points2d[0]) : undefined);
+            const yDir2d = normalize(points2d[2] ? vec2.sub(vec2.create(), points2d[2], points2d[0]) : undefined);
+            const zDir2d = normalize(points2d[3] ? vec2.sub(vec2.create(), points2d[3], points2d[0]) : undefined);
+            return screenSpaceLaser(samples, width, height, points2d[0], xDir2d, yDir2d, zDir2d);
+        }
+    }
+
+
     /**
      * Create a list of intersections between the x and y axis through the tracer position
      * @public
@@ -460,7 +488,7 @@ export class View<
      * results will be ordered from  closest to furthest from the tracer point
      */
 
-    outlineLaser(laserPosition: ReadonlyVec3, planeType: "clipping" | "outline", planeIndex: number, rotation?: number, autoAlign?: "model" | "closest"): OutlineIntersection | undefined {
+    outlineLaser(laserPosition: ReadonlyVec3, planeType: "clipping" | "outline", planeIndex: number, rotation?: number, autoAlign?: "model" | "closest"): Intersection | undefined {
         const context = this._renderContext;
         const { renderStateGL } = this;
         if (context) {

@@ -955,28 +955,42 @@ export class RenderContext {
         this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
     }
 
-    private extractPick(pickBuffer: Uint32Array, x: number, y: number, sampleDiscRadius: number, pickCameraPlane: boolean) {
+    private extractPick(pickBuffer: Uint32Array, pickOptions: { x: number, y: number, sampleDiscRadius: number, pickCameraPlane: boolean } | "fullScreen") {
         const { canvas, wasm, width, height } = this;
         const rect = canvas.getBoundingClientRect(); // dim in css pixels
         const cssWidth = rect.width;
         const cssHeight = rect.height;
         // convert to pixel coords
-        const px = Math.min(Math.max(0, Math.round(x / cssWidth * width)), width);
-        const py = Math.min(Math.max(0, Math.round((1 - (y + 0.5) / cssHeight) * height)), height);
+        let px = 0;
+        let py = 0;
 
         const floats = new Float32Array(pickBuffer.buffer);
 
+        let x0 = 0;
+        let x1 = width;
+        let y0 = 0;
+        let y1 = height;
+
+        let r2: number | undefined;
+
         // fetch sample rectangle from read buffers
-        const r = Math.ceil(sampleDiscRadius);
-        const r2 = sampleDiscRadius * sampleDiscRadius;
-        let x0 = px - r;
-        let x1 = px + r + 1;
-        let y0 = py - r;
-        let y1 = py + r + 1;
-        if (x0 < 0) x0 = 0;
-        if (x1 > width) x1 = width;
-        if (y0 < 0) y0 = 0;
-        if (y1 > height) y1 = height;
+        if (pickOptions != "fullScreen") {
+            const { sampleDiscRadius, x, y } = pickOptions;
+            px = Math.min(Math.max(0, Math.round(x / cssWidth * width)), width);
+            py = Math.min(Math.max(0, Math.round((1 - (y + 0.5) / cssHeight) * height)), height);
+
+            const r = Math.ceil(sampleDiscRadius);
+            r2 = sampleDiscRadius * sampleDiscRadius;
+            x0 = px - r;
+            x1 = px + r + 1;
+            y0 = py - r;
+            y1 = py + r + 1;
+            if (x0 < 0) x0 = 0;
+            if (x1 > width) x1 = width;
+            if (y0 < 0) y0 = 0;
+            if (y1 > height) y1 = height;
+        }
+
         const samples: PickSample[] = [];
         const { isOrtho, viewClipMatrixLastPoll, viewWorldMatrixLastPoll } = this;
         const f16Max = 65504;
@@ -985,13 +999,13 @@ export class RenderContext {
             const dy = iy - py;
             for (let ix = x0; ix < x1; ix++) {
                 const dx = ix - px;
-                if (dx * dx + dy * dy > r2)
+                if (r2 && (dx * dx + dy * dy > r2))
                     continue; // filter out samples that lie outside sample disc radius
                 const buffOffs = ix + iy * width;
                 let objectId = pickBuffer[buffOffs * 4];
                 if (objectId != 0xffffffff) {
                     const isReservedId = objectId >= 0xf000_0000
-                    const depth = pickCameraPlane ? 0 : floats[buffOffs * 4 + 3];
+                    const depth = pickOptions != "fullScreen" && pickOptions.pickCameraPlane ? 0 : floats[buffOffs * 4 + 3];
                     const [nx16, ny16, nz16, pointFactor16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
                     const nx = wasm.float32(nx16);
                     const ny = wasm.float32(ny16);
@@ -1018,10 +1032,23 @@ export class RenderContext {
 
                     const sample = { x: ix - px, y: iy - py, position, normal, objectId, pointFactor, depth, clippingOutline } as const;
                     samples.push(sample);
+                } else if (pickOptions == "fullScreen") {
+                    const sample = { x: ix - px, y: iy - py, position: vec3.create(), normal: vec3.create(), objectId, undefined, depth: 0, clippingOutline: false } as const;
+                    samples.push(sample);
                 }
             }
         }
         return samples;
+    }
+
+    /**
+     * @returns Pick samples over the entire screen
+     */
+    getFullScreenPickSamples(): PickSample[] {
+        if (this.currentPick) {
+            return this.extractPick(this.currentPick, "fullScreen");
+        }
+        return [];
     }
 
     /**
@@ -1064,7 +1091,7 @@ export class RenderContext {
         if (currentPick === undefined || width * height * 4 != currentPick.length) {
             return [];
         }
-        return this.extractPick(currentPick, x, y, sampleDiscRadius, pickCameraPlane);
+        return this.extractPick(currentPick, { x, y, sampleDiscRadius, pickCameraPlane });
     }
 
     setPolygonFillMode(mode: "FILL" | "LINE") {
