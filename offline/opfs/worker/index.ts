@@ -95,7 +95,7 @@ async function closeJournal(name: string) {
         const { handle, unlock } = await journalHandle.lock();
         handle.close();
         const dirHandle = await getDirHandle(name);
-        dirHandle.removeEntry("journal");
+        await dirHandle.removeEntry("journal");
         unlock();
         journalHandles.delete(name);
     }
@@ -465,16 +465,16 @@ async function deleteFiles(dir: string, files: readonly string[]) {
 
 async function deleteDir(dir: string) {
     const root = await rootPromise;
-    closeJournal(dir);
-    root.removeEntry(dir, { recursive: true });
+    await closeJournal(dir);
+    await root.removeEntry(dir, { recursive: true });
 }
 
 async function deleteAll() {
     const root = await rootPromise;
     const entries = await dirEntries(root);
-    for (const [name] of entries) {
-        closeJournal(name);
-        root.removeEntry(name, { recursive: true });
-    }
+    await Promise.all(entries.map(async ([name]) => {
+        await closeJournal(name);
+        await root.removeEntry(name, { recursive: true });
+    }));
 }
 
