@@ -1002,7 +1002,7 @@ export class RenderContext {
             if (dir == undefined) {
                 return [];
             }
-            const currentPos = vec2.clone(laserPoint);
+            const currentPos = out ? vec2.scaleAndAdd(vec2.create(), laserPoint, dir, 5) : vec2.clone(laserPoint);
             let prevDepth = laserSample.depth;
             const updateToNext = () => {
                 const updatePos = vec2.add(vec2.create(), currentPos, dir);
@@ -1058,7 +1058,8 @@ export class RenderContext {
             left: getLaserIntersection(inverse(xDir)) as ReadonlyVec3[],
             up: getLaserIntersection(yDir) as ReadonlyVec3[],
             down: getLaserIntersection(inverse(yDir)) as ReadonlyVec3[],
-            zUp: getLaserIntersection(zDir, true) as ReadonlyVec3[]
+            zUp: getLaserIntersection(zDir, true) as ReadonlyVec3[],
+            zDown: [flipToCad(laserSample.position)]
         }
     }
 
