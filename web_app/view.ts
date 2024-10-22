@@ -537,7 +537,7 @@ export class View<
      */
 
     getOutlineDrawObjects(planeType: "clipping" | "outline", planeIndex: number, drawContext?: DrawContext,
-        settings: LinesDrawSetting = { closed: false, angles: true, generateLineLabels: true }) {
+        settings: LinesDrawSetting = { closed: false, angles: true, generateLengthLabels: true, generateSlope: false }, filter?: Set<ObjectId>) {
         const context = this._renderContext;
         const { renderStateGL } = this;
         const drawProducts: DrawProduct[] = [];
@@ -551,8 +551,10 @@ export class View<
             if (outlineRenderer) {
                 const objToLines = new Map<ObjectId, ReadonlyVec3[][]>();
                 for (const cluster of outlineRenderer.getLineClusters()) {
-                    //const lines: [ReadonlyVec3, ReadonlyVec3][] = [];
                     let lines = objToLines.get(cluster.objectId);
+                    if (filter && !filter.has(cluster.objectId)) {
+                        continue;
+                    }
                     if (!lines) {
                         lines = [];
                         objToLines.set(cluster.objectId, lines);

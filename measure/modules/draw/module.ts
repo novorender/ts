@@ -3,7 +3,7 @@ import { glMatrix, mat4, vec2, vec3, vec4 } from "gl-matrix";
 import type { Camera, MeasureEntity, MeasureSettings, MeasureWorker } from "../../measure_view";
 import { MeasureView } from "../../measure_view";
 import { BaseModule } from "../base";
-import type { DrawContext, DrawObject, DrawPart, DrawProduct, DrawableEntity, LinesDrawSetting } from ".";
+import type { DrawContext, DrawObject, DrawPart, DrawProduct, DrawableEntity, ElevationInfo, Line2d, LinesDrawSetting } from ".";
 import type { DuoMeasurementValues } from "../core";
 import type { ManholeMeasureValues } from "../manhole";
 import { lineSegmentIntersection, type Intersection2d } from "../../calculations_2d";
@@ -165,28 +165,54 @@ export class DrawModule extends BaseModule {
      * @param setting settings on how the entity is supposed to be displayed
      * @returns  hierarcical structure of the element, describing how it should be drawn in 2d, including labels and angles
      */
-    getDrawPartsFromPoints(points: ReadonlyVec3[], settings?: LinesDrawSetting): DrawPart[] {
+    getDrawPartsFromPoints(points: ReadonlyVec3[], settings?: LinesDrawSetting, objectId?: number): DrawPart[] {
         if (points.length === 0) {
             return [];
         }
-        var closed = settings?.closed ?? true;
-        var angles = settings?.angles ?? true;
-        var generateLineLabels = settings?.generateLineLabels ?? false;
-        var decimals = settings?.decimals ?? 3;
+        const closed = settings?.closed ?? true;
+        const angles = settings?.angles ?? true;
+        const generateLengthLabels = settings?.generateLengthLabels ?? false;
+        const decimals = settings?.decimals ?? 3;
+        let generateSlopeLables = false;
+        if (settings?.generateSlope != undefined) {
+            if (settings.generateSlope == true) {
+                generateSlopeLables = true;
+            } else if (settings.generateSlope == false) { }
+            else if (objectId && settings.generateSlope.has(objectId)) {
+                generateSlopeLables = true;
+            }
+        }
 
         const parts: DrawPart[] = [];
         if (points.length === 1) {
             parts.push({ drawType: "vertex", vertices3D: points });
         } else {
             let text: string[][] | undefined = undefined;
-            if (generateLineLabels) {
+            const elevation: (ElevationInfo | undefined)[] = [];
+            if (generateLengthLabels || generateSlopeLables) {
                 const labels: string[] = [];
                 for (let i = 1; i < points.length; ++i) {
-                    labels.push(vec3.dist(points[i - 1], points[i]).toFixed(decimals));
+                    if (generateLengthLabels) {
+                        labels.push(vec3.dist(points[i - 1], points[i]).toFixed(decimals));
+                    } if (generateSlopeLables) {
+                        const SLOPE_EPSILON = 0.1;
+                        const z1 = points[i - 1][2];
+                        const z2 = points[i][2]
+                        const zDist = Math.abs(z1 - z2);
+                        const vec2A = vec2.fromValues(points[i - 1][0], points[i - 1][1]);
+                        const vec2B = vec2.fromValues(points[i][0], points[i][1]);
+                        const planarDist = vec2.distance(vec2A, vec2B);
+                        const slope = Math.abs(zDist / planarDist) * 100;
+                        if (planarDist > SCREEN_SPACE_EPSILON && slope > SLOPE_EPSILON && Math.abs(slope - 100) > SLOPE_EPSILON) {
+                            elevation.push({ from: z1 > z2 ? z1 : z2, to: z1 < z2 ? z1 : z2, horizontalDisplay: false, slope })
+                        } else {
+                            elevation.push(undefined);
+                        }
+                    }
                 }
                 text = [labels];
             }
-            parts.push({ drawType: closed ? "filled" : "lines", vertices3D: points, text });
+            parts.push({ drawType: closed ? "filled" : "lines", vertices3D: points, text, elevation: elevation.length == 0 ? undefined : elevation });
         }
 
         if (angles) {
@@ -273,38 +299,75 @@ export class DrawModule extends BaseModule {
      * @param line Line that traces over objects.
      * @returns  Draw product for displaying lines between intersections and distance labels.
      */
-    getTraceDrawOject(objects: DrawProduct[], line: { start: ReadonlyVec2, end: ReadonlyVec2 }): DrawProduct {
+    getTraceDrawOject(objects: DrawProduct[], line: Line2d, align?: ReadonlyVec2): DrawProduct {
         if (objects.length > 1) {
-            const intersections: {
-                intersection: Intersection2d, point3d: ReadonlyVec3
-            }[] = [];
-            const emptyVertex = vec3.create();
-            objects.forEach(obj => {
-                if (obj.kind == "basic") {
-                    obj.objects.forEach(drawobj => {
-                        if (drawobj.kind == "complex" || drawobj.kind == "curveSegment" || drawobj.kind == "edge") {
-                            drawobj.parts.forEach(part => {
-                                if (part.vertices2D && (part.drawType == "lines" || part.drawType == "curveSegment" || part.drawType == "filled")) {
+            const parts: DrawPart[] = [];
+            const getIntersections = (line: Line2d) => {
+                const intersections: {
+                    intersection: Intersection2d, point3d: ReadonlyVec3, line: Line2d
+                }[] = [];
+                const emptyVertex = vec3.create();
+                objects.forEach(obj => {
+                    if (obj.kind == "basic") {
+                        obj.objects.forEach(drawobj => {
+                            if (drawobj.kind == "complex" || drawobj.kind == "curveSegment" || drawobj.kind == "edge") {
+                                drawobj.parts.forEach(part => {
+                                    if (part.vertices2D && (part.drawType == "lines" || part.drawType == "curveSegment" || part.drawType == "filled")) {
 
-                                    for (let i = 1; i < part.vertices2D.length; ++i) {
-                                        const prev3dPoint = part.indicesOnScreen ? part.vertices3D[part.indicesOnScreen[i - 1]] : part.vertices3D[i - 1];
-                                        const current3dPoint = part.indicesOnScreen ? part.vertices3D[part.indicesOnScreen[i]] : part.vertices3D[i];
-                                        if (vec3.equals(prev3dPoint, emptyVertex) || vec3.equals(current3dPoint, emptyVertex)) {
-                                            continue;
-                                        }
-                                        const lineB = { start: part.vertices2D[i - 1], end: part.vertices2D[i] };
-                                        const intersection = lineSegmentIntersection(line, lineB);
-                                        if (intersection) {
-                                            const dir = vec3.sub(vec3.create(), current3dPoint, prev3dPoint);
-                                            intersections.push({ intersection, point3d: vec3.scaleAndAdd(vec3.create(), prev3dPoint, dir, intersection.u) });
+                                        for (let i = 1; i < part.vertices2D.length; ++i) {
+                                            const prev3dPoint = part.indicesOnScreen ? part.vertices3D[part.indicesOnScreen[i - 1]] : part.vertices3D[i - 1];
+                                            const current3dPoint = part.indicesOnScreen ? part.vertices3D[part.indicesOnScreen[i]] : part.vertices3D[i];
+                                            if (vec3.equals(prev3dPoint, emptyVertex) || vec3.equals(current3dPoint, emptyVertex)) {
+                                                continue;
+                                            }
+                                            const lineB = { start: part.vertices2D[i - 1], end: part.vertices2D[i] };
+                                            const intersection = lineSegmentIntersection(line, lineB);
+                                            if (intersection) {
+                                                const dir = vec3.sub(vec3.create(), current3dPoint, prev3dPoint);
+                                                intersections.push({ intersection, point3d: vec3.scaleAndAdd(vec3.create(), prev3dPoint, dir, intersection.u), line: lineB });
+                                            }
                                         }
                                     }
-                                }
-                            });
-                        }
-                    });
+                                });
+                            }
+                        });
+                    }
+                });
+                return intersections;
+            }
+            if (align) {
+                const verticalIntersections = getIntersections(line);
+                let closest: Line2d | undefined;
+                let dist = Number.MAX_SAFE_INTEGER;
+                const intersectionPoint = vec2.create();
+                for (const i of verticalIntersections) {
+                    const d = vec2.dist(i.intersection.p, align);
+                    if (d < dist) {
+                        dist = d;
+                        closest = i.line;
+                        vec2.copy(intersectionPoint, i.intersection.p);
+                    }
                 }
-            });
+                if (closest) {
+                    const dx = closest.end[0] - closest.start[0];
+                    const dy = closest.end[1] - closest.start[1];
+                    const normal = vec2.fromValues(-dy, dx);
+                    const tangent = vec2.fromValues(dx, dy);
+                    vec2.normalize(normal, normal);
+                    vec2.normalize(tangent, tangent);
+                    const anglePointA = vec2.scaleAndAdd(vec2.create(), intersectionPoint, normal, 20);
+                    const anglePointB = vec2.scaleAndAdd(vec2.create(), anglePointA, tangent, 20);
+                    const anglePointC = vec2.scaleAndAdd(vec2.create(), intersectionPoint, tangent, 20);
+                    parts.push({ drawType: "lines", vertices3D: [], vertices2D: [anglePointA, anglePointB, anglePointC] })
+                    line = {
+                        start: vec2.scaleAndAdd(vec2.create(), intersectionPoint, normal, this.drawContext.height),
+                        end: vec2.scaleAndAdd(vec2.create(), intersectionPoint, normal, -this.drawContext.height),
+                    };
+                }
+
+            }
+
+            const intersections = getIntersections(line);
             if (intersections.length > 1) {
                 intersections.sort((a, b) => a.intersection.t - b.intersection.t);
                 const vertices3D: ReadonlyVec3[] = [vec3.create()];
@@ -323,7 +386,6 @@ export class DrawModule extends BaseModule {
                 vertices3D.push(vec3.create());
                 labels.push("");
 
-                const parts: DrawPart[] = [];
                 parts.push({ drawType: "lines", vertices3D, vertices2D, text: [labels] });
 
                 const drawObjects: DrawObject[] = [];
@@ -334,7 +396,6 @@ export class DrawModule extends BaseModule {
         }
         const parts: DrawPart[] = [];
         parts.push({ drawType: "lines", vertices3D: [], vertices2D: [line.start, line.end] });
-
         const drawObjects: DrawObject[] = [];
         drawObjects.push({ kind: "complex", parts });
         return { kind: "basic", objects: drawObjects };

@@ -3,6 +3,9 @@ import type { Camera, ObjectId } from "../../measure_view";
 
 export { DrawModule } from "./module";
 
+export type ElevationInfo = {
+    from: number; to: number; horizontalDisplay: boolean, slope?: number
+}
 
 /** Setting for drawing lines */
 export interface LinesDrawSetting {
@@ -10,8 +13,10 @@ export interface LinesDrawSetting {
     closed?: boolean,
     /** Generate angles between each line segment */
     angles?: boolean,
-    /** Generate labels on each line segment */
-    generateLineLabels?: boolean,
+    /** Generate length labels on each line segment in meters */
+    generateLengthLabels?: boolean,
+    /** Generate slope labels in percentage and and direction arrow on each line segment*/
+    generateSlope?: boolean | Set<ObjectId>,
     /** Number of decimals on labels */
     decimals?: number
 }
@@ -22,7 +27,7 @@ export interface DrawableEntity {
     /** Object id corresponding to he object ids gotten from picking from the core3d api*/
     readonly ObjectId?: ObjectId;
     /** Collection of kinds that can be drawn using measureView.draw.getDrawMeasureEntity*/
-    readonly drawKind: "edge" | "face" | "vertex" | "curveSegment" | "manhole" | "measureResult";
+    readonly drawKind: "edge" | "face" | "vertex" | "curveSegment" | "manhole" | "measureResult" | "points";
 }
 
 /** A hierarcical structure to draw 2d objects */
@@ -75,6 +80,8 @@ export interface DrawVoid {
     indicesOnScreen?: number[];
 }
 
+export type Line2d = { start: ReadonlyVec2, end: ReadonlyVec2 };
+
 /** Information about object to draw for measurement */
 export interface DrawPart {
     /** Name of the part */
@@ -88,8 +95,8 @@ export interface DrawPart {
     readonly text?: string | string[][];
     /** Type of object to draw */
     readonly drawType: "lines" | "filled" | "vertex" | "curveSegment" | "angle" | "text";
-    /** From/to 3d elevation of object, used for cylinder to show slope */
-    readonly elevation?: { from: number; to: number; horizontalDisplay: boolean };
+    /** From/to 3d elevation of object, used for cylinder to or lines  to show slope */
+    readonly elevation?: ElevationInfo | (ElevationInfo | undefined)[];
     /** Void in the draw part,  only valid for filled kind*/
     readonly voids?: DrawVoid[];
     /** World coordinates*/
