@@ -991,7 +991,7 @@ export class RenderContext {
             return { objectId };
         };
 
-        const laserSample = makeSample(laserPoint[0], laserPoint[1]);
+        const laserSample = makeSample(Math.floor(laserPoint[0]), Math.floor(laserPoint[1]));
         if (laserSample.position == undefined) {
             return undefined;
         }
@@ -1032,7 +1032,7 @@ export class RenderContext {
                     }
                 } else {
                     if (currentSample.position == undefined) {
-                        return prevSample.position;
+                        return [flipToCad(prevSample.position!)];
                     }
                     if (currentSample.objectId != laserSample.objectId ||
                         Math.abs(vec3.dot(laserSample.normal, currentSample.normal)) < 0.9) {
