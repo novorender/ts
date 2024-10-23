@@ -173,13 +173,13 @@ export class DrawModule extends BaseModule {
         const angles = settings?.angles ?? true;
         const generateLengthLabels = settings?.generateLengthLabels ?? false;
         const decimals = settings?.decimals ?? 3;
-        let generateSlopeLables = false;
+        let generateSlopeLabels = false;
         if (settings?.generateSlope != undefined) {
             if (settings.generateSlope == true) {
-                generateSlopeLables = true;
+                generateSlopeLabels = true;
             } else if (settings.generateSlope == false) { }
-            else if (objectId && settings.generateSlope.has(objectId)) {
-                generateSlopeLables = true;
+            else if (objectId != undefined && settings.generateSlope.has(objectId)) {
+                generateSlopeLabels = true;
             }
         }
 
@@ -189,12 +189,12 @@ export class DrawModule extends BaseModule {
         } else {
             let text: string[][] | undefined = undefined;
             const elevation: (ElevationInfo | undefined)[] = [];
-            if (generateLengthLabels || generateSlopeLables) {
+            if (generateLengthLabels || generateSlopeLabels) {
                 const labels: string[] = [];
                 for (let i = 1; i < points.length; ++i) {
                     if (generateLengthLabels) {
                         labels.push(vec3.dist(points[i - 1], points[i]).toFixed(decimals));
-                    } if (generateSlopeLables) {
+                    } if (generateSlopeLabels) {
                         const SLOPE_EPSILON = 0.1;
                         const z1 = points[i - 1][2];
                         const z2 = points[i][2]

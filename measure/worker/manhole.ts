@@ -20,7 +20,7 @@ export async function manholeMeasure(product: ProductData, prodId: ObjectId): Pr
     let outer: { radius: number; entity: CylinderEntity } | undefined = undefined;
     let inner: { radius: number; entity: CylinderEntity } | undefined = undefined;
 
-    const botInnerCandiates: { elevation: number; radius: number | undefined, entity: PlaneEntity }[] = [];
+    const botInnerCandidates: { elevation: number; radius: number | undefined, entity: PlaneEntity }[] = [];
 
     for (let i = 0; i < product.instances.length; ++i) {
         const instanceData = product.instances[i];
@@ -78,7 +78,7 @@ export async function manholeMeasure(product: ProductData, prodId: ObjectId): Pr
                                 botOuter = { elevation: planePos[2], radius, entity: { faceData: face, instanceIdx: i, planeData: surf, faceIdx } };
                             }
                             if (radius != undefined) {
-                                botInnerCandiates.push({ elevation: planePos[2], radius, entity: { faceData: face, instanceIdx: i, planeData: surf, faceIdx } });
+                                botInnerCandidates.push({ elevation: planePos[2], radius, entity: { faceData: face, instanceIdx: i, planeData: surf, faceIdx } });
                             }
 
                         }
@@ -90,7 +90,7 @@ export async function manholeMeasure(product: ProductData, prodId: ObjectId): Pr
         if (typeof instanceData.geometry == "number") {
             //check geom is number
             crawlInstance(product, instanceData, faceFuncPlane, () => { });
-            botInnerCandiates.forEach(plane => {
+            botInnerCandidates.forEach(plane => {
                 const { radius, elevation } = plane;
                 if (botInner && botOuter && radius) {
                     let setInner = false;

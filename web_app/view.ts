@@ -432,7 +432,7 @@ export class View<
      * Inspect the deviations that is on screen
      * @public
      * @param settings Deviation settings, 
-     * @returns Spaced out lables prioritizing the smallest or highest deviation values based on settings. 
+     * @returns Spaced out labels prioritizing the smallest or highest deviation values based on settings. 
      * Also returns a line trough the points if it is able to project the points on a line and the option is given.
      */
     async inspectDeviations(settings: DeviationInspectionSettings): Promise<DeviationInspections | undefined> {
@@ -447,7 +447,7 @@ export class View<
         }
     }
 
-    screenSpaceLaser(laserPosition: ReadonlyVec3, xDir: ReadonlyVec3, yDir: ReadonlyVec3, zDir: ReadonlyVec3): Intersection|undefined {
+    screenSpaceLaser(laserPosition: ReadonlyVec3, xDir: ReadonlyVec3, yDir: ReadonlyVec3, zDir: ReadonlyVec3): Intersection | undefined {
         const context = this._renderContext;
         if (context) {
             const { width, height } = this.renderStateGL.output;
@@ -455,7 +455,7 @@ export class View<
             const xDirPos = vec3.add(vec3.create(), laserPosition, xDir);
             const yDirPos = vec3.add(vec3.create(), laserPosition, yDir);
             const zDirPos = vec3.add(vec3.create(), laserPosition, zDir);
-            const points2d = convert.worldSpaceToScreenSpace([laserPosition, xDirPos, yDirPos, zDirPos], {width, height, round: false});
+            const points2d = convert.worldSpaceToScreenSpace([laserPosition, xDirPos, yDirPos, zDirPos], { width, height, round: false });
             if (points2d[0] === undefined) {
                 return;
             }

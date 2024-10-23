@@ -85,7 +85,7 @@ export interface PickInterface {
     snappingPoints: PickPoints[];
 }
 
-function closestCandiateOnSurfaces(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: number) {
+function closestCandidateOnSurfaces(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: number) {
     let closestCandidate: { entity: MeasureEntity, connectionPoint: vec3, distance: number } | undefined = undefined;
     for (const faceInstance of pickInterface.surfaces) {
         const localPoint = vec3.transformMat4(
@@ -121,7 +121,7 @@ function closestCandiateOnSurfaces(pickInterface: PickInterface, position: Reado
     }
 }
 
-function closestCandiateOnPolyMeshSurface(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: number) {
+function closestCandidateOnPolyMeshSurface(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: number) {
     let closestCandidate: { entity: MeasureEntity, connectionPoint: vec3, distance: number } | undefined = undefined;
     for (const faceInstance of pickInterface.faces) {
         const localPoint = vec3.transformMat4(
@@ -160,7 +160,7 @@ function closestSnappingPoints(pickInterface: PickInterface, position: ReadonlyV
             pointInstance.worldToObject
         );
         for (const snapPoints of pointInstance.points) {
-            if (isInsideAABB(localPoint, snapPoints.aabb, tolerance ? tolerance : 0.1)) {
+            if (isInsideAABB(localPoint, snapPoints.aabb, tolerance ?? 0.1)) {
                 for (let i = 0; i < snapPoints.vertexIndices.length; ++i) {
                     const point = snapPoints.vertices[i];
                     const distance = vec3.dist(point, localPoint);
@@ -437,11 +437,11 @@ export async function getPickInterface(product: ProductData, objectId: number): 
 
 
 export function pickFace(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: number): { entity: MeasureEntity, connectionPoint: vec3, faceType: "surface" | "polymesh" | "points" } | undefined {
-    const closestSurface = closestCandiateOnSurfaces(pickInterface, position, tolerance);
+    const closestSurface = closestCandidateOnSurfaces(pickInterface, position, tolerance);
     if (closestSurface) {
         return { ...closestSurface, faceType: "surface" };
     }
-    const closestFace = closestCandiateOnPolyMeshSurface(pickInterface, position, tolerance);
+    const closestFace = closestCandidateOnPolyMeshSurface(pickInterface, position, tolerance);
     if (closestFace) {
         return { ...closestFace, faceType: "polymesh" };
     }
@@ -585,11 +585,11 @@ export function pick(pickInterface: PickInterface, position: ReadonlyVec3, toler
     }
 
     if (faceTolerance) {
-        const closestSurface = closestCandiateOnSurfaces(pickInterface, position, faceTolerance);
+        const closestSurface = closestCandidateOnSurfaces(pickInterface, position, faceTolerance);
         if (closestSurface) {
             return closestSurface;
         }
-        const closestFace = closestCandiateOnPolyMeshSurface(pickInterface, position, faceTolerance);
+        const closestFace = closestCandidateOnPolyMeshSurface(pickInterface, position, faceTolerance);
         if (closestFace) {
             return closestFace;
         }
