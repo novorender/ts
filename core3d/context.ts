@@ -970,7 +970,7 @@ export class RenderContext {
         if (laserPoint[0] >= width || laserPoint[1] >= height ||
             laserPoint[0] < 0 || laserPoint[1] < 0
         ) {
-            return false;
+            return undefined;
         }
 
         const makeSample = (x: number, y: number) => {
