@@ -963,6 +963,16 @@ export class RenderContext {
         if (currentPick == undefined) {
             return undefined;
         }
+        if (width * height * 4 != currentPick.length) { //Pick buffer does not match screen. Most likely due to drs
+            return undefined;
+        }
+
+        if (laserPoint[0] >= width || laserPoint[1] >= height ||
+            laserPoint[0] < 0 || laserPoint[1] < 0
+        ) {
+            return false;
+        }
+
         const makeSample = (x: number, y: number) => {
             const offset = x + (y * width);
             const objectId = currentPick[offset * 4];
@@ -1003,7 +1013,6 @@ export class RenderContext {
                 return [];
             }
             const currentPos = out ? vec2.scaleAndAdd(vec2.create(), laserPoint, dir, 5) : vec2.clone(laserPoint);
-            let prevDepth = laserSample.depth;
             const updateToNext = () => {
                 const updatePos = vec2.add(vec2.create(), currentPos, dir);
                 while (
@@ -1025,9 +1034,11 @@ export class RenderContext {
                 const currentSample = makeSample(Math.floor(currentPos[0]), Math.floor(currentPos[1]));
                 if (out) {
                     if (currentSample.position == undefined) {
-                        return [];
+                        continue;
                     }
-                    if (areVectorsSameOrOppositeDirection(laserSample.normal, vec3.sub(vec3.create(), currentSample.position, laserSample.position))) {
+                    const dir = vec3.sub(vec3.create(), currentSample.position, laserSample.position);
+                    vec3.normalize(dir, dir);
+                    if (Math.abs(vec3.dot(laserSample.normal, dir)) > 0.99) {
                         return [flipToCad(currentSample.position)];
                     }
                 } else {
@@ -1039,9 +1050,6 @@ export class RenderContext {
                         return [flipToCad(prevSample.position!)];
                     }
                     prevSample = currentSample;
-                    if (currentSample.depth) {
-                        prevDepth = currentSample.depth;
-                    }
                 }
             }
             return [];
@@ -1187,25 +1195,6 @@ export class RenderContext {
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
 }
-
-function areVectorsSameOrOppositeDirection(vec1: ReadonlyVec3, vec2: ReadonlyVec3) {
-    // Check ratios of each component
-    const ratioX = (vec1[0] !== 0) ? (vec2[0] / vec1[0]) : (vec2[0] === 0 ? 1 : null);
-    const ratioY = (vec1[1] !== 0) ? (vec2[1] / vec1[1]) : (vec2[1] === 0 ? 1 : null);
-    const ratioZ = (vec1[2] !== 0) ? (vec2[2] / vec1[2]) : (vec2[2] === 0 ? 1 : null);
-
-    // Check if the ratios are consistent (equal or null), either all positive or all negative
-    const allPositive = (ratioX === null || ratioX >= 0) &&
-        (ratioY === null || ratioY >= 0) &&
-        (ratioZ === null || ratioZ >= 0);
-
-    const allNegative = (ratioX === null || ratioX <= 0) &&
-        (ratioY === null || ratioY <= 0) &&
-        (ratioZ === null || ratioZ <= 0);
-
-    return allPositive || allNegative;
-}
-
 
 /**
  * Deviation sampled from screen
