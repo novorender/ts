@@ -10,24 +10,31 @@ type CurveKind = "line" | "arc" | "nurbs" | "lineStrip";
 // TODO: Triangulate (delauney) p-space?
 // or even tetrahedron tesselation of 3D face?
 
-export interface LineSegment3D {
-    dir: vec3;
-    start: vec3;
-    end: vec3;
+export interface LineSegment3D extends Ray {
+    end: ReadonlyVec3;
 }
 
-export function lineToSegment(line: Line3D, mat: mat4): LineSegment3D {
+export interface Ray {
+    dir: ReadonlyVec3;
+    start: ReadonlyVec3;
+}
+
+export function lineToSegment(line: Line3D, mat?: mat4): LineSegment3D {
     const start = vec3.create();
     const end = vec3.create();
     const dir = vec3.create();
     line.eval(line.beginParam, start, dir);
     line.eval(line.endParam, end, undefined);
-    vec3.transformMat4(start, start, mat);
-    vec3.transformMat4(end, end, mat);
 
-    const normalMat = mat3.normalFromMat4(mat3.create(), mat);
-    vec3.transformMat3(dir, dir, normalMat);
-    vec3.normalize(dir, dir);
+    if (mat) {
+        vec3.transformMat4(start, start, mat);
+        vec3.transformMat4(end, end, mat);
+
+        const normalMat = mat3.normalFromMat4(mat3.create(), mat);
+        vec3.transformMat3(dir, dir, normalMat);
+        vec3.normalize(dir, dir);
+    }
+
     return { dir, start, end };
 }
 
@@ -127,16 +134,16 @@ export class LineStrip3D implements Curve3D {
         return closestParameter;
     }
 
-    toSegments(transform: mat4): LineSegment3D[] {
+    toSegments(transform?: mat4): LineSegment3D[] {
         const { vertices, tesselationParameters } = this;
         const segments: LineSegment3D[] = [];
         for (let i = 1; i < tesselationParameters.length; ++i) {
-            const start = vec3.transformMat4(
+            const start = transform ? vec3.transformMat4(
                 vec3.create(),
                 vertices[i - 1],
                 transform
-            );
-            const end = vec3.transformMat4(vec3.create(), vertices[i], transform);
+            ) : vertices[i - 1];
+            const end = transform ? vec3.transformMat4(vec3.create(), vertices[i], transform) : vertices[i];
             const dir = vec3.sub(vec3.create(), end, start);
             vec3.normalize(dir, dir);
             segments.push({ start, end, dir });

@@ -27,12 +27,18 @@ export class ScreenSpaceConversions {
 
     /** Converts world space points to on screen space points.
      * @param points World space points that will be projected to screen space.
+     * @param width optional pixel width, use canvas width if not given.
+     * @param height optional pixel height, use canvas heigth if not given.
+     * @param round round pixel values or not, `true` if not given.
      * @returns Screen space points regadless if they are within the current canvas size
      *          or undefined if point is outside screen space.
      */
-    worldSpaceToScreenSpace(points: ReadonlyVec3[]): (ReadonlyVec2 | undefined)[] {
+    worldSpaceToScreenSpace(points: ReadonlyVec3[], {width, height, round}: {width?: number, height?: number, round?: boolean} = {}): (ReadonlyVec2 | undefined)[] {
         const { drawContext } = this;
-        const { width, height, camera } = drawContext;
+        width = width ?? drawContext.width;
+        height = height ?? drawContext.height;
+        round = round ?? true;
+        const { camera } = drawContext;
         const { camMat, projMat } = getPathMatrices(width, height, camera);
         const p = vec3.create();
         return points.map((p0) => {
@@ -48,7 +54,7 @@ export class ScreenSpaceConversions {
                 return undefined;
             }
 
-            return toScreen(projMat, width, height, p);
+            return toScreen(projMat, width, height, p, round);
         });
     }
 
@@ -152,11 +158,15 @@ const toView = (() => {
     };
 })();
 
-function toScreen(projMat: mat4, width: number, height: number, p: ReadonlyVec3): vec2 {
+function toScreen(projMat: mat4, width: number, height: number, p: ReadonlyVec3, round: boolean): vec2 {
     const pt = toView(projMat, p);
 
-    pt[0] = Math.round(pt[0] * width);
-    pt[1] = Math.round(pt[1] * height);
+    pt[0] = pt[0] * width;
+    pt[1] = pt[1] * height;
+    if (round) {
+        pt[0] = Math.round(pt[0]);
+        pt[1] = Math.round(pt[1]);
+    }
 
     if (!Number.isFinite(pt[0]) || !Number.isFinite(pt[1])) {
         vec2.set(pt, -100, -100);

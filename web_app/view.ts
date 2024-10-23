@@ -8,7 +8,7 @@ import { downloadOfflineImports, manageOfflineStorage, type OfflineImportMap, ty
 import { loadSceneDataOffline, type DataContext } from "data";
 import * as DataAPI from "data/api";
 import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
-import { outlineLaser, type OutlineIntersection } from "./outline_inspect";
+import { outlineLaser, type Intersection } from "./outline_inspect";
 import { ScreenSpaceConversions } from "./screen_space_conversions";
 
 /**
@@ -432,7 +432,7 @@ export class View<
      * Inspect the deviations that is on screen
      * @public
      * @param settings Deviation settings, 
-     * @returns Spaced out lables prioritizing the smallest or highest deviation values based on settings. 
+     * @returns Spaced out labels prioritizing the smallest or highest deviation values based on settings. 
      * Also returns a line trough the points if it is able to project the points on a line and the option is given.
      */
     async inspectDeviations(settings: DeviationInspectionSettings): Promise<DeviationInspections | undefined> {
@@ -447,6 +447,42 @@ export class View<
         }
     }
 
+    screenSpaceLaser(laserPosition: ReadonlyVec3, xDir: ReadonlyVec3, yDir: ReadonlyVec3, zDir: ReadonlyVec3): Intersection | undefined {
+        const context = this._renderContext;
+        if (context) {
+            const { convert } = this;
+            const { width, height } = this.renderStateGL.output;
+            const { rotation } = this.renderStateCad.camera;
+            const camDir = vec3.transformQuat(vec3.create(), vec3.fromValues(0, 0, 1), rotation);
+
+            const xDirPos = vec3.add(vec3.create(), laserPosition, xDir);
+            const yDirPos = vec3.add(vec3.create(), laserPosition, yDir);
+            const zDirPos = vec3.add(vec3.create(), laserPosition, zDir);
+            const points2d = convert.worldSpaceToScreenSpace([laserPosition, xDirPos, yDirPos, zDirPos], { width, height, round: false });
+            if (points2d[0] === undefined) {
+                return;
+            }
+            const normalize = (dir?: vec2) => {
+                if (dir && vec2.dot(dir, dir) != 0) {
+                    vec2.normalize(dir, dir);
+                    return dir;
+                }
+            }
+
+            for (const point of points2d) {
+                if (point) {
+                    (point as vec2)[1] = height - point[1];
+                }
+            }
+
+            const xDir2d = Math.abs(vec3.dot(xDir, camDir)) < 0.95 ? normalize(points2d[1] ? vec2.sub(vec2.create(), points2d[1], points2d[0]) : undefined) : undefined;
+            const yDir2d = Math.abs(vec3.dot(yDir, camDir)) < 0.95 ? normalize(points2d[2] ? vec2.sub(vec2.create(), points2d[2], points2d[0]) : undefined) : undefined;
+            const zDir2d = Math.abs(vec3.dot(zDir, camDir)) < 0.95 ? normalize(points2d[3] ? vec2.sub(vec2.create(), points2d[3], points2d[0]) : undefined) : undefined;
+            return context.screenSpaceLaser(points2d[0], xDir2d, yDir2d, zDir2d);
+        }
+    }
+
+
     /**
      * Create a list of intersections between the x and y axis through the tracer position
      * @public
@@ -460,7 +496,7 @@ export class View<
      * results will be ordered from  closest to furthest from the tracer point
      */
 
-    outlineLaser(laserPosition: ReadonlyVec3, planeType: "clipping" | "outline", planeIndex: number, rotation?: number, autoAlign?: "model" | "closest"): OutlineIntersection | undefined {
+    outlineLaser(laserPosition: ReadonlyVec3, planeType: "clipping" | "outline", planeIndex: number, rotation?: number, autoAlign?: "model" | "closest"): Intersection | undefined {
         const context = this._renderContext;
         const { renderStateGL } = this;
         if (context) {
@@ -504,7 +540,7 @@ export class View<
      */
 
     getOutlineDrawObjects(planeType: "clipping" | "outline", planeIndex: number, drawContext?: DrawContext,
-        settings: LinesDrawSetting = { closed: false, angles: true, generateLineLabels: true }) {
+        settings: LinesDrawSetting = { closed: false, angles: true, generateLengthLabels: true, generateSlope: false }, filter?: Set<ObjectId>) {
         const context = this._renderContext;
         const { renderStateGL } = this;
         const drawProducts: DrawProduct[] = [];
@@ -518,8 +554,10 @@ export class View<
             if (outlineRenderer) {
                 const objToLines = new Map<ObjectId, ReadonlyVec3[][]>();
                 for (const cluster of outlineRenderer.getLineClusters()) {
-                    //const lines: [ReadonlyVec3, ReadonlyVec3][] = [];
                     let lines = objToLines.get(cluster.objectId);
+                    if (filter && !filter.has(cluster.objectId)) {
+                        continue;
+                    }
                     if (!lines) {
                         lines = [];
                         objToLines.set(cluster.objectId, lines);

@@ -1,6 +1,6 @@
 import { updateMeshHighlights } from "core3d/modules/octree/mesh";
 import { vec2, type ReadonlyVec2, vec3, type ReadonlyVec3 } from "gl-matrix";
-import type { DeviationSample, OutlineSample, PickSample } from "web_app";
+import type { DeviationSample } from "web_app";
 
 /** Deviation lable with pixel position and deviation value as string. */
 export interface DeviationLabel {
@@ -20,7 +20,7 @@ export type DeviationProjection = {
 
 /** Settings  for deviation inspection */
 export type DeviationInspectionSettings = {
-    /** Projection to use, currently only supports circular. Projection is needed to generate line through points and offset lables*/
+    /** Projection to use, currently only supports circular. Projection is needed to generate line through points and offset labels*/
     projection?: DeviationProjection,
     /** Option to generate line trough the deviation points, note that projection needs to also be set*/
     generateLine?: boolean
@@ -30,7 +30,7 @@ export type DeviationInspectionSettings = {
 
 /** Deviation values taken from screen */
 export type DeviationInspections = {
-    /** Spaced out lables for the most significant deviations based on settings */
+    /** Spaced out labels for the most significant deviations based on settings */
     labels: DeviationLabel[],
     /** Line strip of pixel values to draw a line through the deviations on screen */
     line?: vec2[]
@@ -84,6 +84,7 @@ export function inspectDeviations(deviations: DeviationSample[], screenScaling: 
                         break;
                     }
                 }
+
                 if (addLinePoint) {
                     linePoints.push({ position, position3d: currentSample.position, depth: currentSample.depth });
                 }

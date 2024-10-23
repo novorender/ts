@@ -146,7 +146,7 @@ export interface ParametricEntity {
     /** Object Id from the core 3d api. */
     ObjectId: ObjectId;
     /** the type of object that can be drawn from this spesific entity, see  {@link DrawModule} */
-    drawKind: "edge" | "face" | "curveSegment";
+    drawKind: "edge" | "face" | "curveSegment" | "points";
     /** @ignore */
     pathIndex: number;
     /** @ignore */

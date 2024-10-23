@@ -1,11 +1,13 @@
 import { vec2, type ReadonlyVec3, type ReadonlyVec2 } from "gl-matrix";
 
 /** Sorted outlines on screen from closest to furthest from input point */
-export type OutlineIntersection = {
+export type Intersection = {
     left: ReadonlyVec3[],
     right: ReadonlyVec3[],
     up: ReadonlyVec3[],
     down: ReadonlyVec3[],
+    zUp?: ReadonlyVec3[],
+    zDown?: ReadonlyVec3[]
 }
 
 function intersection(line: [ReadonlyVec2, ReadonlyVec2], dir: [ReadonlyVec2, ReadonlyVec2]) {

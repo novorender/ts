@@ -6,8 +6,8 @@ import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
 import type { WasmInstance } from "./wasm";
-import type { ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
-import { glMatrix, mat3, mat4, quat, vec3, vec4 } from "gl-matrix";
+import type { ReadonlyVec2, ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
+import { glMatrix, mat3, mat4, quat, vec2, vec3, vec4 } from "gl-matrix";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
 import { orthoNormalBasisMatrixFromPlane } from "./util";
@@ -955,6 +955,122 @@ export class RenderContext {
         this.updateUniformBuffer(outlineUniforms, outlinesUniformsData);
     }
 
+
+
+    /** @internal */
+    screenSpaceLaser(laserPoint: ReadonlyVec2, xDir?: ReadonlyVec2, yDir?: ReadonlyVec2, zDir?: ReadonlyVec2) {
+        const { currentPick, wasm, width, height, viewClipMatrixLastPoll, viewWorldMatrixLastPoll, isOrtho } = this;
+        if (currentPick == undefined) {
+            return undefined;
+        }
+        if (width * height * 4 != currentPick.length) { //Pick buffer does not match screen. Most likely due to drs
+            return undefined;
+        }
+
+        if (laserPoint[0] >= width || laserPoint[1] >= height ||
+            laserPoint[0] < 0 || laserPoint[1] < 0
+        ) {
+            return false;
+        }
+
+        const makeSample = (x: number, y: number) => {
+            const offset = x + (y * width);
+            const objectId = currentPick[offset * 4];
+            if (objectId != 0xffffffff) {
+                const [depth] = new Float32Array(currentPick.buffer, offset * 16 + 12, 1);
+                const [nx16, ny16, nz16] = new Uint16Array(currentPick.buffer, offset * 16 + 4, 4);
+                const nx = wasm.float32(nx16);
+                const ny = wasm.float32(ny16);
+                const nz = wasm.float32(nz16);
+
+                // compute normal
+                // compute clip space x,y coords
+                const xCS = ((x + 0.5) / width) * 2 - 1;
+                const yCS = ((y + 0.5) / height) * 2 - 1;
+
+                // compute view space position and normal
+                const scale = isOrtho ? 1 : depth;
+                const posVS = vec3.fromValues((xCS / viewClipMatrixLastPoll[0]) * scale, (yCS / viewClipMatrixLastPoll[5]) * scale, -depth);
+
+                // convert into world space.
+                const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrixLastPoll);
+                const normal = vec3.fromValues(nx, ny, nz);
+                vec3.normalize(normal, normal);
+                return { objectId, normal, position, depth };
+            }
+            return { objectId };
+        };
+
+        const laserSample = makeSample(Math.floor(laserPoint[0]), Math.floor(laserPoint[1]));
+        if (laserSample.position == undefined) {
+            return undefined;
+        }
+
+        const flipToCad = (v: ReadonlyVec3) => vec3.fromValues(v[0], -v[2], v[1]);
+
+        const getLaserIntersection = (dir?: ReadonlyVec2, out?: boolean) => {
+            if (dir == undefined) {
+                return [];
+            }
+            const currentPos = out ? vec2.scaleAndAdd(vec2.create(), laserPoint, dir, 5) : vec2.clone(laserPoint);
+            const updateToNext = () => {
+                const updatePos = vec2.add(vec2.create(), currentPos, dir);
+                while (
+                    Math.floor(updatePos[0]) == Math.floor(currentPos[0]) &&
+                    Math.floor(updatePos[1]) == Math.floor(currentPos[1])) {
+                    vec2.add(updatePos, updatePos, dir);
+                }
+                if (updatePos[0] >= width || updatePos[1] >= height ||
+                    updatePos[0] < 0 || updatePos[1] < 0
+                ) {
+                    return false;
+                }
+                vec2.copy(currentPos, updatePos);
+                return true;
+            }
+
+            let prevSample: { objectId: number, normal?: ReadonlyVec3, position?: ReadonlyVec3, depth?: number } = laserSample;
+            while (updateToNext()) {
+                const currentSample = makeSample(Math.floor(currentPos[0]), Math.floor(currentPos[1]));
+                if (out) {
+                    if (currentSample.position == undefined) {
+                        continue;
+                    }
+                    const dir = vec3.sub(vec3.create(), currentSample.position, laserSample.position);
+                    vec3.normalize(dir, dir);
+                    if (Math.abs(vec3.dot(laserSample.normal, dir)) > 0.99) {
+                        return [flipToCad(currentSample.position)];
+                    }
+                } else {
+                    if (currentSample.position == undefined) {
+                        return [flipToCad(prevSample.position!)];
+                    }
+                    if (currentSample.objectId != laserSample.objectId ||
+                        Math.abs(vec3.dot(laserSample.normal, currentSample.normal)) < 0.9) {
+                        return [flipToCad(prevSample.position!)];
+                    }
+                    prevSample = currentSample;
+                }
+            }
+            return [];
+        };
+        const inverse = (dir?: ReadonlyVec2) => {
+            if (dir) {
+                return vec2.fromValues(-dir[0], -dir[1]);
+            }
+            return dir;
+        }
+
+        return {
+            right: getLaserIntersection(xDir) as ReadonlyVec3[],
+            left: getLaserIntersection(inverse(xDir)) as ReadonlyVec3[],
+            up: getLaserIntersection(yDir) as ReadonlyVec3[],
+            down: getLaserIntersection(inverse(yDir)) as ReadonlyVec3[],
+            zUp: getLaserIntersection(zDir, true) as ReadonlyVec3[],
+            zDown: [flipToCad(laserSample.position)]
+        }
+    }
+
     private extractPick(pickBuffer: Uint32Array, x: number, y: number, sampleDiscRadius: number, pickCameraPlane: boolean) {
         const { canvas, wasm, width, height } = this;
         const rect = canvas.getBoundingClientRect(); // dim in css pixels
@@ -964,7 +1080,6 @@ export class RenderContext {
         const px = Math.min(Math.max(0, Math.round(x / cssWidth * width)), width);
         const py = Math.min(Math.max(0, Math.round((1 - (y + 0.5) / cssHeight) * height)), height);
 
-        const floats = new Float32Array(pickBuffer.buffer);
 
         // fetch sample rectangle from read buffers
         const r = Math.ceil(sampleDiscRadius);
@@ -991,7 +1106,7 @@ export class RenderContext {
                 let objectId = pickBuffer[buffOffs * 4];
                 if (objectId != 0xffffffff) {
                     const isReservedId = objectId >= 0xf000_0000
-                    const depth = pickCameraPlane ? 0 : floats[buffOffs * 4 + 3];
+                    const depth = pickCameraPlane ? 0 : new Float32Array(pickBuffer.buffer, buffOffs * 16 + 12, 1)[0];
                     const [nx16, ny16, nz16, pointFactor16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
                     const nx = wasm.float32(nx16);
                     const ny = wasm.float32(ny16);
@@ -1080,7 +1195,6 @@ export class RenderContext {
 function isPromise<T>(promise: T | Promise<T>): promise is Promise<T> {
     return !!promise && typeof Reflect.get(promise, "then") === "function";
 }
-
 
 /**
  * Deviation sampled from screen
