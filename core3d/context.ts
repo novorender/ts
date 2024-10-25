@@ -958,7 +958,7 @@ export class RenderContext {
 
 
     /** @internal */
-    screenSpaceLaser(laserPoint: ReadonlyVec2, xDir?: ReadonlyVec2, yDir?: ReadonlyVec2, zDir?: ReadonlyVec2) {
+    screenSpaceLaser(laserPoint: ReadonlyVec2, onlyOnOutlines: boolean, xDir?: ReadonlyVec2, yDir?: ReadonlyVec2, zDir?: ReadonlyVec2) {
         const { currentPick, wasm, width, height, viewClipMatrixLastPoll, viewWorldMatrixLastPoll, isOrtho } = this;
         if (currentPick == undefined) {
             return undefined;
@@ -1012,6 +1012,9 @@ export class RenderContext {
             if (dir == undefined) {
                 return [];
             }
+            if (out && onlyOnOutlines) {
+                return [];
+            }
             const currentPos = out ? vec2.scaleAndAdd(vec2.create(), laserPoint, dir, 5) : vec2.clone(laserPoint);
             const updateToNext = () => {
                 const updatePos = vec2.add(vec2.create(), currentPos, dir);
@@ -1042,13 +1045,21 @@ export class RenderContext {
                         return [flipToCad(currentSample.position)];
                     }
                 } else {
-                    if (currentSample.position == undefined) {
-                        return [flipToCad(prevSample.position!)];
+                    if (onlyOnOutlines) {
+                        const clippingOutline = currentSample.objectId >= 0xf000_0000 ? false : (currentSample.objectId & (1 << 31)) != 0;
+                        if (clippingOutline) {
+                            return [flipToCad(currentSample.position!)];
+                        }
+                    } else {
+                        if (currentSample.position == undefined) {
+                            return [flipToCad(prevSample.position!)];
+                        }
+                        if (currentSample.objectId != laserSample.objectId ||
+                            Math.abs(vec3.dot(laserSample.normal, currentSample.normal)) < 0.9) {
+                            return [flipToCad(prevSample.position!)];
+                        }
                     }
-                    if (currentSample.objectId != laserSample.objectId ||
-                        Math.abs(vec3.dot(laserSample.normal, currentSample.normal)) < 0.9) {
-                        return [flipToCad(prevSample.position!)];
-                    }
+
                     prevSample = currentSample;
                 }
             }
