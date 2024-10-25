@@ -449,7 +449,7 @@ export class View<
 
 
     /**
-     * Create create laser intersections based on information already on screen
+     * Create list of laser intersections based on information already on screen
      * @public
      * @param laserPosition position where to calculate intersections,  
      * @param onlyOnOutlines only intersect with outlines rendered to screen, drawing outlines must be enabled to work
@@ -457,7 +457,7 @@ export class View<
      * @param yDir optional y direction of the laser
      * @param zDir optional z direction of the laser
      * @returns list of intersections (right, left, up ,down, zUp, zDown)
-     * the lists will either contain a single intersection or non, the zDown will always be the laser position.
+     * the lists will either contain a single intersection or none, the zDown will always be the laser position.
      */
     screenSpaceLaser(laserPosition: ReadonlyVec3, onlyOnOutlines: boolean, xDir?: ReadonlyVec3, yDir?: ReadonlyVec3, zDir?: ReadonlyVec3): Intersection | undefined {
         const context = this._renderContext;
