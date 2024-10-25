@@ -151,14 +151,17 @@ export function outlineLaser(lines: [ReadonlyVec2, ReadonlyVec2][], laserPositio
                     break;
                 }
             }
-            let prevVal = pts[i][sortIdx];
-            filteredPts.push(pts[i++]);
-            for (; i < pts.length; ++i) {
-                if (Math.abs(pts[i][sortIdx] - prevVal) > 0.01) {
-                    prevVal = pts[i][sortIdx];
-                    filteredPts.push(pts[i]);
+            if (i < pts.length) {
+                let prevVal = pts[i][sortIdx];
+                filteredPts.push(pts[i++]);
+                for (; i < pts.length; ++i) {
+                    if (Math.abs(pts[i][sortIdx] - prevVal) > 0.01) {
+                        prevVal = pts[i][sortIdx];
+                        filteredPts.push(pts[i]);
+                    }
                 }
             }
+
         }
         return filteredPts;
     }
