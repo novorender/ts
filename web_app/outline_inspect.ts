@@ -134,8 +134,8 @@ export function outlineLaser(lines: [ReadonlyVec2, ReadonlyVec2][], laserPositio
         const dir = closestDir.dir;
         const tan = vec2.fromValues(dir[1], -dir[0]);
         if (Math.abs(vec2.dot(tan, up)) < 0.99) {
-            up = tan;
-            right = dir;
+            up = dir;
+            right = tan;
             rerunIntersections();
         }
     }
@@ -145,9 +145,15 @@ export function outlineLaser(lines: [ReadonlyVec2, ReadonlyVec2][], laserPositio
         pts.sort((a, b) => inverseSort ? b[sortIdx] - a[sortIdx] : a[sortIdx] - b[sortIdx]);
         const filteredPts: ReadonlyVec2[] = [];
         if (pts.length > 0) {
-            let prevVal = pts[0][sortIdx];
-            filteredPts.push(pts[0]);
-            for (let i = 1; i < pts.length; ++i) {
+            let i = 0;
+            for (; i < pts.length; ++i) {
+                if (vec2.dist(pts[i], laserPosition) > 0.001) {
+                    break;
+                }
+            }
+            let prevVal = pts[i][sortIdx];
+            filteredPts.push(pts[i++]);
+            for (; i < pts.length; ++i) {
                 if (Math.abs(pts[i][sortIdx] - prevVal) > 0.01) {
                     prevVal = pts[i][sortIdx];
                     filteredPts.push(pts[i]);
