@@ -204,7 +204,7 @@ export class DrawModule extends BaseModule {
                         const planarDist = vec2.distance(vec2A, vec2B);
                         const slope = Math.abs(zDist / planarDist) * 100;
                         if (planarDist > SCREEN_SPACE_EPSILON && slope > SLOPE_EPSILON && Math.abs(slope - 100) > SLOPE_EPSILON) {
-                            elevation.push({ from: z1 > z2 ? z1 : z2, to: z1 < z2 ? z1 : z2, horizontalDisplay: false, slope })
+                            elevation.push({ from: z1, to: z2, horizontalDisplay: false, slope })
                         } else {
                             elevation.push(undefined);
                         }
