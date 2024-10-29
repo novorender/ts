@@ -1,7 +1,7 @@
 import { type ReadonlyVec3, vec3, vec2, type ReadonlyQuat, mat3, type ReadonlyVec2, type ReadonlyVec4, glMatrix, vec4, mat4 } from "gl-matrix";
 import { downloadScene, type RenderState, type RenderStateChanges, defaultRenderState, initCore3D, mergeRecursive, RenderContext, type SceneConfig, modifyRenderState, type RenderStatistics, type DeviceProfile, type PickSample, type PickOptions, CoordSpace, type Core3DImports, type RenderStateCamera, validateRenderState, type Core3DImportMap, downloadCore3dImports, type PBRMaterialInfo, type RGB, type RenderStateTextureReference, type ActiveTextureIndex, type MaxActiveTextures, emptyActiveTexturesArray, type AABB } from "core3d";
 import { builtinControllers, ControllerInput, type BaseController, type PickContext, type BuiltinCameraControllerType } from "./controller";
-import { flipGLtoCadVec, flipState } from "./flip";
+import { flipState } from "./flip";
 import { MeasureView, createMeasureView, type MeasureEntity, downloadMeasureImports, type MeasureImportMap, type MeasureImports, type ObjectId, type DrawProduct, type LinesDrawSetting, type DrawContext } from "measure";
 import { inspectDeviations, type DeviationInspectionSettings, type DeviationInspections } from "./buffer_inspect";
 import { downloadOfflineImports, manageOfflineStorage, type OfflineImportMap, type OfflineImports, type OfflineViewState, type SceneIndex } from "offline"
@@ -10,6 +10,7 @@ import * as DataAPI from "data/api";
 import { OfflineFileNotFoundError, hasOfflineDir, requestOfflineFile } from "offline/file";
 import { outlineLaser, type Intersection } from "./outline_inspect";
 import { ScreenSpaceConversions } from "./screen_space_conversions";
+import { getScreenSpaceLaserIntersections } from "./screen_space_laser";
 
 /**
  * A view base class for Novorender content.
@@ -456,37 +457,16 @@ export class View<
      * @param xDir optional x direction of the laser
      * @param yDir optional y direction of the laser
      * @param zDir optional z direction of the laser
+     * @param autoAlign if set to true the laser will try to align to the closest intersection line.
      * @returns list of intersections (right, left, up ,down, zUp, zDown)
      * the lists will either contain a single intersection or none, the zDown will always be the laser position.
      */
-    screenSpaceLaser(laserPosition: ReadonlyVec3, onlyOnOutlines: boolean, xDir?: ReadonlyVec3, yDir?: ReadonlyVec3, zDir?: ReadonlyVec3): Intersection | undefined {
+    screenSpaceLaser(laserPosition: ReadonlyVec3, onlyOnOutlines: boolean, xDir?: ReadonlyVec3, yDir?: ReadonlyVec3, zDir?: ReadonlyVec3, autoAlign?: boolean): Intersection | undefined {
         const context = this._renderContext;
         if (context) {
             const { convert } = this;
             const { width, height } = this.renderStateGL.output;
-            const xDirPos = vec3.add(vec3.create(), laserPosition, xDir ? xDir : vec3.create());
-            const yDirPos = vec3.add(vec3.create(), laserPosition, yDir ? yDir : vec3.create());
-            const zDirPos = vec3.add(vec3.create(), laserPosition, zDir ? zDir : vec3.create());
-            const points2d = convert.worldSpaceToScreenSpace([laserPosition, xDirPos, yDirPos, zDirPos], { width, height, round: false });
-            if (points2d[0] === undefined) {
-                return;
-            }
-            const normalize = (dir?: vec2) => {
-                if (dir && vec2.dot(dir, dir) != 0) {
-                    vec2.normalize(dir, dir);
-                    return dir;
-                }
-            }
-
-            for (const point of points2d) {
-                if (point) {
-                    (point as vec2)[1] = height - point[1];
-                }
-            }
-            const xDir2d = xDir ? normalize(points2d[1] ? vec2.sub(vec2.create(), points2d[1], points2d[0]) : undefined) : undefined;
-            const yDir2d = yDir ? normalize(points2d[2] ? vec2.sub(vec2.create(), points2d[2], points2d[0]) : undefined) : undefined;
-            const zDir2d = zDir ? normalize(points2d[3] ? vec2.sub(vec2.create(), points2d[3], points2d[0]) : undefined) : undefined;
-            return context.screenSpaceLaser(points2d[0], onlyOnOutlines, xDir2d, yDir2d, zDir2d);
+            return getScreenSpaceLaserIntersections(laserPosition, onlyOnOutlines, context, width, height, convert, xDir, yDir, zDir, autoAlign);
         }
     }
 
