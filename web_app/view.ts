@@ -461,12 +461,22 @@ export class View<
      * @returns list of intersections (right, left, up ,down, zUp, zDown)
      * the lists will either contain a single intersection or none, the zDown will always be the laser position.
      */
-    screenSpaceLaser(laserPosition: ReadonlyVec3, onlyOnOutlines: boolean, xDir?: ReadonlyVec3, yDir?: ReadonlyVec3, zDir?: ReadonlyVec3, autoAlign?: boolean): Intersection | undefined {
+    screenSpaceLaser(
+        {
+            laserPosition,
+            onlyOnOutlines,
+            xDir,
+            yDir,
+            zDir,
+            autoAlign
+        }: {
+            laserPosition: ReadonlyVec3, onlyOnOutlines: boolean, xDir?: ReadonlyVec3, yDir?: ReadonlyVec3, zDir?: ReadonlyVec3, autoAlign?: boolean
+        }): Intersection | undefined {
         const context = this._renderContext;
         if (context) {
             const { convert } = this;
             const { width, height } = this.renderStateGL.output;
-            return getScreenSpaceLaserIntersections(laserPosition, onlyOnOutlines, context, width, height, convert, xDir, yDir, zDir, autoAlign);
+            return getScreenSpaceLaserIntersections({ laserPosition, onlyOnOutlines, context, width, height, convert, xDir, yDir, zDir, autoAlign });
         }
     }
 

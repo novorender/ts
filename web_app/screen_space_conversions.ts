@@ -33,7 +33,7 @@ export class ScreenSpaceConversions {
      * @returns Screen space points regadless if they are within the current canvas size
      *          or undefined if point is outside screen space.
      */
-    worldSpaceToScreenSpace(points: ReadonlyVec3[], {width, height, round}: {width?: number, height?: number, round?: boolean} = {}): (ReadonlyVec2 | undefined)[] {
+    worldSpaceToScreenSpace(points: ReadonlyVec3[], { width, height, round }: { width?: number, height?: number, round?: boolean } = {}): (vec2 | undefined)[] {
         const { drawContext } = this;
         width = width ?? drawContext.width;
         height = height ?? drawContext.height;
