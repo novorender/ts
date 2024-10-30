@@ -40,7 +40,7 @@ function isPointOnLine(point: ReadonlyVec3, segment: { start: ReadonlyVec3; end:
     const lineVec = vec3.sub(vec3.create(), segment.end, segment.start);
     const startToP = vec3.sub(vec3.create(), point, segment.start);
     const t = vec3.dot(lineVec, startToP) / vec3.dot(lineVec, lineVec);
-    if (t > 0.1 && t < 0.9) {
+    if (t > 0 && t < 1) {
         const epsilon = Math.max(segment.length / 20, 0.001);
         const projectedPoint = vec3.lerp(vec3.create(), segment.start, segment.end, t);
         if (vec3.dist(projectedPoint, point) < epsilon) {

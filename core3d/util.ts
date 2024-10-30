@@ -21,7 +21,7 @@ export function decodeBase64(base64: string | undefined, type: Uint8ArrayConstru
 export function orthoNormalBasisMatrixFromPlane(plane: ReadonlyVec4): ReadonlyMat4 {
     const [nx, ny, nz, offs] = plane;
     const axisZ = vec3.fromValues(nx, ny, nz);
-    const minI = Math.abs(nx) < Math.abs(ny) && Math.abs(nx) < Math.abs(nz) ? 0 : Math.abs(ny) < Math.abs(nz) ? 1 : 2;
+    const minI = Math.abs(ny) < Math.cos(0.08726646) ? 1 : 2;  //Try to align y axis to up or if normal is already pointing up, then north. 5 degrees test
     const axisY = vec3.fromValues(0, 0, 0);
     axisY[minI] = 1;
     const axisX = vec3.cross(vec3.create(), axisY, axisZ);
