@@ -117,8 +117,8 @@ function closestCandidateOnSurfaces(pickInterface: PickInterface, position: Read
                 }
             }
         }
-        return closestCandidate;
     }
+    return closestCandidate;
 }
 
 function closestCandidateOnPolyMeshSurface(pickInterface: PickInterface, position: ReadonlyVec3, tolerance: number) {
