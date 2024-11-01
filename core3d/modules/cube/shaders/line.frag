@@ -14,10 +14,11 @@ layout(std140) uniform Outline {
     OutlineUniforms outline;
 };
 
-in struct {
+struct Varyings {
     vec3 positionVS;
     float opacity;
-} varyings;
+};
+in Varyings varyings;
 
 layout(location = 0) out vec4 fragColor;
 
