@@ -13,12 +13,13 @@ layout(std140) uniform Outline {
 layout(location = 0) in vec2 vertexPositions;
 layout(location = 1) in uint hidden;
 
-out struct {
+struct Varyings {
     highp vec3 positionVS;
     highp vec2 screenPos;
-} varyings;
+};
+out Varyings varyings;
 
-flat out struct {
+struct VaryingsFlat {
     mediump vec4 color;
     mediump float radius;
     mediump uint hidden;
@@ -28,7 +29,8 @@ flat out struct {
 #else
     highp uint objectId;
 #endif
-} varyingsFlat;
+};
+flat out VaryingsFlat varyingsFlat;
 
 void main() {
     varyingsFlat.hidden = hidden;

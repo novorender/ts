@@ -17,10 +17,11 @@ layout(std140) uniform Outline {
 layout(location = 0) in vec4 vertexPositions;
 layout(location = 1) in float vertexOpacity;
 
-out struct {
+struct Varyings {
     vec3 positionVS;
     float opacity;
-} varyings;
+};
+out Varyings varyings;
 
 void main() {
     vec2 pos = gl_VertexID % 2 == 0 ? vertexPositions.xy : vertexPositions.zw;

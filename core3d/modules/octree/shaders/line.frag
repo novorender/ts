@@ -10,13 +10,14 @@ layout(std140) uniform Outline {
     OutlineUniforms outline;
 };
 
-in struct {
+struct Varyings {
     highp vec3 positionVS;
     mediump vec2 uv;
     mediump float radius;
-} varyings;
+};
+in Varyings varyings;
 
-flat in struct {
+struct VaryingsFlat {
     mediump vec4 color;
     mediump float len;
 #if defined (ADRENO600)
@@ -25,7 +26,8 @@ flat in struct {
 #else
     highp uint objectId;
 #endif
-} varyingsFlat;
+};
+flat in VaryingsFlat varyingsFlat;
 
 layout(location = 0) out mediump vec4 fragColor;
 layout(location = 1) out highp uvec4 fragPick;
