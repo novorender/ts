@@ -366,7 +366,7 @@ function getGeometry(wasm: WasmInstance, schema: Schema, enableOutlines: boolean
         const groupMeshes = subMeshIndices.map(i => filteredSubMeshes[i]);
         const hasMaterials = groupMeshes.some(m => m.materialIndex != 0xff);
         const hasObjectIds = groupMeshes.some(m => m.objectId != 0xffffffff);
-        const maxNumDeviations = Math.max(...groupMeshes.map(m => m.numDeviations))
+        const maxNumDeviations = groupMeshes.reduce((max, m) => Math.max(max, m.numDeviations), 0);
 
         const pos = "position" in vertex ? vertex.position : vertex[posBPC == 16 ? "position16" : "position32"]!;
         const projectedPos = (attributes & OptionalVertexAttribute.projectedPos) != 0 ?
