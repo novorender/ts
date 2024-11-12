@@ -1,6 +1,7 @@
 import { type ResourceType, type PathNameParser } from "../storage";
 import { PromiseBag } from "./promiseBag";
 import type { CreateDirResponse, CreateDirRequest, DeleteAllRequest, DirsRequest, DirsResponse, FilesRequest, IOResponse, ReadRequest, ReadResponse, DeleteAllResponse, FilesResponse, WriteRequest, WriteResponse, DeleteFilesRequest, DeleteFilesResponse, DeleteDirRequest, DeleteDirResponse, FileSizesRequest, FileSizesResponse, OpenStreamRequest, CloseStreamRequest, CloseStreamResponse, AppendStreamRequest, OpenStreamResponse, AppendStreamResponse } from "./messages";
+import { iterateJournal } from "offline/util";
 
 /**
  * Create an OPFS based offline storage.
@@ -219,34 +220,12 @@ class OfflineDirectoryOPFS {
      */
     async getJournalEntries(): Promise<IterableIterator<{ name: string, size: number }>> {
         const journal = await this.read("journal");
-        function* iterate() {
-            if (journal) {
-                const buffer = new Uint8Array(journal);
-                const decoder = new TextDecoder();
-                let prevIndex = 0;
-                while (prevIndex < buffer.length) {
-                    let index = buffer.indexOf(10, prevIndex);
-                    const line = buffer.subarray(prevIndex, index);
-                    try {
-                        const text = decoder.decode(line, { stream: true });
-                        const [name, sizeStr] = text.split(",");
-                        const size = Number.parseInt(sizeStr);
-                        if (Number.isNaN(size)) {
-                            console.warn(`Error reading offline journal: parsed size ${sizeStr} is not a number`);
-                            break;
-                        }
-                        prevIndex = index + 1;
-                        yield { name, size };
-                    } catch (ex) {
-                        console.warn("Error reading offline journal", ex);
-                        break;
-                    }
-                }
-            }
+        if (journal) {
+            const buffer = new Uint8Array(journal);
+            return iterateJournal(buffer);
         }
-        return iterate();
+        return (function* (): IterableIterator<{ name: string, size: number }> { })();;
     }
-
 
     /**
      * Retrive the file sizes.

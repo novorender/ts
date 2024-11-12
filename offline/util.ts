@@ -24,3 +24,26 @@ export function errorMessage(value: unknown, id?: OfflineErrorCode): OfflineErro
     const message = isError(value) ? value.message : typeof (value) == "string" ? value : (value as any).toString();
     return { message, id };
 }
+
+export function* iterateJournal(buffer: Uint8Array) {
+    const decoder = new TextDecoder();
+    let prevIndex = 0;
+    while (prevIndex < buffer.length) {
+        let index = buffer.indexOf(10, prevIndex);
+        const line = buffer.subarray(prevIndex, index);
+        try {
+            const text = decoder.decode(line, { stream: true });
+            const [name, sizeStr] = text.split(",");
+            const size = Number.parseInt(sizeStr);
+            if (Number.isNaN(size)) {
+                console.warn(`Error reading offline journal: parsed size ${sizeStr} is not a number`);
+                break;
+            }
+            prevIndex = index + 1;
+            yield { name, size };
+        } catch (ex) {
+            console.warn("Error reading offline journal", ex);
+            break;
+        }
+    }
+}
