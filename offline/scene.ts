@@ -106,6 +106,54 @@ export class OfflineScene {
     }
 
     /**
+     * Delete files which is no longer used by the current manifest
+     * @param sceneIndexUrl The url to the scene index.json file, complete with sas key.
+     * @param abortSignal A signal to abort downloads/synchronization.
+     * @returns True, if completed successfully, false if not.
+     * @remarks
+     * Errors are logged in the {@link logger}.
+     */
+    async deleteStaleFiles(sceneIndexUrl: URL, abortSignal: AbortSignal) {
+        const { dir, logger } = this;
+
+        const sceneIndexResponse = await fetch(sceneIndexUrl, { mode: "cors", signal: abortSignal });
+        if (!sceneIndexResponse.ok) {
+            throw new Error(`HTTP error: ${sceneIndexResponse.status}!`);
+        }
+        const sceneIndex = await sceneIndexResponse.json();
+        const { offline } = sceneIndex;
+        const manifestUrl = new URL(sceneIndexUrl);
+        let idx = sceneIndexUrl.pathname.lastIndexOf("/");
+        if (idx >= 0) {
+            manifestUrl.pathname = sceneIndexUrl.pathname.slice(0, idx + 1);
+        }
+        const manifestName = offline.manifest;
+        manifestUrl.pathname += manifestName;
+        let manifestData = await this.downloadManifest(manifestUrl, abortSignal);
+        if (manifestData == undefined) {
+            return false;
+        }
+
+        logger?.status("scanning");
+        const files = new Set<string>();
+        manifestData.brep?.forEach(file => files.add(file[0]));
+        manifestData.db?.forEach(file => files.add(file[0]));
+        manifestData.webgl2_bin?.forEach(file => files.add(file[0]));
+
+        const filesToDelete: string[] = [];
+        for (const entry of await dir.getJournalEntries()) {
+            if (!files.has(entry.name)) {
+                filesToDelete.push(entry.name);
+            }
+        }
+        logger?.status("deleting");
+
+        await dir.deleteFiles(filesToDelete);
+        logger?.status("done");
+        return true;
+    }
+
+    /**
      * Incrementally synchronize scene files with online storage.
      * @param sceneIndexUrl The url to the scene index.json file, complete with sas key.
      * @param abortSignal A signal to abort downloads/synchronization.
