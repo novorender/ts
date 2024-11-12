@@ -89,22 +89,34 @@ async function getGetJournalHandle(name: string, reset: boolean) {
     return journalHandle;
 }
 
-async function rebuildJournal(name: string, deletedFiles: readonly string[]) {
-    const journalHandle = await getGetJournalHandle(name, true);
-    const { handle, unlock } = await journalHandle.lock();
-    const size = handle.getSize();
-    const buffer = new Uint8Array(size);
-    handle.read(buffer);
-    handle.truncate(0);
-    for (const entry of iterateJournal(buffer)) {
-        if (!deletedFiles.includes(entry.name)) {
-            const text = `${entry.name},${entry.size}\n`;
-            const bytes = new TextEncoder().encode(text);
-            handle.write(bytes, { at: handle.getSize() });
+async function rebuildJournal(dir: string, deletedFiles: readonly string[]) {
+    let dispose: (() => void) | undefined;
+    try {
+        const journalHandle = await getGetJournalHandle(dir, true);
+        const { handle, unlock } = await journalHandle.lock();
+        dispose = unlock;
+        const size = handle.getSize();
+        const buffer = new Uint8Array(size);
+        handle.read(buffer);
+        handle.truncate(0);
+        for (const entry of iterateJournal(buffer)) {
+            if (!deletedFiles.includes(entry.name)) {
+                const text = `${entry.name},${entry.size}\n`;
+                const bytes = new TextEncoder().encode(text);
+                handle.write(bytes, { at: handle.getSize() });
+            }
         }
+        handle.flush();
+    } catch (error: unknown) {
+        if (error instanceof DOMException && error.name == "NotFoundError") {
+            return undefined;
+        } else {
+            console.log({ error });
+            throw error;
+        }
+    } finally {
+        dispose?.();
     }
-    handle.flush();
-    unlock();
 }
 
 async function closeJournal(name: string) {

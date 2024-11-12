@@ -106,7 +106,7 @@ export class OfflineScene {
     }
 
     /**
-     * Delete files which is no longer used by the current manifest
+     * Delete files which are no longer used by the current manifest
      * @param sceneIndexUrl The url to the scene index.json file, complete with sas key.
      * @param abortSignal A signal to abort downloads/synchronization.
      * @returns True, if completed successfully, false if not.
@@ -271,7 +271,7 @@ export class OfflineScene {
                                 if (typeof error == "object" && error instanceof Error && error.name === "QuotaExceededError") {
                                     throw error;
                                 }
-                                
+
                                 errorQueue.push({ name, size });
                             }
                         }
