@@ -72,7 +72,6 @@ export class ProfileModule extends BaseModule {
         }
         return {
             profilePoints: rProfile,
-            slopes: inProfile.slopes.reverse(),
             startElevation: inProfile.endElevation,
             endElevation: inProfile.startElevation,
             top: inProfile.top,

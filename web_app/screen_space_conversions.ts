@@ -86,8 +86,8 @@ export class ScreenSpaceConversions {
      * @param points Screen points in points that will be projected to world space.
      * @returns Corresponding 3D positions at the view plane in world space.
      */
-    screenSpaceToWorldSpace(points: ReadonlyVec2[]): ReadonlyVec3[] {
-        const { drawContext } = this;
+    screenSpaceToWorldSpace(points: ReadonlyVec2[], inDrawContext?: DrawContext): ReadonlyVec3[] {
+        const drawContext = inDrawContext ?? this.drawContext;
         const { width, height, camera } = drawContext;
         const { camMat, projMat: viewClipMatrix } = getPathMatrices(width, height, camera);
         const viewWorldMatrix = mat4.invert(mat4.create(), camMat);

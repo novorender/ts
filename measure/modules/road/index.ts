@@ -1,53 +1,70 @@
 import type { ReadonlyVec2, ReadonlyVec3 } from "gl-matrix"
+import type { DrawObject, DrawPart, DrawProduct } from "measure";
+import type { CurvatureKind } from "measure/worker/brep";
 export { RoadModule } from "./module";
 
-/**
- * Cross section of a road
- */
-export interface RoadCrossSection {
-    /** 3d points between the different layers [ditch, should, road, center] */
-    readonly points: ReadonlyVec3[],
-    /** 
-     * 2d points between the different layers [ditch, should, road, center] 
-     * projected on a plane along the center line 
-     */
-    readonly points2D: ReadonlyVec2[],
-    /** Layer names, this array matches the 3d and 2d points */
-    readonly labels: string[],
-    /** Slope from centerline to shoulder  [left, Right] */
-    readonly slopes: {
-        left: { slope: number, start: ReadonlyVec3, end: ReadonlyVec3 },
-        right: { slope: number, start: ReadonlyVec3, end: ReadonlyVec3 }
-    },
-    /** Layer codes, this array matches the 3d and 2d points */
-    readonly codes: number[]
+export type SlopeSegment = {
+    horizontalIndexFrom: number, horizontalIndexTo: number, verticalAlignmentIndex: number, slope: number
 }
 
-/**
- * @ignore
- * In development
- */
-export interface RoadProfile {
-    name: string,
-    elevations: number[]
+export type HorizonalPointOfCurvature = {
+    station: number, point: ReadonlyVec3, index: number, kind: CurvatureKind, parameter?: number
 }
 
-/**
- * @ignore
- * In development
- */
-export interface RoadProfiles {
-    readonly name: string,
-    readonly profiles: RoadProfile[],
-    readonly intervals: number[]
+export type VerticalPointOfCurvature = {
+    station: number, height: number, kind: CurvatureKind, parameter?: number
 }
 
-/**
- * @ignore
- * In development
- */
-export interface CrossSlope {
-    readonly left: number[],
-    readonly right: number[],
-    readonly intervals: number[]
+export interface Alignment {
+    readonly objectId: number;
+    readonly points: ReadonlyVec3[];
+    readonly stations: number[];
+    readonly top: number;
+    readonly bottom: number;
+    readonly horizontalPointsOfCurvature: HorizonalPointOfCurvature[];
+    readonly verticalPointsOfCurvature: VerticalPointOfCurvature[];
+    readonly verticalAlignment: ReadonlyVec2[];
+}
+
+export interface HorizontalAlignment {
+    segment: DrawObject;
+    pointsOfCurvature: DrawPart;
+    curvatures: DrawPart;
+}
+
+export interface StationInfo {
+    station: number,
+    point: ReadonlyVec3,
+    direction: ReadonlyVec3
+}
+
+export interface StationDrawObject {
+    info: DrawObject;
+    direction: DrawPart;
+}
+
+export interface StationSegment {
+    start: number,
+    end: number,
+    curvature?: number
+}
+
+export interface StationSegmentInfo {
+    startStation: number,
+    endStation: number,
+    startPoint: ReadonlyVec3,
+    endPoint: ReadonlyVec3,
+    slope?: number,
+    length?: number
+}
+
+export interface StationSegmentDrawObject {
+    segment: DrawPart;
+    stations: DrawPart;
+    labels?: DrawPart;
+}
+
+export interface StationsDrawObject {
+    stationInfo: DrawPart;
+    stationLines: DrawPart[];
 }

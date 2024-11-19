@@ -9,8 +9,17 @@ export type FixedSizeArray<N extends number, T> = N extends 0
 
 // brep
 
+export type CurvatureKind = "line" | "arc" | "clothoid"
+
 export type Index = number;
 export type IndexPair = readonly [number, number];
+export type PointOfCurvature = {
+    parameter?: number,
+    station: number,
+    kind: CurvatureKind;
+}
+
+
 
 export interface AABB2 {
     readonly min: ReadonlyVec2;
@@ -42,7 +51,7 @@ export interface ProductData {
     readonly surfaces: readonly SurfaceData[];
     readonly curves3D: readonly Curve3DData[];
     readonly curves2D: readonly Curve2DData[];
-    readonly curveSegments: readonly CurveSegmentData[];
+    readonly curveSegments: readonly (AlignmentData | CurveSegmentData)[];
     readonly snappingPoints: readonly SnappingPoints[];
 }
 
@@ -112,6 +121,11 @@ export interface CurveSegmentData {
     readonly parameterBounds: readonly [number, number];
     readonly tesselationParameters: readonly number[];
     readonly curve3D: Index;
+}
+
+export interface AlignmentData extends CurveSegmentData {
+    readonly verticalPointsOfCurvature: readonly PointOfCurvature[];
+    readonly horizontalPointsOfCurvature: readonly PointOfCurvature[];
 }
 
 //Used for generated parametric geometry if no face can be made to atleast preserve snapping points

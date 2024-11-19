@@ -86,6 +86,8 @@ export type Line2d = { start: ReadonlyVec2, end: ReadonlyVec2 };
 export interface DrawPart {
     /** Name of the part */
     readonly name?: string;
+    /** Optional color */
+    readonly color?: string,
     /** 
      * Display text of the part,
      * For lines of 2 points it is the length

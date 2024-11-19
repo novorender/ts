@@ -608,69 +608,76 @@ const toScreen = (() => {
     };
 })();
 
-function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
+/**
+ * @internal 
+ */
+
+export function FillDrawInfo2DOnPart(context: DrawContext, drawPart: DrawPart) {
     const { width, height, camera } = context;
     const { camMat, projMat } = getPathMatrices(width, height, camera);
-
-    for (const drawObject of drawObjects) {
-        for (const drawPart of drawObject.parts) {
-            if (drawPart.drawType == "text") { // Pure text can use simplified conversion to 2d
-                const points = toOnscreenText(
-                    drawPart.vertices3D,
+    if (drawPart.drawType == "text") { // Pure text can use simplified conversion to 2d
+        const points = toOnscreenText(
+            drawPart.vertices3D,
+            camMat,
+            projMat,
+            camera.near,
+            width,
+            height,
+            camera.kind == "orthographic",
+            camera.far + 0.2
+        );
+        drawPart.vertices2D = points?.screenPoints;
+        drawPart.indicesOnScreen = points?.intdices;
+    }
+    else {
+        const points = toPathPointsFromMatrices(
+            drawPart.vertices3D,
+            camMat,
+            projMat,
+            camera.near,
+            width,
+            height,
+            camera.kind == "orthographic",
+            camera.far + 0.2
+        );
+        if (points) {
+            const { screenPoints, indicesOnScreen } = points;
+            drawPart.vertices2D = screenPoints;
+            drawPart.indicesOnScreen = screenPoints.length == drawPart.vertices3D.length ? undefined : indicesOnScreen;
+        }
+        else {
+            drawPart.indicesOnScreen = undefined;
+            drawPart.vertices2D = undefined;
+        }
+        if (drawPart.voids) {
+            drawPart.voids.forEach((drawVoid, j) => {
+                const voidPoints = toPathPointsFromMatrices(
+                    drawVoid.vertices3D,
                     camMat,
                     projMat,
                     camera.near,
                     width,
                     height,
                     camera.kind == "orthographic",
-                    camera.far + 0.2
+                    camera.far
                 );
-                drawPart.vertices2D = points?.screenPoints;
-                drawPart.indicesOnScreen = points?.intdices;
-            }
-            else {
-                const points = toPathPointsFromMatrices(
-                    drawPart.vertices3D,
-                    camMat,
-                    projMat,
-                    camera.near,
-                    width,
-                    height,
-                    camera.kind == "orthographic",
-                    camera.far + 0.2
-                );
-                if (points) {
-                    const { screenPoints, indicesOnScreen } = points;
-                    drawPart.vertices2D = screenPoints;
-                    drawPart.indicesOnScreen = screenPoints.length == drawPart.vertices3D.length ? undefined : indicesOnScreen;
+                if (voidPoints) {
+                    const { screenPoints, indicesOnScreen } = voidPoints;
+                    drawVoid.vertices2D = screenPoints;
+                    drawVoid.indicesOnScreen = screenPoints.length == drawVoid.vertices3D.length ? undefined : indicesOnScreen;
                 }
                 else {
-                    drawPart.indicesOnScreen = undefined;
-                    drawPart.vertices2D = undefined;
+                    drawVoid.vertices2D = undefined;
                 }
-                if (drawPart.voids) {
-                    drawPart.voids.forEach((drawVoid, j) => {
-                        const voidPoints = toPathPointsFromMatrices(
-                            drawVoid.vertices3D,
-                            camMat,
-                            projMat,
-                            camera.near,
-                            width,
-                            height,
-                            camera.kind == "orthographic",
-                            camera.far
-                        );
-                        if (voidPoints) {
-                            const { screenPoints, indicesOnScreen } = voidPoints;
-                            drawVoid.vertices2D = screenPoints;
-                            drawVoid.indicesOnScreen = screenPoints.length == drawVoid.vertices3D.length ? undefined : indicesOnScreen;
-                        }
-                        else {
-                            drawVoid.vertices2D = undefined;
-                        }
-                    });
-                }
-            }
+            });
+        }
+    }
+}
+
+export function FillDrawInfo2D(context: DrawContext, drawObjects: DrawObject[]) {
+    for (const drawObject of drawObjects) {
+        for (const drawPart of drawObject.parts) {
+            FillDrawInfo2DOnPart(context, drawPart);
         }
     }
 }

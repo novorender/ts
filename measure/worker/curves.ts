@@ -1,7 +1,7 @@
 import { glMatrix, mat3, mat4, vec2, vec3 } from "gl-matrix";
 import type { ReadonlyVec2, ReadonlyVec3 } from "gl-matrix";
 import { makeNurbsCurve2D, makeNurbsCurve3D } from "./nurbs";
-import { closestPointToLine, getProfile } from "./util";
+import { closestPointToLine, transformedLineData } from "./util";
 glMatrix.setMatrixArrayType(Array);
 
 type CurveKind = "line" | "arc" | "nurbs" | "lineStrip";
@@ -150,9 +150,9 @@ export class LineStrip3D implements Curve3D {
         }
         return segments;
     }
-    toProfile(transform: mat4): ReadonlyVec2[] {
+    toTransformedLineData(transform: mat4): { line: ReadonlyVec3[], profile: ReadonlyVec2[] } {
         const { vertices, tesselationParameters } = this;
-        return getProfile(vertices, tesselationParameters, transform);
+        return transformedLineData(vertices, tesselationParameters, transform);
     }
 }
 
@@ -555,31 +555,4 @@ export class Arc2D implements Curve2D {
 
         return t;
     }
-
-    // isVectorInParamRange(x: number, y: number) {
-    //     return x * this.rangeVec[0] + y * this.rangeVec[1] >= this.rangeCos;
-    // }
-
-    // intersectCount(point: ReadonlyVec2) {
-    //     const [x, y] = point;
-    //     const { origin, radius } = this;
-    //     let cnt = 0;
-    //     if (y >= this.minY && y < this.maxY) {
-    //         const uy = Math.min(1, (y - origin[1]) / radius);
-    //         const ux = Math.sqrt(1 - uy * uy);
-    //         // is point right of origin?
-    //         if (x > origin[0]) {
-    //             if (this.isVectorInParamRange(ux, uy) && x > ux) {
-    //                 cnt++;
-    //             }
-    //         }
-    //         if (x > origin[0] - radius) {
-    //             if (this.isVectorInParamRange(-ux, uy) && x > -ux) {
-    //                 cnt++;
-    //             }
-    //         }
-
-    //     }
-    //     return cnt;
-    // }
 }
