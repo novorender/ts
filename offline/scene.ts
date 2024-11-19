@@ -199,6 +199,8 @@ export class OfflineScene {
             }
         }
 
+        const maxSimulataneousDownloads = 8;
+        const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
         try {
             logger?.status("synchronizing");
             let manifestData = await this.downloadManifest(manifestUrl, abortSignal);
@@ -214,8 +216,6 @@ export class OfflineScene {
             logger?.info?.("fetching new files");
             let totalDownload = 0;
             logger?.progress?.(totalDownload, totalByteSize, "download");
-            const maxSimulataneousDownloads = 8;
-            const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
             const maxErrors = 100;
             const maxQuotaExceededErrors = 5;
             let quotaExceededErrorCount = 0;
@@ -241,25 +241,29 @@ export class OfflineScene {
                         async function download(size: number) {
                             try {
                                 let fileResponse = await fetch(fileRequest);
-                                if (fileResponse.ok) {
-                                    if (size > 10_000_000) {
-                                        const stream = await fileResponse.body;
-                                        if (stream) {
-                                            const addBytes = (bytes: number) => {
-                                                totalDownload += bytes;
-                                                if (debounce(100)) {
-                                                    logger?.progress?.(totalDownload, totalByteSize, "download");
-                                                }
-                                            };
-                                            await dir.writeStream(name, stream, size, abortSignal, addBytes);
+                                if (!abortSignal.aborted) {
+                                    if (fileResponse.ok) {
+                                        if (size > 10_000_000) {
+                                            const stream = await fileResponse.body;
+                                            if (stream) {
+                                                const addBytes = (bytes: number) => {
+                                                    totalDownload += bytes;
+                                                    if (debounce(100)) {
+                                                        logger?.progress?.(totalDownload, totalByteSize, "download");
+                                                    }
+                                                };
+                                                await dir.writeStream(name, stream, size, abortSignal, addBytes);
+                                            }
+                                        } else {
+                                            const buffer = await fileResponse.arrayBuffer();
+                                            if (!abortSignal.aborted) {
+                                                await dir.write(name, buffer);
+                                                totalDownload += size;
+                                            }
                                         }
                                     } else {
-                                        const buffer = await fileResponse.arrayBuffer();
-                                        await dir.write(name, buffer);
-                                        totalDownload += size;
+                                        errorQueue.push({ name, size });
                                     }
-                                } else {
-                                    errorQueue.push({ name, size });
                                 }
                                 if (abortSignal.aborted) {
                                     throw new DOMException("Download aborted!", "AbortError");
@@ -353,6 +357,7 @@ export class OfflineScene {
             logger?.status("synchronized");
             return true;
         } catch (error: unknown) {
+            await Promise.allSettled(downloadQueue);
             if (typeof error == "object" && error instanceof DOMException && error.name == "AbortError") {
                 logger?.status("aborted");
             } else {
