@@ -61,7 +61,7 @@ export function getDeviceProfile(tier: GPUTier, resolutionScaling?: number): Dev
     canvas.width = 1;
     canvas.height = 1;
     document.body.appendChild(canvas);
-    const gl = canvas.getContext("webgl", { failIfMajorPerformanceCaveat: true });
+    const gl = canvas.getContext("webgl", { failIfMajorPerformanceCaveat: false });
     canvas.remove();
 
     if (gl) {

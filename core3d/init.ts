@@ -23,7 +23,7 @@ export function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanvasEleme
         antialias: true,
         depth: false,
         desynchronized: false,
-        failIfMajorPerformanceCaveat: true,
+        failIfMajorPerformanceCaveat: false,
         powerPreference: "high-performance",
         premultipliedAlpha: true,
         preserveDrawingBuffer: true,
