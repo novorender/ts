@@ -261,13 +261,13 @@ export class RoadModule extends BaseModule {
             }
         }
         if (closestDist) {
-            const lineStart = alignment.points[closestDist.startIdx - 1];
-            const lineEnd = alignment.points[closestDist.startIdx];
+            const lineStart = alignment.points[closestDist.startIdx];
+            const lineEnd = alignment.points[closestDist.startIdx + 1];
             const direction = vec3.sub(vec3.create(), lineEnd, lineStart);
             vec3.normalize(direction, direction);
 
-            const stationStart = alignment.stations[closestDist.startIdx - 1];
-            const stationEnd = alignment.stations[closestDist.startIdx];
+            const stationStart = alignment.stations[closestDist.startIdx];
+            const stationEnd = alignment.stations[closestDist.startIdx + 1];
 
             const lineLen = stationEnd - stationStart;
             const station = stationStart + (lineLen * closestDist.t);
