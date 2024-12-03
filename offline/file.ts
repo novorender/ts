@@ -62,8 +62,8 @@ export async function requestOfflineFile(request: Request, cacheFromOnline = tru
 }
 
 /** @internal */
-export async function removeOfflineFile(request: Request): Promise<boolean> {
-    const { pathname } = new URL(request.url);
+export async function removeOfflineFile(url: URL): Promise<boolean> {
+    const { pathname } = url;
     const m = /\/([\da-f]{32})(?=\/).*\/(.+)$/i.exec(pathname);
     if (m && m.length == 3) {
         const [_, dirname, filename] = m;

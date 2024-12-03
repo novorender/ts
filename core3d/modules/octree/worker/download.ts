@@ -54,8 +54,7 @@ export class Downloader {
 
     private async removeFile(filename: string): Promise<boolean> {
         const url = this.getUrl(filename);
-        const request = new Request(url, { mode: "cors" });
-        return removeOfflineFile(request);
+        return removeOfflineFile(url);
     }
 
     downloadArrayBufferAbortable(filename: string, buffer?: ArrayBuffer): AbortableDownload {
@@ -95,8 +94,7 @@ export class Downloader {
                             content = await fetchFile();
                         }
                     }
-                    if (!download.aborted) {
-                        console.assert(offset == content.length);
+                    if (!download.aborted && offset == content.length) {
                         return content.buffer;
                     }
                     reader!.cancel();
