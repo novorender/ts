@@ -2,6 +2,9 @@ import { GL } from "./constants.js";
 import { glExtensions } from "./extensions.js";
 import { getBufferViewType } from "./misc.js";
 
+// Assume MAX_TEXTURE_MAX_ANISOTROPY_EXT won't change for particular WebGL2RenderingContext
+const MAX_TEXTURE_MAX_ANISOTROPY_EXT_CACHE = new WeakMap<WebGL2RenderingContext, number>();
+
 export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParams) {
     const texture = gl.createTexture()!;
     const width = params.width ?? params.image.width;
@@ -19,7 +22,12 @@ export function glCreateTexture(gl: WebGL2RenderingContext, params: TextureParam
     if (textureAnisotropy > 1) {
         const { textureFilterAnisotropic } = glExtensions(gl);
         if (textureFilterAnisotropic) {
-            const max = gl.getParameter(textureFilterAnisotropic.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+            let max = MAX_TEXTURE_MAX_ANISOTROPY_EXT_CACHE.get(gl);
+            if (max === undefined) {
+                // getParameter queries GPU and may take a while, but the value is unlikely to change
+                max = gl.getParameter(textureFilterAnisotropic.MAX_TEXTURE_MAX_ANISOTROPY_EXT) as number;
+                MAX_TEXTURE_MAX_ANISOTROPY_EXT_CACHE.set(gl, max);
+            }
             gl.texParameterf(target, textureFilterAnisotropic.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(max, textureAnisotropy));
         }
     }
