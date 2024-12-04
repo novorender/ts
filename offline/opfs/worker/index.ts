@@ -75,6 +75,7 @@ async function getGetJournalHandle(name: string, reset: boolean) {
     let journalHandle = journalHandles.get(name);
     if (journalHandle && reset) {
         const { handle, unlock } = await journalHandle.lock();
+        handle.flush();
         handle.close();
         unlock();
         journalHandle = undefined;
@@ -123,6 +124,7 @@ async function closeJournal(name: string) {
     let journalHandle = journalHandles.get(name);
     if (journalHandle) {
         const { handle, unlock } = await journalHandle.lock();
+        handle.flush()
         handle.close();
         const dirHandle = await getDirHandle(name);
         await dirHandle.removeEntry("journal");
@@ -348,6 +350,7 @@ async function readFile(dir: string, filename: string) {
         const size = accessHandle.getSize();
         const buffer = new Uint8Array(size);
         accessHandle.read(buffer);
+        accessHandle.flush();
         accessHandle.close();
         return buffer.buffer;
     } catch (error: unknown) {
@@ -372,6 +375,7 @@ async function fileSizes(dir: string, files?: readonly string[]) {
             const fileHandle = await dirHandle.getFileHandle(filename);
             const accessHandle = await fileHandle.createSyncAccessHandle();
             size = accessHandle.getSize();
+            accessHandle.flush();
             accessHandle.close();
         } catch (error: unknown) {
             if (!(error instanceof DOMException && error.name == "NotFoundError")) {
@@ -393,6 +397,7 @@ async function createFile(dir: string, file: string, size: number): Promise<Stre
         accessHandle.truncate(size);
     } catch (e) {
         try {
+            accessHandle.flush();
             accessHandle.close();
             dirHandle.removeEntry(file);
         } catch (e2) {
@@ -437,6 +442,7 @@ async function writeFile(dir: string, file: string, buffer: ArrayBuffer) {
         await appendJournal(dir, file, bytesWritten);
     } catch (ex) {
         try {
+            accessHandle.flush();
             accessHandle.close();
             dirHandle.removeEntry(file);
         } catch (e2) {
