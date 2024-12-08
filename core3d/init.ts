@@ -28,6 +28,7 @@ export function initCore3D(deviceProfile: DeviceProfile, canvas: HTMLCanvasEleme
         premultipliedAlpha: true,
         preserveDrawingBuffer: true,
         stencil: false,
+        xrCompatible: true
     };
 
     let renderContext: RenderContext | undefined;

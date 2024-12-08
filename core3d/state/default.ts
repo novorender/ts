@@ -7,6 +7,7 @@ export function defaultRenderState(): RenderState {
             width: 512,
             height: 256,
             samplesMSAA: 1,
+            xr: false
         },
         background: {
         },

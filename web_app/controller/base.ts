@@ -210,7 +210,7 @@ export abstract class BaseController {
      * Handler for mouse/touch move events.
      * @virtual
      */
-    moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void { }
+    moveBegin(event: TouchEvent | MouseEvent | XRInputSourceEvent): Promise<void> | void { }
 
     /** Move controller to specified position/rotation.
      * @param targetPosition: The position to move to, in world space.
@@ -245,7 +245,7 @@ export abstract class BaseController {
             return;
         }
         this._isMoving = true;
-        if (Object.values(input.axes).some(v => v != 0) || currentFlyTo || _changed) { // check if anything has changed
+        if ((Object.values(input.axes).some(v => v != 0) && !this.input._xrPinch) || currentFlyTo || _changed) { // check if anything has changed
             this.update();
             this.input.resetAxes();
             const changes = this.stateChanges(state);

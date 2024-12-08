@@ -99,6 +99,21 @@ export class ControllerInput {
         return [-(_zoomX - width / 2) / height * 2, (_zoomY - height / 2) / height * 2];
     }
 
+    private _xrSession: XRSession | null = null;
+    _xrPinch = false;
+    connectXr(session: XRSession) {
+        if (this._xrSession) return;
+        this._xrSession = session;
+        session.addEventListener('selectstart', this.xrSelectStart);
+        session.addEventListener('selectend', this.xrSelectEnd);
+    }
+
+    disconnectXr() {
+        this._xrSession?.removeEventListener('selectstart', this.xrSelectStart);
+        this._xrSession?.removeEventListener('selectend', this.xrSelectEnd);
+        this._xrSession = null;
+    }
+
     /** Subscribe to input events from {@link domElement}. */
     protected connect() {
         const { domElement } = this;
@@ -163,6 +178,20 @@ export class ControllerInput {
         e.altKey ? _keys.add("Alt") : _keys.delete("Alt");
         e.shiftKey ? _keys.add("Shift") : _keys.delete("Shift");
         e.ctrlKey ? _keys.add("Control") : _keys.delete("Control");
+    }
+
+    private xrSelectStart = async (e: XRInputSourceEvent) => {
+        const { axes } = this;
+        this._zoomX = 500;
+        this._zoomY = 500;
+        this._xrPinch = true;
+        await this.callbacks?.moveBegin?.(e);
+        this._mouseWheelLastActive = performance.now();
+        axes.mouse_wheel += e.inputSource.handedness === 'left' ? -1 : 1;
+    }
+
+    private xrSelectEnd = async (e: XRInputSourceEvent) => {
+        this._xrPinch = false;
     }
 
     private keydown = (e: KeyboardEvent) => {
@@ -517,7 +546,7 @@ export interface ContollerInputContext {
     /** Touch "click" events. */
     touchChanged(event: TouchEvent): Promise<void> | void;
     /** Mouse or touch move events. */
-    moveBegin(event: TouchEvent | MouseEvent): Promise<void> | void
+    moveBegin(event: TouchEvent | MouseEvent | XRInputSourceEvent): Promise<void> | void
 }
 
 /** A single touch input contact point.

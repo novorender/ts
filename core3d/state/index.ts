@@ -181,6 +181,8 @@ export interface RenderStateOutput {
      * Most devices have a max cap on this value, in which case that smaller of the two will be used.
      */
     readonly samplesMSAA: number;
+
+    readonly xr: boolean;
 }
 
 /** Background/environment related render state.

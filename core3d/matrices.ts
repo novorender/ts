@@ -1,18 +1,40 @@
-import { mat3, mat4, type ReadonlyMat3, type ReadonlyMat4 } from "gl-matrix";
+import { mat3, mat4, quat, vec3, type ReadonlyMat3, type ReadonlyMat4, type ReadonlyVec3 } from "gl-matrix";
 import { CoordSpace, type Matrices, type RenderStateCamera, type RenderStateOutput } from "./state";
+import { flipGLtoCadVec } from "web_app/flip";
+import { rotationFromDirection } from "web_app";
 
 function index(from: CoordSpace, to: CoordSpace): number {
     return from * 3 + to;
 }
 
 /** @internal */
-export function matricesFromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }): Matrices {
+export function matricesFromRenderState(state: { output: RenderStateOutput; camera: RenderStateCamera; }, transformMatrix?: ReadonlyMat4, projectionMatrix?: ReadonlyMat4): Matrices {
     const { camera, output } = state;
     const { width, height } = output;
     const aspectRatio = width / height;
     const fovY = camera.fov * Math.PI / 180;
-    const viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
-    const viewClip = mat4.create();
+    let viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
+    let viewClip = mat4.create();
+    if (transformMatrix && projectionMatrix) {
+        viewWorld = mat4.fromRotationTranslation(mat4.create(), camera.rotation, camera.position);
+        // viewWorld = mat4.clone(transformMatrix);
+        const tm = mat4.clone(transformMatrix);
+        // [tm[13], tm[14]] = [-tm[14], tm[13]];
+        mat4.fromRotationTranslation(tm, quat.invert(quat.create(), mat4.getRotation(quat.create(), tm)), mat4.getTranslation(vec3.create(), tm));
+        mat4.invert(tm, tm);
+        mat4.multiply(viewWorld, viewWorld, tm);
+        // mat4.multiply(viewWorld, viewWorld, mat4.fromQuat(mat4.create(), camera.rotation));
+        // mat4.translate(viewWorld, viewWorld, camera.position);
+        // mat4.fromRotationTranslation(tm, quat.invert(quat.create(), mat4.getRotation(quat.create(), tm)), mat4.getTranslation(vec3.create(), tm));
+        // mat4.mul(viewWorld, tm, viewWorld);
+        // mat4.multiply(viewWorld, viewWorld, mat4.fromQuat(mat4.create(), quat.invert(quat.create(), mat4.getRotation(quat.create(), tm))));
+        // mat4.translate(viewWorld, viewWorld, mat4.getTranslation(vec3.create(), tm));
+        // mat4.invert(viewWorld, viewWorld);
+        viewClip = mat4.clone(projectionMatrix);
+        // mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
+    } else {
+        mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
+    }
     if (camera.kind == "orthographic") {
         const aspect = output.width / output.height;
         const halfHeight = camera.fov / 2;
@@ -20,7 +42,7 @@ export function matricesFromRenderState(state: { output: RenderStateOutput; came
         mat4.ortho(viewClip, -halfWidth, halfWidth, -halfHeight, halfHeight, camera.near, camera.far);
     }
     else {
-        mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
+        // mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
     }
     return new MatricesImpl(viewWorld, viewClip);
 }

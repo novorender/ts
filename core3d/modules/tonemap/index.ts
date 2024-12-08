@@ -79,6 +79,11 @@ class TonemapModuleContext implements RenderModuleContext {
             },
         });
 
+        const baseLayer = this.context.xrSession?.renderState.baseLayer;
+        if (baseLayer) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, baseLayer.framebuffer);
+        }
+
         const stats = glDraw(gl, { kind: "arrays", mode: "TRIANGLE_STRIP", count: 4 });
         context.addRenderStatistics(stats);
     }

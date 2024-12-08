@@ -18,7 +18,7 @@ export function createDefaultModules() {
         new ClippingModule(),
         new OctreeModule(),
         new DynamicModule(),
-        new ToonModule(),
+        // new ToonModule(),
         new GridModule(),
         new WatermarkModule(),
         new TonemapModule(),

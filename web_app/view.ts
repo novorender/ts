@@ -858,11 +858,13 @@ export class View<
         let possibleChanges = false;
         while (this._run && !(abortSignal?.aborted ?? false)) {
             const { _renderContext, _activeController, deviceProfile } = this;
-            const renderTime = await RenderContext.nextFrame(_renderContext);
+            const {time: renderTime, views} = await RenderContext.nextFrame(_renderContext);
             const frameTime = renderTime - prevRenderTime;
             const cameraChanges = _activeController.renderStateChanges(this.renderStateCad.camera, renderTime - prevRenderTime);
             if (cameraChanges) {
                 this.modifyRenderState(cameraChanges);
+            } else {
+                this.modifyRenderState({camera: {...this.renderState.camera}});
             }
             const { moving } = _activeController;
 
@@ -918,10 +920,16 @@ export class View<
                 const { renderStateGL } = this;
                 if (prevState !== renderStateGL || _renderContext.changed) {
                     prevState = renderStateGL;
-                    const statsPromise = _renderContext.render(renderStateGL);
+                    const prevXrSession = _renderContext.xrSession;
+                    const statsPromise = _renderContext.render(renderStateGL, views!);
                     statsPromise.then((stats) => {
                         this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
                         this.render?.({ isIdleFrame, cameraMoved: moving });
+                        if (!prevXrSession && _renderContext.xrSession) {
+                            _renderContext.xrSession.addEventListener('end', () => {
+                                this.modifyRenderState({ output: { xr: false } });
+                            });
+                        }
                         possibleChanges = true;
                     });
                 } else if (possibleChanges) {
@@ -959,7 +967,18 @@ export class View<
      * These changes will be applied and a single call to the {@link modifyRenderState} function just prior to rendering each frame.
      */
     modifyRenderState(changes: RenderStateChanges): void {
-        this._stateChanges = mergeRecursive(this._stateChanges, changes);
+        if (changes.output?.xr && !this.renderState.output.xr) {
+            this.renderContext?.initXr().then(() => {
+                Object.values(this.controllers).forEach(c => c.input.connectXr(this.renderContext?.xrSession!));
+                this._stateChanges = mergeRecursive(this._stateChanges, changes);
+            });
+        } else if (changes.output?.xr === false && this.renderState.output.xr) {
+            this._activeController.input.disconnectXr();
+            Object.values(this.controllers).forEach(c => c.input.disconnectXr());
+            this._stateChanges = mergeRecursive(this._stateChanges, changes);
+        } else {
+            this._stateChanges = mergeRecursive(this._stateChanges, changes);
+        }
     }
 
     /**

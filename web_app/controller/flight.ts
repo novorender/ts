@@ -319,7 +319,7 @@ export class FlightController extends BaseController {
         }
     }
 
-    async moveBegin(event: TouchEvent | MouseEvent): Promise<void> {
+    async moveBegin(event: TouchEvent | MouseEvent | XRInputSourceEvent): Promise<void> {
         const { pointerTable, pick, resetPickDelay } = this;
 
         const deltaTime = this.lastUpdate - this.lastUpdatedMoveBegin;
@@ -341,7 +341,9 @@ export class FlightController extends BaseController {
             }
         }
 
-        if (isTouchEvent(event)) {
+        if ('inputSource' in event) {
+            await setPickPosition(500, 500, false);
+        } else if (isTouchEvent(event)) {
             if (pointerTable.length > 1) {
                 await setPickPosition(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2), true)
             }

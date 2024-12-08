@@ -6,13 +6,14 @@ import { matricesFromRenderState } from "./matrices";
 import { createViewFrustum } from "./viewFrustum";
 import { BufferFlags, RenderBuffers } from "./buffers";
 import type { WasmInstance } from "./wasm";
-import type { ReadonlyVec2, ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
+import type { ReadonlyMat4, ReadonlyVec2, ReadonlyVec3, ReadonlyVec4 } from "gl-matrix";
 import { glMatrix, mat3, mat4, quat, vec2, vec3, vec4 } from "gl-matrix";
 import { ResourceBin } from "./resource";
 import type { DeviceProfile } from "./device";
 import { orthoNormalBasisMatrixFromPlane } from "./util";
 import { createDefaultModules } from "./modules/default";
 import type { OutlineRenderer } from "./modules/octree/outlines";
+import { flipGLtoCadVec } from "web_app/flip";
 
 // the context is re-created from scratch if the underlying webgl2 context is lost
 
@@ -143,6 +144,8 @@ export class RenderContext {
         /** # True if these are the default IBL textures. */
         readonly default: boolean;
     };
+    xrSession: XRSession | undefined = undefined;
+    xrReferenceSpace: XRReferenceSpace | undefined = undefined;
 
     /** @internal */
     constructor(
@@ -262,6 +265,32 @@ export class RenderContext {
         });
         this.linkAsyncPrograms();
         this.modules = await Promise.all(modulePromises);
+    }
+
+    async initXr() {
+        if (this.xrSession) {
+            return;
+        }
+
+        try {
+            const xrSession = await navigator.xr!.requestSession('immersive-vr');
+            await this.gl.makeXRCompatible();
+            await xrSession.updateRenderState({
+                baseLayer: new XRWebGLLayer(xrSession, this.gl)
+            });
+            this.xrReferenceSpace = await xrSession.requestReferenceSpace('local');
+            this.xrSession = xrSession;
+        } catch(ex) {
+            alert(ex);
+        }
+    }
+
+    async uninitXr() {
+        if (this.xrSession) {
+            this.xrSession.end();
+            this.xrSession = undefined;
+            this.xrReferenceSpace = undefined;
+        }
     }
 
     private linkAsyncPrograms() {
@@ -515,6 +544,9 @@ export class RenderContext {
                 module?.contextLost();
             }
         }
+        // this.xrSession?.end();
+        // this.xrSession = undefined;
+        // this.xrReferenceSpace = undefined;
     }
 
     /** @internal */
@@ -558,19 +590,44 @@ export class RenderContext {
      * @param context render context to wait for, if any.
      * @remarks Use this function instead of requestAnimationFrame()!
      */
-    public static nextFrame(context: RenderContext | undefined): Promise<number> {
-        return new Promise<number>((resolve) => {
-            requestAnimationFrame((time) => {
-                if (context) {
-                    const { prevFrame } = context;
-                    if (prevFrame) {
-                        prevFrame.resolve(time - prevFrame.time);
-                        context.prevFrame = undefined;
+    public static nextFrame(context: RenderContext | undefined): Promise<{time: number, views?: {viewport: XRViewport, projectionMatrix?: ReadonlyMat4, transformMatrix?: ReadonlyMat4}[]}> {
+        return new Promise((resolve) => {
+            if (context?.xrSession) {
+                context.xrSession.requestAnimationFrame((time, frame) => {
+                    if (context?.xrSession && context.xrReferenceSpace) {
+                        const { prevFrame } = context;
+                        if (prevFrame) {
+                            prevFrame.resolve(time - prevFrame.time);
+                            context.prevFrame = undefined;
+                        }
+                        context.currentFrameTime = time;
+                        const baseLayer = context.xrSession.renderState.baseLayer!;
+                        const viewerPose = frame.getViewerPose(context.xrReferenceSpace)!;
+                        const views = viewerPose.views.map(view => ({
+                            viewport: baseLayer.getViewport(view)!,
+                            projectionMatrix: view.projectionMatrix,
+                            transformMatrix: view.transform.matrix
+                        }));
+                        resolve({time, views});
+                        return;
                     }
-                    context.currentFrameTime = time;
-                }
-                resolve(time);
-            });
+                    resolve({time});
+                });
+            } else {
+                requestAnimationFrame((time: number) => {
+                    if (context) {
+                        const { prevFrame } = context;
+                        if (prevFrame) {
+                            prevFrame.resolve(time - prevFrame.time);
+                            context.prevFrame = undefined;
+                        }
+                        context.currentFrameTime = time;
+                        resolve({time});
+                        return;
+                    }
+                    resolve({time});
+                });
+            }
         });
     }
 
@@ -579,7 +636,9 @@ export class RenderContext {
      * @param state An object describing what the frame should look like.
      * @returns A promise to the performance related statistics involved in rendering this frame.
      */
-    public async render(state: RenderState): Promise<RenderStatistics> {
+    private prevBufferWidth = 0;
+    private prevBufferHeight = 0;
+    public async render(state: RenderState, views: undefined | {viewport: XRViewport, projectionMatrix?: ReadonlyMat4, transformMatrix?: ReadonlyMat4}[]): Promise<RenderStatistics> {
         if (!this.modules) {
             throw new Error("Context has not been initialized!");
         }
@@ -597,6 +656,24 @@ export class RenderContext {
         // handle resizes
         let resized = false;
         const { output } = state;
+
+        if (!views) {
+            views = [{viewport: {x: 0, y: 0, width: canvas.width, height: canvas.height}}];
+        }
+        views = views.map(view => {
+            const kx = output.width / canvas.width;
+            const ky = output.height / canvas.height;
+            return {
+                ...view,
+                viewport: {
+                    x: Math.round(view.viewport.x * kx),
+                    y: Math.round(view.viewport.y * ky),
+                    width: Math.round(view.viewport.width * kx),
+                    height: Math.round(view.viewport.height * ky),
+                }
+            }
+        });
+        
         if (this.hasStateChanged({ output })) {
             const { width, height } = output;
             console.assert(Number.isInteger(width) && Number.isInteger(height));
@@ -604,101 +681,147 @@ export class RenderContext {
             canvas.height = height;
             resized = true;
             this.changed = true;
-            this.buffers?.dispose();
-            this.buffers = new RenderBuffers(gl, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
+            if (output.xr !== this.prevState?.output.xr) {
+                if (output.xr) {
+                    await this.initXr();
+                } else {
+                    await this.uninitXr();
+                }
+            }
+            // this.buffers?.dispose();
+            // this.buffers = new RenderBuffers(gl, width / 2, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
         }
 
         type Mutable<T> = { -readonly [P in keyof T]: T[P] };
-        const derivedState = state as Mutable<DerivedRenderState>;
-        derivedState.effectiveSamplesMSAA = effectiveSamplesMSAA;
-        if (resized || state.camera !== prevState?.camera) {
-            const snapDist = 1024; // make local space roughly within 1KM of camera
-            const dir = vec3.sub(vec3.create(), state.camera.position, this.localSpaceTranslation).map(c => Math.abs(c));
-            const dist = Math.max(dir[0], dir[2]) //Skip Y as we will not get an issue with large Y offset and we elevations internally in shader.
-            // don't change localspace unless camera is far enough away. we want to avoid flipping back and forth across snap boundaries.
-            if (dist >= snapDist) {
-                function snap(v: number) {
-                    return Math.round(v / snapDist) * snapDist;
+        const baseDerivedState = state as Mutable<DerivedRenderState>;
+        baseDerivedState.effectiveSamplesMSAA = effectiveSamplesMSAA;
+
+        for (const view of views ?? []) {
+            const { viewport } = view;
+            // const viewport = {width: canvas.width, height: canvas.height};
+
+            let viewCamera = state.camera;
+            if (view.transformMatrix) {
+                const rot = mat4.getRotation(quat.create(), view.transformMatrix);
+                const tr = mat4.getTranslation(vec3.create(), view.transformMatrix);
+                // vec3.negate(tr, tr);
+                const m = mat4.create();
+                mat4.fromRotationTranslation(m, state.camera.rotation, state.camera.position);
+                mat4.multiply(m, m, mat4.fromQuat(mat4.create(), rot));
+                mat4.translate(m, m, flipGLtoCadVec(tr as number[]) as vec3);
+                // mat4.mul(m, mat4.fromRotationTranslation(mat4.create(), rot, flipGLtoCadVec(tr as number[]) as vec3), m);
+                viewCamera = {
+                    ...viewCamera,
+                    // position: mat4.getTranslation(vec3.create(), m),
+                    // rotation: mat4.getRotation(quat.create(), m),
+                };
+            }
+            
+            const derivedState = {
+                ...baseDerivedState,
+                output: {...baseDerivedState.output, width: viewport.width, height: viewport.height},
+                camera: viewCamera
+            };
+
+            if (viewport.width !== this.prevBufferWidth || viewport.height !== this.prevBufferHeight) {
+                const width = viewport.width;
+                const height = viewport.height;
+                console.assert(Number.isInteger(width) && Number.isInteger(height));
+                this.buffers?.dispose();
+                this.buffers = new RenderBuffers(gl, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
+                this.prevBufferWidth = viewport.width;
+                this.prevBufferHeight = viewport.height;
+            }
+
+            if (resized || derivedState.camera !== prevState?.camera) {
+                const snapDist = 1024; // make local space roughly within 1KM of camera
+                const dir = vec3.sub(vec3.create(), derivedState.camera.position, this.localSpaceTranslation).map(c => Math.abs(c));
+                const dist = Math.max(dir[0], dir[2]) //Skip Y as we will not get an issue with large Y offset and we elevations internally in shader.
+                // don't change localspace unless camera is far enough away. we want to avoid flipping back and forth across snap boundaries.
+                if (dist >= snapDist) {
+                    function snap(v: number) {
+                        return Math.round(v / snapDist) * snapDist;
+                    }
+                    this.localSpaceTranslation = vec3.fromValues(snap(derivedState.camera.position[0]), 0, snap(derivedState.camera.position[2]));
                 }
-                this.localSpaceTranslation = vec3.fromValues(snap(state.camera.position[0]), 0, snap(state.camera.position[2]));
+
+                baseDerivedState.localSpaceTranslation = derivedState.localSpaceTranslation = this.localSpaceTranslation; // update the object reference to indicate that values have changed
+                baseDerivedState.matrices = derivedState.matrices = matricesFromRenderState(derivedState, view.transformMatrix, view.projectionMatrix);
+                baseDerivedState.viewFrustum = derivedState.viewFrustum = createViewFrustum(derivedState, derivedState.matrices);
+            }
+            this.currentState = derivedState;
+            this.pickBuffersValid = false;
+            const { buffers } = this;
+            buffers.readBuffersNeedUpdate = true;
+
+            this.updateCameraUniforms(derivedState);
+            this.updateClippingUniforms(derivedState);
+
+            // update internal state
+            this.isOrtho = derivedState.camera.kind == "orthographic";
+            mat4.copy(this.viewClipMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.Clip));
+            mat4.copy(this.viewWorldMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.World));
+            mat3.copy(this.viewWorldMatrixNormal, derivedState.matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World));
+
+            // update modules from state
+            if (!this.pause) {
+                for (const module of this.modules) {
+                    module?.update(derivedState);
+                }
             }
 
-            derivedState.localSpaceTranslation = this.localSpaceTranslation; // update the object reference to indicate that values have changed
-            derivedState.matrices = matricesFromRenderState(state);
-            derivedState.viewFrustum = createViewFrustum(state, derivedState.matrices);
-        }
-        this.currentState = derivedState;
-        this.pickBuffersValid = false;
-        const { buffers } = this;
-        buffers.readBuffersNeedUpdate = true;
+            // link any updates programs asynchronously here
+            this.linkAsyncPrograms();
 
-        this.updateCameraUniforms(derivedState);
-        this.updateClippingUniforms(derivedState);
+            this.setPolygonFillMode("FILL");
 
-        // update internal state
-        this.isOrtho = derivedState.camera.kind == "orthographic";
-        mat4.copy(this.viewClipMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.Clip));
-        mat4.copy(this.viewWorldMatrix, derivedState.matrices.getMatrix(CoordSpace.View, CoordSpace.World));
-        mat3.copy(this.viewWorldMatrixNormal, derivedState.matrices.getMatrixNormal(CoordSpace.View, CoordSpace.World));
+            const frameBufferName = effectiveSamplesMSAA > 1 ? "colorMSAA" : "color";
+            const frameBuffer = buffers.frameBuffers[frameBufferName];
+            buffers.invalidate(frameBufferName, BufferFlags.all);
+            const viewportWithoutOffset = {width: viewport.width, height: viewport.height};
+            glState(gl, { viewport: viewportWithoutOffset, frameBuffer });
+            glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
 
-        // update modules from state
-        if (!this.pause) {
-            for (const module of this.modules) {
-                module?.update(derivedState);
+
+            // apply module render z-buffer pre-pass
+            if (this.usePrepass) {
+                for (const module of this.modules) {
+                    if (module && module.prepass) {
+                        glState(gl, {
+                            viewport: viewportWithoutOffset,
+                            frameBuffer,
+                            drawBuffers: [],
+                            // colorMask: [false, false, false, false],
+                        });
+                        module.prepass(derivedState);
+                        this.resetGLState();
+                    }
+                }
             }
-        }
 
-        // link any updates programs asynchronously here
-        this.linkAsyncPrograms();
-
-        // pick frame buffer and clear z-buffer
-        const { width, height } = canvas;
-
-        this.setPolygonFillMode("FILL");
-
-        const frameBufferName = effectiveSamplesMSAA > 1 ? "colorMSAA" : "color";
-        const frameBuffer = buffers.frameBuffers[frameBufferName];
-        buffers.invalidate(frameBufferName, BufferFlags.all);
-        glState(gl, { viewport: { width, height }, frameBuffer });
-        glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
-
-
-        // apply module render z-buffer pre-pass
-        if (this.usePrepass) {
+            // render modules
             for (const module of this.modules) {
-                if (module && module.prepass) {
+                if (module) {
                     glState(gl, {
-                        viewport: { width, height },
+                        viewport: module === this.modules.at(-1) ? viewport : viewportWithoutOffset,
                         frameBuffer,
-                        drawBuffers: [],
-                        // colorMask: [false, false, false, false],
+                        drawBuffers: this.drawBuffers(BufferFlags.color),
+                        sample: { alphaToCoverage: effectiveSamplesMSAA > 1 },
                     });
-                    module.prepass(derivedState);
+                    module.render(derivedState);
                     this.resetGLState();
                 }
             }
+
+            drawTimer.end();
+
+            // invalidate color and depth buffers only (we may need pick buffers for picking)
+            this.buffers.invalidate("colorMSAA", BufferFlags.color | BufferFlags.depth);
+            this.buffers.invalidate("color", BufferFlags.color | BufferFlags.depth);
+
+            this.prevState = baseDerivedState;
         }
 
-        // render modules
-        for (const module of this.modules) {
-            if (module) {
-                glState(gl, {
-                    viewport: { width, height },
-                    frameBuffer,
-                    drawBuffers: this.drawBuffers(BufferFlags.color),
-                    sample: { alphaToCoverage: effectiveSamplesMSAA > 1 },
-                });
-                module.render(derivedState);
-                this.resetGLState();
-            }
-        }
-
-        drawTimer.end();
-
-        // invalidate color and depth buffers only (we may need pick buffers for picking)
-        this.buffers.invalidate("colorMSAA", BufferFlags.color | BufferFlags.depth);
-        this.buffers.invalidate("color", BufferFlags.color | BufferFlags.depth);
-        this.prevState = derivedState;
         const endTime = performance.now();
 
         const intervalPromise = new Promise<number>((resolve) => {
