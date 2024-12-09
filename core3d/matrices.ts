@@ -20,8 +20,8 @@ export function matricesFromRenderState(state: { output: RenderStateOutput; came
         // viewWorld = mat4.clone(transformMatrix);
         const tm = mat4.clone(transformMatrix);
         // [tm[13], tm[14]] = [-tm[14], tm[13]];
-        mat4.fromRotationTranslation(tm, quat.invert(quat.create(), mat4.getRotation(quat.create(), tm)), mat4.getTranslation(vec3.create(), tm));
-        mat4.invert(tm, tm);
+        // mat4.fromRotationTranslation(tm, quat.invert(quat.create(), mat4.getRotation(quat.create(), tm)), mat4.getTranslation(vec3.create(), tm));
+        // mat4.invert(tm, tm);
         mat4.multiply(viewWorld, viewWorld, tm);
         // mat4.multiply(viewWorld, viewWorld, mat4.fromQuat(mat4.create(), camera.rotation));
         // mat4.translate(viewWorld, viewWorld, camera.position);
@@ -41,8 +41,8 @@ export function matricesFromRenderState(state: { output: RenderStateOutput; came
         const halfWidth = halfHeight * aspect;
         mat4.ortho(viewClip, -halfWidth, halfWidth, -halfHeight, halfHeight, camera.near, camera.far);
     }
-    else {
-        // mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
+    else if (!transformMatrix || !projectionMatrix) {
+        mat4.perspective(viewClip, fovY, aspectRatio, camera.near, camera.far);
     }
     return new MatricesImpl(viewWorld, viewClip);
 }

@@ -276,7 +276,9 @@ export class RenderContext {
             const xrSession = await navigator.xr!.requestSession('immersive-vr');
             await this.gl.makeXRCompatible();
             await xrSession.updateRenderState({
-                baseLayer: new XRWebGLLayer(xrSession, this.gl)
+                baseLayer: new XRWebGLLayer(xrSession, this.gl),
+                depthNear: 0.1,
+                depthFar: 5000
             });
             this.xrReferenceSpace = await xrSession.requestReferenceSpace('local');
             this.xrSession = xrSession;
@@ -590,26 +592,32 @@ export class RenderContext {
      * @param context render context to wait for, if any.
      * @remarks Use this function instead of requestAnimationFrame()!
      */
-    public static nextFrame(context: RenderContext | undefined): Promise<{time: number, views?: {viewport: XRViewport, projectionMatrix?: ReadonlyMat4, transformMatrix?: ReadonlyMat4}[]}> {
+    public static nextFrame(context: RenderContext | undefined): Promise<{time: number, views?: {viewport: XRViewport, projectionMatrix?: ReadonlyMat4, transformMatrix?: ReadonlyMat4, position?: DOMPointReadOnly, orientation?: DOMPointReadOnly}[]}> {
         return new Promise((resolve) => {
             if (context?.xrSession) {
                 context.xrSession.requestAnimationFrame((time, frame) => {
-                    if (context?.xrSession && context.xrReferenceSpace) {
-                        const { prevFrame } = context;
-                        if (prevFrame) {
-                            prevFrame.resolve(time - prevFrame.time);
-                            context.prevFrame = undefined;
+                    try {
+                        if (context?.xrSession && context.xrReferenceSpace) {
+                            const { prevFrame } = context;
+                            if (prevFrame) {
+                                prevFrame.resolve(time - prevFrame.time);
+                                context.prevFrame = undefined;
+                            }
+                            context.currentFrameTime = time;
+                            const baseLayer = context.xrSession.renderState.baseLayer!;
+                            const viewerPose = frame.getViewerPose(context.xrReferenceSpace)!;
+                            const views = viewerPose.views.map(view => ({
+                                viewport: baseLayer.getViewport(view)!,
+                                projectionMatrix: view.projectionMatrix,
+                                transformMatrix: view.transform.matrix,
+                                position: view.transform.position,
+                                orientation: view.transform.orientation,
+                            }));
+                            resolve({time, views});
+                            return;
                         }
-                        context.currentFrameTime = time;
-                        const baseLayer = context.xrSession.renderState.baseLayer!;
-                        const viewerPose = frame.getViewerPose(context.xrReferenceSpace)!;
-                        const views = viewerPose.views.map(view => ({
-                            viewport: baseLayer.getViewport(view)!,
-                            projectionMatrix: view.projectionMatrix,
-                            transformMatrix: view.transform.matrix
-                        }));
-                        resolve({time, views});
-                        return;
+                    } catch(ex) {
+                        console.error(ex);
                     }
                     resolve({time});
                 });
@@ -638,7 +646,7 @@ export class RenderContext {
      */
     private prevBufferWidth = 0;
     private prevBufferHeight = 0;
-    public async render(state: RenderState, views: undefined | {viewport: XRViewport, projectionMatrix?: ReadonlyMat4, transformMatrix?: ReadonlyMat4}[]): Promise<RenderStatistics> {
+    public async render(state: RenderState, views: undefined | {viewport: XRViewport, projectionMatrix?: ReadonlyMat4, transformMatrix?: ReadonlyMat4, position?: DOMPointReadOnly, orientation?: DOMPointReadOnly}[]): Promise<RenderStatistics> {
         if (!this.modules) {
             throw new Error("Context has not been initialized!");
         }
@@ -701,14 +709,18 @@ export class RenderContext {
             // const viewport = {width: canvas.width, height: canvas.height};
 
             let viewCamera = state.camera;
-            if (view.transformMatrix) {
-                const rot = mat4.getRotation(quat.create(), view.transformMatrix);
-                const tr = mat4.getTranslation(vec3.create(), view.transformMatrix);
+            if (view.transformMatrix && view.position && view.orientation) {
+                // const rot = mat4.getRotation(quat.create(), view.transformMatrix);
+                // const tr = mat4.getTranslation(vec3.create(), view.transformMatrix);
+                const tr = domPointToVec3(view.position);
+                const trScale = 1;
+                vec3.scale(tr, tr, trScale);
                 // vec3.negate(tr, tr);
                 const m = mat4.create();
                 mat4.fromRotationTranslation(m, state.camera.rotation, state.camera.position);
-                mat4.multiply(m, m, mat4.fromQuat(mat4.create(), rot));
-                mat4.translate(m, m, flipGLtoCadVec(tr as number[]) as vec3);
+                // mat4.multiply(m, m, mat4.fromQuat(mat4.create(), rot));
+                mat4.translate(m, m, tr);
+                // mat4.translate(m, m, flipGLtoCadVec(tr as number[]) as vec3);
                 // mat4.mul(m, mat4.fromRotationTranslation(mat4.create(), rot, flipGLtoCadVec(tr as number[]) as vec3), m);
                 viewCamera = {
                     ...viewCamera,
@@ -1460,3 +1472,11 @@ export interface RenderStatistics {
     /** Effective interval in milliseconds since last frame was drawn. */
     readonly frameInterval: number;
 };
+
+function domPointToVec3(p: DOMPointReadOnly) {
+    return vec3.fromValues(p.x, p.y, p.z);
+}
+
+function orientationToQuat(p: DOMPointReadOnly) {
+    return quat.fromValues(p.x, p.y, p.z, p.w);
+}
