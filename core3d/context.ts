@@ -278,7 +278,7 @@ export class RenderContext {
             await xrSession.updateRenderState({
                 baseLayer: new XRWebGLLayer(xrSession, this.gl),
                 depthNear: 0.1,
-                depthFar: 5000
+                depthFar: 5000,
             });
             this.xrReferenceSpace = await xrSession.requestReferenceSpace('local');
             this.xrSession = xrSession;
@@ -735,14 +735,17 @@ export class RenderContext {
                 camera: viewCamera
             };
 
-            if (viewport.width !== this.prevBufferWidth || viewport.height !== this.prevBufferHeight) {
-                const width = viewport.width;
-                const height = viewport.height;
+            const localScale = views.length > 1 ? 0.5 : 1;
+            const scaledViewportWidth = viewport.width * localScale;
+            const scaledViewportHeight = viewport.height * localScale;
+            if (scaledViewportWidth < 10000 && (scaledViewportWidth !== this.prevBufferWidth || scaledViewportHeight !== this.prevBufferHeight)) {
+                const width = scaledViewportWidth;
+                const height = scaledViewportHeight;
                 console.assert(Number.isInteger(width) && Number.isInteger(height));
                 this.buffers?.dispose();
                 this.buffers = new RenderBuffers(gl, width, height, effectiveSamplesMSAA, this.resourceBin("FrameBuffers"));
-                this.prevBufferWidth = viewport.width;
-                this.prevBufferHeight = viewport.height;
+                this.prevBufferWidth = width;
+                this.prevBufferHeight = height;
             }
 
             if (resized || derivedState.camera !== prevState?.camera) {
@@ -790,7 +793,7 @@ export class RenderContext {
             const frameBufferName = effectiveSamplesMSAA > 1 ? "colorMSAA" : "color";
             const frameBuffer = buffers.frameBuffers[frameBufferName];
             buffers.invalidate(frameBufferName, BufferFlags.all);
-            const viewportWithoutOffset = {width: viewport.width, height: viewport.height};
+            const viewportWithoutOffset = {width: viewport.width * localScale, height: viewport.height * localScale};
             glState(gl, { viewport: viewportWithoutOffset, frameBuffer });
             glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
 
