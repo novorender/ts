@@ -302,4 +302,15 @@ export class RoadModule extends BaseModule {
         FillDrawInfo2DOnPart(context, drawObject.direction);
         FillDrawInfo2D(context, [drawObject.info]);
     }
+
+    getPointAtStation(alignment: Alignment, station: number): ReadonlyVec3 {
+        for (let i = 1; i < alignment.stations.length; ++i) {
+            const stationEnd = alignment.stations[i];
+            if (station < stationEnd) {
+                const stationStart = alignment.stations[i - 1];
+                return vec3.lerp(vec3.create(), alignment.points[i - 1], alignment.points[i], station - stationStart);
+            }
+        }
+        return alignment.points[alignment.points.length - 1];
+    }
 }
