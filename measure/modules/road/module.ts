@@ -308,7 +308,8 @@ export class RoadModule extends BaseModule {
             const stationEnd = alignment.stations[i];
             if (station < stationEnd) {
                 const stationStart = alignment.stations[i - 1];
-                return vec3.lerp(vec3.create(), alignment.points[i - 1], alignment.points[i], station - stationStart);
+                const t = (station - stationStart) / (stationEnd - stationStart);
+                return vec3.lerp(vec3.create(), alignment.points[i - 1], alignment.points[i], t);
             }
         }
         return alignment.points[alignment.points.length - 1];
