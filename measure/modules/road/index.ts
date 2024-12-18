@@ -24,6 +24,7 @@ export interface Alignment {
     readonly horizontalPointsOfCurvature: HorizonalPointOfCurvature[];
     readonly verticalPointsOfCurvature: VerticalPointOfCurvature[];
     readonly verticalAlignment: ReadonlyVec2[];
+    readonly tesselatedSegment: boolean;
 }
 
 export interface HorizontalAlignment {

@@ -98,7 +98,8 @@ export function getAlignment(
         bottom: verticalAlignment.bottom,
         verticalPointsOfCurvature,
         horizontalPointsOfCurvature,
-        verticalAlignment: verticalAlignment.profilePoints
+        verticalAlignment: verticalAlignment.profilePoints,
+        tesselatedSegment: horizontalPointsOfCurvature.length == 0
     }
 
 }
