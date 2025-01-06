@@ -101,20 +101,21 @@ export class LineStrip3D implements Curve3D {
             }
         }
 
-        const start = vertices[segIndex];
-        const dir =
-            segIndex < vertices.length - 1
-                ? vec3.subtract(vec3.create(), vertices[segIndex + 1], start)
-                : vec3.subtract(vec3.create(), start, vertices[segIndex - 1]);
-        vec3.normalize(dir, dir);
+        const [startIndex, endIndex] =
+            segIndex < vertices.length - 1 ?
+                [segIndex, segIndex + 1] :
+                [segIndex - 1, segIndex];
+        const start = vertices[startIndex];
+        const end = vertices[endIndex];
+
         if (point) {
-            const segStartParam = tesselationParameters[segIndex];
-            const localParam = t - segStartParam;
-            vec3.scale(point, dir, localParam);
-            vec3.add(point, point, start);
+            const k = (t - tesselationParameters[startIndex]) / (tesselationParameters[endIndex] - tesselationParameters[startIndex])
+            vec3.lerp(point, start, end, k);
         }
+
         if (tangent) {
-            vec3.copy(tangent, dir);
+            vec3.subtract(tangent, end, start);
+            vec3.normalize(tangent, tangent);
         }
     }
     invert(pos: ReadonlyVec3): number {
