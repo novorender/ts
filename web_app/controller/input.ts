@@ -31,6 +31,7 @@ export class ControllerInput {
     private _touchZoomDistancePrev = 0;
     private _mouseDownClientPos = vec2.create();
     private _mouseMoveStarted = false;
+    private _pointerLocked = false;
 
     private _mouseWheelLastActive = 0;
     private static readonly _gestureKeys = ["KeyW", "KeyS", "KeyA", "KeyD", "KeyQ", "KeyE", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
@@ -112,7 +113,7 @@ export class ControllerInput {
         domElement.addEventListener("contextmenu", this.contextmenu, options);
         domElement.addEventListener("mousedown", this.mousedown, options);
         domElement.addEventListener("mouseup", this.mouseup, options);
-        domElement.addEventListener("mousemove", this.mousemove, options);
+        window.addEventListener("mousemove", this.mousemove, options);
         domElement.addEventListener("wheel", this.wheel, options);
         domElement.addEventListener("touchstart", this.touchstart, options);
         domElement.addEventListener("touchmove", this.touchmove, options);
@@ -133,7 +134,7 @@ export class ControllerInput {
         domElement.removeEventListener("contextmenu", this.contextmenu, options);
         domElement.removeEventListener("mousedown", this.mousedown, options);
         domElement.removeEventListener("mouseup", this.mouseup, options);
-        domElement.removeEventListener("mousemove", this.mousemove, options);
+        window.removeEventListener("mousemove", this.mousemove, options);
         domElement.removeEventListener("wheel", this.wheel, options);
         domElement.removeEventListener("touchstart", this.touchstart, options);
         domElement.removeEventListener("touchmove", this.touchmove, options);
@@ -192,9 +193,10 @@ export class ControllerInput {
         const { domElement, axes } = this;
         vec2.set(this._mouseDownClientPos, e.clientX, e.clientY);
         if (this.mouseMoveSensitivity <= 0) {
-            this._mouseButtonDown = true;
             this._mouseMoveStarted = true;
         }
+        this._mouseButtonDown = true;
+        this._pointerLocked = false;
         domElement.focus();
         e.preventDefault();
         this.updateModifierKeys(e);
@@ -214,6 +216,7 @@ export class ControllerInput {
         this.callbacks?.mouseButtonChanged?.(e);
         this._mouseButtonDown = false;
         this._mouseMoveStarted = false;
+        this._pointerLocked = false;
     };
 
     private wheel = async (e: WheelEvent) => {
@@ -228,7 +231,7 @@ export class ControllerInput {
     };
 
     private mousemove = (e: MouseEvent) => {
-        if (e.buttons < 1) return;
+        if (!this._mouseButtonDown) return;
         this.updateModifierKeys(e);
         if (!this._mouseMoveStarted) {
             const dist = vec2.dist(this._mouseDownClientPos, vec2.fromValues(e.clientX, e.clientY));
@@ -239,9 +242,9 @@ export class ControllerInput {
                 return;
             }
         }
-        if (this._mouseButtonDown && this.usePointerLock) {
-            (e.currentTarget as HTMLElement).requestPointerLock();
-            this._mouseButtonDown = false;
+        if (!this._pointerLocked && this.usePointerLock) {
+            this.domElement.requestPointerLock();
+            this._pointerLocked = true;
         }
         const { axes } = this;
         if (e.buttons & MouseButtons.right) {
