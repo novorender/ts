@@ -143,7 +143,6 @@ export class RoadModule extends BaseModule {
         const stationMinorLines: DrawPart[] = [];
 
         let nextParam = start ?? Math.ceil(alignment.stations[0] / minorTickInterval) * minorTickInterval;
-        let stationsProcessed = 0;
         const stations: { position: ReadonlyVec3, direction: ReadonlyVec3, stationInfo: string }[] = [];
 
         for (let i = 1; i < alignment.stations.length;) {
@@ -152,7 +151,7 @@ export class RoadModule extends BaseModule {
                 ++i;
                 continue;
             }
-            const isMinorTick = stationsProcessed % minorTickFreq !== 0;
+            const isMinorTick = nextParam % interval !== 0;
             const stationStart = alignment.stations[i - 1];
             const dir = vec3.sub(vec3.create(), alignment.points[i], alignment.points[i - 1]);
             vec3.normalize(dir, dir);
@@ -186,7 +185,6 @@ export class RoadModule extends BaseModule {
             }
 
             nextParam += minorTickInterval;
-            stationsProcessed += 1;
         }
         return {
             stationLines,
