@@ -135,7 +135,7 @@ export class RoadModule extends BaseModule {
     }
 
     getStationsDrawObject(alignment: Alignment, interval: number, start?: number, elevation?: boolean, slopes?: boolean): StationsDrawObject {
-        const show_station_above = 1;
+        const show_station_above = 0.01;
         const minorTickFreq = 5;
         const minorTickInterval = interval / minorTickFreq;
 
@@ -177,8 +177,8 @@ export class RoadModule extends BaseModule {
                     stationInfo += ", z=" + stationPosition[2].toFixed(2);
                 } if (slopes) {
                     const info = infoBetweenStations(alignment, nextParam - interval, nextParam, true);
-                    if (info?.slope && Math.abs(info?.slope) > show_station_above) {
-                        stationInfo += ", S " + info.slope.toFixed(0) + "%"
+                    if (info?.slope && Math.abs(info.slope) > show_station_above) {
+                        stationInfo += ", S " + (info.slope * 100).toFixed(0) + "%"
                     }
                 }
                 stations.push({ position: stationPosition, direction: vec3.negate(vec3.create(), side), stationInfo });
