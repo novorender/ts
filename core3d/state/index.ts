@@ -277,7 +277,16 @@ export interface RenderStateQuality {
      * Higher values will increase geometric detail, at the cost of performance and memory consumption.
      * At some point the amount of detail is capped by device specific constraints.
      */
-    readonly detail: number;
+    readonly detail: {
+        /**
+         * Active bias will only work for lowering the current level of detail. It will keep the current nodes in memory but not render.
+         */
+        readonly activeBias: number,
+        /**
+         * Download bias will affect the downloaded nodes.
+         */
+        readonly downloadBias: number,
+    };
 }
 
 /** Debug related state.

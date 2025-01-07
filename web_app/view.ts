@@ -72,9 +72,12 @@ export class View<
     private drsHighInterval = 50;
     private drsLowInterval = 100;
     private lastDrsAdjustTime = 0;
+    private lastDetailAdjustTime = 0;
     private resolutionTier: 0 | 1 | 2 = 2;
 
-    private currentDetailBias: number = 1;
+    private currentActiveDetailBias: number = 1;
+    //Set to 0.5 to account for the first frame increase.
+    private currentDownloadDetailBias: number = 0.5;
 
     /**
      * @param canvas The HtmlCanvasElement used for rendering.
@@ -869,6 +872,7 @@ export class View<
             const isIdleFrame = idleFrameTime > 500 && !moving;
             if (_renderContext && !_renderContext.isContextLost()) {
                 _renderContext.poll(); // poll for events, such as async reads and shader linking
+                const activeDetailDownloadModifier = this.dynamicDetailAdjustment();
 
                 if (isIdleFrame) { // increase resolution and detail bias on idle frame
                     if (deviceProfile.tier > 0 && this.renderState.toonOutline.on == false) {
@@ -883,8 +887,8 @@ export class View<
                         // set max quality and resolution when the camera stops moving
                         this.resolutionModifier = Math.min(1, this.baseRenderResolution * 2);
                         this.resize();
-                        this.modifyRenderState({ quality: { detail: 1 } });
-                        this.currentDetailBias = 1;
+                        this.modifyRenderState({ quality: { detail: { activeBias: 1 } } });
+                        this.currentActiveDetailBias = 1;
                         wasIdle = true;
                         // if pick is not already rendered then start to make the pick buffer available when the camera stops
                     }
@@ -902,10 +906,15 @@ export class View<
                         this.dynamicQualityAdjustment(frameIntervals);
                     }
                     const activeDetailModifier = 0.5;
-                    if (this.renderStateGL.quality.detail != activeDetailModifier) {
-                        this.currentDetailBias = activeDetailModifier;
-                        this.modifyRenderState({ quality: { detail: activeDetailModifier } });
+                    if (this.renderStateGL.quality.detail.activeBias != activeDetailModifier) {
+                        this.currentActiveDetailBias = activeDetailModifier;
+                        this.modifyRenderState({ quality: { detail: { activeBias: activeDetailModifier } } });
                     }
+                }
+
+                if (this.currentDownloadDetailBias != activeDetailDownloadModifier) {
+                    this.modifyRenderState({ quality: { detail: { downloadBias: activeDetailDownloadModifier } } });
+                    this.currentDownloadDetailBias = activeDetailDownloadModifier;
                 }
 
                 this.animate?.(renderTime);
@@ -920,7 +929,7 @@ export class View<
                     prevState = renderStateGL;
                     const statsPromise = _renderContext.render(renderStateGL);
                     statsPromise.then((stats) => {
-                        this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
+                        this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentActiveDetailBias * this.currentDownloadDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
                         this.render?.({ isIdleFrame, cameraMoved: moving });
                         possibleChanges = true;
                     });
@@ -1116,6 +1125,37 @@ export class View<
         const clone = structuredClone(state);
         flipState(clone, "GLToCAD");
         return clone;
+    }
+
+    private dynamicDetailAdjustment() {
+        const { _renderContext, deviceProfile, statistics, currentDownloadDetailBias } = this;
+        if (!_renderContext || !statistics) {
+            return 1;
+        }
+        const now = performance.now();
+        const adjustUpCooldown = 1000;
+        const adjustDownCooldown = 200;
+        const maxDetail = 10;
+        const minDetail = 1.0;
+        const increaseMemorySize = deviceProfile.limits.maxGPUBytes * 0.75;
+        const decreaseMemorySizeSize = deviceProfile.limits.maxGPUBytes * 0.90;
+        const increaseTriangleSize = deviceProfile.limits.maxPrimitives * 0.75;
+        const decreaseTriangleSize = deviceProfile.limits.maxPrimitives * 0.90;
+        const detailStep = 0.5;
+        if (statistics.render.bufferBytes < increaseMemorySize && statistics.render.triangles < increaseTriangleSize) {
+            if (_renderContext.isSceneResolved()) {
+                if (now > this.lastDetailAdjustTime + adjustUpCooldown) {
+                    this.lastDetailAdjustTime = now;
+                    return Math.min(currentDownloadDetailBias + detailStep, maxDetail);
+                }
+            }
+        } else if (statistics.render.bufferBytes > decreaseMemorySizeSize || statistics.render.triangles > decreaseTriangleSize) {
+            if (now > this.lastDetailAdjustTime + adjustDownCooldown) {
+                this.lastDetailAdjustTime = now;
+                return Math.max(currentDownloadDetailBias - detailStep, minDetail);
+            }
+        }
+        return currentDownloadDetailBias;
     }
 
 
