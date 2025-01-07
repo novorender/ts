@@ -1139,8 +1139,8 @@ export class View<
         const minDetail = 1.0;
         const increaseMemorySize = deviceProfile.limits.maxGPUBytes * 0.75;
         const decreaseMemorySizeSize = deviceProfile.limits.maxGPUBytes * 0.90;
-        const increaseTriangleSize = deviceProfile.limits.maxPrimitives * 0.75;
-        const decreaseTriangleSize = deviceProfile.limits.maxPrimitives * 0.90;
+        const increaseTriangleSize = deviceProfile.limits.maxPrimitives * 0.80;
+        const decreaseTriangleSize = deviceProfile.limits.maxPrimitives * 0.95;
         const detailStep = 0.5;
         if (statistics.render.bufferBytes < increaseMemorySize && statistics.render.triangles < increaseTriangleSize) {
             if (_renderContext.isSceneResolved()) {
