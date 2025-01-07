@@ -169,7 +169,7 @@ export class RoadModule extends BaseModule {
                     stationInfo += ", S " + info.slope.toFixed(0) + "%"
                 }
             }
-            stations.push({ position: lineVertices[1], direction: vec3.negate(vec3.create(), side), stationInfo });
+            stations.push({ position: stationPosition, direction: vec3.negate(vec3.create(), side), stationInfo });
             nextParam += interval;
         }
         return {
