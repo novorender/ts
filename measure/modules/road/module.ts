@@ -138,7 +138,7 @@ export class RoadModule extends BaseModule {
         const show_station_above = 1;
         const stationLines: DrawPart[] = [];
         let nextParam = start ?? Math.ceil(alignment.stations[0] / interval) * interval;
-        const stations: { position: ReadonlyVec3, stationInfo: string }[] = [];
+        const stations: { position: ReadonlyVec3, direction: ReadonlyVec3, stationInfo: string }[] = [];
         for (let i = 1; i < alignment.stations.length;) {
             const stationEnd = alignment.stations[i];
             if (stationEnd < nextParam) {
@@ -169,12 +169,12 @@ export class RoadModule extends BaseModule {
                     stationInfo += ", S " + info.slope.toFixed(0) + "%"
                 }
             }
-            stations.push({ position: lineVertices[1], stationInfo });
+            stations.push({ position: lineVertices[1], direction: vec3.negate(vec3.create(), side), stationInfo });
             nextParam += interval;
         }
         return {
             stationLines,
-            stationInfo: { drawType: "text", vertices3D: stations.map(s => s.position), text: [stations.map(s => s.stationInfo)] }
+            stationInfo: { drawType: "text", vertices3D: stations.map(s => s.position), directions3D: stations.map(s => s.direction), text: [stations.map(s => s.stationInfo)] },
         };
     }
 
