@@ -74,7 +74,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
     update(state: DerivedRenderState) {
         // const beginTime = performance.now();
 
-        const { renderContext, resources, uniforms, projectedSizeSplitThreshold, module, currentProgramFlags } = this;
+        const { renderContext, resources, uniforms, module, currentProgramFlags } = this;
         const { gl, deviceProfile } = renderContext;
         const { scene, localSpaceTranslation, highlights, points, terrain, pick, output, clipping, outlines } = state;
         const { values } = uniforms.scene;
@@ -371,7 +371,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             recompile();
         }
 
-        const detailAdjutment = state.quality.detail.downloadBias;
+        const detailAdjustment = state.quality.detail.downloadBias;
 
         if (!this.suspendUpdates) {
             const nodes: OctreeNode[] = [];
@@ -381,7 +381,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 // collapse nodes
                 const preCollapseNodes = [...iterateNodes(rootNode)];
                 for (const node of preCollapseNodes) {
-                    if (!node.shouldSplit((projectedSizeSplitThreshold / detailAdjutment) * 0.98)) { // add a little "slack" before collapsing back again
+                    if (!node.shouldSplit((this.projectedSizeSplitThreshold / detailAdjustment) * 0.98)) { // add a little "slack" before collapsing back again
                         if (node.state != NodeState.collapsed) {
                             node.dispose(); // collapse node
                         }
@@ -410,7 +410,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
             // split nodes based on camera orientation
             for (const node of nodes) {
-                if (node.shouldSplit(projectedSizeSplitThreshold / detailAdjutment)) {
+                if (node.shouldSplit(this.projectedSizeSplitThreshold / detailAdjustment)) {
                     if (node.state == NodeState.collapsed) {
                         if (primitives + node.data.primitivesDelta <= maxPrimitives && gpuBytes + node.data.gpuBytes <= maxGPUBytes) {
                             node.state = NodeState.requestDownload;
@@ -433,8 +433,6 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                     availableDownloads--;
                 }
             }
-
-            renderContext.setSceneResolved(this.loader.activeDownloads == 0);
         }
     }
 
@@ -614,6 +612,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
         }
+        renderContext.setSceneResolved(this.loader.activeDownloads == 0);
     }
 
     pick() {

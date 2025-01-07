@@ -1138,18 +1138,18 @@ export class View<
         const maxDetail = 10;
         const minDetail = 1.0;
         const increaseMemorySize = deviceProfile.limits.maxGPUBytes * 0.75;
-        const decreaseMemorySizeSize = deviceProfile.limits.maxGPUBytes * 0.90;
-        const increaseTriangleSize = deviceProfile.limits.maxPrimitives * 0.80;
-        const decreaseTriangleSize = deviceProfile.limits.maxPrimitives * 0.95;
+        const decreaseMemorySize = deviceProfile.limits.maxGPUBytes * 0.90;
+        const increasePrimitiveSize = deviceProfile.limits.maxPrimitives * 0.80;
+        const decreasePrimitiveSize = deviceProfile.limits.maxPrimitives * 0.95;
         const detailStep = 0.5;
-        if (statistics.render.bufferBytes < increaseMemorySize && statistics.render.triangles < increaseTriangleSize) {
+        if (statistics.render.bufferBytes < increaseMemorySize && statistics.render.primitives < increasePrimitiveSize) {
             if (_renderContext.isSceneResolved()) {
                 if (now > this.lastDetailAdjustTime + adjustUpCooldown) {
                     this.lastDetailAdjustTime = now;
                     return Math.min(currentDownloadDetailBias + detailStep, maxDetail);
                 }
             }
-        } else if (statistics.render.bufferBytes > decreaseMemorySizeSize || statistics.render.triangles > decreaseTriangleSize) {
+        } else if (statistics.render.bufferBytes > decreaseMemorySize || statistics.render.primitives > decreasePrimitiveSize) {
             if (now > this.lastDetailAdjustTime + adjustDownCooldown) {
                 this.lastDetailAdjustTime = now;
                 return Math.max(currentDownloadDetailBias - detailStep, minDetail);
