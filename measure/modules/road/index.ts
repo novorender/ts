@@ -67,6 +67,7 @@ export interface StationSegmentDrawObject {
 
 export interface StationsDrawObject {
     stationInfo: DrawPart;
+    stationInfoProfiles: number[];
     stationLines: DrawPart[];
     stationMinorLines: DrawPart[];
 }

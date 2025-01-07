@@ -143,7 +143,7 @@ export class RoadModule extends BaseModule {
         const stationMinorLines: DrawPart[] = [];
 
         let nextParam = start ?? Math.ceil(alignment.stations[0] / minorTickInterval) * minorTickInterval;
-        const stations: { position: ReadonlyVec3, direction: ReadonlyVec3, stationInfo: string }[] = [];
+        const stations: { position: ReadonlyVec3, direction: ReadonlyVec3, stationInfo: string, param: number }[] = [];
 
         for (let i = 1; i < alignment.stations.length;) {
             const stationEnd = alignment.stations[i];
@@ -181,7 +181,7 @@ export class RoadModule extends BaseModule {
                         stationInfo += ", S " + (info.slope * 100).toFixed(0) + "%"
                     }
                 }
-                stations.push({ position: stationPosition, direction: vec3.negate(vec3.create(), side), stationInfo });
+                stations.push({ position: stationPosition, direction: vec3.negate(vec3.create(), side), stationInfo, param: nextParam });
             }
 
             nextParam += minorTickInterval;
@@ -190,6 +190,7 @@ export class RoadModule extends BaseModule {
             stationLines,
             stationMinorLines,
             stationInfo: { drawType: "text", vertices3D: stations.map(s => s.position), directions3D: stations.map(s => s.direction), text: [stations.map(s => s.stationInfo)] },
+            stationInfoProfiles: stations.map(s => s.param)
         };
     }
 
