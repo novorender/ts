@@ -76,8 +76,10 @@ export class View<
     private resolutionTier: 0 | 1 | 2 = 2;
 
     private currentActiveDetailBias: number = 1;
+
     //Set to 0.5 to account for the first frame increase.
-    private currentDownloadDetailBias: number = 0.5;
+    private currentDownloadDetailBias: number = 0.75;
+    private lastDetailChangeAfterUpdate: "positive" | "negative" | "none" = "none";
 
     /**
      * @param canvas The HtmlCanvasElement used for rendering.
@@ -860,12 +862,15 @@ export class View<
         const frameIntervals: number[] = [];
         let possibleChanges = false;
         while (this._run && !(abortSignal?.aborted ?? false)) {
-            const { _renderContext, _activeController, deviceProfile } = this;
+            const { _renderContext, _activeController, deviceProfile, _stateChanges } = this;
             const renderTime = await RenderContext.nextFrame(_renderContext);
             const frameTime = renderTime - prevRenderTime;
             const cameraChanges = _activeController.renderStateChanges(this.renderStateCad.camera, renderTime - prevRenderTime);
             if (cameraChanges) {
                 this.modifyRenderState(cameraChanges);
+            }
+            if (cameraChanges || _stateChanges?.highlights) {
+                this.lastDetailChangeAfterUpdate = "none";
             }
             const { moving } = _activeController;
 
@@ -1133,17 +1138,18 @@ export class View<
             return 1;
         }
         const now = performance.now();
-        const adjustUpCooldown = 1000;
-        const adjustDownCooldown = 200;
+        const adjustUpCooldown = 500;
+        const adjustDownCooldown = 100;
         const maxDetail = 10;
         const minDetail = 1.0;
         const increaseMemorySize = deviceProfile.limits.maxGPUBytes * 0.75;
         const decreaseMemorySize = deviceProfile.limits.maxGPUBytes * 0.90;
         const increasePrimitiveSize = deviceProfile.limits.maxPrimitives * 0.80;
         const decreasePrimitiveSize = deviceProfile.limits.maxPrimitives * 0.95;
-        const detailStep = 0.5;
+        const detailStep = 0.25;
         if (statistics.render.bufferBytes < increaseMemorySize && statistics.render.primitives < increasePrimitiveSize) {
-            if (_renderContext.isSceneResolved()) {
+            if (_renderContext.isSceneResolved() && this.lastDetailChangeAfterUpdate != "negative") {
+                this.lastDetailChangeAfterUpdate = "positive";
                 if (now > this.lastDetailAdjustTime + adjustUpCooldown) {
                     this.lastDetailAdjustTime = now;
                     return Math.min(currentDownloadDetailBias + detailStep, maxDetail);
@@ -1151,6 +1157,7 @@ export class View<
             }
         } else if (statistics.render.bufferBytes > decreaseMemorySize || statistics.render.primitives > decreasePrimitiveSize) {
             if (now > this.lastDetailAdjustTime + adjustDownCooldown) {
+                this.lastDetailChangeAfterUpdate = "negative";
                 this.lastDetailAdjustTime = now;
                 return Math.max(currentDownloadDetailBias - detailStep, minDetail);
             }
