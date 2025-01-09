@@ -135,16 +135,23 @@ export class RoadModule extends BaseModule {
     }
 
     getStationsDrawObject(alignment: Alignment, interval: number, start?: number, elevation?: boolean, slopes?: boolean): StationsDrawObject {
-        const show_station_above = 1;
+        const show_station_above = 0.01;
+        const minorTickFreq = 5;
+        const minorTickInterval = interval / minorTickFreq;
+
         const stationLines: DrawPart[] = [];
-        let nextParam = start ?? Math.ceil(alignment.stations[0] / interval) * interval;
-        const stations: { position: ReadonlyVec3, stationInfo: string }[] = [];
+        const stationMinorLines: DrawPart[] = [];
+
+        let nextParam = start ?? Math.ceil(alignment.stations[0] / minorTickInterval) * minorTickInterval;
+        const stations: { position: ReadonlyVec3, direction: ReadonlyVec3, stationInfo: string, param: number }[] = [];
+
         for (let i = 1; i < alignment.stations.length;) {
             const stationEnd = alignment.stations[i];
             if (stationEnd < nextParam) {
                 ++i;
                 continue;
             }
+            const isMinorTick = nextParam % interval !== 0;
             const stationStart = alignment.stations[i - 1];
             const dir = vec3.sub(vec3.create(), alignment.points[i], alignment.points[i - 1]);
             vec3.normalize(dir, dir);
@@ -157,30 +164,42 @@ export class RoadModule extends BaseModule {
             const stationPosition = vec3.lerp(vec3.create(), alignment.points[i - 1], alignment.points[i],
                 (nextParam - stationStart) / (stationEnd - stationStart));
 
-            const lineVertices = [vec3.scaleAndAdd(vec3.create(), stationPosition, side, 5), vec3.scaleAndAdd(vec3.create(), stationPosition, side, -5)];
-            stationLines.push({ drawType: "lines", vertices3D: lineVertices });
+            const tickOffset = isMinorTick ? 2 : 5;
+            const lineVertices = [vec3.scaleAndAdd(vec3.create(), stationPosition, side, tickOffset), vec3.scaleAndAdd(vec3.create(), stationPosition, side, -tickOffset)];
+            
+            if (isMinorTick) {
+                stationMinorLines.push({ drawType: "lines", vertices3D: lineVertices });
+            } else {
+                stationLines.push({ drawType: "lines", vertices3D: lineVertices });
 
-            let stationInfo = nextParam.toFixed(0);
-            if (elevation) {
-                stationInfo += ", z=" + stationPosition[2].toFixed(2);
-            } if (slopes) {
-                const info = infoBetweenStations(alignment, nextParam - interval, nextParam, true);
-                if (info?.slope && Math.abs(info?.slope) > show_station_above) {
-                    stationInfo += ", S " + info.slope.toFixed(0) + "%"
+                let stationInfo = nextParam.toFixed(0);
+                if (elevation) {
+                    stationInfo += ", z=" + stationPosition[2].toFixed(2);
+                } if (slopes) {
+                    const info = infoBetweenStations(alignment, nextParam - interval, nextParam, true);
+                    if (info?.slope && Math.abs(info.slope) > show_station_above) {
+                        stationInfo += ", S " + (info.slope * 100).toFixed(0) + "%"
+                    }
                 }
+                stations.push({ position: stationPosition, direction: vec3.negate(vec3.create(), side), stationInfo, param: nextParam });
             }
-            stations.push({ position: lineVertices[1], stationInfo });
-            nextParam += interval;
+
+            nextParam += minorTickInterval;
         }
         return {
             stationLines,
-            stationInfo: { drawType: "text", vertices3D: stations.map(s => s.position), text: [stations.map(s => s.stationInfo)] }
+            stationMinorLines,
+            stationInfo: { drawType: "text", vertices3D: stations.map(s => s.position), directions3D: stations.map(s => s.direction), text: [stations.map(s => s.stationInfo)] },
+            stationInfoProfiles: stations.map(s => s.param)
         };
     }
 
     updateStationsDrawObject(stations: StationsDrawObject, context = this.parent.draw.drawContext) {
         FillDrawInfo2DOnPart(context, stations.stationInfo);
         for (const part of stations.stationLines) {
+            FillDrawInfo2DOnPart(context, part);
+        }
+        for (const part of stations.stationMinorLines) {
             FillDrawInfo2DOnPart(context, part);
         }
     }
