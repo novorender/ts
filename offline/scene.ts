@@ -106,6 +106,54 @@ export class OfflineScene {
     }
 
     /**
+     * Delete files which are no longer used by the current manifest
+     * @param sceneIndexUrl The url to the scene index.json file, complete with sas key.
+     * @param abortSignal A signal to abort downloads/synchronization.
+     * @returns True, if completed successfully, false if not.
+     * @remarks
+     * Errors are logged in the {@link logger}.
+     */
+    async deleteStaleFiles(sceneIndexUrl: URL, abortSignal: AbortSignal) {
+        const { dir, logger } = this;
+
+        const sceneIndexResponse = await fetch(sceneIndexUrl, { mode: "cors", signal: abortSignal });
+        if (!sceneIndexResponse.ok) {
+            throw new Error(`HTTP error: ${sceneIndexResponse.status}!`);
+        }
+        const sceneIndex = await sceneIndexResponse.json();
+        const { offline } = sceneIndex;
+        const manifestUrl = new URL(sceneIndexUrl);
+        let idx = sceneIndexUrl.pathname.lastIndexOf("/");
+        if (idx >= 0) {
+            manifestUrl.pathname = sceneIndexUrl.pathname.slice(0, idx + 1);
+        }
+        const manifestName = offline.manifest;
+        manifestUrl.pathname += manifestName;
+        let manifestData = await this.downloadManifest(manifestUrl, abortSignal);
+        if (manifestData == undefined) {
+            return false;
+        }
+
+        logger?.status("scanning");
+        const files = new Set<string>();
+        manifestData.brep?.forEach(file => files.add(file[0]));
+        manifestData.db?.forEach(file => files.add(file[0]));
+        manifestData.webgl2_bin?.forEach(file => files.add(file[0]));
+
+        const filesToDelete: string[] = [];
+        for (const entry of await dir.getJournalEntries()) {
+            if (!files.has(entry.name)) {
+                filesToDelete.push(entry.name);
+            }
+        }
+        logger?.status("deleting");
+
+        await dir.deleteFiles(filesToDelete);
+        logger?.status("done");
+        return true;
+    }
+
+    /**
      * Incrementally synchronize scene files with online storage.
      * @param sceneIndexUrl The url to the scene index.json file, complete with sas key.
      * @param abortSignal A signal to abort downloads/synchronization.
@@ -151,6 +199,8 @@ export class OfflineScene {
             }
         }
 
+        const maxSimulataneousDownloads = 8;
+        const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
         try {
             logger?.status("synchronizing");
             let manifestData = await this.downloadManifest(manifestUrl, abortSignal);
@@ -166,8 +216,6 @@ export class OfflineScene {
             logger?.info?.("fetching new files");
             let totalDownload = 0;
             logger?.progress?.(totalDownload, totalByteSize, "download");
-            const maxSimulataneousDownloads = 8;
-            const downloadQueue = new Array<Promise<void> | undefined>(maxSimulataneousDownloads);
             const maxErrors = 100;
             const maxQuotaExceededErrors = 5;
             let quotaExceededErrorCount = 0;
@@ -193,25 +241,29 @@ export class OfflineScene {
                         async function download(size: number) {
                             try {
                                 let fileResponse = await fetch(fileRequest);
-                                if (fileResponse.ok) {
-                                    if (size > 10_000_000) {
-                                        const stream = await fileResponse.body;
-                                        if (stream) {
-                                            const addBytes = (bytes: number) => {
-                                                totalDownload += bytes;
-                                                if (debounce(100)) {
-                                                    logger?.progress?.(totalDownload, totalByteSize, "download");
-                                                }
-                                            };
-                                            await dir.writeStream(name, stream, size, abortSignal, addBytes);
+                                if (!abortSignal.aborted) {
+                                    if (fileResponse.ok) {
+                                        if (size > 10_000_000) {
+                                            const stream = await fileResponse.body;
+                                            if (stream) {
+                                                const addBytes = (bytes: number) => {
+                                                    totalDownload += bytes;
+                                                    if (debounce(100)) {
+                                                        logger?.progress?.(totalDownload, totalByteSize, "download");
+                                                    }
+                                                };
+                                                await dir.writeStream(name, stream, size, abortSignal, addBytes);
+                                            }
+                                        } else {
+                                            const buffer = await fileResponse.arrayBuffer();
+                                            if (!abortSignal.aborted) {
+                                                await dir.write(name, buffer);
+                                                totalDownload += size;
+                                            }
                                         }
                                     } else {
-                                        const buffer = await fileResponse.arrayBuffer();
-                                        await dir.write(name, buffer);
-                                        totalDownload += size;
+                                        errorQueue.push({ name, size });
                                     }
-                                } else {
-                                    errorQueue.push({ name, size });
                                 }
                                 if (abortSignal.aborted) {
                                     throw new DOMException("Download aborted!", "AbortError");
@@ -223,7 +275,7 @@ export class OfflineScene {
                                 if (typeof error == "object" && error instanceof Error && error.name === "QuotaExceededError") {
                                     throw error;
                                 }
-                                
+
                                 errorQueue.push({ name, size });
                             }
                         }
@@ -305,6 +357,7 @@ export class OfflineScene {
             logger?.status("synchronized");
             return true;
         } catch (error: unknown) {
+            await Promise.allSettled(downloadQueue);
             if (typeof error == "object" && error instanceof DOMException && error.name == "AbortError") {
                 logger?.status("aborted");
             } else {

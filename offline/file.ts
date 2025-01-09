@@ -62,6 +62,21 @@ export async function requestOfflineFile(request: Request, cacheFromOnline = tru
 }
 
 /** @internal */
+export async function removeOfflineFile(url: URL): Promise<boolean> {
+    const { pathname } = url;
+    const m = /\/([\da-f]{32})(?=\/).*\/(.+)$/i.exec(pathname);
+    if (m && m.length == 3) {
+        const [_, dirname, filename] = m;
+        const dirHandle = await getDirHandle(dirname);
+        if (dirHandle) {
+            await dirHandle.removeEntry(filename);
+            return true;
+        }
+    }
+    return false;
+}
+
+/** @internal */
 export async function hasOfflineDir(dirname: string): Promise<boolean> {
     const dirHandle = await getDirHandle(dirname);
     return !!dirHandle;

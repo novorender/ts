@@ -14,13 +14,14 @@ layout(location = 0) in vec4 vertexPositions;
 layout(location = 1) in mediump vec4 vertexColor;
 layout(location = 2) in uint vertexObjectId;
 
-out struct {
+struct Varyings {
     highp vec3 positionVS;
     mediump vec2 uv;
     mediump float radius;
-} varyings;
+};
+out Varyings varyings;
 
-flat out struct {
+struct VaryingsFlat {
     mediump vec4 color;
     mediump float len;
 #if defined (ADRENO600)
@@ -29,7 +30,8 @@ flat out struct {
 #else
     highp uint objectId;
 #endif
-} varyingsFlat;
+};
+flat out VaryingsFlat varyingsFlat;
 
 bool clipZ(inout vec4 v0CS, inout vec4 v1CS, inout vec4 v0VS, inout vec4 v1VS) {
     float z0 = v0CS.z;

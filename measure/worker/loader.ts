@@ -285,10 +285,12 @@ export class GeometryFactory {
     }
 
     getCurve3DFromSegment(data: ProductData, segmentIndex: number) {
-        return this.getCurve3DFromEdgeOrSegment(
-            data,
-            data.curveSegments[segmentIndex]
-        );
+        if (data.curveSegments && segmentIndex < data.curveSegments.length) {
+            return this.getCurve3DFromEdgeOrSegment(
+                data,
+                data.curveSegments[segmentIndex]
+            );
+        }
     }
 
     getCurve3DFromEdge(
