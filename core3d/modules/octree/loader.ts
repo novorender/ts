@@ -38,6 +38,7 @@ export class NodeLoader {
     }
 
     private receive(msg: MessageResponse) {
+        const { renderContext } = this;
         if (msg.kind == "buffer") {
             const { resolveBuffer } = this;
             this.resolveBuffer = undefined;
@@ -48,7 +49,7 @@ export class NodeLoader {
             const { resolveAbortAll } = this;
             this.resolveAbortAll = undefined;
             resolveAbortAll?.();
-            this.renderContext.setSceneResolved(true);
+            renderContext.setSceneResolved(true);
             return;
         }
         const { id } = msg;
@@ -62,11 +63,11 @@ export class NodeLoader {
                     resolve(msg);
                     break;
                 case "aborted":
-                    this.renderContext.setSceneResolved(payloadPromises.size == 0);
+                    renderContext.setSceneResolved(payloadPromises.size == 0);
                     resolve(undefined);
                     break;
                 case "error":
-                    this.renderContext.setSceneResolved(payloadPromises.size == 0);
+                    renderContext.setSceneResolved(payloadPromises.size == 0);
                     reject(msg.error);
                     break;
             }
