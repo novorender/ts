@@ -110,7 +110,10 @@ export class NodeLoader {
         const loadMsg: LoadMessage = { kind: "load", id, config, url: url.toString(), byteSize, enableOutlines, applyFilter };
         console.assert(byteSize != 0);
         const abortMsg: AbortMessage = { kind: "abort", id };
-        const abort = () => { this.send(abortMsg); }
+        const abort = () => {
+            this.send(abortMsg);
+            node.context.renderContext.setSceneResolved(this.payloadPromises.size == 0);
+        }
         node.download = { abort };
         this.send(loadMsg);
         return new Promise<NodePayload | undefined>((resolve, reject) => {
