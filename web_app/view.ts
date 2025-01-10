@@ -227,6 +227,14 @@ export class View<
     }
 
     /**
+     * The scene is considered resolved when it is done loading all nodes for the current render state.
+     * @returns if the scene is currently resolved
+     */
+    isSceneResolved() {
+        return this._renderContext?.isSceneResolved() ?? false;
+    }
+
+    /**
      * Convert 2D pixel position to 3D position.
      * @param x Pixel x coordinate, in CSS pixels.
      * @param y Pixel y coordinate, in CSS pixels.
