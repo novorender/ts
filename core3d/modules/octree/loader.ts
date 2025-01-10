@@ -111,8 +111,8 @@ export class NodeLoader {
         console.assert(byteSize != 0);
         const abortMsg: AbortMessage = { kind: "abort", id };
         const abort = () => {
+            node.context.renderContext.setSceneResolved(this.payloadPromises.size == 1);
             this.send(abortMsg);
-            node.context.renderContext.setSceneResolved(this.payloadPromises.size == 0);
         }
         node.download = { abort };
         this.send(loadMsg);
