@@ -193,7 +193,8 @@ class ValidationContext {
 
     quality(state: RenderStateQuality) {
         const { detail } = state;
-        this.numeric(detail).positive().report("quality.detail");
+        this.numeric(detail.activeBias).positive().report("quality.detail.activeBias");
+        this.numeric(detail.downloadBias).positive().report("quality.detail.downloadBias");
     }
 
     scene(state: RenderStateScene) {
