@@ -62,11 +62,11 @@ export class NodeLoader {
                     resolve(msg);
                     break;
                 case "aborted":
-                    this.renderContext.setSceneResolved(this.payloadPromises.size == 0);
+                    this.renderContext.setSceneResolved(payloadPromises.size == 0);
                     resolve(undefined);
                     break;
                 case "error":
-                    this.renderContext.setSceneResolved(this.payloadPromises.size == 0);
+                    this.renderContext.setSceneResolved(payloadPromises.size == 0);
                     reject(msg.error);
                     break;
             }
