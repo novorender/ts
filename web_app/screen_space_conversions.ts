@@ -33,12 +33,12 @@ export class ScreenSpaceConversions {
      * @returns Screen space points regadless if they are within the current canvas size
      *          or undefined if point is outside screen space.
      */
-    worldSpaceToScreenSpace(points: ReadonlyVec3[], { width, height, round }: { width?: number, height?: number, round?: boolean } = {}): (vec2 | undefined)[] {
+    worldSpaceToScreenSpace(points: ReadonlyVec3[], { width, height, camera, round }: { width?: number, height?: number, camera?: Camera; round?: boolean } = {}): (vec2 | undefined)[] {
         const { drawContext } = this;
-        width = width ?? drawContext.width;
-        height = height ?? drawContext.height;
+        width ??= drawContext.width;
+        height ??= drawContext.height;
+        camera ??= drawContext.camera;
         round = round ?? true;
-        const { camera } = drawContext;
         const { camMat, projMat } = getPathMatrices(width, height, camera);
         const p = vec3.create();
         return points.map((p0) => {
