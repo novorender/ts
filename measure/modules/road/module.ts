@@ -154,7 +154,7 @@ export class RoadModule extends BaseModule {
             const stationStart = alignment.stations[i - 1];
             const dir = vec3.sub(vec3.create(), alignment.points[i], alignment.points[i - 1]);
             vec3.normalize(dir, dir);
-            const crossIdx = Math.abs(dir[2]) < Math.cos(0.08726646) ? 2 : 1;
+            const crossIdx = Math.abs(dir[2]) < Math.cos(0.08726646) ? 2 : 1; // 0.08726646 is 5deg
             const up = vec3.fromValues(0, 0, 0);
             up[crossIdx] = 1;
             const side = vec3.cross(vec3.create(), up, dir);
