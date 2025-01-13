@@ -36,7 +36,6 @@ function getHorizontalPointsOfCurvature(curveSeg: Curve3D, horizontalPointsOfCur
                 break;
             }
         }
-        curveSeg.tesselationParameters
         vec3.transformMat4(point, point, transform);
         curvaturePoints.push({ station: p.station, point, index, kind: p.kind, parameter: p.parameter });
     }

@@ -99,7 +99,6 @@ export class RoadModule extends BaseModule {
                 segmentVertices.push(alignment.points[i]);
                 segmentParts.push({ drawType: "lines", vertices3D: segmentVertices, color: curvatureColors?.get(pointOfCurvature.kind) });
                 segmentVertices = [];
-                segmentVertices.push(alignment.points[i]);
                 ++curvatureIdx;
             }
             segmentVertices.push(alignment.points[i]);
@@ -166,7 +165,6 @@ export class RoadModule extends BaseModule {
 
             const tickOffset = isMinorTick ? 2 : 5;
             const lineVertices = [vec3.scaleAndAdd(vec3.create(), stationPosition, side, tickOffset), vec3.scaleAndAdd(vec3.create(), stationPosition, side, -tickOffset)];
-            
             if (isMinorTick) {
                 stationMinorLines.push({ drawType: "lines", vertices3D: lineVertices });
             } else {
@@ -215,7 +213,7 @@ export class RoadModule extends BaseModule {
         for (let i = 1; i < segments.length; ++i) {
             const start = segments[i - 1];
             const end = segments[i];
-            if (station > start.station && station < end.station) {
+            if (station >= start.station && station <= end.station) {
                 return { start: start.station, end: end.station, curvature: end.parameter };
             }
         }
