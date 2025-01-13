@@ -144,13 +144,15 @@ export class RoadModule extends BaseModule {
         let nextParam = start ?? Math.ceil(alignment.stations[0] / minorTickInterval) * minorTickInterval;
         const stations: { position: ReadonlyVec3, direction: ReadonlyVec3, stationInfo: string, param: number }[] = [];
 
+        const intervalX100 = interval * 100;
+
         for (let i = 1; i < alignment.stations.length;) {
             const stationEnd = alignment.stations[i];
             if (stationEnd < nextParam) {
                 ++i;
                 continue;
             }
-            const isMinorTick = nextParam % interval !== 0;
+            const isMinorTick = Math.round(nextParam * 100) % intervalX100 !== 0;
             const stationStart = alignment.stations[i - 1];
             const dir = vec3.sub(vec3.create(), alignment.points[i], alignment.points[i - 1]);
             vec3.normalize(dir, dir);
@@ -194,12 +196,12 @@ export class RoadModule extends BaseModule {
 
     updateStationsDrawObject(stations: StationsDrawObject, context = this.parent.draw.drawContext) {
         FillDrawInfo2DOnPart(context, stations.stationInfo);
-        for (const part of stations.stationLines) {
-            FillDrawInfo2DOnPart(context, part);
-        }
-        for (const part of stations.stationMinorLines) {
-            FillDrawInfo2DOnPart(context, part);
-        }
+        // for (const part of stations.stationLines) {
+        //     FillDrawInfo2DOnPart(context, part);
+        // }
+        // for (const part of stations.stationMinorLines) {
+        //     FillDrawInfo2DOnPart(context, part);
+        // }
     }
 
     getStationSegment(alignment: Alignment, station: number, type: "horizontal" | "vertical"): StationSegment | undefined {
