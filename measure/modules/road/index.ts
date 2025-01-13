@@ -1,5 +1,5 @@
 import type { ReadonlyVec2, ReadonlyVec3 } from "gl-matrix"
-import type { DrawObject, DrawPart, DrawProduct } from "measure";
+import type { DrawObject, DrawPart } from "measure";
 import type { CurvatureKind } from "measure/worker/brep";
 export { RoadModule } from "./module";
 
@@ -7,7 +7,7 @@ export type SlopeSegment = {
     horizontalIndexFrom: number, horizontalIndexTo: number, verticalAlignmentIndex: number, slope: number
 }
 
-export type HorizonalPointOfCurvature = {
+export type HorizontalPointOfCurvature = {
     station: number, point: ReadonlyVec3, index: number, kind: CurvatureKind, parameter?: number
 }
 
@@ -21,7 +21,7 @@ export interface Alignment {
     readonly stations: number[];
     readonly top: number;
     readonly bottom: number;
-    readonly horizontalPointsOfCurvature: HorizonalPointOfCurvature[];
+    readonly horizontalPointsOfCurvature: HorizontalPointOfCurvature[];
     readonly verticalPointsOfCurvature: VerticalPointOfCurvature[];
     readonly verticalAlignment: ReadonlyVec2[];
     readonly tesselatedSegment: boolean;
@@ -34,9 +34,9 @@ export interface HorizontalAlignment {
 }
 
 export interface StationInfo {
-    station: number,
-    point: ReadonlyVec3,
-    direction: ReadonlyVec3
+    station: number;
+    point: ReadonlyVec3;
+    direction: ReadonlyVec3;
 }
 
 export interface StationDrawObject {
@@ -45,18 +45,18 @@ export interface StationDrawObject {
 }
 
 export interface StationSegment {
-    start: number,
-    end: number,
-    curvature?: number
+    start: number;
+    end: number;
+    curvature?: number;
 }
 
 export interface StationSegmentInfo {
-    startStation: number,
-    endStation: number,
-    startPoint: ReadonlyVec3,
-    endPoint: ReadonlyVec3,
-    slope?: number,
-    length?: number
+    startStation: number;
+    endStation: number;
+    startPoint: ReadonlyVec3;
+    endPoint: ReadonlyVec3;
+    slope?: number;
+    length?: number;
 }
 
 export interface StationSegmentDrawObject {

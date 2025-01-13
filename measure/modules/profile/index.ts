@@ -1,7 +1,5 @@
 import type { ReadonlyVec2 } from "gl-matrix";
-import type { SlopeSegment } from "measure";
 export { ProfileModule } from "./module";
-
 
 
 /** 2d profile with slope information */

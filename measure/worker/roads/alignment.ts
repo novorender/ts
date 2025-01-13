@@ -1,10 +1,10 @@
-import type { Alignment, HorizonalPointOfCurvature, Profile, SlopeSegment, VerticalPointOfCurvature } from "measure";
+import type { Alignment, HorizontalPointOfCurvature, VerticalPointOfCurvature } from "measure";
 import type { PointOfCurvature, ProductData } from "../brep";
 import type { Curve3D, LineStrip3D, NurbsCurve3D } from "../curves";
 import { matFromInstance } from "../loader";
-import { reduceProfile, slopeFromProfile, topAndBottomFromProfile } from "../profile";
+import { reduceProfile } from "../profile";
 import { transformedLineData, reduceLineStrip } from "../util";
-import { vec2, vec3, type ReadonlyMat4, type ReadonlyVec2, type ReadonlyVec3, type ReadonlyVec4 } from "gl-matrix";
+import { vec2, vec3, type ReadonlyMat4, type ReadonlyVec2, type ReadonlyVec3 } from "gl-matrix";
 
 
 function getVerticalPointsOfCurvature(verticalAlignment: ReadonlyVec2[], verticalPointsOfCurvature: readonly PointOfCurvature[]) {
@@ -25,7 +25,7 @@ function getVerticalPointsOfCurvature(verticalAlignment: ReadonlyVec2[], vertica
 }
 
 function getHorizontalPointsOfCurvature(curveSeg: Curve3D, horizontalPointsOfCurvature: readonly PointOfCurvature[], transform: ReadonlyMat4) {
-    const curvaturePoints: HorizonalPointOfCurvature[] = [];
+    const curvaturePoints: HorizontalPointOfCurvature[] = [];
     let index = 0;
     for (const p of horizontalPointsOfCurvature) {
 
@@ -85,7 +85,7 @@ export function getAlignment(
         stations.push(p[0]);
     }
     let verticalPointsOfCurvature: VerticalPointOfCurvature[] = [];
-    let horizontalPointsOfCurvature: HorizonalPointOfCurvature[] = [];
+    let horizontalPointsOfCurvature: HorizontalPointOfCurvature[] = [];
     if (pointsOfCurvature) {
         verticalPointsOfCurvature = getVerticalPointsOfCurvature(alignmentData.profile, pointsOfCurvature.vertical);
         horizontalPointsOfCurvature = getHorizontalPointsOfCurvature(curveSeg, pointsOfCurvature.horizontal, transform);

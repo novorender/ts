@@ -1,4 +1,4 @@
-import type { Alignment, DrawObject, DrawPart, DrawProduct, HorizontalAlignment, StationDrawObject, StationInfo, StationsDrawObject, StationSegment, StationSegmentDrawObject, StationSegmentInfo, } from "..";
+import type { Alignment, DrawObject, DrawPart, HorizontalAlignment, StationDrawObject, StationInfo, StationsDrawObject, StationSegment, StationSegmentDrawObject, StationSegmentInfo, } from "..";
 import { BaseModule } from "../base";
 import { vec3, type ReadonlyVec3 } from "gl-matrix";
 import { FillDrawInfo2D, FillDrawInfo2DOnPart } from "../draw/module";
@@ -135,7 +135,7 @@ export class RoadModule extends BaseModule {
     }
 
     getStationsDrawObject(alignment: Alignment, interval: number, start?: number, elevation?: boolean, slopes?: boolean): StationsDrawObject {
-        const show_station_above = 0.01;
+        const showStationAbove = 0.01;
         const minorTickFreq = 5;
         const minorTickInterval = interval / minorTickFreq;
 
@@ -177,7 +177,7 @@ export class RoadModule extends BaseModule {
                     stationInfo += ", z=" + stationPosition[2].toFixed(2);
                 } if (slopes) {
                     const info = infoBetweenStations(alignment, nextParam - interval, nextParam, true);
-                    if (info?.slope && Math.abs(info.slope) > show_station_above) {
+                    if (info?.slope && Math.abs(info.slope) > showStationAbove) {
                         stationInfo += ", S " + (info.slope * 100).toFixed(0) + "%"
                     }
                 }
@@ -244,7 +244,7 @@ export class RoadModule extends BaseModule {
                 labelTexts.push(`${stationSegment.length.toFixed(2)}m`);
             }
             if (stationSegment.slope) {
-                labelTexts.push(`${stationSegment.slope.toFixed(2)}%`);
+                labelTexts.push(`${(stationSegment.slope * 100).toFixed(2)}%`);
             }
             let labels: DrawPart | undefined;
             if (labelTexts.length > 0) {
