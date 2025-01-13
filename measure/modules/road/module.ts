@@ -32,7 +32,7 @@ function infoBetweenStations(
         }
 
         if (stationEnd >= end) {
-            vec3.lerp(endPoint, alignment.points[index - 1], alignment.points[index], (end - start) / (stationEnd - stationStart));
+            vec3.lerp(endPoint, alignment.points[index - 1], alignment.points[index], (end - stationStart) / (stationEnd - stationStart));
             if (vertices) {
                 vertices.push(endPoint);
             }
