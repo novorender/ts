@@ -67,10 +67,14 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         return this.highlight.indices;
     }
 
+    getAdjustedProjectedSizeSplitThreshold(state: DerivedRenderState) {
+        return this.projectedSizeSplitThreshold / (state.quality.detail.activeBias * state.quality.detail.downloadBias);
+    }
+
     update(state: DerivedRenderState) {
         // const beginTime = performance.now();
 
-        const { renderContext, resources, uniforms, projectedSizeSplitThreshold, module, currentProgramFlags } = this;
+        const { renderContext, resources, uniforms, module, currentProgramFlags } = this;
         const { gl, deviceProfile } = renderContext;
         const { scene, localSpaceTranslation, highlights, points, terrain, pick, output, clipping, outlines } = state;
         const { values } = uniforms.scene;
@@ -367,6 +371,8 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
             recompile();
         }
 
+        const detailAdjustment = state.quality.detail.downloadBias;
+
         if (!this.suspendUpdates) {
             const nodes: OctreeNode[] = [];
             for (const rootNode of Object.values(rootNodes)) {
@@ -375,7 +381,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 // collapse nodes
                 const preCollapseNodes = [...iterateNodes(rootNode)];
                 for (const node of preCollapseNodes) {
-                    if (!node.shouldSplit(projectedSizeSplitThreshold * 0.98)) { // add a little "slack" before collapsing back again
+                    if (!node.shouldSplit((this.projectedSizeSplitThreshold / detailAdjustment) * 0.98)) { // add a little "slack" before collapsing back again
                         if (node.state != NodeState.collapsed) {
                             node.dispose(); // collapse node
                         }
@@ -404,7 +410,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
             // split nodes based on camera orientation
             for (const node of nodes) {
-                if (node.shouldSplit(projectedSizeSplitThreshold)) {
+                if (node.shouldSplit(this.projectedSizeSplitThreshold / detailAdjustment)) {
                     if (node.state == NodeState.collapsed) {
                         if (primitives + node.data.primitivesDelta <= maxPrimitives && gpuBytes + node.data.gpuBytes <= maxGPUBytes) {
                             node.state = NodeState.requestDownload;
@@ -478,7 +484,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { programs } = resources;
         const { gl } = renderContext;
         for (const rootNode of Object.values(this.rootNodes)) {
-            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, rootNode);
+            const renderNodes = this.getRenderNodes(this.getAdjustedProjectedSizeSplitThreshold(state), rootNode);
             glState(gl, {
                 program: programs.pre,
                 depth: { test: true },
@@ -498,6 +504,9 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { color, nor } = this.materialTextures;
         const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
         const { gl, iblTextures, lut_ggx, cameraUniforms, clippingUniforms, deviceProfile } = renderContext;
+
+
+        const projectedSizeSplitThreshold = this.getAdjustedProjectedSizeSplitThreshold(state);
 
         // glClear(gl, { kind: "DEPTH_STENCIL", depth: 1.0, stencil: 0 });
 
@@ -531,7 +540,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         gl.activeTexture(gl.TEXTURE0);
 
         for (const rootNode of Object.values(this.rootNodes)) {
-            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, rootNode);
+            const renderNodes = this.getRenderNodes(projectedSizeSplitThreshold, rootNode);
             const meshState: MeshState = {};
             for (const { mask, node } of renderNodes) {
                 this.renderNode(node, mask, meshState, ShaderPass.color);
@@ -548,7 +557,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 const [x, y, z, offset] = plane;
                 const p = vec4.fromValues(x, y, z, -offset);
                 renderContext.updateOutlinesUniforms(state.outlines, p, planeIndex);
-                const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail,
+                const renderNodes = this.getRenderNodes(projectedSizeSplitThreshold,
                     this.rootNodes[NodeGeometryKind.triangles], this.rootNodes[NodeGeometryKind.terrain]);
 
                 this.renderNodeClippingOutline(plane, state, renderNodes, state.outlines.hidden, color);
@@ -570,7 +579,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
 
         if (debug) {
             for (const rootNode of Object.values(this.rootNodes)) {
-                const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, rootNode);
+                const renderNodes = this.getRenderNodes(projectedSizeSplitThreshold, rootNode);
                 glState(gl, {
                     program: programs.debug,
                     uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
@@ -603,6 +612,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
                 }
             }
         }
+        renderContext.setSceneResolved(this.loader.activeDownloads == 0);
     }
 
     pick() {
@@ -611,9 +621,10 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         const { programs, sceneUniforms, samplerNearest, materialTexture, highlightTexture, gradientsTexture } = resources;
         const { diffuse, specular } = iblTextures;
         const state = currentState!;
+        const projectedSizeSplitThreshold = this.getAdjustedProjectedSizeSplitThreshold(state);
 
         for (const rootNode of Object.values(this.rootNodes)) {
-            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail, rootNode);
+            const renderNodes = this.getRenderNodes(projectedSizeSplitThreshold, rootNode);
             glState(gl, {
                 program: programs.pick,
                 uniformBuffers: [cameraUniforms, clippingUniforms, sceneUniforms, null],
@@ -642,7 +653,7 @@ export class OctreeModuleContext implements RenderModuleContext, OctreeContext {
         }
 
         if (deviceProfile.features.outline && state.outlines.on) {
-            const renderNodes = this.getRenderNodes(this.projectedSizeSplitThreshold / state.quality.detail,
+            const renderNodes = this.getRenderNodes(projectedSizeSplitThreshold,
                 this.rootNodes[NodeGeometryKind.triangles],
                 state.terrain.asBackground ? undefined : this.rootNodes[NodeGeometryKind.terrain]);
 

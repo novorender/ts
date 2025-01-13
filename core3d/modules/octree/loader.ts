@@ -1,6 +1,7 @@
 import type { AbortAllMessage, AbortMessage, InitMessage, CloseMessage, LoadMessage, MessageRequest, MessageResponse, NodePayload, ParseMessage, ParseConfig } from "./worker";
 import { OctreeNode } from "./node.js";
 import type { DeviceProfile } from "core3d/device.js";
+import type { RenderContext } from "core3d/context";
 
 interface PayloadPromiseMethods { readonly resolve: (value: NodePayload | undefined) => void, readonly reject: (reason: string) => void };
 
@@ -13,7 +14,7 @@ export class NodeLoader {
     private resolveBuffer: (() => void) | undefined;
     aborted = false;
 
-    constructor(readonly worker: Worker) {
+    constructor(readonly worker: Worker, readonly renderContext: RenderContext) {
         worker.onmessage = e => {
             this.receive(e.data as MessageResponse);
         }
@@ -37,6 +38,7 @@ export class NodeLoader {
     }
 
     private receive(msg: MessageResponse) {
+        const { renderContext } = this;
         if (msg.kind == "buffer") {
             const { resolveBuffer } = this;
             this.resolveBuffer = undefined;
@@ -47,6 +49,7 @@ export class NodeLoader {
             const { resolveAbortAll } = this;
             this.resolveAbortAll = undefined;
             resolveAbortAll?.();
+            renderContext.setSceneResolved(true);
             return;
         }
         const { id } = msg;
@@ -60,9 +63,11 @@ export class NodeLoader {
                     resolve(msg);
                     break;
                 case "aborted":
+                    renderContext.setSceneResolved(payloadPromises.size == 0);
                     resolve(undefined);
                     break;
                 case "error":
+                    renderContext.setSceneResolved(payloadPromises.size == 0);
                     reject(msg.error);
                     break;
             }

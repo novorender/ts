@@ -72,9 +72,14 @@ export class View<
     private drsHighInterval = 50;
     private drsLowInterval = 100;
     private lastDrsAdjustTime = 0;
+    private lastDetailAdjustTime = 0;
     private resolutionTier: 0 | 1 | 2 = 2;
 
-    private currentDetailBias: number = 1;
+    private currentActiveDetailBias: number = 1;
+
+    //Set to 0.5 to account for the first frame increase.
+    private currentDownloadDetailBias: number = 0.75;
+    private lastDetailChangeAfterUpdate: "positive" | "negative" | "none" = "none";
 
     /**
      * @param canvas The HtmlCanvasElement used for rendering.
@@ -219,6 +224,14 @@ export class View<
         const rot = (_stateChanges?.camera?.rotation ?? renderState.camera.rotation) as ReadonlyQuat;
         const mat = mat3.fromQuat(mat3.create(), rot); // TODO: Rotate vector instead?
         return Math.abs(mat[8]) > 0.98;
+    }
+
+    /**
+     * The scene is considered resolved when it is done loading all nodes for the current render state.
+     * @returns if the scene is currently resolved
+     */
+    isSceneResolved() {
+        return this._renderContext?.isSceneResolved() ?? false;
     }
 
     /**
@@ -857,18 +870,22 @@ export class View<
         const frameIntervals: number[] = [];
         let possibleChanges = false;
         while (this._run && !(abortSignal?.aborted ?? false)) {
-            const { _renderContext, _activeController, deviceProfile } = this;
+            const { _renderContext, _activeController, deviceProfile, _stateChanges } = this;
             const renderTime = await RenderContext.nextFrame(_renderContext);
             const frameTime = renderTime - prevRenderTime;
             const cameraChanges = _activeController.renderStateChanges(this.renderStateCad.camera, renderTime - prevRenderTime);
             if (cameraChanges) {
                 this.modifyRenderState(cameraChanges);
             }
+            if (cameraChanges || _stateChanges?.highlights) {
+                this.lastDetailChangeAfterUpdate = "none";
+            }
             const { moving } = _activeController;
 
             const isIdleFrame = idleFrameTime > 500 && !moving;
             if (_renderContext && !_renderContext.isContextLost()) {
                 _renderContext.poll(); // poll for events, such as async reads and shader linking
+                const activeDetailDownloadModifier = this.dynamicDetailAdjustment();
 
                 if (isIdleFrame) { // increase resolution and detail bias on idle frame
                     if (deviceProfile.tier > 0 && this.renderState.toonOutline.on == false) {
@@ -883,8 +900,8 @@ export class View<
                         // set max quality and resolution when the camera stops moving
                         this.resolutionModifier = Math.min(1, this.baseRenderResolution * 2);
                         this.resize();
-                        this.modifyRenderState({ quality: { detail: 1 } });
-                        this.currentDetailBias = 1;
+                        this.modifyRenderState({ quality: { detail: { activeBias: 1 } } });
+                        this.currentActiveDetailBias = 1;
                         wasIdle = true;
                         // if pick is not already rendered then start to make the pick buffer available when the camera stops
                     }
@@ -902,10 +919,15 @@ export class View<
                         this.dynamicQualityAdjustment(frameIntervals);
                     }
                     const activeDetailModifier = 0.5;
-                    if (this.renderStateGL.quality.detail != activeDetailModifier) {
-                        this.currentDetailBias = activeDetailModifier;
-                        this.modifyRenderState({ quality: { detail: activeDetailModifier } });
+                    if (this.renderStateGL.quality.detail.activeBias != activeDetailModifier) {
+                        this.currentActiveDetailBias = activeDetailModifier;
+                        this.modifyRenderState({ quality: { detail: { activeBias: activeDetailModifier } } });
                     }
+                }
+
+                if (this.currentDownloadDetailBias != activeDetailDownloadModifier) {
+                    this.modifyRenderState({ quality: { detail: { downloadBias: activeDetailDownloadModifier } } });
+                    this.currentDownloadDetailBias = activeDetailDownloadModifier;
                 }
 
                 this.animate?.(renderTime);
@@ -920,7 +942,7 @@ export class View<
                     prevState = renderStateGL;
                     const statsPromise = _renderContext.render(renderStateGL);
                     statsPromise.then((stats) => {
-                        this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
+                        this._statistics = { render: stats, view: { resolution: this.resolutionModifier, detailBias: deviceProfile.detailBias * this.currentActiveDetailBias * this.currentDownloadDetailBias, fps: stats.frameInterval ? 1000 / stats.frameInterval : undefined } };
                         this.render?.({ isIdleFrame, cameraMoved: moving });
                         possibleChanges = true;
                     });
@@ -1116,6 +1138,39 @@ export class View<
         const clone = structuredClone(state);
         flipState(clone, "GLToCAD");
         return clone;
+    }
+
+    private dynamicDetailAdjustment() {
+        const { _renderContext, deviceProfile, statistics, currentDownloadDetailBias } = this;
+        if (!_renderContext || !statistics) {
+            return 1;
+        }
+        const now = performance.now();
+        const adjustUpCooldown = 500;
+        const adjustDownCooldown = 100;
+        const maxDetail = 10;
+        const minDetail = 1.0;
+        const increaseMemorySize = deviceProfile.limits.maxGPUBytes * 0.75;
+        const decreaseMemorySize = deviceProfile.limits.maxGPUBytes * 0.90;
+        const increasePrimitiveSize = deviceProfile.limits.maxPrimitives * 0.80;
+        const decreasePrimitiveSize = deviceProfile.limits.maxPrimitives * 0.95;
+        const detailStep = 0.25;
+        if (statistics.render.bufferBytes < increaseMemorySize && statistics.render.primitives < increasePrimitiveSize) {
+            if (_renderContext.isSceneResolved() && this.lastDetailChangeAfterUpdate != "negative") {
+                this.lastDetailChangeAfterUpdate = "positive";
+                if (now > this.lastDetailAdjustTime + adjustUpCooldown) {
+                    this.lastDetailAdjustTime = now;
+                    return Math.min(currentDownloadDetailBias + detailStep, maxDetail);
+                }
+            }
+        } else if (statistics.render.bufferBytes > decreaseMemorySize || statistics.render.primitives > decreasePrimitiveSize) {
+            if (now > this.lastDetailAdjustTime + adjustDownCooldown) {
+                this.lastDetailChangeAfterUpdate = "negative";
+                this.lastDetailAdjustTime = now;
+                return Math.max(currentDownloadDetailBias - detailStep, minDetail);
+            }
+        }
+        return currentDownloadDetailBias;
     }
 
 

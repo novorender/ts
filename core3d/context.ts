@@ -54,6 +54,7 @@ export class RenderContext {
     private readonly defaultResourceBin;
     private readonly iblResourceBin;
     private pickBuffersValid = false;
+    private sceneResolved = false;
     private currentPick: Uint32Array | undefined;
     private activeTimers = new Set<Timer>();
     private currentFrameTime = 0;
@@ -337,6 +338,18 @@ export class RenderContext {
      */
     isPickBuffersValid() {
         return this.pickBuffersValid;
+    }
+
+    /** 
+     * The scene is considered resolved when all currently split nodes are done downloading.
+     */
+    isSceneResolved() {
+        return this.sceneResolved;
+    }
+
+    /** @internal */
+    setSceneResolved(resolved: boolean) {
+        this.sceneResolved = resolved;
     }
 
     /** Query whether the underlying WebGL render context is currently lost.

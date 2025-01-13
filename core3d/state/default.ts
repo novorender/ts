@@ -20,7 +20,10 @@ export function defaultRenderState(): RenderState {
             far: 10000,
         },
         quality: {
-            detail: 1,
+            detail: {
+                activeBias: 1,
+                downloadBias: 1,
+            },
         },
         debug: {
             wireframe: false,
