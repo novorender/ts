@@ -31,6 +31,7 @@ export class ControllerInput {
     private _touchZoomDistancePrev = 0;
     private _mouseDownClientPos = vec2.create();
     private _mouseMoveStarted = false;
+    private _mouseMoveEventIndex = -1;
     private _pointerLocked = false;
 
     private _mouseWheelLastActive = 0;
@@ -237,6 +238,7 @@ export class ControllerInput {
             const dist = vec2.dist(this._mouseDownClientPos, vec2.fromValues(e.clientX, e.clientY));
             if (dist >= this.mouseMoveSensitivity) {
                 this._mouseMoveStarted = true;
+                this._mouseMoveEventIndex = 0;
                 this._mouseButtonDown = true;
             } else {
                 return;
@@ -247,16 +249,37 @@ export class ControllerInput {
             this._pointerLocked = true;
         }
         const { axes } = this;
-        if (e.buttons & MouseButtons.right) {
-            axes.mouse_rmb_move_x += e.movementX;
-            axes.mouse_rmb_move_y += e.movementY;
-        } else if (e.buttons & MouseButtons.middle) {
-            axes.mouse_mmb_move_x += e.movementX;
-            axes.mouse_mmb_move_y += e.movementY;
-        } else if (e.buttons & MouseButtons.left) {
-            axes.mouse_lmb_move_x += e.movementX;
-            axes.mouse_lmb_move_y += e.movementY;
+
+        const movement = vec2.fromValues(e.movementX, e.movementY);
+        {
+            // Chrome on Windows sometimes reports very big movement (e.g. 500)
+            // in the beginning after entering pointer lock, so limit first few moves
+            // to a small distance (assuming rapid movements either don't start immediately
+            // or limiting only few events won't be that noticeable).
+            // It's only applied to first few events, because people can start doing rapid motions later
+            // (with distance=60 for example), but having that high of a limit in the beginning still
+            // feels awkward.
+            const movementDist = vec2.len(movement);
+            const maxMovementDist = 10;
+            if (this._mouseMoveEventIndex <= 2 && movementDist > maxMovementDist) {
+                
+                vec2.scale(movement, movement, maxMovementDist / movementDist);
+                vec2.round(movement, movement);
+            }
         }
+        const [movementX, movementY] = movement;
+
+        if (e.buttons & MouseButtons.right) {
+            axes.mouse_rmb_move_x += movementX;
+            axes.mouse_rmb_move_y += movementY;
+        } else if (e.buttons & MouseButtons.middle) {
+            axes.mouse_mmb_move_x += movementX;
+            axes.mouse_mmb_move_y += movementY;
+        } else if (e.buttons & MouseButtons.left) {
+            axes.mouse_lmb_move_x += movementX;
+            axes.mouse_lmb_move_y += movementY;
+        }
+        this._mouseMoveEventIndex += 1;
     };
 
     private getTouchData = (touch: Touch) => {
