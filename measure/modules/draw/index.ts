@@ -86,6 +86,8 @@ export type Line2d = { start: ReadonlyVec2, end: ReadonlyVec2 };
 export interface DrawPart {
     /** Name of the part */
     readonly name?: string;
+    /** Optional color */
+    readonly color?: string,
     /** 
      * Display text of the part,
      * For lines of 2 points it is the length
@@ -101,9 +103,13 @@ export interface DrawPart {
     readonly voids?: DrawVoid[];
     /** World coordinates*/
     readonly vertices3D: ReadonlyVec3[];
+    /** Direction of the points. Used for text rotation */
+    readonly directions3D?: ReadonlyVec3[];
 
     /** View space coordinates, in pixel values, empty if the entire part is out of view*/
     vertices2D?: ReadonlyVec2[];
+    /** Angles in 2D space. Angle will be defined only if directions3D is present */
+    angles2D?: number[];
 
     /** Indices reffering to vertices3D and text if it is a list, -1 means an added empty text*/
     indicesOnScreen?: number[];

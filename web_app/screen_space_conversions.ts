@@ -33,12 +33,12 @@ export class ScreenSpaceConversions {
      * @returns Screen space points regadless if they are within the current canvas size
      *          or undefined if point is outside screen space.
      */
-    worldSpaceToScreenSpace(points: ReadonlyVec3[], { width, height, round }: { width?: number, height?: number, round?: boolean } = {}): (vec2 | undefined)[] {
+    worldSpaceToScreenSpace(points: ReadonlyVec3[], { width, height, camera, round }: { width?: number, height?: number, camera?: Camera; round?: boolean } = {}): (vec2 | undefined)[] {
         const { drawContext } = this;
-        width = width ?? drawContext.width;
-        height = height ?? drawContext.height;
+        width ??= drawContext.width;
+        height ??= drawContext.height;
+        camera ??= drawContext.camera;
         round = round ?? true;
-        const { camera } = drawContext;
         const { camMat, projMat } = getPathMatrices(width, height, camera);
         const p = vec3.create();
         return points.map((p0) => {
@@ -86,8 +86,7 @@ export class ScreenSpaceConversions {
      * @param points Screen points in points that will be projected to world space.
      * @returns Corresponding 3D positions at the view plane in world space.
      */
-    screenSpaceToWorldSpace(points: ReadonlyVec2[]): ReadonlyVec3[] {
-        const { drawContext } = this;
+    screenSpaceToWorldSpace(points: ReadonlyVec2[], drawContext = this.drawContext): ReadonlyVec3[] {
         const { width, height, camera } = drawContext;
         const { camMat, projMat: viewClipMatrix } = getPathMatrices(width, height, camera);
         const viewWorldMatrix = mat4.invert(mat4.create(), camMat);

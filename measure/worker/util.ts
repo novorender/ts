@@ -86,9 +86,7 @@ export function closestPointToLine(
     lineEnd: ReadonlyVec3,
     projectedPoint?: vec3
 ): { pos: vec3; parameter: number } {
-    const lineVec = vec3.sub(vec3.create(), lineEnd, lineStart);
-    const startToP = vec3.sub(vec3.create(), point, lineStart);
-    const t = vec3.dot(lineVec, startToP) / vec3.dot(lineVec, lineVec);
+    const t = projectPoint(point, lineStart, lineEnd);
     if (projectedPoint) {
         vec3.lerp(projectedPoint, lineStart, lineEnd, t);
     }
@@ -101,12 +99,20 @@ export function closestPointToLine(
     return { pos: vec3.lerp(vec3.create(), lineStart, lineEnd, t), parameter: t };
 }
 
-export function getProfile(
+export function projectPoint(point: ReadonlyVec3, lineStart: ReadonlyVec3, lineEnd: ReadonlyVec3) {
+    const lineVec = vec3.sub(vec3.create(), lineEnd, lineStart);
+    const startToP = vec3.sub(vec3.create(), point, lineStart);
+    const t = vec3.dot(lineVec, startToP) / vec3.dot(lineVec, lineVec);
+    return t;
+}
+
+export function transformedLineData(
     vertices: ReadonlyVec3[],
     tesselationParameters: readonly number[] | undefined,
     transform: mat4 | undefined
-): ReadonlyVec2[] {
+): { line: ReadonlyVec3[], profile: ReadonlyVec2[] } {
     const profile: ReadonlyVec2[] = [];
+    const line: ReadonlyVec3[] = [];
     let prev = transform
         ? vec3.transformMat4(vec3.create(), vertices[0], transform)
         : vertices[0];
@@ -116,22 +122,25 @@ export function getProfile(
             ? vec2.fromValues(tesselationParameters[0], prev[2])
             : vec2.fromValues(len, prev[2])
     );
+    line.push(prev);
     for (let i = 1; i < vertices.length; ++i) {
         const p = transform
             ? vec3.transformMat4(vec3.create(), vertices[i], transform)
             : vertices[i];
         if (tesselationParameters) {
             profile.push(vec2.fromValues(tesselationParameters[i], p[2]));
+            line.push(p);
         } else {
             len += vec2.distance(
                 vec2.fromValues(prev[0], prev[1]),
                 vec2.fromValues(p[0], p[1])
             );
             profile.push(vec2.fromValues(len, p[2]));
+            line.push(p);
         }
         prev = p;
     }
-    return profile;
+    return { line, profile };
 }
 
 export function reduceLineStrip(lineStrip: ReadonlyVec3[]): ReadonlyVec3[] {

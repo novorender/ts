@@ -4,8 +4,8 @@ import type { ProductData } from "./brep";
 import { cylinderCenterLine } from "./calculations";
 import type { Curve3D, LineStrip3D, NurbsCurve3D } from "./curves";
 import { crawlInstance, matFromInstance } from "./loader";
-import { getProfile, reduceLineStrip } from "./util";
-import type { MeasureSettings, Profile } from "measure";
+import { transformedLineData, reduceLineStrip } from "./util";
+import type { MeasureSettings, Profile, SlopeSegment } from "measure";
 
 export function slopeFromProfile(profile: ReadonlyVec2[]): number[] {
     const slopes: number[] = [];
@@ -33,7 +33,7 @@ export function topAndBottomFromProfile(profile: ReadonlyVec2[]) {
 
 export function reduceProfile(profile: ReadonlyVec2[]): Profile {
     const slopeEpsilon = 1e-4;
-    const slopes: number[] = [];
+    const slopeLabelEpsilon = 0.01;
     const newProfile: ReadonlyVec2[] = [];
     var elevations = topAndBottomFromProfile(profile);
     let startElevation = 0;
@@ -43,7 +43,6 @@ export function reduceProfile(profile: ReadonlyVec2[]): Profile {
     if (profile.length > 1) {
         let prevSlope = 0;
         newProfile.push(profile[0]);
-        slopes.push(prevSlope);
         for (let i = 1; i < profile.length; ++i) {
             const prevP = profile[i - 1];
             const p = profile[i];
@@ -51,17 +50,14 @@ export function reduceProfile(profile: ReadonlyVec2[]): Profile {
             const heightDiff = p[1] - prevP[1];
             const slope = heightDiff / segLen;
             if (Math.abs(slope - prevSlope) > slopeEpsilon) {
-                slopes.push(prevSlope);
                 newProfile.push(prevP);
+                prevSlope = slope;
             }
-            prevSlope = slope;
         }
         newProfile.push(profile[profile.length - 1]);
-        slopes.push(prevSlope);
     }
     return {
         profilePoints: newProfile,
-        slopes,
         startElevation,
         endElevation,
         top: elevations.top,
@@ -77,8 +73,8 @@ export function getCurveSegmentProfile(
     if (curveSeg && curveSeg.kind == "lineStrip") {
         const lineStrip = curveSeg as LineStrip3D;
         const mat = matFromInstance(product.instances[instanceIdx]);
-        const profile = lineStrip.toProfile(mat);
-        return reduceProfile(profile);
+        const data = lineStrip.toTransformedLineData(mat);
+        return reduceProfile(data.profile);
     }
     if (curveSeg && curveSeg.kind == "nurbs") {
         const nurbs = curveSeg as NurbsCurve3D;
@@ -100,16 +96,8 @@ export function getCurveSegmentProfile(
         }
 
         const mat = matFromInstance(product.instances[instanceIdx]);
-        const profile = getProfile(reduceLineStrip(vertices), parameters, mat);
-        var elevations = topAndBottomFromProfile(profile);
-        return {
-            profilePoints: profile,
-            slopes: slopeFromProfile(profile),
-            startElevation: profile[0][1],
-            endElevation: profile[profile.length - 1][1],
-            top: elevations.top,
-            bottom: elevations.bottom,
-        };
+        const data = transformedLineData(reduceLineStrip(vertices), parameters, mat);
+        return reduceProfile(data.profile);
     }
 }
 
@@ -147,7 +135,6 @@ export async function getCylinderProfile(
 
         return {
             profilePoints: profile,
-            slopes: slopeFromProfile(profile),
             top: elevations.top,
             bottom: elevations.bottom,
             startElevation: profile[0][1],

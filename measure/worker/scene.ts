@@ -1,6 +1,6 @@
 import type { ReadonlyMat4, ReadonlyVec3 } from "gl-matrix";
 import { glMatrix, mat4, vec3 } from "gl-matrix";
-import type { CylinderData, PlaneData, ProductData } from "./brep";
+import type { CylinderData, PlaneData, ProductData, AlignmentData, PointOfCurvature } from "./brep";
 import {
     cylinderCenterLine,
     edgeToPointMeasureValues,
@@ -16,7 +16,7 @@ import {
 } from "./calculations";
 import { unitToScale, matFromInstance, GeometryFactory, createGeometryFactory } from "./loader";
 import { getBrepEdges, getBrepFaces, getEdgeStrip, type PathInfo } from "./outline";
-import { Downloader, getProfile, reduceLineStrip, swapCylinderImpl, } from "./util";
+import { Downloader, transformedLineData, reduceLineStrip, swapCylinderImpl, } from "./util";
 import { type ParametricProduct, toParametricProduct } from "./parametric_product";
 import {
     addCenterLinesFromCylinders,
@@ -34,10 +34,10 @@ import { manholeMeasure } from "./manhole";
 import { getCylinderDrawParts, getManholeDrawObjects, getSurfaceDrawParts } from "./draw_objects";
 import { getFaceToFaceCollisionValues } from "./collision";
 import { getPickInterface, pick, pickFace, type PickInterface } from "./snaps";
-import { RoadTool } from "./roads/scene";
-import type { CameraValues, CollisionValues, CrossSlope, DrawObject, DrawPart, DuoMeasurementValues, EdgeValues, FaceValues, LaserIntersections, LoadStatus, ManholeMeasureValues, MeasureEntity, MeasureSettings, ObjectId, ParameterBounds, ParametricEntity, Profile, RoadCrossSection, RoadProfiles, SnapTolerance } from "measure";
+import type { Alignment, CameraValues, CollisionValues, DrawObject, DrawPart, DuoMeasurementValues, EdgeValues, FaceValues, LaserIntersections, LoadStatus, ManholeMeasureValues, MeasureEntity, MeasureSettings, ObjectId, ParameterBounds, ParametricEntity, Profile, SnapTolerance } from "measure";
 import type { Curve3D } from "./curves";
 import { getLaserCylinderValues, getLaserPlaneValues } from "./laser";
+import { getAlignment } from "./roads/alignment";
 
 glMatrix.setMatrixArrayType(Array);
 export const epsilon = 0.0001;
@@ -95,7 +95,6 @@ class BrepCache {
 
 export class MeasureTool {
     downloader: Downloader = undefined!;
-    crossSectionTool: RoadTool = undefined!;
     cache = new BrepCache;
     nextSnapIdx = 0;
     static geometryFactory: GeometryFactory = undefined!;
@@ -185,7 +184,6 @@ export class MeasureTool {
             this.idToHash = undefined;
         }
 
-        this.crossSectionTool = new RoadTool(new URL(baseUrl));
         this.cache.clear();
     }
 
@@ -653,8 +651,8 @@ export class MeasureTool {
 
         const lineStrip = reduceLineStrip(centerLinesToLinesTrip(centerLines));
         if (lineStrip.length > 1) {
-            const profile = getProfile(lineStrip, undefined, undefined);
-            return reduceProfile(profile);
+            const data = transformedLineData(lineStrip, undefined, undefined);
+            return reduceProfile(data.profile);
         }
         return undefined;
     }
@@ -703,7 +701,7 @@ export class MeasureTool {
         const product = await this.getProduct(id);
         if (product) {
             const face = product.faces[faceIdx];
-            const surface = face.surface != undefined  ?
+            const surface = face.surface != undefined ?
                 product.surfaces[face.surface] : undefined;;
             let drawParts: DrawPart[] = [];
             const kind = surface != undefined ? surface.kind == "cylinder" ? "cylinder" : "plane" : "unknown";
@@ -993,16 +991,25 @@ export class MeasureTool {
         return undefined;
     }
 
-    //Road stuff
-    async getRoadProfile(roadId: string): Promise<RoadProfiles | undefined> {
-        return await this.crossSectionTool.getRoadProfiles(roadId);
-    }
 
-    async getRoadCrossSlope(roadId: string): Promise<CrossSlope | undefined> {
-        return await this.crossSectionTool.getCrossSlope(roadId);
-    }
-
-    async getCrossSection(roadId: string, profileNumber: number): Promise<RoadCrossSection | undefined> {
-        return await this.crossSectionTool.getCrossSection(roadId, profileNumber);
+    async getAlignment(
+        id: ObjectId
+    ): Promise<Alignment | undefined> {
+        const product = await this.getProduct(id);
+        if (product && product.curveSegments && product.curveSegments.length == 1) {
+            const curveSeg = MeasureTool.geometryFactory.getCurve3DFromSegment(product, 0);
+            if (curveSeg) {
+                const curveData = product.curveSegments[0];
+                function isAlignmentData(object: any): object is AlignmentData {
+                    return object.verticalPointsOfCurvature != undefined;
+                }
+                let pointsOfCurvature: { horizontal: readonly PointOfCurvature[], vertical: readonly PointOfCurvature[] } | undefined;
+                if (isAlignmentData(curveData)) {
+                    pointsOfCurvature = { horizontal: curveData.horizontalPointsOfCurvature, vertical: curveData.verticalPointsOfCurvature };
+                }
+                return getAlignment(product, curveSeg, 0, id, pointsOfCurvature);
+            }
+        }
+        return undefined;
     }
 }
