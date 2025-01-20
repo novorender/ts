@@ -55,6 +55,8 @@ export interface StationSegmentInfo {
     endStation: number;
     startPoint: ReadonlyVec3;
     endPoint: ReadonlyVec3;
+    startIndex: number;
+    endIndex: number;
     slope?: number;
     length?: number;
 }
