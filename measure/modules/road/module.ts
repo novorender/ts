@@ -16,6 +16,7 @@ function infoBetweenStations(
 
     let index = 1;
     start = Math.max(alignment.stations[0], start);
+    let startIndex = 0;
     const startPoint = vec3.create();
     const endPoint = vec3.create();
     let segLength = 0;
@@ -25,6 +26,7 @@ function infoBetweenStations(
             continue;
         }
 
+        startIndex = index - 1;
         const stationStart = alignment.stations[index - 1];
         vec3.lerp(startPoint, alignment.points[index - 1], alignment.points[index], (start - stationStart) / (stationEnd - stationStart));
         if (vertices) {
@@ -38,7 +40,7 @@ function infoBetweenStations(
             }
             const segLength = length ? vec3.dist(startPoint, endPoint) : undefined;
             const segSlope = slope ? (endPoint[2] - startPoint[2]) / (end - start) : undefined;
-            return { slope: segSlope, length: segLength, startPoint, endPoint, startStation: start, endStation: end }
+            return { slope: segSlope, length: segLength, startPoint, endPoint, startStation: start, endStation: end, startIndex, endIndex: index }
         }
 
         if (length) {
@@ -65,7 +67,7 @@ function infoBetweenStations(
                 vertices.push(endPoint);
             }
             const segSlope = slope ? (endPoint[2] - startPoint[2]) / (end - start) : undefined;
-            return { slope: segSlope, length: length ? segLength : undefined, startPoint, endPoint, startStation: start, endStation: end }
+            return { slope: segSlope, length: length ? segLength : undefined, startPoint, endPoint, startStation: start, endStation: end, startIndex, endIndex: index }
         }
         if (length) {
             segLength += vec3.dist(alignment.points[index - 1], alignment.points[index]);
@@ -76,7 +78,7 @@ function infoBetweenStations(
     }
     vec3.copy(endPoint, alignment.points[alignment.points.length - 1]);
     const segSlope = slope ? (endPoint[2] - startPoint[2]) / (end - start) : undefined;
-    return { slope: segSlope, length: length ? segLength : undefined, startPoint, endPoint, startStation: start, endStation: end }
+    return { slope: segSlope, length: length ? segLength : undefined, startPoint, endPoint, startStation: start, endStation: end, startIndex, endIndex: alignment.stations.length - 1 }
 }
 
 /**
@@ -107,24 +109,57 @@ export class RoadModule extends BaseModule {
         const segment = { kind: "curveSegment", parts: segmentParts } as DrawObject;
         const curvatureChangePoints: ReadonlyVec3[] = [];
         const curvatureMidPoints: ReadonlyVec3[] = [];
+        const curvatureDirections: ReadonlyVec3[] = [];
         const curvatureInfo: string[] = [];
         for (let i = 0; i < alignment.horizontalPointsOfCurvature.length; ++i) {
             const point = alignment.horizontalPointsOfCurvature[i];
             curvatureChangePoints.push(point.point);
             if (i !== 0 && point.parameter) {
                 const prevPoint = alignment.horizontalPointsOfCurvature[i - 1];
-                curvatureMidPoints.push(vec3.lerp(vec3.create(), prevPoint.point, point.point, 0.5));
+
+                const { point: midPoint, normal: labelDir } = this.getSegmentMidPointAndNormal(alignment, prevPoint.index, point.index);
+                curvatureMidPoints.push(midPoint);
+                curvatureDirections.push(labelDir);
+
                 curvatureInfo.push(`r=${point.parameter.toFixed(2)}m`);
             }
         }
         const pointsOfCurvature = { drawType: "vertex", vertices3D: curvatureChangePoints } as DrawPart;
-        const curvatures = { drawType: "text", vertices3D: curvatureMidPoints, text: [curvatureInfo] } as DrawPart;
+        const curvatures = { drawType: "text", vertices3D: curvatureMidPoints, directions3D: curvatureDirections, text: [curvatureInfo] } as DrawPart;
 
 
         const horizontalAlignment = { segment, pointsOfCurvature, curvatures };
 
         this.updateHorizontalDrawItem(horizontalAlignment, context);
         return horizontalAlignment;
+    }
+
+    private getSegmentMidPointAndNormal(alignment: Alignment, startIdx: number, endIdx: number) {
+        const midStation = (alignment.stations[startIdx] + alignment.stations[endIdx]) / 2;
+        let i = startIdx;
+        while (i < endIdx && alignment.stations[i] < midStation) {
+            i++;
+        }
+        const [i1, i2] = i === alignment.stations.length - 1 ? [i - 1, i] : [i, i + 1];
+        const s1 = alignment.stations[i1];
+        const s2 = alignment.stations[i2];
+        const p1 = alignment.points[i1];
+        const p2 = alignment.points[i2];
+
+        return {
+            point: vec3.lerp(vec3.create(), p1, p2, (midStation - s1) / (s2 - s1)),
+            normal: this.getLabelDirection3D(vec3.create(), p1, p2)
+        };
+    }
+
+    private getLabelDirection3D(out: vec3, start: ReadonlyVec3, end: ReadonlyVec3) {
+        vec3.sub(out, start, end);
+        vec3.normalize(out, out);
+        const crossIdx = Math.abs(out[2]) < Math.cos(0.08726646) ? 2 : 1; // 0.08726646 is 5deg
+        const up = vec3.fromValues(0, 0, 0);
+        up[crossIdx] = 1;
+        vec3.cross(out, up, out);
+        return vec3.normalize(out, out);
     }
 
     updateHorizontalDrawItem(alignment: HorizontalAlignment, context = this.parent.draw.drawContext) {
@@ -154,14 +189,8 @@ export class RoadModule extends BaseModule {
             }
             const isMinorTick = Math.round(nextParam * 100) % intervalX100 !== 0;
             const stationStart = alignment.stations[i - 1];
-            const dir = vec3.sub(vec3.create(), alignment.points[i], alignment.points[i - 1]);
-            vec3.normalize(dir, dir);
-            const crossIdx = Math.abs(dir[2]) < Math.cos(0.08726646) ? 2 : 1; // 0.08726646 is 5deg
-            const up = vec3.fromValues(0, 0, 0);
-            up[crossIdx] = 1;
-            const side = vec3.cross(vec3.create(), up, dir);
-            vec3.normalize(side, side);
-
+            const side = this.getLabelDirection3D(vec3.create(), alignment.points[i - 1], alignment.points[i]);
+            
             const stationPosition = vec3.lerp(vec3.create(), alignment.points[i - 1], alignment.points[i],
                 (nextParam - stationStart) / (stationEnd - stationStart));
 
@@ -234,6 +263,10 @@ export class RoadModule extends BaseModule {
             const stations = {
                 drawType: "text",
                 vertices3D: [stationSegment.startPoint, stationSegment.endPoint],
+                directions3D: [
+                    this.getLabelDirection3D(vec3.create(), stationSegment.startPoint, alignment.points[stationSegment.startIndex + 1]),
+                    this.getLabelDirection3D(vec3.create(), alignment.points[stationSegment.endIndex - 1], stationSegment.endPoint)
+                ],
                 text: [[startLabel, endLabel]]
             } as DrawPart;
             let labelTexts: string[] = [];
@@ -248,10 +281,11 @@ export class RoadModule extends BaseModule {
             }
             let labels: DrawPart | undefined;
             if (labelTexts.length > 0) {
+                const { point, normal } = this.getSegmentMidPointAndNormal(alignment, stationSegment.startIndex, stationSegment.endIndex);
                 labels = {
                     drawType: "text",
-                    vertices3D: [vec3.lerp(vec3.create(),
-                        stationSegment.startPoint, stationSegment.endPoint, 0.5)],
+                    vertices3D: [point],
+                    directions3D: [normal],
                     text: [labelTexts]
                 } as DrawPart;
             }

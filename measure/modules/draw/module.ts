@@ -499,6 +499,10 @@ function toOnscreenText(points: ReadonlyVec3[],
     const offset = vec3.create();
     const point = vec3.create();
 
+    // Allow text anchor point to be 200px outside screen bounds
+    // to account for long text and offsets
+    const threshold = 200;
+
     points.forEach((pointWorldSpace, i) => {
         vec3.transformMat4(point, pointWorldSpace, camMat);
 
@@ -510,7 +514,7 @@ function toOnscreenText(points: ReadonlyVec3[],
             return;
         }
         const _p = toScreen(projMat, width, height, point);
-        if (_p[0] < 0 || _p[0] > width || _p[1] < 0 || _p[1] > height) {
+        if (_p[0] < -threshold || _p[0] > width + threshold || _p[1] < -threshold || _p[1] > height + threshold) {
             return;
         }
         intdices.push(i);
