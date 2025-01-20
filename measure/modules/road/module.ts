@@ -189,7 +189,7 @@ export class RoadModule extends BaseModule {
             }
             const isMinorTick = Math.round(nextParam * 100) % intervalX100 !== 0;
             const stationStart = alignment.stations[i - 1];
-            const side = this.getLabelDirection3D(vec3.create(), alignment.points[i - 1], alignment.points[i]);
+            const side = this.getLabelDirection3D(vec3.create(), alignment.points[i], alignment.points[i - 1]);
             
             const stationPosition = vec3.lerp(vec3.create(), alignment.points[i - 1], alignment.points[i],
                 (nextParam - stationStart) / (stationEnd - stationStart));
