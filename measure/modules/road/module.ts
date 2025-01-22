@@ -121,7 +121,8 @@ export class RoadModule extends BaseModule {
                 curvatureMidPoints.push(midPoint);
                 curvatureDirections.push(labelDir);
 
-                curvatureInfo.push(`r=${point.parameter.toFixed(2)}m`);
+                const paramName = point.kind === 'clothoid' ? 'A' : 'r';
+                curvatureInfo.push(`${paramName}=${point.parameter.toFixed(1)}m`);
             }
         }
         const pointsOfCurvature = { drawType: "vertex", vertices3D: curvatureChangePoints } as DrawPart;
@@ -239,20 +240,20 @@ export class RoadModule extends BaseModule {
             return undefined;
         }
         if (station < segments[0].station) {
-            return { start: alignment.stations[0], end: segments[0].station, curvature: segments[0].parameter };
+            return { start: alignment.stations[0], end: segments[0].station, curvature: segments[0].parameter, kind: segments[0].kind };
         }
         for (let i = 1; i < segments.length; ++i) {
             const start = segments[i - 1];
             const end = segments[i];
             if (station >= start.station && station <= end.station) {
-                return { start: start.station, end: end.station, curvature: end.parameter };
+                return { start: start.station, end: end.station, curvature: end.parameter, kind: end.kind };
             }
         }
         return undefined;
     }
 
     getStationSectionDrawObject(alignment: Alignment, stationStart: number, stationEnd: number,
-        settings?: { curvature?: number, length?: boolean, slope?: boolean, elevation?: boolean },
+        settings?: { curvature?: number, kind?: CurvatureKind, length?: boolean, slope?: boolean, elevation?: boolean },
         context = this.parent.draw.drawContext): StationSegmentDrawObject | undefined {
         const vertices: ReadonlyVec3[] = [];
         const stationSegment = infoBetweenStations(alignment, stationStart, stationEnd, settings?.slope, settings?.length, vertices);
@@ -271,7 +272,8 @@ export class RoadModule extends BaseModule {
             } as DrawPart;
             let labelTexts: string[] = [];
             if (settings?.curvature) {
-                labelTexts.push(`r=${settings.curvature.toFixed(1)}m`);
+                const paramName = settings.kind === 'clothoid' ? 'A' : 'r';
+                labelTexts.push(`${paramName}=${settings.curvature.toFixed(1)}m`);
             }
             if (stationSegment.length) {
                 labelTexts.push(`${stationSegment.length.toFixed(2)}m`);

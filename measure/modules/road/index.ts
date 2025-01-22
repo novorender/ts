@@ -48,6 +48,7 @@ export interface StationSegment {
     start: number;
     end: number;
     curvature?: number;
+    kind?: CurvatureKind;
 }
 
 export interface StationSegmentInfo {
