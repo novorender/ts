@@ -25,10 +25,11 @@ function infoBetweenStations(
         if (stationEnd < start) {
             continue;
         }
-
-        startIndex = index - 1;
+        
         const stationStart = alignment.stations[index - 1];
-        vec3.lerp(startPoint, alignment.points[index - 1], alignment.points[index], (start - stationStart) / (stationEnd - stationStart));
+        const startT = (start - stationStart) / (stationEnd - stationStart);
+        startIndex = startT === 1 ? index : index - 1;
+        vec3.lerp(startPoint, alignment.points[index - 1], alignment.points[index], startT);
         if (vertices) {
             vertices.push(startPoint);
         }
