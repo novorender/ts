@@ -22,10 +22,10 @@ function infoBetweenStations(
     let segLength = 0;
     for (; index < alignment.stations.length; ++index) {
         const stationEnd = alignment.stations[index];
-        if (stationEnd < start) {
+        if (stationEnd <= start) {
             continue;
         }
-
+      
         startIndex = index - 1;
         const stationStart = alignment.stations[index - 1];
         vec3.lerp(startPoint, alignment.points[index - 1], alignment.points[index], (start - stationStart) / (stationEnd - stationStart));
