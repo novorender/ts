@@ -1,7 +1,7 @@
 
-import { type ReadonlyVec3, vec3, quat, glMatrix, type ReadonlyQuat } from "gl-matrix";
+import { type ReadonlyVec3, vec3, quat, glMatrix, type ReadonlyQuat, type ReadonlyVec2, vec2 } from "gl-matrix";
 import { BaseController, easeInOut, easeOut, type ControllerInitParams, type MutableCameraState, type PickContext } from "./base";
-import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type BoundingSphere } from "core3d";
+import { type RenderStateCamera, type RecursivePartial, mergeRecursive, type BoundingSphere, type PickSample } from "core3d";
 import { PitchRollYawOrientation, clamp, decomposeRotation } from "./orientation";
 import { ControllerInput, MouseButtons } from "./input";
 import type { ScreenSpaceConversions } from "web_app/screen_space_conversions";
@@ -37,8 +37,12 @@ export class FlightController extends BaseController {
     private readonly resetPickDelay = 3000;
     private lastUpdatedMoveBegin: number = 0;
     private lastUpdate: number = 0;
+    private lastUpdateWithWheel: number = 0;
     private moveBeginDelay = 0;
     private recordedMoveBegin: ReadonlyVec3 | undefined = undefined;
+    private recordedMoveBeginDepth: number | undefined = undefined;
+    private recordedMoveBegin2d: ReadonlyVec2 | undefined = undefined;
+    private recordedMoveBeginObjectId: number | undefined = undefined;
     private inMoveBegin = false;
 
     /**
@@ -209,6 +213,9 @@ export class FlightController extends BaseController {
         }
         this._flyToFromDeacceleration = false;
         this.lastUpdate = performance.now();
+        if (this.modifiers().mouseWheelModifier) {
+            this.lastUpdateWithWheel = this.lastUpdate;
+        }
         let { tx, ty, tz, rx, ry, shouldPivot } = this.getTransformations();
         _orientation.roll = 0;
         const [zoomX, zoomY] = zoomPos;
@@ -327,29 +334,60 @@ export class FlightController extends BaseController {
             return;
         }
         this.inMoveBegin = true;
-        const setPickPosition = async (x: number, y: number, touchEvent: boolean) => {
-            const sample = await pick.pick(x, y, { async: true, sampleDiscRadius: touchEvent ? 16 : 12 });
-            if (sample) {
-                if (performance.now() - this.lastUpdatedMoveBegin > 2000) { //Delay proportinal speed for better feeling on bad devices
-                    this.moveBeginDelay = performance.now();
+        const setPickPosition = async (x: number, y: number) => {
+            const sample = await pick.pick(x, y, { async: true, sampleDiscRadius: 400, searchType: 'closestToPickCenter' });
+            const pos2d = vec2.fromValues(x, y);
+            const now = performance.now();
+
+            if (this.shouldStickToPrevPick(pos2d, sample)) {
+                // noop
+            } else if (sample) {
+                if (now - this.lastUpdatedMoveBegin > 2000) { //Delay proportional speed for better feeling on bad devices
+                    this.moveBeginDelay = now;
                 }
                 this.recordedMoveBegin = sample.position;
-                this.lastUpdatedMoveBegin = performance.now();
+                this.recordedMoveBeginDepth = sample.depth;
+                this.recordedMoveBegin2d = pos2d;
+                this.recordedMoveBeginObjectId = sample.objectId;
+                this.lastUpdatedMoveBegin = now;
             } else if (resetPickDelay < deltaTime) {
                 this.recordedMoveBegin = undefined;
-                this.lastUpdatedMoveBegin = performance.now();
+                this.recordedMoveBeginDepth = undefined;
+                this.recordedMoveBegin2d = undefined;
+                this.recordedMoveBeginObjectId = undefined;
+                this.lastUpdatedMoveBegin = now;
             }
         }
 
         if (isTouchEvent(event)) {
             if (pointerTable.length > 1) {
-                await setPickPosition(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2), true)
+                await setPickPosition(Math.round((pointerTable[0].x + pointerTable[1].x) / 2), Math.round((pointerTable[0].y + pointerTable[1].y) / 2))
             }
         } else {
-            await setPickPosition(event.offsetX, event.offsetY, false)
+            await setPickPosition(event.offsetX, event.offsetY)
         }
         this.inMoveBegin = false;
 
+    }
+
+    private shouldStickToPrevPick(pos2d: ReadonlyVec2, sample: PickSample | undefined) {
+        // When we zoom too close to an object and zoom through it - proportional speed changes too fast and feels jumpy
+        // instead we can remember the last object we started zooming from and stick to it until we move mouse far enough or wait long enough
+        // Also only stick if new sample is significantly further away from the camera
+
+        return sample &&
+            sample.objectId !== this.recordedMoveBeginObjectId &&
+            // Only if mouse haven't moved far enough since beginning of move (not sure about this)
+            this.recordedMoveBegin2d &&
+            vec2.dist(this.recordedMoveBegin2d, pos2d) < 200 &&
+            // Reset sticking after not using the wheel for some time.
+            // Expectation is that user is zooming non stop while trying to find a good view point
+            // close to the object of interest
+            (performance.now() - this.lastUpdateWithWheel) < 2000 &&
+            // Only stick if new sample is further away from the camera
+            // otherwise mouse doesn't stick to the relevant objects quite often
+            this.recordedMoveBeginDepth !== undefined &&
+            sample.depth - this.recordedMoveBeginDepth >= 1;
     }
 
     private resetPivot(active: boolean) {
