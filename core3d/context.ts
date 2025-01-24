@@ -1095,7 +1095,7 @@ export class RenderContext {
         }
     }
 
-    private extractPick(pickBuffer: Uint32Array, x: number, y: number, sampleDiscRadius: number, pickCameraPlane: boolean) {
+    private extractPick(pickBuffer: Uint32Array, x: number, y: number, sampleDiscRadius: number, searchType: PickSearchType, pickCameraPlane: boolean) {
         const { canvas, wasm, width, height } = this;
         const rect = canvas.getBoundingClientRect(); // dim in css pixels
         const cssWidth = rect.width;
@@ -1108,57 +1108,115 @@ export class RenderContext {
         // fetch sample rectangle from read buffers
         const r = Math.ceil(sampleDiscRadius);
         const r2 = sampleDiscRadius * sampleDiscRadius;
-        let x0 = px - r;
-        let x1 = px + r + 1;
-        let y0 = py - r;
-        let y1 = py + r + 1;
-        if (x0 < 0) x0 = 0;
-        if (x1 > width) x1 = width;
-        if (y0 < 0) y0 = 0;
-        if (y1 > height) y1 = height;
         const samples: PickSample[] = [];
         const { isOrtho, viewClipMatrixLastPoll, viewWorldMatrixLastPoll } = this;
         const f16Max = 65504;
 
-        for (let iy = y0; iy < y1; iy++) {
+        const handlePos = (iy: number, ix: number) => {
             const dy = iy - py;
-            for (let ix = x0; ix < x1; ix++) {
-                const dx = ix - px;
-                if (dx * dx + dy * dy > r2)
-                    continue; // filter out samples that lie outside sample disc radius
-                const buffOffs = ix + iy * width;
-                let objectId = pickBuffer[buffOffs * 4];
-                if (objectId != 0xffffffff) {
-                    const isReservedId = objectId >= 0xf000_0000
-                    const depth = pickCameraPlane ? 0 : new Float32Array(pickBuffer.buffer, buffOffs * 16 + 12, 1)[0];
-                    const [nx16, ny16, nz16, pointFactor16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
-                    const nx = wasm.float32(nx16);
-                    const ny = wasm.float32(ny16);
-                    const nz = wasm.float32(nz16);
-                    const pf32 = wasm.float32(pointFactor16);
-                    const pointFactor = pointFactor16 !== 0 ? pf32 : undefined;
+            const dx = ix - px;
+            if (dx * dx + dy * dy > r2)
+                return; // filter out samples that lie outside sample disc radius
+            const buffOffs = ix + iy * width;
+            let objectId = pickBuffer[buffOffs * 4];
+            if (objectId != 0xffffffff) {
+                const isReservedId = objectId >= 0xf000_0000
+                const depth = pickCameraPlane ? 0 : new Float32Array(pickBuffer.buffer, buffOffs * 16 + 12, 1)[0];
+                const [nx16, ny16, nz16, pointFactor16] = new Uint16Array(pickBuffer.buffer, buffOffs * 16 + 4, 4);
+                const nx = wasm.float32(nx16);
+                const ny = wasm.float32(ny16);
+                const nz = wasm.float32(nz16);
+                const pf32 = wasm.float32(pointFactor16);
+                const pointFactor = pointFactor16 !== 0 ? pf32 : undefined;
 
-                    // compute normal
-                    // compute clip space x,y coords
-                    const xCS = ((ix + 0.5) / width) * 2 - 1;
-                    const yCS = ((iy + 0.5) / height) * 2 - 1;
+                // compute normal
+                // compute clip space x,y coords
+                const xCS = ((ix + 0.5) / width) * 2 - 1;
+                const yCS = ((iy + 0.5) / height) * 2 - 1;
 
-                    // compute view space position and normal
-                    const scale = isOrtho ? 1 : depth;
+                // compute view space position and normal
+                const scale = isOrtho ? 1 : depth;
 
-                    const posVS = vec3.fromValues((xCS / viewClipMatrixLastPoll[0]) * scale, (yCS / viewClipMatrixLastPoll[5]) * scale, -depth);
+                const posVS = vec3.fromValues((xCS / viewClipMatrixLastPoll[0]) * scale, (yCS / viewClipMatrixLastPoll[5]) * scale, -depth);
 
-                    // convert into world space.
-                    const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrixLastPoll);
-                    const normal = vec3.fromValues(nx, ny, nz);
-                    vec3.normalize(normal, normal);
-                    const clippingOutline = isReservedId ? false : (objectId & (1 << 31)) != 0;
-                    objectId = isReservedId ? objectId : objectId & ~(1 << 31);
+                // convert into world space.
+                const position = vec3.transformMat4(vec3.create(), posVS, viewWorldMatrixLastPoll);
+                const normal = vec3.fromValues(nx, ny, nz);
+                vec3.normalize(normal, normal);
+                const clippingOutline = isReservedId ? false : (objectId & (1 << 31)) != 0;
+                objectId = isReservedId ? objectId : objectId & ~(1 << 31);
 
-                    const sample = { x: ix - px, y: iy - py, position, normal, objectId, pointFactor, depth, clippingOutline } as const;
-                    samples.push(sample);
+                const sample = { x: ix - px, y: iy - py, position, normal, objectId, pointFactor, depth, clippingOutline } as const;
+                samples.push(sample);
+            }
+        }
+
+        if (searchType === 'closestToCamera') {
+            let x0 = px - r;
+            let x1 = px + r + 1;
+            let y0 = py - r;
+            let y1 = py + r + 1;
+            if (x0 < 0) x0 = 0;
+            if (x1 > width) x1 = width;
+            if (y0 < 0) y0 = 0;
+            if (y1 > height) y1 = height;
+
+            for (let iy = y0; iy < y1; iy++) {
+                for (let ix = x0; ix < x1; ix++) {
+                    handlePos(iy, ix);
                 }
             }
+        } else {
+            const findSample = () => {
+                const ix = Math.max(0, Math.min(px, width - 1));
+                const iy = Math.max(0, Math.min(py, height - 1));
+                handlePos(iy, ix);
+                if (samples.length > 0) return;
+
+                // Move in diagonal direction along the sides of an expanding rhombus
+                // it doesn't exactly search on all points within the radius because we use rhombus,
+                // and the point would be closest based on manhattan distance, but it should be good enough.
+                for (let i = 1; i < sampleDiscRadius; i++) {
+                    // moving left -> top
+                    {
+                        const startX = Math.max(0, ix - i);
+                        const startY = iy - (startX - (ix - i));
+                        for (let x = startX, y = startY; x < ix && y >= 0; x++, y--) {
+                            handlePos(y, x);
+                            if (samples.length > 0) return;
+                        }
+                    }
+                    // moving top -> right
+                    {
+                        const startY = Math.max(0, iy - i);
+                        const startX = ix + (startY - (iy - i));
+                        for (let y = startY, x = startX; y < iy && x < width; y++, x++) {
+                            handlePos(y, x);
+                            if (samples.length > 0) return;
+                        }
+                    }
+                    // moving right -> bottom
+                    {
+                        const startX = Math.min(width - 1, ix + i);
+                        const startY = iy + ((ix + i) - startX);
+                        for (let x = startX, y = startY; x > ix && y < height; x--, y++) {
+                            handlePos(y, x);
+                            if (samples.length > 0) return;
+                        }
+                    }
+                    // moving bottom -> left
+                    {
+                        const startY = Math.min(height - 1, iy + i);
+                        const startX = ix - ((iy + i) - startY);
+                        for (let y = startY, x = startX; y > py && x >= 0; y--, x--) {
+                            handlePos(y, x);
+                            if (samples.length > 0) return;
+                        }
+                    }
+                }
+            }
+            
+            findSample();
         }
         return samples;
     }
@@ -1174,6 +1232,7 @@ export class RenderContext {
         const sampleDiscRadius = options?.sampleDiscRadius ?? 0;
         const callAsync = options?.async ?? true;
         const pickCameraPlane = options?.pickCameraPlane ?? false;
+        const searchType = options?.searchType ?? "closestToCamera";
         if (sampleDiscRadius < 0)
             return [];
         this.renderPickBuffers();
@@ -1203,7 +1262,7 @@ export class RenderContext {
         if (currentPick === undefined || width * height * 4 != currentPick.length) {
             return [];
         }
-        return this.extractPick(currentPick, x, y, sampleDiscRadius, pickCameraPlane);
+        return this.extractPick(currentPick, x, y, sampleDiscRadius, searchType, pickCameraPlane);
     }
 
     setPolygonFillMode(mode: "FILL" | "LINE") {
@@ -1272,6 +1331,8 @@ export interface PickSample {
     readonly clippingOutline: boolean;
 };
 
+export type PickSearchType = "closestToCamera" | "closestToPickCenter";
+
 /** Extra pick options. */
 export interface PickOptions {
     /** The radius of the sample disc (0 yields a single pixel). */
@@ -1279,6 +1340,7 @@ export interface PickOptions {
     /** True to wait for the pick buffers to be available, false to return whatever is in the current pick buffer synchronously.
      * @remarks The latter option is more error prone, but useful for e.g. mouse hover operations.
      */
+    readonly searchType?: PickSearchType;
     readonly async?: boolean;
     /** Return pick without depth. */
     readonly pickCameraPlane?: boolean;
